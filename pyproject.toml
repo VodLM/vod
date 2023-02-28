@@ -1,0 +1,90 @@
+[tool.commitizen]
+version = "0.1.0"
+version_files = [
+  "src/__init__.py:__version__",
+  "pyproject.toml:version",
+  "VERSION"
+]
+tag_format = "v$version"
+
+[tool.poetry]
+name = "ds-template-repo"
+version = "0.1.0"
+description = ""
+authors = ["Your Name <you@example.com>"]
+readme = "README.md"
+packages = [{include = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+loguru = "^0.6.0"
+pydantic = "^1.10.5"
+fastapi = "^0.92.0"
+uvicorn = "^0.20.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.2.1"
+pylint = "^2.16.2"
+black = "^23.1.0"
+isort = "^5.12.0"
+pre-commit = "^3.0.4"
+commitizen = "^2.42.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.isort]
+line_length = 120
+include_trailing_comma = true
+profile = "black"
+
+[tool.black]
+line-length = 120
+
+[tool.pyright]
+reportOptionalMemberAccess = false
+
+[tool.pylint.main]
+ignore = ["tests"]
+py-version = "3.11"
+
+[tool.pylint.basic]
+bad-names = ["foo", "bar", "baz", "toto", "tutu", "tata", "l"]
+
+good-names = [
+    "i", "j", "k", # iterators
+    "f", # file in context managers
+    "ex", "e", # exceptions
+    "run", "Run", # factory code
+    "_", # unused variables
+    "ds", "df", # dataset, dataframe
+    "x", "y", "z", # polynomials, unknowns
+    "cv", # cross validation
+    "r", "s", # relevance, score
+    "m", "d", # faiss parameters
+    "p", "q", "a", # prediction, question, answer
+]
+
+[tool.pylint.design]
+max-args = 8
+
+[tool.pylint.format]
+max-line-length = 120
+
+[tool.pylint."messages control"]
+disable = [
+    "raw-checker-failed",
+    "bad-inline-option",
+    "locally-disabled",
+    "file-ignored",
+    "suppressed-message",
+    "useless-suppression",
+    "deprecated-pragma",
+    "use-symbolic-message-instead",
+    "missing-module-docstring",
+    "too-few-public-methods",
+    "use-dict-literal",
+]
+
+extension-pkg-whitelist = "pydantic"

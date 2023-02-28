@@ -1,0 +1,128 @@
+# RENAME THIS FILE TO `config.yml`
+version: 2.1
+
+orbs:
+  slack: circleci/slack@3.4.2
+  gimlet: "gimlet-io/circleci-orb@1.0.0"
+
+workflows:
+  build:
+    jobs:
+      - test:
+          context:
+            - AzureCR
+            - Slack
+            - DSGithub
+
+      - build_docker_image:
+          context:
+            - AzureCR
+            - Slack
+            - DSGithub
+
+          filters:
+            branches:
+              only:
+                - main
+          requires:
+            - test
+
+      - ship_gimlet_artifact:
+          context:
+            - Gimlet
+            - Slack
+          requires:
+            - build_docker_image
+
+jobs:
+  test:
+    docker:
+      - image: raffle.azurecr.io/cimg-python:latest
+        auth:
+          username: $CLIENT_ID
+          password: $CLIENT_SECRET
+
+    environment:
+      SERVICE_NAME: ds-repo-template
+
+    steps:
+      - setup_remote_docker
+      - checkout
+
+      - run:
+          name: "install dependency packages"
+          command: |
+            poetry install
+
+      - run:
+          name: "lint"
+          command: |
+            make lint
+
+      - run:
+          name: "test"
+          command: |
+            make test
+
+      - run:
+          name: "build docker"
+          command: make docker
+
+      - slack/status:
+          fail_only: true
+          only_for_branches: main
+          channel: tech-data-science-alerts
+
+  version_bump:
+    docker:
+      - image: raffle.azurecr.io/cimg-python:latest
+        auth:
+          username: $CLIENT_ID
+          password: $CLIENT_SECRET
+
+    environment:
+      SERVICE_NAME: "ds-repo-template-api"
+
+    steps:
+      - setup_remote_docker
+      - checkout
+      - restore_cache:
+          key: bin-{{ .Environment.CIRCLE_SHA1 }}
+
+  build_docker_image:
+    machine:
+      image: ubuntu-2004:202111-02
+      docker_layer_caching: true
+    environment:
+      SERVICE_NAME: "ds-repo-template-api"
+    parameters:
+      DOCKER_TAG:
+        type: string
+        default: latest
+    steps:
+      - checkout
+      - run:
+          name: login
+          command: |
+            VERSION=$(git rev-parse HEAD)
+            docker login raffle.azurecr.io -u $AZ_CLIENT_ID -p $AZ_CLIENT_SECRET
+      - run:
+          name: build docker
+          command: |
+            docker build . -f Dockerfile -t $SERVICE_NAME
+      - run:
+          name: push docker
+          command: |
+            docker tag $SERVICE_NAME raffle.azurecr.io/$SERVICE_NAME:<< parameters.DOCKER_TAG >>
+            docker push raffle.azurecr.io/$SERVICE_NAME:<< parameters.DOCKER_TAG >>
+      - slack/status:
+          fail_only: true
+          only_for_branches: "master"
+
+  ship_gimlet_artifact:
+    working_directory: /tmp/workspace
+    machine: true
+    steps:
+      - checkout
+      - gimlet/gimlet-artifact-create:
+          image-tag: 'n/a'
