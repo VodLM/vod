@@ -1,0 +1,3 @@
+defaults:
+  - t5-base
+pretrained_model_name_or_path: google/t5-v1_1-base

@@ -1,0 +1,16 @@
+defaults:
+  - tokenizer: default
+  - _self_
+
+_target_: raffle_ds_research.datasets.builders.MsMarcosBuilder
+name: ms_marco
+subset_size: null
+
+# builder args
+prep_map_kwargs:
+  num_proc: ${resources.num_proc}
+top_k: null
+split: null
+language: en
+question_max_length: null
+section_max_length: null

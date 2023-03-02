@@ -1,0 +1,18 @@
+defaults:
+  - tokenizer: default
+  - templates: ${infer_model_type:${model/encoder}}
+  - _self_
+
+_target_: raffle_ds_research.datasets.builders.FrankBuilder
+name: frank
+language: en
+split: A
+subset_size: null
+
+# builder args
+prep_map_kwargs:
+  num_proc: ${resources.num_proc}
+index_max_top_k: 100
+top_k: 8
+question_max_length: 256
+section_max_length: 512

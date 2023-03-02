@@ -1,0 +1,21 @@
+# @package _global_
+
+defaults:
+  - override /model/encoder: bert-tiny
+  - _self_
+
+embedding_size: 64
+
+batch_size:
+  per_device: 4
+  per_device_eval: 8
+
+resources:
+  num_workers: 1
+  num_proc: 4
+
+trainer:
+  accelerator: cpu
+
+builder:
+  subset_size: 1000

@@ -1,0 +1,8 @@
+mlflow:
+  _target_: pytorch_lightning.loggers.MLFlowLogger
+  experiment_name: ${exp_name}
+  run_name: ${run_name}
+  tags:
+    model_name: ${model_name}
+    precision: ${trainer.precision}
+  tracking_uri: ${os_expanduser:"~/mlflow"}

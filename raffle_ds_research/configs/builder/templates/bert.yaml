@@ -1,0 +1,2 @@
+question: "{{ question }}"
+section: "Title: {% if title %}{{ title }}{% else %}NO TITLE{% endif %}. {{ content }}"

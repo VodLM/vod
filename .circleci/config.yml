@@ -1,4 +1,3 @@
-# RENAME THIS FILE TO `config.yml`
 version: 2.1
 
 orbs:
@@ -14,115 +13,68 @@ workflows:
             - Slack
             - DSGithub
 
-      - build_docker_image:
+      - bump_version:
           context:
-            - AzureCR
-            - Slack
             - DSGithub
+
+          requires:
+            - test
 
           filters:
             branches:
               only:
                 - main
-          requires:
-            - test
 
-      - ship_gimlet_artifact:
-          context:
-            - Gimlet
-            - Slack
-          requires:
-            - build_docker_image
 
 jobs:
   test:
     docker:
-      - image: raffle.azurecr.io/cimg-python:latest
-        auth:
-          username: $CLIENT_ID
-          password: $CLIENT_SECRET
-
-    environment:
-      SERVICE_NAME: ds-repo-template
+      - image: cimg/python:3.11.2
 
     steps:
       - setup_remote_docker
       - checkout
 
       - run:
-          name: "install dependency packages"
+          name: Install dependency packages
           command: |
             poetry install
 
       - run:
-          name: "lint"
+          name: Lint
           command: |
             make lint
 
       - run:
-          name: "test"
+          name: Test
           command: |
             make test
-
-      - run:
-          name: "build docker"
-          command: make docker
 
       - slack/status:
           fail_only: true
           only_for_branches: main
           channel: tech-data-science-alerts
 
-  version_bump:
+  bump_version:
     docker:
-      - image: raffle.azurecr.io/cimg-python:latest
-        auth:
-          username: $CLIENT_ID
-          password: $CLIENT_SECRET
-
-    environment:
-      SERVICE_NAME: "ds-repo-template-api"
+      - image: cimg/python:3.11.2
 
     steps:
       - setup_remote_docker
       - checkout
-      - restore_cache:
-          key: bin-{{ .Environment.CIRCLE_SHA1 }}
 
-  build_docker_image:
-    machine:
-      image: ubuntu-2004:202111-02
-      docker_layer_caching: true
-    environment:
-      SERVICE_NAME: "ds-repo-template-api"
-    parameters:
-      DOCKER_TAG:
-        type: string
-        default: latest
-    steps:
-      - checkout
       - run:
-          name: login
+          name: Bump version
           command: |
-            VERSION=$(git rev-parse HEAD)
-            docker login raffle.azurecr.io -u $AZ_CLIENT_ID -p $AZ_CLIENT_SECRET
-      - run:
-          name: build docker
-          command: |
-            docker build . -f Dockerfile -t $SERVICE_NAME
-      - run:
-          name: push docker
-          command: |
-            docker tag $SERVICE_NAME raffle.azurecr.io/$SERVICE_NAME:<< parameters.DOCKER_TAG >>
-            docker push raffle.azurecr.io/$SERVICE_NAME:<< parameters.DOCKER_TAG >>
-      - slack/status:
-          fail_only: true
-          only_for_branches: "master"
+            git config --global user.email "hal9000@raffle.ai"
+            git config --global user.name "Hal 9000"
+            git remote set-url origin https://$GIT_TOKEN@github.com/raffle-ai/ds-research.git/
 
-  ship_gimlet_artifact:
-    working_directory: /tmp/workspace
-    machine: true
-    steps:
-      - checkout
-      - gimlet/gimlet-artifact-create:
-          image-tag: 'n/a'
+            python3 -m venv venv
+            source venv/bin/activate
+            pip install commitizen
+            git pull
+            cz bump --changelog
+
+            git push origin main
+            git push origin --tags

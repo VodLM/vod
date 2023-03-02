@@ -1,0 +1,28 @@
+defaults:
+  - builder: frank
+  - model: default
+  - resources: default
+  - batch_size: default
+  - trainer: default
+  - sys: default
+  - hydra: default
+  # enable color logging
+  - override hydra/hydra_logging: colorlog
+  - override hydra/job_logging: colorlog
+
+seed: ${randint:0,1_000_000}
+model_name: ${model.encoder.pretrained_model_name_or_path}
+exp_name: ${builder.name}-${builder.split}-${builder.language}
+run_name: ${model_name}-${model.embedding_size}-${trainer.precision}-${seed}-${rdn_name:}
+
+train_loader_kwargs:
+  batch_size: ${batch_size.per_device}
+  num_workers: ${resources.num_workers}
+  pin_memory: True
+  shuffle: True
+
+eval_loader_kwargs:
+  batch_size: ${batch_size.per_device_eval}
+  num_workers: ${resources.num_workers}
+  pin_memory: True
+  shuffle: False

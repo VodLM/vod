@@ -1,0 +1,3 @@
+csv:
+  _target_: pytorch_lightning.loggers.CSVLogger
+  save_dir: .

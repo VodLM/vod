@@ -1,0 +1,10 @@
+defaults:
+  - encoder: bert-tiny
+  - gradients: supervised
+  - optimizer: adamw # todo: lion
+  - scheduler: linear
+  - monitor: retrieval
+  - _self_
+
+_target_: raffle_ds_research.ml_models.ranker.Ranker
+embedding_size: 512

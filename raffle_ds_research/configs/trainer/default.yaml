@@ -1,0 +1,18 @@
+defaults:
+  - callbacks:
+      - rich_progress_bar
+      - checkpoint
+      - lr_monitor
+  - logger:
+      - csv
+      - mlflow
+  - _self_
+
+_target_: raffle_ds_research.tools.utils.trainer.Trainer
+max_steps: 100_000
+val_check_interval: null
+fast_dev_run: false
+gradient_clip_val: 0.5
+accumulate_grad_batches: ${batch_size.gradient_accumulation_steps}
+accelerator: ${default_trainer_accelerator:}
+precision: 32
