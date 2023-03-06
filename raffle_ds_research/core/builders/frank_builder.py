@@ -123,12 +123,6 @@ class FrankBuilder(dataset_builder.HfBuilder):
     def _build_dset(self) -> HfDatasetDict:
         qa = self._build_qa()
         sections = self._build_sections()
-        rich.print(
-            {
-                "FRANK QA": qa,
-                "FRANK Sections": sections,
-            }
-        )
 
         # map the sections to the questions
         index_kwargs = dict(max_top_k=self.index_max_top_k, padding=True)

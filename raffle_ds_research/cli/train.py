@@ -24,8 +24,6 @@ from raffle_ds_research.utiils.config import config_to_flat_dict
 
 register_omgeaconf_resolvers()
 
-MLFlowLogger
-
 
 def fetch_mlflow_logger(loggers: list[pl.loggers.base.LightningLoggerBase]) -> Optional[pl.loggers.MLFlowLogger]:
     for logger in loggers:
@@ -35,8 +33,7 @@ def fetch_mlflow_logger(loggers: list[pl.loggers.base.LightningLoggerBase]) -> O
 
 @hydra.main(config_path="../configs/", config_name="main", version_base="1.3")
 def run(config: DictConfig):
-    datasets.utils.logging.set_verbosity_error()
-    transformers.utils.logging.set_verbosity_error()
+    _set_context()
     print_config(config)
     exp_dir = Path()
     logger.info(f"Experiment directory: {exp_dir.absolute()}")
@@ -79,9 +76,17 @@ def run(config: DictConfig):
         **config.eval_loader_kwargs,
     )
 
-    # train the ranker
+    # train the ranker (evaluate first)
     seed_everything(config.seed, workers=True)
+    trainer.validate(ranker, dataloaders=val_loader)
     trainer.fit(ranker, train_dataloaders=train_loader, val_dataloaders=val_loader)
+
+
+def _set_context():
+    """Set the general context for torch, datasets, etc."""
+    datasets.utils.logging.set_verbosity_error()
+    transformers.utils.logging.set_verbosity_error()
+    torch.set_float32_matmul_precision("medium")
 
 
 def log_config(trainer, config, exp_dir):
@@ -90,7 +95,7 @@ def log_config(trainer, config, exp_dir):
     mlflow_logger = fetch_mlflow_logger(trainer.loggers)
     config_path = Path(exp_dir, "config.yaml")
     with open(config_path, "w") as f:
-        f.write(OmegaConf.to_yaml(config))
+        f.write(OmegaConf.to_yaml(config, resolve=True))
     if mlflow_logger:
         mlflow_logger._mlflow_client.log_artifact(run_id=mlflow_logger.run_id, local_path=config_path)
 

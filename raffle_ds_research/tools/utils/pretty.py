@@ -34,6 +34,7 @@ def print_config(
         resolve (bool, optional): Whether to resolve reference fields of DictConfig.
         exclude (List[str], optional): fields to exclude
     """
+    config = copy(config)
 
     style = "dim"
     tree = Tree(":gear: CONFIG", style=style, guide_style=style)

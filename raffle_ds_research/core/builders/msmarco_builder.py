@@ -16,6 +16,7 @@ from raffle_ds_research.tools import dataset_builder, pipes
 
 
 def preprocess_ms_marco(batch: dict, idx: Optional[list] = None, **kwargs) -> dict:
+    """Preprocess a batch of raw `MS MARCO` into our format."""
     passages = batch["passages"]
     batch = {
         "question": batch["query"],
@@ -26,10 +27,13 @@ def preprocess_ms_marco(batch: dict, idx: Optional[list] = None, **kwargs) -> di
 
 
 def filter_ms_marco(batch: dict, idx: Optional[list] = None, **kwargs) -> bool:
+    """Filter out batches that have no positive examples."""
     return any(batch["section.label"])
 
 
 class CollateMsMarco(pipes.Pipe):
+    """Collate a list of `MS MARCO` examples into a batch."""
+
     tokenizer: Optional[PreTrainedTokenizerBase] = None
     question_max_length: Optional[int] = 512
     section_max_length: Optional[int] = 512
@@ -37,7 +41,7 @@ class CollateMsMarco(pipes.Pipe):
     max_sections: Optional[int] = None
 
     def _collate_egs(self, examples: list[dict], **kwargs) -> dict:
-        """Collate a list of `MS MAORCO"""
+        """Implementation of the collate logic."""
         batch_size = len(examples)
         q_template = JinjaTemplate(self.templates["question"])
         s_template = JinjaTemplate(self.templates["section"])
@@ -86,10 +90,13 @@ class CollateMsMarco(pipes.Pipe):
         return batch
 
     def _process_batch(self, batch: dict, idx: Optional[list[int]] = None, **kwargs) -> dict:
+        """No need for additional processing here."""
         return batch
 
 
 class MsMarcoBuilder(dataset_builder.HfBuilder):
+    """Builder for the `MS MARCO` dataset."""
+
     _validate_splits: list[str] = ["train", "validation"]
 
     def __init__(
@@ -197,10 +204,11 @@ def _sample_sections(
     eg: dict[str, list],
     n_total: Optional[int],
 ) -> dict[str, list]:
+    """Sample a subset of `n_total` sections."""
     if n_total is None:
         return eg
 
-    def _valid_label(x: Any) -> bool:
+    def _cast_bool(x: Any) -> bool:
         if isinstance(x, int):
             if x not in {0, 1}:
                 raise ValueError(f"Invalid label {x}. Expected 0 or 1.")
@@ -215,7 +223,7 @@ def _sample_sections(
         return samples
 
     eg = eg.copy()
-    labels: list[bool] = [_valid_label(x) for x in eg["section.label"]]
+    labels: list[bool] = [_cast_bool(x) for x in eg["section.label"]]
     scores: list[float] = eg["section.score"]
     if len(labels) != len(scores):
         raise ValueError(f"Number of labels ({len(labels)}) and scores ({len(scores)}) do not match.")
@@ -255,6 +263,7 @@ def _sample_sections(
 
 
 def _pad_sections(eg: dict, max_n_sections: int) -> dict:
+    """Pad the sections to the maximum number of sections."""
     eg = eg.copy()
     n_secs = len(eg["section"])
     if n_secs == max_n_sections:

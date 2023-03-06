@@ -4,6 +4,7 @@ defaults:
   - override /builder: msmarco
   - override /model/encoder: bert-base
   - override /model/gradients: kl_div
+  - override /batch_size: base
   - _self_
 
 model:
@@ -15,11 +16,6 @@ model:
   scheduler:
     total_iters: 1_000
 
-batch_size:
-  effective: 32
-  per_device: 32
-  per_device_eval: 64
-
 resources:
   num_workers: 4
   num_proc: 8
@@ -27,8 +23,9 @@ resources:
 trainer:
   accelerator: gpu
   precision: 16
-  val_check_interval: 1_000
+  val_check_interval: ${int_mul:${trainer.accumulate_grad_batches},500}
   limit_val_batches: 100
+  detect_anomaly: true
 
 builder:
   n_sections:

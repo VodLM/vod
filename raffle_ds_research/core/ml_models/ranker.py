@@ -42,7 +42,6 @@ class Ranker(pl.LightningModule):
         monitor: Optional[Monitor] = None,
         embedding_size: Optional[int] = 512,
         use_pooler_layer: bool = False,
-        init_proj_to_zero: bool = True,
         better_transformers: bool = False,
     ):
         super().__init__()
@@ -55,13 +54,14 @@ class Ranker(pl.LightningModule):
 
         self.optimizer_cls: functools.partial = optimizer
         self.scheduler_cls: functools.partial = scheduler
-
-        if better_transformers:
-            encoder = BetterTransformer.transform(encoder)
-
-        self.encoder = encoder
         self.gradients = gradients
         self.monitor = monitor
+
+        # setup the encoder
+        if better_transformers:
+            encoder = BetterTransformer.transform(encoder)
+        self.encoder = encoder
+
         # projection layer
         self.use_pooler_layer = use_pooler_layer
         h_model = self._infer_model_output_size(encoder)
@@ -71,8 +71,6 @@ class Ranker(pl.LightningModule):
         else:
             self.proj = torch.nn.Linear(h_model, embedding_size, bias=False)
             self._output_size = embedding_size
-            if init_proj_to_zero:
-                self.proj.weight.data.zero_()
 
     @staticmethod
     def _infer_model_output_size(encoder: TransformerEncoder) -> int:

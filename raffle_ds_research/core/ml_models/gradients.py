@@ -105,4 +105,13 @@ class KlDivGradients(Gradients):
         kl_div = kl_div_terms.sum(dim=-1)
         loss = (q_with_positives * kl_div).sum() / q_with_positives.sum()
 
+        # import rich
+        # rich.print({
+        #     "loss": loss,
+        #     "kl_div": kl_div,
+        #     # "q_with_positives": q_with_positives,
+        #     # "model_logits": model_logits,
+        #     "data_logits": data_logits,
+        # })
+
         return {"loss": loss, "_targets": data.targets, "_logits": model_logits}

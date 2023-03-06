@@ -10,7 +10,7 @@ defaults:
   - override hydra/hydra_logging: colorlog
   - override hydra/job_logging: colorlog
 
-seed: ${randint:0,1_000_000}
+seed: ${global_seed:}
 model_name: ${model.encoder.pretrained_model_name_or_path}
 exp_name: ${builder.name}-${builder.split}-${builder.language}
 run_name: ${model_name}-${model.embedding_size}-${trainer.precision}-${seed}-${rdn_name:}

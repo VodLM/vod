@@ -3039,6 +3039,21 @@ strategies = ["colossalai (>=0.2.0)", "deepspeed (>=0.6.0)", "fairscale (>=0.4.5
 test = ["cloudpickle (>=1.3)", "codecov (==2.1.12)", "coverage (==6.5.0)", "fastapi (<0.87.0)", "onnxruntime (<1.14.0)", "pandas (>1.0)", "pre-commit (==2.20.0)", "protobuf (<=3.20.1)", "psutil (<5.9.5)", "pytest (==7.2.0)", "pytest-cov (==4.0.0)", "pytest-forked (==1.4.0)", "pytest-rerunfailures (==10.3)", "scikit-learn (>0.22.1)", "tensorboard (>=2.9.1)", "uvicorn (<0.19.1)"]
 
 [[package]]
+name = "pytorch-ranger"
+version = "0.1.1"
+description = "Ranger - a synergistic optimizer using RAdam (Rectified Adam) and LookAhead in one codebase"
+category = "main"
+optional = false
+python-versions = ">=3.5"
+files = [
+    {file = "pytorch_ranger-0.1.1-py3-none-any.whl", hash = "sha256:1e69156c9cc8439185cb8ba4725b18c91947fbe72743e25aca937da8aeb0c8ec"},
+    {file = "pytorch_ranger-0.1.1.tar.gz", hash = "sha256:aa7115431cef11b57d7dd7bc86e7302a911dae467f62ec5d0b10e1ff744875db"},
+]
+
+[package.dependencies]
+torch = "*"
+
+[[package]]
 name = "pytz"
 version = "2022.7.1"
 description = "World timezone definitions, modern and historical"
@@ -3911,6 +3926,22 @@ typing-extensions = "*"
 opt-einsum = ["opt-einsum (>=3.3)"]
 
 [[package]]
+name = "torch-optimizer"
+version = "0.3.0"
+description = "pytorch-optimizer"
+category = "main"
+optional = false
+python-versions = ">=3.6.0"
+files = [
+    {file = "torch-optimizer-0.3.0.tar.gz", hash = "sha256:b2180629df9d6cd7a2aeabe71fa4a872bba938e8e275965092568cd9931b924c"},
+    {file = "torch_optimizer-0.3.0-py3-none-any.whl", hash = "sha256:7de8e57315e43561cdd0370a1b67303cc8ef1b053f9b5573de629a62390f2af9"},
+]
+
+[package.dependencies]
+pytorch-ranger = ">=0.1.1"
+torch = ">=1.5.0"
+
+[[package]]
 name = "torchmetrics"
 version = "0.11.3"
 description = "PyTorch native Metrics"
@@ -4466,4 +4497,4 @@ testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.9,<3.9.7 || >3.9.7,<4.0"
-content-hash = "df3733a107f323306df142f7f0f51bea80f210d18b0542461ac7f746dfca849f"
+content-hash = "30ec33f9608d9eab4d5362c3a04fbaeff6f553fba859566595809df526deeddb"

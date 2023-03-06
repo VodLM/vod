@@ -1,6 +1,6 @@
 import os
 import socket
-from random import randint, random
+from random import randint
 from typing import Optional
 
 import randomname
@@ -41,6 +41,7 @@ def register_omgeaconf_resolvers():
     GIT_HASH = git_revision_hash()
     GIT_HASH_SHORT = git_revision_short_hash()
     GIT_BRANCH_NAME = git_branch_name()
+    SEED = randint(0, 100_000)
 
     def default_trainer_accelerator(*args, **kwargs):
         if N_GPUS == 0:
@@ -79,3 +80,4 @@ def register_omgeaconf_resolvers():
     OmegaConf.register_new_resolver("default_trainer_accelerator", default_trainer_accelerator)
     OmegaConf.register_new_resolver("infer_model_type", infer_model_type)
     OmegaConf.register_new_resolver("randint", randint)
+    OmegaConf.register_new_resolver("global_seed", lambda *_: SEED)

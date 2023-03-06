@@ -16,5 +16,8 @@ lint:
 	poetry run pre-commit install
 	poetry run pre-commit run --all-files
 
+black:
+	poetry run black .
+
 test:
 	poetry run pytest

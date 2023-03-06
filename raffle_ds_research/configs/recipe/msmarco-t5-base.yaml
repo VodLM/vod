@@ -1,37 +1,27 @@
 # @package _global_
 
 defaults:
-  - override /builder: msmarco
+  - msmarco-bert-base
   - override /model/encoder: t5-base
-  - override /model/gradients: kl_div
+  - override /model/optimizer: adafactor
   - _self_
 
 model:
   embedding_size: 768
   use_pooler_layer: false
   optimizer:
-    lr: 3e-6
+    lr: 1e-4
     weight_decay: 0
   scheduler:
     total_iters: 1_000
 
-batch_size:
-  effective: 32
-  per_device: 16
-  per_device_eval: 64
-
-resources:
-  num_workers: 4
-  num_proc: 8
 
 trainer:
   accelerator: gpu
-  precision: 16
-  val_check_interval: 1_000
-  limit_val_batches: 200
+  precision: 32
+  limit_val_batches: 30
+  val_check_interval: 300
 
-builder:
-  top_k: 8
-  subset_size: null
-  question_max_length: null
-  section_max_length: 200
+batch_size:
+  per_device: 16
+  effective: 32
