@@ -1,15 +1,17 @@
 defaults:
   - tokenizer: default
+  - templates: ${infer_model_type:${model/encoder}}
   - _self_
 
-_target_: raffle_ds_research.datasets.builders.MsMarcosBuilder
+_target_: raffle_ds_research.core.builders.MsMarcoBuilder
 name: ms_marco
 subset_size: null
+filter_questions_without_positive: true
 
 # builder args
 prep_map_kwargs:
   num_proc: ${resources.num_proc}
-top_k: null
+n_sections: 8
 split: null
 language: en
 question_max_length: null

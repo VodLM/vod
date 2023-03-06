@@ -4,11 +4,11 @@ import io
 from abc import ABC, abstractmethod
 from enum import Enum
 from numbers import Number
-from typing import TypeVar, Generic, Type, Union
-from typing_extensions import Self
+from typing import Generic, Type, TypeVar, Union
 
 import numpy as np
 import torch
+from typing_extensions import Self
 
 
 class TensorFormatType(Enum):

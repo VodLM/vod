@@ -1,2 +1,2 @@
-_target_: raffle_ds_research.ml_models.gradients.KlDivGradients
-eps: 1e-2
+_target_: raffle_ds_research.core.ml_models.gradients.KlDivGradients
+eps: null

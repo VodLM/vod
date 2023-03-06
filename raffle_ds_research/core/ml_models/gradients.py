@@ -1,5 +1,6 @@
 import abc
 import math
+from typing import Optional
 
 import torch.nn
 from pydantic.fields import Field
@@ -58,7 +59,7 @@ class SelfSupervisedGradients(Gradients):
 class KlDivGradients(Gradients):
     """Compute the KL divergence between the model and the data."""
 
-    def __init__(self, eps: float = 1e-3):
+    def __init__(self, eps: Optional[float] = None):
         super().__init__()
         if eps:
             self.log_eps = math.log(eps)
@@ -74,17 +75,17 @@ class KlDivGradients(Gradients):
         # Define the logits of the model `q_model(z)`
         # set -inf wherever:
         #   - the section is masked (padding)
-        model_logits = torch.einsum("bh, bdh -> bd", data.hq, data.hd)
-        model_logits.masked_fill_(is_padding, -torch.inf)
-        model_logits = model_logits.log_softmax(dim=-1)
+        model_scores = torch.einsum("bh, bdh -> bd", data.hq, data.hd)
+        model_scores.masked_fill_(is_padding, -torch.inf)
+        model_logits = model_scores.log_softmax(dim=-1)
 
         # Define the logits target distribution `p_data(z)`
         # set -log(eps) wherever:
         #   - the section is labelled as negative
         #   - except when all the sections for a given are negative
         is_negative = ~data.targets
-        q_with_only_negatives = is_negative.all(dim=-1)
-        data_zero_prob = is_negative & ~q_with_only_negatives[:, None]
+        q_with_positives = ~is_negative.all(dim=-1)
+        data_zero_prob = is_negative | ~q_with_positives[:, None]
         data_logits = torch.where(
             data_zero_prob,
             self.log_eps,
@@ -95,16 +96,13 @@ class KlDivGradients(Gradients):
         data_logits.masked_fill_(is_padding, -torch.inf)
         data_logits = data_logits.log_softmax(dim=-1)
 
-        # Compute the loss `KL( q_model(z) || p_data(z) )`
+        # Compute the loss `KL( p_data(z) || p_model(z) )`
         # Exclude:
         #   - the sections which are masked (padding)
         #   - the questions where there are no positive
-        kl_div_terms = torch.where(
-            is_padding | q_with_only_negatives[:, None],
-            0,
-            model_logits.exp() * (model_logits - data_logits),
-        )
+        mask = (data_logits.isinf() & (data_logits < 0)) | is_padding | ~q_with_positives[:, None]
+        kl_div_terms = torch.where(mask, 0, -data_logits.exp() * (model_logits - data_logits))
         kl_div = kl_div_terms.sum(dim=-1)
-        loss = kl_div.mean()
+        loss = (q_with_positives * kl_div).sum() / q_with_positives.sum()
 
         return {"loss": loss, "_targets": data.targets, "_logits": model_logits}

@@ -2,22 +2,22 @@
 
 defaults:
   - override /builder: msmarco
-  - override /model/encoder: t5-base
+  - override /model/encoder: bert-base
   - override /model/gradients: kl_div
   - _self_
 
 model:
-  embedding_size: 768
-  use_pooler_layer: false
+  embedding_size: null
+  use_pooler_layer: true
   optimizer:
-    lr: 3e-6
+    lr: 1e-5
     weight_decay: 0
   scheduler:
     total_iters: 1_000
 
 batch_size:
   effective: 32
-  per_device: 16
+  per_device: 32
   per_device_eval: 64
 
 resources:
@@ -28,10 +28,13 @@ trainer:
   accelerator: gpu
   precision: 16
   val_check_interval: 1_000
-  limit_val_batches: 200
+  limit_val_batches: 100
 
 builder:
-  top_k: 8
+  n_sections:
+    train: 8
+    validation: null
+    test: null
   subset_size: null
   question_max_length: null
-  section_max_length: 200
+  section_max_length: 220

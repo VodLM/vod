@@ -1,7 +1,7 @@
 import json
 from typing import Optional
 
-from datasets.fingerprint import hashregister, Hasher
+from datasets.fingerprint import Hasher, hashregister
 from pydantic import Field
 
 from .pipe import Pipe

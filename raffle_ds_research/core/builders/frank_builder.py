@@ -9,9 +9,8 @@ from omegaconf import DictConfig, OmegaConf
 from pydantic import BaseModel, Field
 from transformers import PreTrainedTokenizerBase
 
-from raffle_ds_research.datasets.builders.builder import HfBuilder
-from raffle_ds_research.datasets.generators.pretrain_utils import FrankSplitName, HfFrankSplit, load_hf_frank
-from raffle_ds_research.tools import pipes
+from raffle_ds_research.tools import dataset_builder, pipes
+from raffle_ds_research.tools.raffle_datasets import frank
 
 QUESTION_TEMPLATE = "<extra_id_0>{{ question }}"
 SECTION_TEMPLATE = "<extra_id_1>Title: " "{% if title %}{{ title }}{% else %}NO TITLE{% endif %}. " "{{ content }}"
@@ -49,16 +48,16 @@ class FrankRowModel(BaseModel):
     )
 
 
-class FrankBuilder(HfBuilder):
+class FrankBuilder(dataset_builder.HfBuilder):
     def __init__(
         self,
         language: str,
-        split: FrankSplitName,
+        split: frank.FrankSplitName,
         tokenizer: PreTrainedTokenizerBase,
         name: str = "frank",
         prep_map_kwargs: Optional[dict] = None,
         index_max_top_k: int = 100,
-        top_k: int = 32,
+        n_sections: int = 32,
         question_max_length: Optional[int] = 512,
         section_max_length: Optional[int] = 512,
         templates: Optional[dict[str, str]] = None,
@@ -89,13 +88,12 @@ class FrankBuilder(HfBuilder):
         self.templates = templates
 
         # collate
-        self.top_k = top_k
+        self.n_sections = n_sections
         self.question_max_length = question_max_length
         self.section_max_length = section_max_length
 
-    def _load_frank_split(self, frank_split: FrankSplitName) -> HfFrankSplit:
-        frank = load_hf_frank(self.language)
-        return getattr(frank, frank_split)
+    def _load_frank_split(self, frank_split: frank.FrankSplitName) -> frank.HfFrankSplit:
+        return frank.load_frank(self.language, split=frank_split)
 
     def _build_sections(self) -> HfDataset:
         frank_split = self._load_frank_split(self.split)
@@ -147,9 +145,9 @@ class FrankBuilder(HfBuilder):
 
         return mapped_qa
 
-    def get_collate_fn(self):
+    def get_collate_fn(self, split: Optional[str] = None):
         sections = self._build_sections()
-        sampler = pipes.RandomSampler(total=self.top_k)
+        sampler = pipes.RandomSampler(total=self.n_sections)
         collate_fn = pipes.SupervisedBatcher(
             tokenizer=self.tokenizer,
             sampler=sampler,

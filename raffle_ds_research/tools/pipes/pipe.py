@@ -2,11 +2,10 @@ from __future__ import annotations
 
 from abc import ABC
 from copy import copy
-from typing import TypeVar, Generic, Optional, Type
-from typing import Union
+from typing import Generic, Optional, Type, TypeVar, Union
 
 import torch
-from pydantic import BaseModel, PrivateAttr, Extra, Field
+from pydantic import BaseModel, Extra, Field, PrivateAttr
 
 I = TypeVar("I", bound=Union[None, BaseModel])
 """Models an input bach."""

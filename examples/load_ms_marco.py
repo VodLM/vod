@@ -5,8 +5,7 @@ import torch.utils.data
 import transformers
 from tqdm import tqdm
 
-from raffle_ds_research import MsMarcosBuilder
-from raffle_ds_research import Print
+from raffle_ds_research import MsMarcosBuilder, Print
 
 if __name__ == "__main__":
     tokenizer = transformers.AutoTokenizer.from_pretrained("bert-base-uncased")

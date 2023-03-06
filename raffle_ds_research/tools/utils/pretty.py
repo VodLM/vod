@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from copy import copy
 from numbers import Number
-from typing import Optional, List
+from typing import List, Optional
 
 import rich
 from omegaconf import DictConfig, OmegaConf, open_dict

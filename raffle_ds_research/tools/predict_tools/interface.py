@@ -3,7 +3,7 @@ from __future__ import annotations
 import functools
 import shutil
 from pathlib import Path
-from typing import Any, Callable, Optional, Iterable
+from typing import Any, Callable, Iterable, Optional
 
 import numpy as np
 import pytorch_lightning as pl
@@ -13,19 +13,15 @@ from datasets import Dataset as HfDataset
 from datasets import DatasetDict as HfDatasetDict
 from datasets.fingerprint import Hasher
 from loguru import logger
-from pydantic import BaseModel, validator, Extra
+from pydantic import BaseModel, Extra, validator
 from pytorch_lightning import Trainer
 
-from raffle_ds_research.datasets.builders.builder import DatasetProtocol
+from raffle_ds_research.tools.dataset_builder.builder import CollateFnProtocol, DatasetProtocol
 from raffle_ds_research.tools.utils.tensor_tools import serialize_tensor
+
 from .callback import StorePredictions
 from .ts_utils import TensorStoreFactory
-from .wrappers import (
-    _wrap_dataset_with_indices,
-    _wrap_collate_fn_with_indices,
-    _warp_as_lightning_model,
-    CollateFnType,
-)
+from .wrappers import _warp_as_lightning_model, _wrap_collate_fn_with_indices, _wrap_dataset_with_indices
 
 
 class DataLoaderForPredictKwargs(BaseModel):
@@ -68,7 +64,7 @@ def predict(
     trainer: Trainer,
     cache_dir: str | Path,
     model: torch.nn.Module | pl.LightningModule,
-    collate_fn: Callable[[list[dict]], dict],
+    collate_fn: CollateFnProtocol = torch.utils.data.dataloader.default_collate,
     model_output_key: Optional[str] = None,
     loader_kwargs: Optional[dict[str, Any] | DataLoaderForPredictKwargs] = None,
     ts_kwargs: Optional[dict[str, Any]] = None,
@@ -145,7 +141,7 @@ def _infer_vector_shape(
     model_output_key: Optional[str],
     *,
     dataset: DatasetProtocol,
-    collate_fn: CollateFnType,
+    collate_fn: CollateFnProtocol,
 ) -> tuple[int, ...]:
     # todo: handle variable length inputs
     try:

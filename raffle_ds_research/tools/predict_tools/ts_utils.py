@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal, Any, Union, Iterable
+from typing import Any, Iterable, Literal, Union
 
 import pydantic
 import tensorstore

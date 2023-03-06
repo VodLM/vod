@@ -1,9 +1,9 @@
-from .pipe import Pipe
 from .batching import SupervisedBatcher
 from .compose import Sequential
 from .debug import Print
-from .sampler import Sampler, RandomSampler
+from .index.index import Index
+from .index.lookup import LookupIndex
+from .pipe import Pipe
+from .sampler import RandomSampler, Sampler
 from .template import TemplatePipe
 from .tokenizer import TokenizerPipe
-from .index.lookup import LookupIndex
-from .index.index import Index

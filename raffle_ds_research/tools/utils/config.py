@@ -1,16 +1,15 @@
 import os
 import socket
-from random import random, randint
+from random import randint, random
 from typing import Optional
 
 import randomname
 import torch
-from hydra import initialize_config_module, compose
-from omegaconf import DictConfig
-from omegaconf import OmegaConf
+from hydra import compose, initialize_config_module
+from omegaconf import DictConfig, OmegaConf
 
-from raffle_ds_research.tools.utils.git import git_revision_hash, git_revision_short_hash, git_branch_name
-from raffle_ds_research.tools.utils.misc import int_div, int_mul, int_max
+from raffle_ds_research.tools.utils.git import git_branch_name, git_revision_hash, git_revision_short_hash
+from raffle_ds_research.tools.utils.misc import int_div, int_max, int_mul
 
 
 def init_hydra_config(

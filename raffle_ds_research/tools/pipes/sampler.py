@@ -3,9 +3,9 @@ from numbers import Number
 from typing import Optional, Union
 
 import torch
-from pydantic import Field, BaseModel, PrivateAttr
+from pydantic import BaseModel, Field, PrivateAttr
 
-from .pipe import Pipe, I, O, E
+from .pipe import E, I, O, Pipe
 
 
 class Sampler(Pipe[I, O, E]):

@@ -1,21 +1,22 @@
 from __future__ import annotations
 
 import functools
-from typing import Any, Optional, Union, Iterable
+from typing import Any, Iterable, Optional, Union
 
 import pytorch_lightning as pl
 import rich
 import torch
 import transformers
-from datasets.fingerprint import hashregister, Hasher
+from datasets.fingerprint import Hasher, hashregister
 from hydra.utils import instantiate
 from loguru import logger
 from omegaconf import DictConfig
+from optimum.bettertransformer import BetterTransformer
 from torch.optim.lr_scheduler import _LRScheduler  # type: ignore
-from transformers import T5EncoderModel, BertModel, BertConfig
+from transformers import BertConfig, BertModel, T5EncoderModel
 
-from raffle_ds_research.ml_models.gradients import Gradients
-from raffle_ds_research.ml_models.monitor import Monitor
+from raffle_ds_research.core.ml_models.gradients import Gradients
+from raffle_ds_research.core.ml_models.monitor import Monitor
 
 TransformerEncoder = Union[T5EncoderModel, BertModel]
 
@@ -42,6 +43,7 @@ class Ranker(pl.LightningModule):
         embedding_size: Optional[int] = 512,
         use_pooler_layer: bool = False,
         init_proj_to_zero: bool = True,
+        better_transformers: bool = False,
     ):
         super().__init__()
         if isinstance(optimizer, (dict, DictConfig)):
@@ -53,10 +55,13 @@ class Ranker(pl.LightningModule):
 
         self.optimizer_cls: functools.partial = optimizer
         self.scheduler_cls: functools.partial = scheduler
+
+        if better_transformers:
+            encoder = BetterTransformer.transform(encoder)
+
         self.encoder = encoder
         self.gradients = gradients
         self.monitor = monitor
-
         # projection layer
         self.use_pooler_layer = use_pooler_layer
         h_model = self._infer_model_output_size(encoder)
@@ -174,10 +179,9 @@ class Ranker(pl.LightningModule):
     def _step(self, batch: dict, batch_idx: Optional[int] = None, *, split: str, **kwargs) -> dict:
         output = self(batch)
 
-        # todo: update metrics in _step_metrics
         if self.monitor is not None:
             self.monitor.update(output, split=split)
-            if self.monitor.on_step(split):
+            if self.monitor.log_on_step(split):
                 metrics = self.monitor.compute(split=split)
                 output.update(metrics)
                 self.monitor.reset(split=split)

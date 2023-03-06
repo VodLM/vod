@@ -2,10 +2,19 @@
 
 A simple interface to download Raffle datasets as `datasets.Dataset` objects.
 
-## Usage
+## HF-like interface
 
 ```python
+import datasets
 from raffle_ds_research.tools.raffle_datasets import load_raffle_dataset
 
-frank = load_raffle_dataset("frank", name="en.A.qa_splits")
+frank: datasets.DatasetDict = load_raffle_dataset("frank", name="en.A.qa_splits")
+```
+
+## Frank
+
+```python
+from raffle_ds_research.tools.raffle_datasets import frank
+dset: frank.HfFrankSplit = frank.load_frank(language="en", split="A")
+```
 ```

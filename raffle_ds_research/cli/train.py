@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from pathlib import Path
+from typing import Optional
+
 import datasets
 import hydra
 import pytorch_lightning as pl
@@ -7,17 +10,27 @@ import rich
 import torch
 import transformers
 from hydra.utils import instantiate
+from lightning_fabric import seed_everything
 from loguru import logger
 from omegaconf import DictConfig, OmegaConf
-from pytorch_lightning.utilities.seed import seed_everything
+from pytorch_lightning.loggers import MLFlowLogger
 from torch.utils.data import DataLoader
 
-from raffle_ds_research.datasets.builders import FrankBuilder
-from raffle_ds_research.ml_models.ranker import Ranker
+from raffle_ds_research.core.builders import FrankBuilder
+from raffle_ds_research.core.ml_models import Ranker
 from raffle_ds_research.tools.utils.config import register_omgeaconf_resolvers
 from raffle_ds_research.tools.utils.pretty import print_config
+from raffle_ds_research.utiils.config import config_to_flat_dict
 
 register_omgeaconf_resolvers()
+
+MLFlowLogger
+
+
+def fetch_mlflow_logger(loggers: list[pl.loggers.base.LightningLoggerBase]) -> Optional[pl.loggers.MLFlowLogger]:
+    for logger in loggers:
+        if isinstance(logger, pl.loggers.mlflow.MLFlowLogger):
+            return logger
 
 
 @hydra.main(config_path="../configs/", config_name="main", version_base="1.3")
@@ -25,8 +38,8 @@ def run(config: DictConfig):
     datasets.utils.logging.set_verbosity_error()
     transformers.utils.logging.set_verbosity_error()
     print_config(config)
-    with open("config.yaml", "w") as f:
-        f.write(OmegaConf.to_yaml(config))
+    exp_dir = Path()
+    logger.info(f"Experiment directory: {exp_dir.absolute()}")
 
     # Instantiate the dataset builder
     logger.info(f"Instantiating builder <{config.builder._target_}>")
@@ -36,7 +49,6 @@ def run(config: DictConfig):
     logger.info(f"Building the Frank ({builder.split}) dataset..")
     seed_everything(config.seed)
     dataset = builder()
-    collate_fn = builder.get_collate_fn()
     rich.print(dataset)
 
     # load the model
@@ -50,17 +62,37 @@ def run(config: DictConfig):
     except Exception as e:
         logger.warning(f"Could not compile the model: {e}")
 
-    # Trainer
+    # Init the trainer, log the hyperparameters
     logger.info(f"Instantiating model <{config.trainer._target_}>")
     trainer: pl.Trainer = instantiate(config.trainer)
+    log_config(trainer, config, exp_dir)
 
     # Init the data loaders
-    train_loader = DataLoader(dataset["train"], collate_fn=collate_fn, **config.train_loader_kwargs)
-    val_loader = DataLoader(dataset["validation"], collate_fn=collate_fn, **config.eval_loader_kwargs)
+    train_loader = DataLoader(
+        dataset["train"],
+        collate_fn=builder.get_collate_fn(split="train"),
+        **config.train_loader_kwargs,
+    )
+    val_loader = DataLoader(
+        dataset["validation"],
+        collate_fn=builder.get_collate_fn(split="validation"),
+        **config.eval_loader_kwargs,
+    )
 
     # train the ranker
     seed_everything(config.seed, workers=True)
     trainer.fit(ranker, train_dataloaders=train_loader, val_dataloaders=val_loader)
+
+
+def log_config(trainer, config, exp_dir):
+    """Log the config as hyperparameters and save it locally and on MLFlow."""
+    trainer.logger.log_hyperparams(config_to_flat_dict(config))
+    mlflow_logger = fetch_mlflow_logger(trainer.loggers)
+    config_path = Path(exp_dir, "config.yaml")
+    with open(config_path, "w") as f:
+        f.write(OmegaConf.to_yaml(config))
+    if mlflow_logger:
+        mlflow_logger._mlflow_client.log_artifact(run_id=mlflow_logger.run_id, local_path=config_path)
 
 
 if __name__ == "__main__":

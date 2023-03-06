@@ -9,8 +9,8 @@ import numpy as np
 from datasets.fingerprint import hashregister
 from pydantic import PrivateAttr
 
-from .index import Index, SupervisedIndexInput, SupervisedIndexOuput
 from ..utils.misc import pad_list
+from .index import Index, SupervisedIndexInput, SupervisedIndexOuput
 
 
 class LookupIndex(Index[SupervisedIndexInput, SupervisedIndexOuput, None]):

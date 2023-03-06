@@ -4,9 +4,9 @@ import math
 from typing import Optional, TypeVar
 
 from datasets import Dataset as HfDataset
-from pydantic import PrivateAttr, BaseModel, Field, root_validator
+from pydantic import BaseModel, Field, PrivateAttr, root_validator
 
-from ..pipe import Pipe, I, O, E
+from ..pipe import E, I, O, Pipe
 from ..utils.misc import keep_only_columns
 
 T = TypeVar("T")

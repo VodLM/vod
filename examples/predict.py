@@ -9,8 +9,7 @@ import torch
 import transformers
 from transformers import BertModel
 
-from raffle_ds_research import predict
-from raffle_ds_research import Trainer
+from raffle_ds_research import Trainer, predict
 
 
 class CollateFn(object):

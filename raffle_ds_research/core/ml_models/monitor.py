@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from typing import Optional, Tuple, Literal
+from typing import Optional, Tuple
 
 import torch
 import torchmetrics
-from omegaconf import OmegaConf, DictConfig
+from omegaconf import DictConfig, OmegaConf
 from torch import nn
-from torchmetrics import MetricCollection, Metric
+from torchmetrics import Metric, MetricCollection
 
-SplitName = Literal["train", "val", "test"]
-MetricsBySplits = dict[SplitName, dict[str, Metric]]
+SPLIT_NAMES = ["train", "val", "test"]
+MetricsBySplits = dict[str, dict[str, Metric]]
 
 
 class Monitor(nn.Module):
@@ -17,18 +17,18 @@ class Monitor(nn.Module):
     computing and collecting metrics"""
 
     metrics: dict[str, MetricCollection]
-    _on_step: dict[SplitName, bool]
+    _log_on_step: dict[str, bool]
 
-    def __init__(self, metrics: MetricsBySplits, on_step: dict[SplitName, bool] = None):
+    def __init__(self, metrics: MetricsBySplits, log_on_step: dict[str, bool] = None):
         super().__init__()
-        self.metrics, self._on_step = {}, {}
+        self.metrics, self._log_on_step = {}, {}
         for key, metric in metrics.items():
             metric = self._handle_metric_init(metric)
             self.metrics[key] = metric
-            if on_step is None:
-                self._on_step[key] = False
+            if log_on_step is None:
+                self._log_on_step[key] = False
             else:
-                self._on_step[key] = on_step[key]
+                self._log_on_step[key] = log_on_step[key]
 
     @staticmethod
     def _handle_metric_init(metric):
@@ -55,10 +55,13 @@ class Monitor(nn.Module):
             raise TypeError(f"Unknown metric type: {type(metric)}")
         return metric
 
-    def on_step(self, split: SplitName) -> bool:
-        return self._on_step[split]
+    def log_on_step(self, split: str) -> bool:
+        """Return True if the metrics should be logged on step"""
+        if split not in SPLIT_NAMES:
+            raise TypeError(f"Unknown split type: {type(split)}")
+        return self._log_on_step[split]
 
-    def forward(self, data: dict, split: SplitName) -> dict:
+    def forward(self, data: dict, split: str) -> dict:
         """Compute the metrics"""
         metric = self.metrics[split]
         args = self._make_args(data)

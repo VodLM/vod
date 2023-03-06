@@ -1,16 +1,14 @@
 from __future__ import annotations
 
 import functools
-from typing import Callable, Sized
+from typing import Sized
 
 import pytorch_lightning as pl
 import torch
-from typing_extensions import TypeAlias
 
-from raffle_ds_research.datasets.builders.builder import DatasetProtocol
+from raffle_ds_research.tools.dataset_builder.builder import CollateFnProtocol, DatasetProtocol
 
 PREDICT_IDX_COL_NAME = "__idx__"
-CollateFnType: TypeAlias = Callable[[list[dict]], dict]
 
 
 class ModuleWrapper(pl.LightningModule):
@@ -24,10 +22,10 @@ class ModuleWrapper(pl.LightningModule):
         return self.module(batch)
 
 
-class DatasetWithIndices(DatasetProtocol[dict]):
+class DatasetWithIndices(DatasetProtocol):
     """This class is used to add the column `IDX_COL` to the batch"""
 
-    def __init__(self, dataset: Sized):
+    def __init__(self, dataset: DatasetProtocol):
         self.dataset = dataset
 
     def __len__(self):
@@ -45,7 +43,7 @@ class DatasetWithIndices(DatasetProtocol[dict]):
         return batch
 
 
-def collate_with_ids(rows: list[dict], collate_fn: CollateFnType) -> dict:
+def collate_with_ids(rows: list[dict], collate_fn: CollateFnProtocol) -> dict:
     def _safely_fetch_id(row: dict) -> int:
         try:
             return row.pop(PREDICT_IDX_COL_NAME)
@@ -61,7 +59,7 @@ def collate_with_ids(rows: list[dict], collate_fn: CollateFnType) -> dict:
     return batch
 
 
-def _wrap_collate_fn_with_indices(collate_fn: CollateFnType) -> CollateFnType:
+def _wrap_collate_fn_with_indices(collate_fn: CollateFnProtocol) -> CollateFnProtocol:
     """Wrap the collate_fn to return IDX_COL along the batch values"""
 
     return functools.partial(collate_with_ids, collate_fn=collate_fn)

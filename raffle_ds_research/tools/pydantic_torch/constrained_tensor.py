@@ -1,4 +1,4 @@
-from typing import Optional, Union, Iterable, Callable, Any, Dict, Type
+from typing import Any, Callable, Dict, Iterable, Optional, Type, Union
 
 import numpy as np
 import torch

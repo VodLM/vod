@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Union, Iterable, Optional
+from typing import Iterable, Optional, Union
 
 import pytorch_lightning as pl
 from fsspec import Callback

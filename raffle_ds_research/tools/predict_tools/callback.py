@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from asyncio import Future
-from typing import Optional, List
+from typing import List, Optional
 
 import pytorch_lightning as pl
 import tensorstore
@@ -10,6 +10,7 @@ import torch
 from pytorch_lightning import Callback
 
 from raffle_ds_research.tools.utils.trainer import Trainer
+
 from .wrappers import PREDICT_IDX_COL_NAME
 
 

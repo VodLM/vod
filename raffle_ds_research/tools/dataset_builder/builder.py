@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from copy import copy
-from typing import Callable, List, TypeVar, Generic, Protocol, Optional, Union
+from typing import Generic, List, Optional, Protocol, TypeVar, Union
 
 import numpy as np
 import torch
@@ -11,14 +11,17 @@ from datasets import DatasetDict as HfDatasetDict
 from datasets import load_dataset
 from pydantic import BaseModel, ValidationError
 
-E = TypeVar("E", bound=Union[dict, BaseModel])
 
-
-class DatasetProtocol(Protocol[E]):
-    def __getitem__(self, index: int) -> E:
+class DatasetProtocol(Protocol):
+    def __getitem__(self, index: int) -> dict:
         ...
 
     def __len__(self) -> int:
+        ...
+
+
+class CollateFnProtocol(Protocol):
+    def __call__(self, batch: List[dict]) -> dict:
         ...
 
 
@@ -26,7 +29,7 @@ D = TypeVar("D", bound=DatasetProtocol)
 DD = TypeVar("DD", bound=Union[dict[str, DatasetProtocol], HfDatasetDict])
 
 
-class DatasetBuilder(Generic[DD, E], ABC):
+class DatasetBuilder(Generic[DD], ABC):
     """Abstract object for all dataset datasets."""
 
     @abstractmethod
@@ -36,7 +39,7 @@ class DatasetBuilder(Generic[DD, E], ABC):
 
     @staticmethod
     @abstractmethod
-    def get_collate_fn() -> Callable[[List[E]], dict]:
+    def get_collate_fn(split: Optional[str] = None) -> CollateFnProtocol:
         """Return collate function for that dataset."""
         return torch.utils.data.dataloader.default_collate
 
@@ -49,9 +52,10 @@ class CollateRuntimeError(RuntimeError):
     ...
 
 
-class HfBuilder(DatasetBuilder[HfDatasetDict, dict]):
+class HfBuilder(DatasetBuilder[HfDatasetDict]):
     validator: Optional[type(BaseModel)] = None
     batch_validator: Optional[type(BaseModel)] = None
+    _validate_splits: list[str] = ["train", "validation", "test"]
 
     def __init__(
         self,
@@ -70,7 +74,8 @@ class HfBuilder(DatasetBuilder[HfDatasetDict, dict]):
     def __call__(self):
         dset = self._build_dset()
         for key, dset_split in dset.items():
-            self._validate(dset_split)
+            if key in self._validate_splits:
+                self._validate(dset_split)
         return dset
 
     def _build_dset(self) -> HfDatasetDict:
@@ -85,7 +90,7 @@ class HfBuilder(DatasetBuilder[HfDatasetDict, dict]):
 
         # collate_fn
         xs = [dset[i] for i in range(min(3, len(dset)))]
-        collate_fn = self.get_collate_fn()
+        collate_fn = self.get_collate_fn(split="train")
         try:
             batch = collate_fn(xs)
             if self.batch_validator is not None:
@@ -97,7 +102,7 @@ class HfBuilder(DatasetBuilder[HfDatasetDict, dict]):
             ) from e
 
     @staticmethod
-    def get_collate_fn():
+    def get_collate_fn(split: Optional[str] = None):
         return torch.utils.data.dataloader.default_collate
 
     def _take_subset(self, dset: HfDatasetDict) -> HfDatasetDict:

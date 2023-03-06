@@ -6,5 +6,5 @@ defaults:
   - monitor: retrieval
   - _self_
 
-_target_: raffle_ds_research.ml_models.ranker.Ranker
+_target_: raffle_ds_research.core.ml_models.Ranker
 embedding_size: 512
