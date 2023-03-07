@@ -1,3 +1,4 @@
+cache/
 runs/
 lightning_logs/
 sandbox*

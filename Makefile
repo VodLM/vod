@@ -21,3 +21,6 @@ black:
 
 test:
 	poetry run pytest
+
+ray_start:
+	poetry run ray start --head --port=6379
