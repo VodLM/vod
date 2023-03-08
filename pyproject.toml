@@ -55,7 +55,6 @@ scikit-learn = "^1"
 fastapi = "^0.92.0"
 uvicorn = "^0.20.0"
 python-multipart = "^0.0.6"
-ray = "^2.3.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.1"
