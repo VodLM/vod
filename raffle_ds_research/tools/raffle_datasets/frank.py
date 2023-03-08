@@ -1,10 +1,12 @@
 # pylint: disable=missing-function-docstring
+from __future__ import annotations
+
 import json
 from collections import defaultdict
 from enum import Enum
 from os import PathLike
 from pathlib import Path
-from typing import Optional, Type
+from typing import Optional, Type, Union
 
 from datasets import Dataset as HfDataset
 from datasets import DatasetDict as HfDatasetDict
@@ -129,7 +131,7 @@ def _make_local_sync_path(cached_dir: PathLike, language: str, split: FrankSplit
 @validate_arguments(config=dict(arbitrary_types_allowed=True))
 def load_frank(
     language: str,
-    split: str | FrankSplitName,
+    split: Union[str, FrankSplitName],
     version: int = 0,
     cache_dir: Optional[PathLike] = None,
     keep_in_memory: Optional[bool] = None,

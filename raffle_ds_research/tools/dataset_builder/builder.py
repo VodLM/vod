@@ -6,9 +6,7 @@ from typing import Generic, List, Optional, Protocol, TypeVar, Union
 
 import numpy as np
 import torch
-from datasets import Dataset as HfDataset
-from datasets import DatasetDict as HfDatasetDict
-from datasets import load_dataset
+import datasets
 from pydantic import BaseModel, ValidationError
 
 
@@ -26,7 +24,7 @@ class CollateFnProtocol(Protocol):
 
 
 D = TypeVar("D", bound=DatasetProtocol)
-DD = TypeVar("DD", bound=Union[dict[str, DatasetProtocol], HfDatasetDict])
+DD = TypeVar("DD", bound=Union[dict[str, DatasetProtocol], datasets.DatasetDict])
 
 
 class DatasetBuilder(Generic[DD], ABC):
@@ -36,6 +34,11 @@ class DatasetBuilder(Generic[DD], ABC):
     def __call__(self) -> DD:
         """Instantiate dataset and return it."""
         ...
+
+    @staticmethod
+    def get_corpus(self) -> Optional[datasets.Dataset]:
+        """Return corpus dataset if it exists."""
+        return None
 
     @staticmethod
     @abstractmethod
@@ -52,7 +55,7 @@ class CollateRuntimeError(RuntimeError):
     ...
 
 
-class HfBuilder(DatasetBuilder[HfDatasetDict]):
+class HfBuilder(DatasetBuilder[datasets.DatasetDict]):
     validator: Optional[type(BaseModel)] = None
     batch_validator: Optional[type(BaseModel)] = None
     _validate_splits: list[str] = ["train", "validation", "test"]
@@ -78,11 +81,11 @@ class HfBuilder(DatasetBuilder[HfDatasetDict]):
                 self._validate(dset_split)
         return dset
 
-    def _build_dset(self) -> HfDatasetDict:
-        dset = load_dataset(self.name, **self.load_kwargs)
+    def _build_dset(self) -> datasets.DatasetDict:
+        dset = datasets.load_dataset(self.name, **self.load_kwargs)
         return dset
 
-    def _validate(self, dset: HfDataset):
+    def _validate(self, dset: datasets.Dataset):
         # validate the first row
         if self.validator is not None:
             row = dset[0]
@@ -105,7 +108,7 @@ class HfBuilder(DatasetBuilder[HfDatasetDict]):
     def get_collate_fn(split: Optional[str] = None):
         return torch.utils.data.dataloader.default_collate
 
-    def _take_subset(self, dset: HfDatasetDict) -> HfDatasetDict:
+    def _take_subset(self, dset: datasets.DatasetDict) -> datasets.DatasetDict:
         subset_size = copy(self.subset_size)
         if isinstance(subset_size, int):
             subset_size = {split: subset_size for split in dset.keys()}
@@ -119,4 +122,4 @@ class HfBuilder(DatasetBuilder[HfDatasetDict]):
             ids = rgn.choice(list(range(len(dset[split]))), size=size, replace=False)
             new_mapped_qa[split] = dset[split].select(ids)
 
-        return HfDatasetDict(new_mapped_qa)
+        return datasets.DatasetDict(new_mapped_qa)

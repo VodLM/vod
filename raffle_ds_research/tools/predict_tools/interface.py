@@ -1,24 +1,23 @@
 from __future__ import annotations
 
-import functools
+import math
 import shutil
+from numbers import Number
 from pathlib import Path
 from typing import Any, Callable, Iterable, Optional
 
+import datasets
 import numpy as np
 import pytorch_lightning as pl
 import tensorstore
 import torch
-from datasets import Dataset as HfDataset
-from datasets import DatasetDict as HfDatasetDict
-from datasets.fingerprint import Hasher
 from loguru import logger
+from omegaconf import DictConfig, omegaconf
 from pydantic import BaseModel, Extra, validator
 from pytorch_lightning import Trainer
 
 from raffle_ds_research.tools.dataset_builder.builder import CollateFnProtocol, DatasetProtocol
 from raffle_ds_research.tools.utils.tensor_tools import serialize_tensor
-
 from .callback import StorePredictions
 from .ts_utils import TensorStoreFactory
 from .wrappers import _warp_as_lightning_model, _wrap_collate_fn_with_indices, _wrap_dataset_with_indices
@@ -57,16 +56,62 @@ class DataLoaderForPredictKwargs(BaseModel):
         return False
 
 
-@functools.singledispatch
 def predict(
-    dataset: DatasetProtocol,
+    dataset: DatasetProtocol | datasets.Dataset | datasets.DatasetDict | dict[str, DatasetProtocol],
     *,
     trainer: Trainer,
     cache_dir: str | Path,
     model: torch.nn.Module | pl.LightningModule,
     collate_fn: CollateFnProtocol = torch.utils.data.dataloader.default_collate,
     model_output_key: Optional[str] = None,
-    loader_kwargs: Optional[dict[str, Any] | DataLoaderForPredictKwargs] = None,
+    loader_kwargs: Optional[dict[str, Any] | DictConfig | DataLoaderForPredictKwargs] = None,
+    ts_kwargs: Optional[dict[str, Any]] = None,
+    validate_store: bool | int = True,
+) -> TensorStoreFactory | dict[str, TensorStoreFactory]:
+    """Compute predictions for a dataset and store them in a tensorstore"""
+    if isinstance(dataset, (dict, datasets.DatasetDict)):
+        return _predict_dict(
+            dataset,
+            trainer=trainer,
+            cache_dir=cache_dir,
+            model=model,
+            collate_fn=collate_fn,
+            model_output_key=model_output_key,
+            loader_kwargs=loader_kwargs,
+            ts_kwargs=ts_kwargs,
+            validate_store=validate_store,
+        )
+    else:
+        return _predict_single(
+            dataset,
+            trainer=trainer,
+            cache_dir=cache_dir,
+            model=model,
+            collate_fn=collate_fn,
+            model_output_key=model_output_key,
+            loader_kwargs=loader_kwargs,
+            ts_kwargs=ts_kwargs,
+            validate_store=validate_store,
+        )
+
+
+def _predict_dict(
+    dataset: dict[str, DatasetProtocol],
+    **kwargs,
+) -> dict[str, TensorStoreFactory]:
+    """Compute predictions for a dataset and store them in a tensorstore"""
+    return {split: _predict_single(dset, **kwargs) for split, dset in dataset.items()}
+
+
+def _predict_single(
+    dataset: DatasetProtocol | datasets.Dataset,
+    *,
+    trainer: Trainer,
+    cache_dir: str | Path,
+    model: torch.nn.Module | pl.LightningModule,
+    collate_fn: CollateFnProtocol = torch.utils.data.dataloader.default_collate,
+    model_output_key: Optional[str] = None,
+    loader_kwargs: Optional[dict[str, Any] | DictConfig | DataLoaderForPredictKwargs] = None,
     ts_kwargs: Optional[dict[str, Any]] = None,
     validate_store: bool | int = True,
 ) -> TensorStoreFactory:
@@ -75,8 +120,9 @@ def predict(
     # set the fingerprint and define the store path
     dset_fingerprint = _get_dset_fingerprint(dataset)
     model_fingerprint = _get_model_fingerprint(model)
+    collate_fn_fingerprint = _get_collate_fn_fingerprint(collate_fn)
     logger.debug(f"Computing vectors for dataset: {dset_fingerprint} and model: {model_fingerprint}")
-    fingerprint = f"{dset_fingerprint}_{model_fingerprint}"
+    fingerprint = f"{dset_fingerprint}_{model_fingerprint}_{collate_fn_fingerprint}"
     if model_output_key:
         fingerprint += f"_{model_output_key}"
 
@@ -121,7 +167,7 @@ def predict(
 
     # validate that all store values have been initialized
     if validate_store:
-        n_samples = None if isinstance(validate_store, bool) else validate_store
+        n_samples = math.inf if isinstance(validate_store, bool) else validate_store
         zero_ids = list(_get_zero_indices(dataset, store, n_samples=n_samples))
         if len(zero_ids):
             raise ValueError(
@@ -153,7 +199,10 @@ def _infer_vector_shape(
             f"Implement `model.get_output_shape(output_key: str) -> tuple[int,...]` to skip this step."
         )
         batch = collate_fn([dataset[0]])
-        one_vec = model(batch)
+        if hasattr(model, "predict"):
+            one_vec = model.predict(batch)
+        else:
+            one_vec = model(batch)
         if model_output_key is not None:
             one_vec = one_vec[model_output_key]
         vector_shape = one_vec.shape[1:]
@@ -161,27 +210,15 @@ def _infer_vector_shape(
     return vector_shape
 
 
-def _get_zero_indices(dataset, store, n_samples: Optional[int] = None) -> Iterable[int]:
-    if n_samples is not None:
-        ids = np.random.choice(len(dataset), n_samples, replace=False)
+def _get_zero_indices(dataset, store, n_samples: Number) -> Iterable[int]:
+    if n_samples < len(dataset):
+        ids = np.random.choice(len(dataset), int(n_samples), replace=False)
     else:
         ids = range(len(dataset))
     for i in ids:
         vec = store[i].read()
         if np.all(vec == 0):
             yield i
-
-    return True
-
-
-@predict.register(HfDatasetDict)
-@predict.register(dict)
-def _predict_dict(
-    dataset: dict[str, DatasetProtocol],
-    **kwargs,
-) -> dict[str, TensorStoreFactory]:
-    """Compute predictions for a dataset and store them in a tensorstore"""
-    return {split: predict(dset, **kwargs) for split, dset in dataset.items()}
 
 
 @torch.inference_mode()
@@ -191,7 +228,7 @@ def _compute_and_store_predictions(
     model: torch.nn.Module | pl.LightningModule,
     collate_fn: Callable[[list[dict]], dict],
     store: tensorstore.TensorStore,
-    loader_kwargs: Optional[dict[str, Any] | DataLoaderForPredictKwargs] = None,
+    loader_kwargs: Optional[dict[str, Any] | DictConfig | DataLoaderForPredictKwargs] = None,
     model_output_key: Optional[str] = None,
 ) -> tensorstore.TensorStore:
     """Compute predictions for a dataset and store them in a tensorstore"""
@@ -201,6 +238,8 @@ def _compute_and_store_predictions(
     pl_model = _warp_as_lightning_model(model)
 
     # build the dataloader
+    if isinstance(loader_kwargs, DictConfig):
+        loader_kwargs = omegaconf.OmegaConf.to_container(loader_kwargs, resolve=True)
     if not isinstance(loader_kwargs, DataLoaderForPredictKwargs):
         loader_kwargs = loader_kwargs or {}
         if len(loader_kwargs) == 0:
@@ -216,12 +255,12 @@ def _compute_and_store_predictions(
     return store
 
 
-def _get_dset_fingerprint(dataset: DatasetProtocol):
+def _get_dset_fingerprint(dataset: DatasetProtocol) -> str:
     N_MAX_SAMPLES = 1000
-    if isinstance(dataset, HfDataset):
+    if isinstance(dataset, datasets.Dataset):
         return dataset._fingerprint
     else:
-        hasher = Hasher()
+        hasher = datasets.fingerprint.Hasher()
         hasher.update({"length": len(dataset)})
 
         # select random row ids
@@ -240,9 +279,18 @@ def _get_dset_fingerprint(dataset: DatasetProtocol):
 
 def _get_model_fingerprint(model: torch.nn.Module):
     state = model.state_dict()
-    hasher = Hasher()
-    for k, v in state.items():
+    hasher = datasets.fingerprint.Hasher()
+    hasher.update(type(model).__name__)
+    for k, v in sorted(state.items(), key=lambda x: x[0]):
         hasher.update(k)
         u = serialize_tensor(v)
         hasher.update(u)
     return hasher.hexdigest()
+
+
+def _get_collate_fn_fingerprint(collate_fn: CollateFnProtocol) -> str:
+    hasher = datasets.fingerprint.Hasher()
+    hasher.update(collate_fn)
+    return hasher.hexdigest()
+
+    pass

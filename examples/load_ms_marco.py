@@ -5,11 +5,12 @@ import torch.utils.data
 import transformers
 from tqdm import tqdm
 
-from raffle_ds_research import MsMarcosBuilder, Print
+from raffle_ds_research.core.builders import MsMarcoBuilder
+from raffle_ds_research.tools.pipes import Print
 
 if __name__ == "__main__":
     tokenizer = transformers.AutoTokenizer.from_pretrained("bert-base-uncased")
-    builder = MsMarcosBuilder(
+    builder = MsMarcoBuilder(
         load_kwargs=dict(keep_in_memory=False),
         prep_map_kwargs=dict(num_proc=4, batch_size=1000),
         tokenizer=tokenizer,

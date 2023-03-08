@@ -18,8 +18,8 @@ from raffle_ds_research.tools.index_tools.data_models import (
     SearchFaissQuery,
     FastSearchFaissQuery,
     FastFaissSearchResponse,
-    IoArrayType,
 )
+from raffle_ds_research.tools.index_tools.retrieval_data_type import RetrievalDataType
 
 
 def parse_args() -> argparse.Namespace:
@@ -37,7 +37,7 @@ def init_index(args: argparse.Namespace) -> faiss.Index:
     """Initialize the index"""
     logger.info("Initializing index")
     faiss_index = faiss.read_index(args.index_path)
-    # faiss_index.nprobe = args.nprobe
+    faiss_index.nprobe = args.nprobe
     return faiss_index
 
 
@@ -72,8 +72,8 @@ def search(query: SearchFaissQuery) -> FaissSearchResponse:
 def fast_search(query: FastSearchFaissQuery) -> FastFaissSearchResponse:
     """Search the index. TODO: use gRPC to speed up communication."""
     deserializer = {
-        IoArrayType.NUMPY: io.deserialize_np_array,
-        IoArrayType.TORCH: io.deserialize_torch_tensor,
+        RetrievalDataType.NUMPY: io.deserialize_np_array,
+        RetrievalDataType.TORCH: io.deserialize_torch_tensor,
     }[query.array_type]
     query_vec = deserializer(query.vectors)
     if len(query_vec.shape) != 2:

@@ -1,62 +1,13 @@
 from __future__ import annotations
 
-from enum import Enum
-from typing import Optional, TypeVar, Union, Generic
+from typing import Optional
 
-import numpy as np
-import torch
-from pydantic import BaseModel
+import pydantic
 
-
-class IoArrayType(Enum):
-    NUMPY = "NUMPY"
-    TORCH = "TORCH"
+from raffle_ds_research.tools.index_tools.retrieval_data_type import RetrievalDataType
 
 
-Ts = TypeVar("Ts", bound=Union[np.ndarray, torch.Tensor])
-
-
-def type_repr(x: Ts) -> str:
-    return f"{type(x).__name__}"
-
-
-def array_repr(x: Ts) -> str:
-    return f"{type(x).__name__}(shape={x.shape}, dtype={x.dtype}))"
-
-
-class FaissResults(Generic[Ts]):
-    scores: Ts
-    indices: Ts
-
-    def __init__(self, scores: Ts, indices: Ts):
-        self.scores = scores
-        self.indices = indices
-
-    def _get_repr_parts(self) -> list[str]:
-        parts = [
-            f"{type(self).__name__}[{type_repr(self.scores)}](",
-            f"scores={repr(self.scores)}, ",
-            f"indices={repr(self.indices)},",
-            f")",
-        ]
-
-        return parts
-
-    def __repr__(self) -> str:
-        return "".join(self._get_repr_parts())
-
-    def __str__(self) -> str:
-        return "\n".join(self._get_repr_parts())
-
-    def __eq__(self, other: "FaissResults") -> bool:
-        op = {
-            torch.Tensor: torch.all,
-            np.ndarray: np.all,
-        }[type(self.scores)]
-        return op(self.scores == other.scores) and op(self.indices == other.indices)
-
-
-class FaissInitConfig(BaseModel):
+class FaissInitConfig(pydantic.BaseModel):
     class Config:
         allow_mutation = False
         extra = "forbid"
@@ -65,7 +16,7 @@ class FaissInitConfig(BaseModel):
     nprobe: int = 8
 
 
-class InitResponse(BaseModel):
+class InitResponse(pydantic.BaseModel):
     class Config:
         allow_mutation = False
         extra = "forbid"
@@ -74,16 +25,16 @@ class InitResponse(BaseModel):
     exception: Optional[str]
 
 
-class SearchFaissQuery(BaseModel):
+class SearchFaissQuery(pydantic.BaseModel):
     class Config:
         allow_mutation = False
         extra = "forbid"
 
-    vectors: list  # todo [list[float]]
+    vectors: list = pydantic.Field(..., description="A batch of vectors. Implicitly defines `list[list[float]]`.")
     top_k: int = 3
 
 
-class FastSearchFaissQuery(BaseModel):
+class FastSearchFaissQuery(pydantic.BaseModel):
     """
     This is the same as SearchFaissQuery, but with the vectors serialized.
     todo: use protobuf
@@ -93,21 +44,23 @@ class FastSearchFaissQuery(BaseModel):
         allow_mutation = False
         extra = "forbid"
 
-    vectors: str
-    array_type: IoArrayType = IoArrayType.NUMPY
+    vectors: str = pydantic.Field(
+        ..., description="A batch of serialized vectors`. Implicitly defines `np.ndarray` or `torch.Tensor`."
+    )
+    array_type: RetrievalDataType = RetrievalDataType.NUMPY
     top_k: int = 3
 
 
-class FaissSearchResponse(BaseModel):
+class FaissSearchResponse(pydantic.BaseModel):
     class Config:
         allow_mutation = False
         extra = "forbid"
 
-    scores: list  # todo [list[float]]
-    indices: list  # todo [list[int]]
+    scores: list = pydantic.Field(..., description="A batch of scores. Implicitly defines `list[list[float]]`.")
+    indices: list = pydantic.Field(..., description="A batch of indices. Implicitly defines `list[list[int]]`.")
 
 
-class FastFaissSearchResponse(BaseModel):
+class FastFaissSearchResponse(pydantic.BaseModel):
     """
     This is the same as FaissSearchResponse, but with the vectors serialized.
     todo: use protobuf
