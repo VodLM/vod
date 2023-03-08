@@ -26,3 +26,10 @@ eval_loader_kwargs:
   num_workers: ${resources.num_workers}
   pin_memory: True
   shuffle: False
+
+
+predict_loader_kwargs:
+  batch_size: ${batch_size.per_device_predict}
+  num_workers: ${resources.num_workers}
+  pin_memory: True
+  shuffle: False

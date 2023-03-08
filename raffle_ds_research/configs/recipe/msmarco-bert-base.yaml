@@ -23,9 +23,12 @@ resources:
 trainer:
   accelerator: gpu
   precision: 16
-  val_check_interval: ${int_mul:${trainer.accumulate_grad_batches},500}
-  limit_val_batches: 100
   detect_anomaly: true
+  max_steps: -1
+  max_epochs: 1
+  limit_val_batches: 100
+  val_check_interval: 500
+   #  val_check_interval: ${int_mul:${trainer.accumulate_grad_batches},500}
 
 builder:
   n_sections:

@@ -10,9 +10,14 @@ poetry env use 3.10 # <- requires python 3.10 to be installed
 poetry install
 
 # in case of `InitError` (on GCP): run the following
-# see `https://github.com/python-poetry/poetry/issues/1917#issuecomment-1251667047`
+# --> see `https://github.com/python-poetry/poetry/issues/1917#issuecomment-1251667047`
 export PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring
 poetry install
+
+# faiss segmentation fault
+# --> install faiss using conda first
+# --> see `https://github.com/facebookresearch/faiss/issues/2317`
+conda install -c pytorch faiss-cpu
 ```
 
 ## Usage

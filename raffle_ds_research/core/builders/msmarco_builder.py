@@ -4,7 +4,7 @@ import math
 from typing import Any, Optional
 
 import torch
-from datasets import DatasetDict as HfDatasetDict
+import datasets
 from jinja2 import Template as JinjaTemplate
 from loguru import logger
 from omegaconf import DictConfig, OmegaConf
@@ -147,7 +147,7 @@ class MsMarcoBuilder(dataset_builder.HfBuilder):
             n_sections = OmegaConf.to_container(n_sections)
         self.n_sections = n_sections
 
-    def _build_dset(self) -> HfDatasetDict:
+    def _build_dset(self) -> datasets.DatasetDict:
         dataset = super()._build_dset()
 
         # sub-sample the dataset
@@ -198,6 +198,9 @@ class MsMarcoBuilder(dataset_builder.HfBuilder):
         )
 
         return collate_fn
+
+    def get_corpus(self) -> Optional[datasets.Dataset]:
+        return None
 
 
 def _sample_sections(

@@ -1,4 +1,4 @@
-raffle_path: ${os_expanduser:${oc.env:RAFFLE_PATH,"~/.raffle"}}}
+raffle_path: ${os_expanduser:${oc.env:RAFFLE_PATH,"~/.raffle"}}
 
 # hydra hijacks working directory by changing it to the current log directory,
 # so it's useful to have this path as a special variable
@@ -6,4 +6,4 @@ raffle_path: ${os_expanduser:${oc.env:RAFFLE_PATH,"~/.raffle"}}}
 work_dir: ${hydra:runtime.cwd}
 
 # path to folder with data
-cache_dir: ${sys.raffle_path}/ml-x-cache/}
+cache_dir: ${sys.raffle_path}/ds-research-cache/

@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-import rich
-from datasets import Dataset as HfDataset
-from datasets import DatasetDict as HfDatasetDict
+import datasets
 from omegaconf import DictConfig, OmegaConf
 from pydantic import BaseModel, Field
 from transformers import PreTrainedTokenizerBase
@@ -95,7 +93,7 @@ class FrankBuilder(dataset_builder.HfBuilder):
     def _load_frank_split(self, frank_split: frank.FrankSplitName) -> frank.HfFrankSplit:
         return frank.load_frank(self.language, split=frank_split)
 
-    def _build_sections(self) -> HfDataset:
+    def _build_sections(self) -> datasets.Dataset:
         frank_split = self._load_frank_split(self.split)
         sections = frank_split.sections
 
@@ -107,7 +105,7 @@ class FrankBuilder(dataset_builder.HfBuilder):
         )
         return sections
 
-    def _build_qa(self) -> HfDatasetDict:
+    def _build_qa(self) -> datasets.DatasetDict:
         frank_split = self._load_frank_split(self.split)
         qa = frank_split.qa_splits
 
@@ -120,7 +118,7 @@ class FrankBuilder(dataset_builder.HfBuilder):
         )
         return qa
 
-    def _build_dset(self) -> HfDatasetDict:
+    def _build_dset(self) -> datasets.DatasetDict:
         qa = self._build_qa()
         sections = self._build_sections()
 
@@ -184,3 +182,6 @@ class FrankBuilder(dataset_builder.HfBuilder):
             ]
         )
         return sections_pipe
+
+    def get_corpus(self) -> Optional[datasets.Dataset]:
+        return self._build_sections()

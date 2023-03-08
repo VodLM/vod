@@ -9,6 +9,7 @@ embedding_size: 64
 batch_size:
   per_device: 4
   per_device_eval: 8
+  per_device_predict: 10
 
 resources:
   num_workers: 1

@@ -17,6 +17,7 @@ from transformers import BertConfig, BertModel, T5EncoderModel
 
 from raffle_ds_research.core.ml_models.gradients import Gradients
 from raffle_ds_research.core.ml_models.monitor import Monitor
+from raffle_ds_research.tools.utils.tensor_tools import serialize_tensor
 
 TransformerEncoder = Union[T5EncoderModel, BertModel]
 
@@ -71,6 +72,10 @@ class Ranker(pl.LightningModule):
         else:
             self.proj = torch.nn.Linear(h_model, embedding_size, bias=False)
             self._output_size = embedding_size
+
+    def get_output_shape(self, model_output_key: Optional[str] = None) -> tuple[int, ...]:
+        """Dimension of the model output."""
+        return (self._output_size,)
 
     @staticmethod
     def _infer_model_output_size(encoder: TransformerEncoder) -> int:
@@ -142,23 +147,30 @@ class Ranker(pl.LightningModule):
         return embedding
 
     @staticmethod
-    def _fetch_fields(batch: dict, field: str) -> dict[str, torch.Tensor]:
+    def _fetch_fields(batch: dict, field: str) -> Optional[dict[str, torch.Tensor]]:
         keys = ["input_ids", "attention_mask"]
-        output = {key: batch[f"{field}.{key}"] for key in keys}
+        keys_map = {f"{field}.{key}": key for key in keys}
+        if not all(key in batch for key in keys_map):
+            return None
+        output = {key_to: batch[key_from] for key_from, key_to in keys_map.items()}
         return output
 
     def forward(self, batch: dict, **kwargs: Any) -> dict:
+        output = self.predict(batch)
+        return output
+
+    def predict(self, batch: dict, **kwargs: Any) -> dict[str, torch.Tensor]:
         mapping = {"question": "hq", "section": "hd"}
         output = {}
         for field, key in mapping.items():
-            output[key] = self._forward_field(self._fetch_fields(batch, field))
+            fields = self._fetch_fields(batch, field)
+            if fields is None:
+                continue
+            output[key] = self._forward_field(fields)
         if len(output) == 0:
             raise ValueError(
                 f"No fields to process. " f"Batch keys = {batch.keys()}. " f"Expected fields = {mapping.keys()}."
             )
-
-        output = self.gradients({**batch, **output})
-        output.update(self._input_stats(batch))
         return output
 
     @staticmethod
@@ -175,7 +187,9 @@ class Ranker(pl.LightningModule):
         return output
 
     def _step(self, batch: dict, batch_idx: Optional[int] = None, *, split: str, **kwargs) -> dict:
-        output = self(batch)
+        output = self.forward(batch)
+        output = self.gradients({**batch, **output})
+        output.update(self._input_stats(batch))
 
         if self.monitor is not None:
             self.monitor.update(output, split=split)

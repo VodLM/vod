@@ -1,9 +1,8 @@
 # @package _global_
 
 defaults:
-  - msmarco-bert-base
-  - override /model/encoder: t5-base
-  - override /model/optimizer: adafactor
+  - msmarco-t5-base
+  - override /model/encoder: t5-large
   - _self_
 
 model:
@@ -21,5 +20,6 @@ trainer:
   precision: 32
 
 batch_size:
-  per_device: 16
+  per_device: 4
   effective: 32
+  per_device_eval: 32
