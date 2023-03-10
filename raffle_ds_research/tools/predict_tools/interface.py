@@ -15,14 +15,14 @@ from datasets import fingerprint
 from loguru import logger
 from omegaconf import DictConfig, omegaconf
 from pydantic import BaseModel, Extra, validator
-from pytorch_lightning import Trainer
 
 from raffle_ds_research.tools import pipes
 from raffle_ds_research.tools.dataset_builder.builder import DatasetProtocol
 from raffle_ds_research.tools.utils.tensor_tools import serialize_tensor
+
 from .callback import StorePredictions
 from .ts_utils import TensorStoreFactory
-from .wrappers import _warp_as_lightning_model, CollateWithIndices, DatasetWithIndices
+from .wrappers import CollateWithIndices, DatasetWithIndices, _warp_as_lightning_model
 
 
 class DataLoaderForPredictKwargs(BaseModel):
@@ -61,10 +61,10 @@ class DataLoaderForPredictKwargs(BaseModel):
 def predict(
     dataset: DatasetProtocol | datasets.Dataset | datasets.DatasetDict | dict[str, DatasetProtocol],
     *,
-    trainer: Trainer,
     cache_dir: str | Path,
     model: torch.nn.Module | pl.LightningModule,
     collate_fn: pipes.Collate = torch.utils.data.dataloader.default_collate,
+    trainer: Optional[pl.Trainer] = None,
     model_output_key: Optional[str] = None,
     loader_kwargs: Optional[dict[str, Any] | DictConfig | DataLoaderForPredictKwargs] = None,
     ts_kwargs: Optional[dict[str, Any]] = None,
@@ -75,6 +75,8 @@ def predict(
 
     Note: the fingerprint of the collate_fn changes after a call of `_predict_single`. Can't figure out why.
     """
+    if trainer is None:
+        trainer = pl.Trainer()
     if isinstance(dataset, (dict, datasets.DatasetDict)):
         return _predict_dict(
             dataset,
@@ -112,7 +114,7 @@ def _predict_dict(
 def _predict_single(
     dataset: DatasetProtocol | datasets.Dataset,
     *,
-    trainer: Trainer,
+    trainer: pl.Trainer,
     cache_dir: str | Path,
     model: torch.nn.Module | pl.LightningModule,
     collate_fn: pipes.Collate,

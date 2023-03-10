@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Iterable, Any
+from typing import Any, Iterable
 
 import pytorch_lightning as pl
 import torch

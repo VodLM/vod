@@ -12,8 +12,7 @@ import torch
 import transformers
 from transformers import BertModel
 
-from raffle_ds_research.tools import pipes
-from raffle_ds_research.tools import predict
+from raffle_ds_research.tools import pipes, predict
 from raffle_ds_research.tools.utils.trainer import Trainer
 
 dotenv.load_dotenv(Path(__file__).parent / ".predict.env")
