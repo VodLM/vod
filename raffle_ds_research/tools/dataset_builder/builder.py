@@ -19,7 +19,7 @@ class DatasetProtocol(Protocol):
 
 
 class CollateFnProtocol(Protocol):
-    def __call__(self, batch: List[dict]) -> dict:
+    def __call__(self, batch: List[dict], **kwargs) -> dict:
         ...
 
 

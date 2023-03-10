@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import functools
-from typing import Sized
+from typing import Iterable, Any
 
 import pytorch_lightning as pl
 import torch
 
-from raffle_ds_research.tools.dataset_builder.builder import CollateFnProtocol, DatasetProtocol
+from raffle_ds_research.tools import pipes
+from raffle_ds_research.tools.dataset_builder.builder import DatasetProtocol
 
 PREDICT_IDX_COL_NAME = "__idx__"
 
@@ -43,31 +43,29 @@ class DatasetWithIndices(DatasetProtocol):
         return batch
 
 
-def collate_with_ids(rows: list[dict], collate_fn: CollateFnProtocol) -> dict:
-    def _safely_fetch_id(row: dict) -> int:
-        try:
-            return row.pop(PREDICT_IDX_COL_NAME)
-        except KeyError:
-            raise ValueError(
-                f"Column {PREDICT_IDX_COL_NAME} not found in batch. "
-                f"Make sure to wrap your dataset with `DatasetWithIndices`."
-            )
+def _safely_fetch_key(row: dict) -> int:
+    try:
+        return row.pop(PREDICT_IDX_COL_NAME)
+    except KeyError:
+        raise ValueError(
+            f"Column {PREDICT_IDX_COL_NAME} not found in batch. "
+            f"Make sure to wrap your dataset with `DatasetWithIndices`."
+        )
 
-    ids = [_safely_fetch_id(row) for row in rows]
-    batch = collate_fn(rows)
+
+def _collate_with_indices(examples: Iterable[dict[str, Any]], *, collate_fn: pipes.Collate, **kwargs: Any) -> dict:
+    ids = [_safely_fetch_key(row) for row in examples]
+    batch = collate_fn(examples, **kwargs)
     batch[PREDICT_IDX_COL_NAME] = ids
     return batch
 
 
-def _wrap_collate_fn_with_indices(collate_fn: CollateFnProtocol) -> CollateFnProtocol:
-    """Wrap the collate_fn to return IDX_COL along the batch values"""
+class CollateWithIndices(pipes.Collate):
+    def __init__(self, collate_fn: pipes.Collate):  # type: ignore
+        self.collate_fn = collate_fn
 
-    return functools.partial(collate_with_ids, collate_fn=collate_fn)
-
-
-def _wrap_dataset_with_indices(dataset: Sized) -> DatasetWithIndices:
-    """Wrap the dataset to return IDX_COL along the batch values"""
-    return DatasetWithIndices(dataset)
+    def __call__(self, examples: Iterable[dict[str, Any]], **kwargs: Any) -> dict:
+        return _collate_with_indices(examples, collate_fn=self.collate_fn, **kwargs)
 
 
 def _warp_as_lightning_model(

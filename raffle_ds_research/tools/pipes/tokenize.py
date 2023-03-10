@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import functools
+import json
 from typing import Any, Iterable, Optional
 
+import rich
 import torch
 import transformers
+from datasets import fingerprint
 
 from raffle_ds_research.tools.pipes.utils.misc import pack_examples
 
@@ -62,6 +66,7 @@ def torch_tokenize_pipe(
     field: str,
     tokenizer: transformers.PreTrainedTokenizer,
     lazy: bool = True,
+    padding: bool = True,
     **kwargs: Any,
 ) -> dict[str, torch.Tensor]:
     """Tokenize a text field."""
@@ -71,7 +76,7 @@ def torch_tokenize_pipe(
         return _torch_pad_tokenized_field(batch, idx, field=field, tokenizer=tokenizer, **kwargs)
 
     text = batch[field]
-    encodings = tokenizer(text, return_tensors="pt", **kwargs)
+    encodings = tokenizer(text, return_tensors="pt", padding=padding, **kwargs)
     return dict(encodings)
 
 

@@ -1,11 +1,14 @@
+from __future__ import annotations
+
 from copy import copy
+from functools import partial
 from typing import Any, Optional
 
 from raffle_ds_research.tools.pipes.protocols import Pipe
 
 
 class Sequential(object):
-    def __init__(self, pipes: list[Pipe], with_updates: bool = False):
+    def __init__(self, pipes: list[Pipe | partial], with_updates: bool = False):
         self.pipes = pipes
         self.with_updates = with_updates
 

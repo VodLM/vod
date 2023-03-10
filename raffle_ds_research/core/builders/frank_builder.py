@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import partial
 from typing import Optional
 
 import datasets
@@ -152,15 +153,18 @@ class FrankBuilder(dataset_builder.HfBuilder):
     def _get_qa_preprocessing(self) -> pipes.Pipe:
         qa_pipe = pipes.Sequential(
             pipes=[
-                pipes.TemplatePipe(
+                partial(
+                    pipes.template_pipe,
                     template=self.templates["question"],
                     input_keys=["question"],
                     output_key="question",
                 ),
-                pipes.TokenizerPipe(
+                partial(
+                    pipes.tokenize_pipe,
                     tokenizer=self.tokenizer,
-                    input_key="question",
-                    fn_kwargs=dict(padding=False, truncation=False),
+                    fied="question",
+                    padding=False,
+                    truncation=False,
                 ),
             ]
         )

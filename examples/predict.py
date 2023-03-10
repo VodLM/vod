@@ -1,25 +1,22 @@
 from __future__ import annotations
 
 import tempfile
+from functools import partial
+from pathlib import Path
 
 import datasets
+import dotenv
 import rich
 import tensorstore
 import torch
 import transformers
 from transformers import BertModel
 
+from raffle_ds_research.tools import pipes
 from raffle_ds_research.tools import predict
 from raffle_ds_research.tools.utils.trainer import Trainer
 
-
-class CollateFn(object):
-    def __init__(self, tokenizer):
-        self.tokenizer = tokenizer
-
-    def __call__(self, rows: list[dict]):
-        encodings = self.tokenizer([r["question"] for r in rows], return_tensors="pt", padding=True)
-        return dict(encodings)
+dotenv.load_dotenv(Path(__file__).parent / ".predict.env")
 
 
 class Encoder(torch.nn.Module):
@@ -38,14 +35,12 @@ def run():
     model = Encoder(bert)
     model.eval()
     tokenizer = transformers.AutoTokenizer.from_pretrained(model_name)
-    squad = datasets.load_dataset("squad", split="train[:10%]")
+    squad = datasets.load_dataset("squad", split="train[:1%]")
     rich.print(squad)
-    collate_fn = CollateFn(tokenizer)
+    collate_fn = partial(pipes.torch_tokenize_collate, tokenizer=tokenizer, field="question")
 
-    # init the trainer
+    # init the trainer and compute the vectors
     trainer = Trainer()
-
-    # compute the vectors
     with tempfile.TemporaryDirectory() as tmpdir:
         stores = predict(
             {"valid": squad, "train": squad},
@@ -54,14 +49,12 @@ def run():
             model=model,
             model_output_key="pooler_output",
             collate_fn=collate_fn,
-            loader_kwargs={"batch_size": 10, "num_workers": 1},
+            loader_kwargs={"batch_size": 10, "num_workers": 0},
         )
-        rich.print(stores)
 
         store: tensorstore.TensorStore = stores["valid"].open()
         rich.print(store[:].read().result())
 
 
 if __name__ == "__main__":
-    # try tensorstore callback
     run()

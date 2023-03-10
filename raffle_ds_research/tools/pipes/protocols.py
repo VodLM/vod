@@ -1,6 +1,7 @@
-from typing import Any, Iterable, Optional, Protocol
+from typing import Any, Iterable, Optional, Protocol, runtime_checkable
 
 
+@runtime_checkable
 class Pipe(Protocol):
     """A pipe is a callable that takes a batch and returns a batch."""
 
@@ -8,6 +9,7 @@ class Pipe(Protocol):
         ...
 
 
+@runtime_checkable
 class Collate(Protocol):
     """A collate is a callable that takes a list of examples and returns a batch."""
 

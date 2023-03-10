@@ -11,17 +11,18 @@ import numpy as np
 import pytorch_lightning as pl
 import tensorstore
 import torch
+from datasets import fingerprint
 from loguru import logger
 from omegaconf import DictConfig, omegaconf
 from pydantic import BaseModel, Extra, validator
 from pytorch_lightning import Trainer
 
-from raffle_ds_research.tools.dataset_builder.builder import CollateFnProtocol, DatasetProtocol
+from raffle_ds_research.tools import pipes
+from raffle_ds_research.tools.dataset_builder.builder import DatasetProtocol
 from raffle_ds_research.tools.utils.tensor_tools import serialize_tensor
-
 from .callback import StorePredictions
 from .ts_utils import TensorStoreFactory
-from .wrappers import _warp_as_lightning_model, _wrap_collate_fn_with_indices, _wrap_dataset_with_indices
+from .wrappers import _warp_as_lightning_model, CollateWithIndices, DatasetWithIndices
 
 
 class DataLoaderForPredictKwargs(BaseModel):
@@ -63,13 +64,17 @@ def predict(
     trainer: Trainer,
     cache_dir: str | Path,
     model: torch.nn.Module | pl.LightningModule,
-    collate_fn: CollateFnProtocol = torch.utils.data.dataloader.default_collate,
+    collate_fn: pipes.Collate = torch.utils.data.dataloader.default_collate,
     model_output_key: Optional[str] = None,
     loader_kwargs: Optional[dict[str, Any] | DictConfig | DataLoaderForPredictKwargs] = None,
     ts_kwargs: Optional[dict[str, Any]] = None,
     validate_store: bool | int = True,
 ) -> TensorStoreFactory | dict[str, TensorStoreFactory]:
-    """Compute predictions for a dataset and store them in a tensorstore"""
+    """
+    Compute predictions for a dataset and store them in a tensorstore
+
+    Note: the fingerprint of the collate_fn changes after a call of `_predict_single`. Can't figure out why.
+    """
     if isinstance(dataset, (dict, datasets.DatasetDict)):
         return _predict_dict(
             dataset,
@@ -110,7 +115,7 @@ def _predict_single(
     trainer: Trainer,
     cache_dir: str | Path,
     model: torch.nn.Module | pl.LightningModule,
-    collate_fn: CollateFnProtocol = torch.utils.data.dataloader.default_collate,
+    collate_fn: pipes.Collate,
     model_output_key: Optional[str] = None,
     loader_kwargs: Optional[dict[str, Any] | DictConfig | DataLoaderForPredictKwargs] = None,
     ts_kwargs: Optional[dict[str, Any]] = None,
@@ -119,15 +124,15 @@ def _predict_single(
     """Compute predictions for a dataset and store them in a tensorstore"""
 
     # set the fingerprint and define the store path
-    dset_fingerprint = _get_dset_fingerprint(dataset)
-    model_fingerprint = _get_model_fingerprint(model)
-    collate_fn_fingerprint = _get_collate_fn_fingerprint(collate_fn)
-    logger.debug(f"Computing vectors for dataset: {dset_fingerprint} and model: {model_fingerprint}")
-    fingerprint = f"{dset_fingerprint}_{model_fingerprint}_{collate_fn_fingerprint}"
-    if model_output_key:
-        fingerprint += f"_{model_output_key}"
+    op_fingerprint = _make_fingerprint(
+        dataset=dataset,
+        collate_fn=collate_fn,
+        model=model,
+        model_output_key=model_output_key,
+    )
+    logger.debug(f"Computing vectors with fingerprint `{op_fingerprint}`")
 
-    index_path = Path(cache_dir, "predictions", f"{fingerprint}.ts")
+    index_path = Path(cache_dir, "predictions", f"{op_fingerprint}.ts")
     index_path.parent.mkdir(parents=True, exist_ok=True)
 
     # infer the dataset shape by running one example through the model
@@ -188,7 +193,7 @@ def _infer_vector_shape(
     model_output_key: Optional[str],
     *,
     dataset: DatasetProtocol,
-    collate_fn: CollateFnProtocol,
+    collate_fn: pipes.Collate,
 ) -> tuple[int, ...]:
     # todo: handle variable length inputs
     try:
@@ -227,16 +232,15 @@ def _compute_and_store_predictions(
     trainer: pl.Trainer,
     dataset: DatasetProtocol,
     model: torch.nn.Module | pl.LightningModule,
-    collate_fn: Callable[[list[dict]], dict],
+    collate_fn: pipes.Collate,
     store: tensorstore.TensorStore,
     loader_kwargs: Optional[dict[str, Any] | DictConfig | DataLoaderForPredictKwargs] = None,
     model_output_key: Optional[str] = None,
 ) -> tensorstore.TensorStore:
     """Compute predictions for a dataset and store them in a tensorstore"""
-    # wrap the input variables
-    dset_with_ids = _wrap_dataset_with_indices(dataset)
-    collate_fn_with_ids = _wrap_collate_fn_with_indices(collate_fn)
-    pl_model = _warp_as_lightning_model(model)
+    dset_with_ids: DatasetProtocol = DatasetWithIndices(dataset)
+    collate_fn_with_ids: pipes.Collate = CollateWithIndices(collate_fn)
+    pl_model: pl.LightningModule = _warp_as_lightning_model(model)
 
     # build the dataloader
     if isinstance(loader_kwargs, DictConfig):
@@ -261,7 +265,7 @@ def _get_dset_fingerprint(dataset: DatasetProtocol) -> str:
     if isinstance(dataset, datasets.Dataset):
         return dataset._fingerprint
     else:
-        hasher = datasets.fingerprint.Hasher()
+        hasher = fingerprint.Hasher()
         hasher.update({"length": len(dataset)})
 
         # select random row ids
@@ -278,9 +282,25 @@ def _get_dset_fingerprint(dataset: DatasetProtocol) -> str:
         return hasher.hexdigest()
 
 
+def _make_fingerprint(
+    *,
+    dataset: DatasetProtocol,
+    collate_fn: pipes.Collate,
+    model: torch.nn.Module | pl.LightningModule,
+    model_output_key: Optional[str] = None,
+):
+    dset_fingerprint = _get_dset_fingerprint(dataset)
+    model_fingerprint = _get_model_fingerprint(model)
+    collate_fn_fingerprint = _get_collate_fn_fingerprint(collate_fn)
+    op_fingerprint = f"{dset_fingerprint}_{model_fingerprint}_{collate_fn_fingerprint}"
+    if model_output_key:
+        op_fingerprint += f"_{model_output_key}"
+    return op_fingerprint
+
+
 def _get_model_fingerprint(model: torch.nn.Module):
     state = model.state_dict()
-    hasher = datasets.fingerprint.Hasher()
+    hasher = fingerprint.Hasher()
     hasher.update(type(model).__name__)
     for k, v in sorted(state.items(), key=lambda x: x[0]):
         hasher.update(k)
@@ -289,9 +309,5 @@ def _get_model_fingerprint(model: torch.nn.Module):
     return hasher.hexdigest()
 
 
-def _get_collate_fn_fingerprint(collate_fn: CollateFnProtocol) -> str:
-    hasher = datasets.fingerprint.Hasher()
-    hasher.update(collate_fn)
-    return hasher.hexdigest()
-
-    pass
+def _get_collate_fn_fingerprint(collate_fn: pipes.Collate) -> str:
+    return fingerprint.Hasher.hash(collate_fn)

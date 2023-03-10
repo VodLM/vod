@@ -9,7 +9,7 @@ import torch
 import transformers
 from omegaconf import OmegaConf
 
-from raffle_ds_research.utiils.config import config_to_flat_dict
+from raffle_ds_research.utils.config import config_to_flat_dict
 
 
 def _set_context():
