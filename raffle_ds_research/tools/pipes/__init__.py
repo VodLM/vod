@@ -1,5 +1,5 @@
 from .compose import Sequential
-from .debug import print_pipe
+from .debug import datashape_print_pipe, pprint_batch, rich_print_pipe
 from .hashing import _register_special_hashers
 from .lookup_index import LookupIndexPipe
 from .protocols import Collate, Pipe

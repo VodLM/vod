@@ -1,12 +1,14 @@
 import time
 
+import numpy as np
 import rich
 import torch.utils.data
 import transformers
 from tqdm import tqdm
 
 from raffle_ds_research.core.builders import MsMarcoBuilder
-from raffle_ds_research.tools.pipes import Print
+from raffle_ds_research.tools import pipes
+from raffle_ds_research.tools.pipes.utils.misc import iter_examples
 
 if __name__ == "__main__":
     tokenizer = transformers.AutoTokenizer.from_pretrained("bert-base-uncased")
@@ -23,7 +25,8 @@ if __name__ == "__main__":
     # Tokenize and collate a batch
     collate_fn = builder.get_collate_fn()
     batch = collate_fn([dataset["train"][0], dataset["train"][1]])
-    Print(header="ms_marco - batch")(batch)
+    batch["text"] = ["hello world"] * len(list(iter_examples(batch)))
+    pipes.pprint_batch(batch, header="ms_marco - batch")
 
     # Init the dataloader
     bs = 100

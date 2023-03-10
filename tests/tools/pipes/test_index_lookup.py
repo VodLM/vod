@@ -12,8 +12,7 @@ from raffle_ds_research.tools import pipes
 from raffle_ds_research.tools.pipes.utils.misc import iter_examples, pack_examples
 
 
-@pytest.fixture
-def corpus(
+def gen_corpus(
     seed: int,
     num_kbs: int = 10,
     num_answers_per_kbs: tuple[int, int] = (1, 10),
@@ -37,8 +36,7 @@ def corpus(
     return dataset
 
 
-@pytest.fixture
-def questions(
+def gen_questions(
     seed: int,
     corpus: datasets.Dataset,
     has_section_prob: float = 0.5,
@@ -79,6 +77,36 @@ def questions(
     return _convert_rows_to_dataset(data)
 
 
+@pytest.fixture
+def corpus(
+    seed: int,
+    num_kbs: int = 10,
+    num_answers_per_kbs: tuple[int, int] = (1, 10),
+    num_sections_per_answers: tuple[int, int] = (1, 3),
+) -> datasets.Dataset:
+    return gen_corpus(
+        seed=seed,
+        num_kbs=num_kbs,
+        num_answers_per_kbs=num_answers_per_kbs,
+        num_sections_per_answers=num_sections_per_answers,
+    )
+
+
+@pytest.fixture
+def questions(
+    seed: int,
+    corpus: datasets.Dataset,
+    has_section_prob: float = 0.5,
+    num_questions: int = 10,
+) -> datasets.Dataset:
+    return gen_questions(
+        seed=seed,
+        corpus=corpus,
+        has_section_prob=has_section_prob,
+        num_questions=num_questions,
+    )
+
+
 @pytest.mark.parametrize("seed", [0, 1, 2])
 @pytest.mark.parametrize("n_sections", [9, 101])
 @pytest.mark.parametrize("out_of_domain_score", [-math.inf, None])
@@ -106,6 +134,11 @@ def test_lookup_index(
     in_domain_keys = lookup_pipe._in_domain_keys
     for i, example in enumerate(iter_examples(output)):
         question = questions[i]
+        # check there is at least one positive example
+        labels = example[pipes.LookupIndexPipe._label_key]
+        if not any(labels):
+            raise ValueError(f"No positive example. Example: {example}")
+
         for result in iter_examples(example):
             # fetch the corresponding section
             result_score = result[pipes.LookupIndexPipe._score_key]

@@ -781,22 +781,6 @@ torch = ["torch"]
 vision = ["Pillow (>=6.2.1)"]
 
 [[package]]
-name = "datashape"
-version = "0.5.2"
-description = "A data description language."
-category = "main"
-optional = false
-python-versions = "*"
-files = [
-    {file = "datashape-0.5.2.tar.gz", hash = "sha256:2356ea690c3cf003c1468a243a9063144235de45b080b3652de4f3d44e57d783"},
-]
-
-[package.dependencies]
-multipledispatch = ">=0.4.7"
-numpy = ">=1.7"
-python-dateutil = "*"
-
-[[package]]
 name = "decli"
 version = "0.5.2"
 description = "Minimal, easy-to-use, declarative cli tool"
@@ -2298,22 +2282,6 @@ files = [
     {file = "multidict-6.0.4-cp39-cp39-win_amd64.whl", hash = "sha256:33029f5734336aa0d4c0384525da0387ef89148dc7191aae00ca5fb23d7aafc2"},
     {file = "multidict-6.0.4.tar.gz", hash = "sha256:3666906492efb76453c0e7b97f2cf459b0682e7402c0489a95484965dbc1da49"},
 ]
-
-[[package]]
-name = "multipledispatch"
-version = "0.6.0"
-description = "Multiple dispatch"
-category = "main"
-optional = false
-python-versions = "*"
-files = [
-    {file = "multipledispatch-0.6.0-py2-none-any.whl", hash = "sha256:407e6d8c5fa27075968ba07c4db3ef5f02bea4e871e959570eeb69ee39a6565b"},
-    {file = "multipledispatch-0.6.0-py3-none-any.whl", hash = "sha256:a55c512128fb3f7c2efd2533f2550accb93c35f1045242ef74645fc92a2c3cba"},
-    {file = "multipledispatch-0.6.0.tar.gz", hash = "sha256:a7ab1451fd0bf9b92cab3edbd7b205622fb767aeefb4fb536c2e3de9e0a38bea"},
-]
-
-[package.dependencies]
-six = "*"
 
 [[package]]
 name = "multiprocess"
@@ -4685,4 +4653,4 @@ testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.9"
-content-hash = "54603a340f98d95149a008b7d80090e2d62479ec189eaadf60df0a26e30978c0"
+content-hash = "ffc7606e0feac6339176cfb8dd9ae1433c20b941ad790d83a06c913bef3aec22"

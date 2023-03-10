@@ -191,20 +191,24 @@ class LookupIndexPipe(object):
         exclude: Optional[set[int]] = None,
         reduce_op: Callable[[set, set], set] = set.intersection,
     ) -> set[int]:
-        pids = set()
+        pids = None
         for batch_key, corpus_key in key_map.items():
             id_for_key = eg[batch_key]
             if id_for_key is None:
                 continue
 
-            # fetch the positive pids for the key
+            # fetch the pids for the key
             lookup_for_key = self._lookups[corpus_key]
             pids_for_key = lookup_for_key[id_for_key]
             if exclude is not None:
                 pids_for_key = pids_for_key - exclude
-            pids = reduce_op(pids, pids_for_key)
 
-        return pids
+            if pids is None:
+                pids = pids_for_key
+            else:
+                pids = reduce_op(pids, pids_for_key)
+
+        return pids or set()
 
     @staticmethod
     def _resample_pids(pids: set[int], n: int) -> set[int]:

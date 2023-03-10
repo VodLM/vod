@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Any, Callable, Dict, Iterable, Optional, Type, Union
 
 import numpy as np
@@ -68,7 +70,7 @@ class ConstrainedTensor:
         return v
 
     @classmethod
-    def validate_device(cls, v):
+    def validate_device(cls, v: Any) -> torch.Tensor | None:
         if cls.device is None:
             return v
 
@@ -80,7 +82,7 @@ class ConstrainedTensor:
         return v
 
     @classmethod
-    def validate_shape(cls, v):
+    def validate_shape(cls, v: Any) -> tuple | None:
         if cls.shape is None:
             return v
 
@@ -141,8 +143,8 @@ def validate_shapes_consistency(model: BaseModel, values: dict[str, Any]) -> dic
     }
 
     # init the shape_variable structure
-    INIT = "<|INITIALIZED|>"
-    shapes_variables = {d: INIT for shp in constrained_shapes.values() for d in shp if isinstance(d, str)}
+    _init = "<|INITIALIZED|>"
+    shapes_variables = {d: _init for shp in constrained_shapes.values() for d in shp if isinstance(d, str)}
 
     # scan through the actual shape values
     for k, v in values.items():
@@ -152,7 +154,7 @@ def validate_shapes_consistency(model: BaseModel, values: dict[str, Any]) -> dic
             for i, d in enumerate(constrained_shape):
                 if not isinstance(d, str):
                     continue
-                if shapes_variables[d] == INIT:
+                if shapes_variables[d] == _init:
                     shapes_variables[d] = int(actual_shape[i])
                 elif shapes_variables[d] != int(actual_shape[i]):
                     raise ValueError(
