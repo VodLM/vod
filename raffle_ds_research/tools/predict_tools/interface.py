@@ -18,6 +18,7 @@ from pytorch_lightning import Trainer
 
 from raffle_ds_research.tools.dataset_builder.builder import CollateFnProtocol, DatasetProtocol
 from raffle_ds_research.tools.utils.tensor_tools import serialize_tensor
+
 from .callback import StorePredictions
 from .ts_utils import TensorStoreFactory
 from .wrappers import _warp_as_lightning_model, _wrap_collate_fn_with_indices, _wrap_dataset_with_indices

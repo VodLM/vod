@@ -1,24 +1,21 @@
-import json
-from typing import Optional
+from copy import copy
+from typing import Any, Optional
 
-from datasets.fingerprint import Hasher, hashregister
-from pydantic import Field
-
-from .pipe import Pipe
+from raffle_ds_research.tools.pipes.protocols import Pipe
 
 
-class Sequential(Pipe):
-    pipes: list[Pipe] = Field(..., description="The pipes to run sequentially.")
+class Sequential(object):
+    def __init__(self, pipes: list[Pipe], with_updates: bool = False):
+        self.pipes = pipes
+        self.with_updates = with_updates
 
-    def _process_batch(self, batch: dict, idx: Optional[list[int]] = None, **kwargs) -> dict:
+    def __call__(self, batch: dict[str, Any], idx: Optional[list[int]] = None, **kwargs: Any) -> dict[str, Any]:
         for pipe in self.pipes:
-            batch = pipe(batch, idx=idx, **kwargs)
+            batch = copy(batch)
+            batch_ = pipe(batch, idx, **kwargs)
+            if self.with_updates:
+                batch.update(batch_)
+            else:
+                batch = batch_
+
         return batch
-
-
-@hashregister(Sequential)
-def _hash_sequential(hasher: Hasher, value: Sequential):
-    data = value.dict()
-    data["pipes"] = {i: hasher.hash(p) for i, p in enumerate(data["pipes"])}
-    h = hasher.hash_bytes(json.dumps(data, sort_keys=True).encode("utf-8"))
-    return h

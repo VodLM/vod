@@ -1,6 +1,6 @@
 import base64
 import io
-from typing import Type, Optional
+from typing import Optional, Type
 
 import numpy as np
 import torch

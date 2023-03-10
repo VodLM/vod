@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Iterable, Optional, Sized, TypeVar
+from typing import Any, Iterable, Optional, Sized, TypeVar
 
 import numpy as np
 from datasets import Dataset as HfDataset
@@ -9,7 +9,11 @@ from datasets import Dataset as HfDataset
 T = TypeVar("T")
 
 
-def unpack_batch(batch: dict[str, list], keys: list[str]) -> Iterable[dict]:
+def iter_examples(batch: dict[str, list], keys: Iterable[str] = None) -> Iterable[dict]:
+    if keys is None:
+        keys = list(batch.keys())
+    else:
+        keys = list(keys)
     subset = {key: batch[key] for key in keys}
     master_key, *other_keys = subset
     for i in range(len(batch[master_key])):
@@ -17,12 +21,13 @@ def unpack_batch(batch: dict[str, list], keys: list[str]) -> Iterable[dict]:
         yield example
 
 
-def repack_examples(examples: Iterable[dict]) -> dict[str, list]:
+def pack_examples(examples: Iterable[dict[T, Any]], keys: Optional[list[T]] = None) -> dict[T, list[Any]]:
     output = defaultdict(list)
     for example in examples:
-        for key in example.keys():
+        iter_keys = keys or example.keys()
+        for key in iter_keys:
             output[key].append(example[key])
-    return output
+    return dict(output)
 
 
 def pad_list(

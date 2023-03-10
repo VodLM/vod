@@ -1,23 +1,11 @@
 from copy import copy
-from typing import Protocol, Any, Optional
+from typing import Any, Optional
+
+from raffle_ds_research.tools.pipes.protocols import Pipe
 
 
-class Pipe(Protocol):
-    """A pipe is a callable that takes a batch and returns a batch."""
-
-    def __call__(self, batch: dict[str, Any], idx: Optional[list[int]] = None, **kwargs: Any) -> dict[str, Any]:
-        ...
-
-
-class Collate(Protocol):
-    """A collate is a callable that takes a list of examples and returns a batch."""
-
-    def __call__(self, examples: list[dict[str, Any]], **kwargs: Any) -> dict[str, Any]:
-        ...
-
-
-def retain_inputs(pipe: Pipe) -> Pipe:
-    """Decorator to retain the inputs to a pipe."""
+def retain_inputs_wrapper(pipe: Pipe) -> Pipe:
+    """Retain the inputs along with the pipe outputs."""
 
     def wrapper(batch: dict[str, Any], idx: Optional[list[int]] = None, **kwargs: Any) -> dict[str, Any]:
         input_batch = copy(batch)
@@ -28,8 +16,8 @@ def retain_inputs(pipe: Pipe) -> Pipe:
     return wrapper
 
 
-def filter_inputs(pipe: Pipe, keys: list[str], strict: bool = True) -> Pipe:
-    """Decorator to filter the inputs to a pipe."""
+def filter_inputs_wrapper(pipe: Pipe, keys: list[str], strict: bool = True) -> Pipe:
+    """Filter the inputs to a pipe."""
 
     def wrapper(batch: dict[str, Any], idx: Optional[list[int]] = None, **kwargs: Any) -> dict[str, Any]:
         if strict:

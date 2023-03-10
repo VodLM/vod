@@ -6,14 +6,14 @@ import sys
 import time
 from copy import copy
 from pathlib import Path
-from typing import Type, Optional
+from typing import Optional, Type
 
 import numpy as np
 import requests
 import torch
 
 from raffle_ds_research.tools.index_tools import io
-from raffle_ds_research.tools.index_tools.retrieval_data_type import RetrievalDataType, Ts, RetrievalBatch
+from raffle_ds_research.tools.index_tools.retrieval_data_type import RetrievalBatch, RetrievalDataType, Ts
 
 # get the path to the server script
 server_run_path = Path(__file__).parent / "server.py"

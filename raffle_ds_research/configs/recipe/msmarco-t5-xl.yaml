@@ -2,7 +2,7 @@
 
 defaults:
   - msmarco-t5-base
-  - override /model/encoder: t5-large
+  - override /model/encoder: t5-xl
   - _self_
 
 model:
@@ -20,6 +20,6 @@ trainer:
   precision: 32
 
 batch_size:
-  per_device: 6
-  effective: 36
+  per_device: 1
+  effective: 32
   per_device_eval: 32

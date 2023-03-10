@@ -4,9 +4,9 @@ from abc import ABC, abstractmethod
 from copy import copy
 from typing import Generic, List, Optional, Protocol, TypeVar, Union
 
+import datasets
 import numpy as np
 import torch
-import datasets
 from pydantic import BaseModel, ValidationError
 
 

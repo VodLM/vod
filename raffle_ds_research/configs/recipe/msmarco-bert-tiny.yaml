@@ -31,7 +31,7 @@ trainer:
   limit_val_batches: 200
 
 builder:
-  top_k: 8
+  n_sections: 8
   subset_size: null
   question_max_length: null
   section_max_length: 200

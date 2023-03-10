@@ -5,7 +5,7 @@ import rich
 import seaborn as sns
 from matplotlib import pyplot as plt
 
-from examples.faiss_server import profile_faiss_server, ProfileArgs
+from examples.faiss_server import ProfileArgs, profile_faiss_server
 
 sns.set(style="darkgrid")
 colors = sns.color_palette()

@@ -19,4 +19,10 @@ trainer:
   accelerator: cpu
 
 builder:
-  subset_size: 1000
+  n_sections:
+    train: 8
+    validation: null
+    test: null
+  subset_size: null
+  question_max_length: null
+  section_max_length: 220

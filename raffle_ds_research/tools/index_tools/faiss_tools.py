@@ -5,7 +5,7 @@ import faiss
 # faiss.contrib.torch_utils: required to handle torch.Tensor inputs.
 from faiss.contrib import torch_utils  # type: ignore
 
-from raffle_ds_research.tools.index_tools.vector_handler import vector_handler, VectorType
+from raffle_ds_research.tools.index_tools.vector_handler import VectorType, vector_handler
 
 
 def build_index(

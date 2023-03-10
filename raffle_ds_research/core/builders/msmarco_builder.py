@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import math
-from typing import Any, Optional
+from typing import Any, Iterable, Optional
 
-import torch
 import datasets
+import torch
 from jinja2 import Template as JinjaTemplate
 from loguru import logger
 from omegaconf import DictConfig, OmegaConf
@@ -12,7 +12,7 @@ from transformers import PreTrainedTokenizerBase
 
 from raffle_ds_research.core.builders.frank_builder import DEFAULT_TEMPLATES
 from raffle_ds_research.core.data_models.supervised_retrieval import SupervisedRetrievalBatch
-from raffle_ds_research.tools import dataset_builder, pipes
+from raffle_ds_research.tools import dataset_builder
 
 
 def preprocess_ms_marco(batch: dict, idx: Optional[list] = None, **kwargs) -> dict:
@@ -31,17 +31,26 @@ def filter_ms_marco(batch: dict, idx: Optional[list] = None, **kwargs) -> bool:
     return any(batch["section.label"])
 
 
-class CollateMsMarco(pipes.Pipe):
+class CollateMsMarco:
     """Collate a list of `MS MARCO` examples into a batch."""
 
-    tokenizer: Optional[PreTrainedTokenizerBase] = None
-    question_max_length: Optional[int] = 512
-    section_max_length: Optional[int] = 512
-    templates: Optional[dict] = DEFAULT_TEMPLATES
-    max_sections: Optional[int] = None
+    def __init__(
+        self,
+        tokenizer: Optional[PreTrainedTokenizerBase] = None,
+        question_max_length: Optional[int] = 512,
+        section_max_length: Optional[int] = 512,
+        templates: Optional[dict] = DEFAULT_TEMPLATES,
+        max_sections: Optional[int] = None,
+    ):
+        self.tokenizer = tokenizer
+        self.question_max_length = question_max_length
+        self.section_max_length = section_max_length
+        self.templates = templates
+        self.max_sections = max_sections
 
-    def _collate_egs(self, examples: list[dict], **kwargs) -> dict:
+    def __call__(self, examples: Iterable[dict[str, Any]], **kwargs: Any) -> dict[str, Any]:
         """Implementation of the collate logic."""
+        examples = list(examples)
         batch_size = len(examples)
         q_template = JinjaTemplate(self.templates["question"])
         s_template = JinjaTemplate(self.templates["section"])

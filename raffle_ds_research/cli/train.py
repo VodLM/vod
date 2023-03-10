@@ -12,7 +12,7 @@ from loguru import logger
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader
 
-from raffle_ds_research.cli.utils import _set_context, _log_config
+from raffle_ds_research.cli.utils import _log_config, _set_context
 from raffle_ds_research.core.builders import FrankBuilder
 from raffle_ds_research.core.ml_models import Ranker
 from raffle_ds_research.tools.utils.config import register_omgeaconf_resolvers

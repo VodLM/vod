@@ -24,5 +24,4 @@ trainer:
   precision: 16
 
 builder:
-  top_k: 8
   subset_size: null

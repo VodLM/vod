@@ -6,7 +6,6 @@ from pydantic import BaseModel, Field, PrivateAttr
 from transformers import PreTrainedTokenizerBase
 
 from ..utils.exceptions import dump_exceptions_to_file
-from .pipe import Pipe
 from .sampler import Sampler
 from .utils.misc import keep_only_columns
 

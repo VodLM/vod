@@ -19,11 +19,10 @@ from omegaconf import DictConfig
 from raffle_ds_research.cli.utils import _set_context
 from raffle_ds_research.core.builders import FrankBuilder
 from raffle_ds_research.core.ml_models import Ranker
-from raffle_ds_research.tools import index_tools
-from raffle_ds_research.tools import predict
+from raffle_ds_research.tools import index_tools, predict
 from raffle_ds_research.tools.index_tools import RetrievalBatch
-from raffle_ds_research.tools.index_tools.client import FaissMaster, FaissClient
-from raffle_ds_research.tools.index_tools.vector_handler import vector_handler, VectorHandler
+from raffle_ds_research.tools.index_tools.client import FaissClient, FaissMaster
+from raffle_ds_research.tools.index_tools.vector_handler import VectorHandler, vector_handler
 from raffle_ds_research.tools.utils.config import register_omgeaconf_resolvers
 from raffle_ds_research.tools.utils.pretty import print_config
 

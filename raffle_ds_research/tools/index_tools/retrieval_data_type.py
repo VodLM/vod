@@ -4,7 +4,7 @@ import abc
 from abc import ABC
 from enum import Enum
 from numbers import Number
-from typing import TypeVar, Union, Type, Generic, Iterable
+from typing import Generic, Iterable, Type, TypeVar, Union
 
 import numpy as np
 import torch
@@ -40,6 +40,24 @@ def _convert_array(scores: Union[np.ndarray, torch.Tensor], target_type: Type[Ts
     }
     converter = conversions[target_type][type(scores)]
     return converter(scores)
+
+
+def _stack_arrays(arrays: Iterable[Ts]) -> Ts:
+    first, *rest = arrays
+    op = {
+        torch.Tensor: torch.stack,
+        np.ndarray: np.stack,
+    }[type(first)]
+    return op([first, *rest])
+
+
+def _concat_arrays(arrays: Iterable[Ts]) -> Ts:
+    first, *rest = arrays
+    op = {
+        torch.Tensor: torch.cat,
+        np.ndarray: np.concatenate,
+    }[type(first)]
+    return op([first, *rest])
 
 
 class RetrievalData(ABC, Generic[Ts]):
@@ -145,6 +163,12 @@ class RetrievalSample(RetrievalData[Ts]):
         for i in range(len(self)):
             yield self[i]
 
+    def __add__(self, other: "RetrievalSample") -> "RetrievalBatch":
+        return RetrievalBatch(
+            scores=_stack_arrays([self.scores, other.scores]),
+            indices=_stack_arrays([self.indices, other.indices]),
+        )
+
 
 class RetrievalBatch(RetrievalData[Ts]):
     _expected_dim = 2
@@ -159,3 +183,9 @@ class RetrievalBatch(RetrievalData[Ts]):
     def __iter__(self) -> Iterable[RetrievalSample[Ts]]:
         for i in range(len(self)):
             yield self[i]
+
+    def __add__(self, other: "RetrievalBatch") -> "RetrievalBatch":
+        return RetrievalBatch(
+            scores=_concat_arrays([self.scores, other.scores]),
+            indices=_concat_arrays([self.indices, other.indices]),
+        )

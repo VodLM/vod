@@ -15,9 +15,9 @@ from loguru import logger
 from raffle_ds_research.tools.index_tools import io
 from raffle_ds_research.tools.index_tools.data_models import (
     FaissSearchResponse,
-    SearchFaissQuery,
-    FastSearchFaissQuery,
     FastFaissSearchResponse,
+    FastSearchFaissQuery,
+    SearchFaissQuery,
 )
 from raffle_ds_research.tools.index_tools.retrieval_data_type import RetrievalDataType
 

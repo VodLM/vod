@@ -124,7 +124,7 @@ class FrankBuilder(dataset_builder.HfBuilder):
 
         # map the sections to the questions
         index_kwargs = dict(max_top_k=self.index_max_top_k, padding=True)
-        index = pipes.LookupIndex(sections, **index_kwargs)
+        index = pipes.LookupIndexPipe(sections, **index_kwargs)
         mapped_qa = qa.map(
             index,
             **self.prep_map_kwargs,

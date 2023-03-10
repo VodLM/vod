@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import abc
-from typing import Union, TypeVar, Iterable
+from typing import Iterable, TypeVar, Union
 
 import numpy as np
 import rich
