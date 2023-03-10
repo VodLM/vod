@@ -10,7 +10,7 @@ from raffle_ds_research.tools import pipes
 from raffle_ds_research.tools.pipes.lookup_index import _build_lookups
 
 
-def hash_json_like(data):
+def hash_json_dump(data):
     return datasets.fingerprint.Hasher.hash(json.dumps(data))
 
 

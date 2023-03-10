@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from collections import defaultdict
 from functools import partial
-from typing import Any, Iterable, Optional
+from typing import Any, Callable, Iterable, Optional
 
 import datasets
 import numpy as np
@@ -56,6 +56,7 @@ class LookupIndexPipe(object):
         "_lookups",
         "_answer_lookup",
         "_n_sections",
+        "_in_domain_score",
         "_out_of_domain_score",
         "_all_pids",
         "_label_keys",
@@ -71,6 +72,7 @@ class LookupIndexPipe(object):
     _corpus: datasets.Dataset
     _all_pids: set[int]
     _n_sections: int
+    _in_domain_score: float
     _out_of_domain_score: float
 
     def __init__(
@@ -78,6 +80,7 @@ class LookupIndexPipe(object):
         *,
         corpus: datasets.Dataset,
         n_sections: int = 100,
+        in_domain_score: float = 0.0,
         out_of_domain_score: float = -math.inf,
         label_keys: dict[str, str] = None,
         in_domain_keys: dict[str, str] = None,
@@ -101,6 +104,7 @@ class LookupIndexPipe(object):
             raise ValueError(f"Corpus must have columns: `{self._required_corpus_columns}`")
 
         self._n_sections = n_sections
+        self._in_domain_score = in_domain_score
         self._out_of_domain_score = out_of_domain_score
         self._corpus = corpus
         self._lookups = _build_lookups(corpus, keys=self._required_corpus_columns)
@@ -134,21 +138,30 @@ class LookupIndexPipe(object):
 
         # sample the positive pids
         split = "positive"
-        positive_pids = self._gather_pids(eg, self._label_keys)
+        positive_pids = self._gather_pids(
+            eg,
+            self._label_keys,
+            reduce_op=set.intersection,
+        )
         positive_pids = self._resample_pids(positive_pids, n=self._n_sections)
         eg_pids[split] = list(positive_pids)
-        eg_labels[split] = [1] * len(positive_pids)
-        eg_scores[split] = [0.0] * len(positive_pids)
+        eg_labels[split] = [True] * len(positive_pids)
+        eg_scores[split] = [self._in_domain_score] * len(positive_pids)
 
         # complete the list of pids with negative pids and the rest
         if len(eg_pids) < self._n_sections:
             if self._in_domain_keys is not None:
                 split = "negative"
-                neg_eg_pids = self._gather_pids(eg, self._in_domain_keys, exclude=positive_pids)
+                neg_eg_pids = self._gather_pids(
+                    eg,
+                    self._in_domain_keys,
+                    exclude=positive_pids,
+                    reduce_op=set.intersection,
+                )
                 neg_eg_pids = self._resample_pids(neg_eg_pids, n=self._n_sections - n_pids())
                 eg_pids[split] = list(neg_eg_pids)
-                eg_labels[split] = [0] * len(neg_eg_pids)
-                eg_scores[split] = [0.0] * len(neg_eg_pids)
+                eg_labels[split] = [False] * len(neg_eg_pids)
+                eg_scores[split] = [self._in_domain_score] * len(neg_eg_pids)
 
             # sample with the rest
             if len(eg_pids) < self._n_sections:
@@ -156,7 +169,7 @@ class LookupIndexPipe(object):
                 remaining_pids = self._all_pids - set.intersection(*(set(x) for x in eg_pids.values()))
                 padding_pids = self._resample_pids(remaining_pids, n=self._n_sections - n_pids())
                 eg_pids[split] = list(padding_pids)
-                eg_labels[split] = [0] * len(padding_pids)
+                eg_labels[split] = [False] * len(padding_pids)
                 eg_scores[split] = [self._out_of_domain_score] * len(padding_pids)
 
         # safety first
@@ -171,7 +184,13 @@ class LookupIndexPipe(object):
             self._score_key: sum([eg_scores[k] for k in split_keys], []),
         }
 
-    def _gather_pids(self, eg: dict[str, Any], key_map: dict[str, str], exclude: Optional[set[int]] = None) -> set[int]:
+    def _gather_pids(
+        self,
+        eg: dict[str, Any],
+        key_map: dict[str, str],
+        exclude: Optional[set[int]] = None,
+        reduce_op: Callable[[set, set], set] = set.intersection,
+    ) -> set[int]:
         pids = set()
         for batch_key, corpus_key in key_map.items():
             id_for_key = eg[batch_key]
@@ -183,15 +202,15 @@ class LookupIndexPipe(object):
             pids_for_key = lookup_for_key[id_for_key]
             if exclude is not None:
                 pids_for_key = pids_for_key - exclude
-            pids.update(pids_for_key)
+            pids = reduce_op(pids, pids_for_key)
 
         return pids
 
     @staticmethod
     def _resample_pids(pids: set[int], n: int) -> set[int]:
         if len(pids) > n:
-            pids = np.random.choice(list(pids), n, replace=False)
-        return set(pids)
+            pids = set(np.random.choice(list(pids), n, replace=False).tolist())
+        return pids
 
 
 @datasets.fingerprint.hashregister(LookupIndexPipe)
