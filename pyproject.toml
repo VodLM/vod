@@ -56,6 +56,7 @@ uvicorn = "^0.20.0"
 python-multipart = "^0.0.6"
 psutil = "^5.9.4"
 python-dotenv = "^1.0.0"
+cython = "^0.29.33"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.1"
@@ -67,21 +68,30 @@ commitizen = "^2.42.0"
 seaborn = "^0.12.2"
 
 [build-system]
-requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+requires = [
+    "poetry-core",
+    "Cython",
+    "numpy",
+]
+
+
+[tool.poetry.build]
+generate-setup-file = false
+script = "build.py"
 
 [tool.mypy]
 python_version = "3.11"
 disable_error_code = [
-  "assignment",
-  "index",
-  "arg-type",
-  "call-arg",
-  "call-overload",
-  "union-attr",
-  "attr-defined",
-  "valid-type",
-  "dict-item",
+    "assignment",
+    "index",
+    "arg-type",
+    "call-arg",
+    "call-overload",
+    "union-attr",
+    "attr-defined",
+    "valid-type",
+    "dict-item",
 ]
 ignore_missing_imports = true
 follow_imports = "skip"
@@ -94,6 +104,18 @@ profile = "black"
 
 [tool.black]
 line-length = 120
+exclude = '''
+(
+  /(
+      \.git
+    | \.pyx
+    | \.venv
+    | _build
+    | build
+    | dist
+  )/
+)
+'''
 
 [tool.pyright]
 reportOptionalMemberAccess = false
