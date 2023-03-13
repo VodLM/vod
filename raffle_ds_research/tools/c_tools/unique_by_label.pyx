@@ -1,4 +1,4 @@
-from typing import Tuple, Union, Any
+from typing import Tuple, Union, Any, Optional
 
 cimport cython
 import numpy as np
@@ -42,6 +42,9 @@ cdef int _unique_by_label(
 
     for i in range(n):
         v_i = values[i]
+        if v_i < 0:
+            # ignore negative values (padding)
+            continue
         l_i = labels[i]
         found = 0
         for s in range(cursor):
@@ -91,7 +94,7 @@ def unique_by_label(
     labels: PyArray,
     *,
     n_labels: int,
-    max_n_unique: int,
+    max_n_unique: Optional[int] = None,
 ) -> Tuple[np.ndarray, np.ndarray]:
 
     if labels.max() >= n_labels:
@@ -102,6 +105,8 @@ def unique_by_label(
     # create arrays
     values = _cast_array(values, dtype=NP_DTYPE)
     labels = _cast_array(labels, dtype=NP_DTYPE)
+    if max_n_unique is None:
+        max_n_unique = values.shape[-1]
     ndim = len(values.shape)
     if ndim == 1:
         batched = False
@@ -136,7 +141,7 @@ def unique_by_label(
             batch_size,
             n_labels,
         )
-        uvalues = np.asarray(buffer, np)
+        uvalues = np.asarray(buffer)
         cursors = np.asarray(cursors)
         max_cursor = cursors.max()
         return (uvalues[:, :max_cursor, 0],

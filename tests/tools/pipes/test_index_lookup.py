@@ -1,5 +1,4 @@
 import json
-import math
 import pickle
 from typing import Any, Iterable
 
@@ -9,185 +8,146 @@ import pytest
 from datasets import fingerprint
 
 from raffle_ds_research.tools import pipes
-from raffle_ds_research.tools.pipes.utils.misc import iter_examples, pack_examples
+from raffle_ds_research.tools.pipes.lookup_index import _build_lookup_tables
+from raffle_ds_research.tools.pipes.utils.misc import pack_examples
+
+_KEYS = ["kb_id", "answer_id", "section_id"]
+
+
+def _gen_nested_rows(key: str, total: int, data: list[dict] = None) -> Iterable[dict]:
+    if data is None:
+        for global_id in range(total):
+            yield {key: global_id}
+    else:
+        global_id = 0
+        for row in data:
+            for local_id in range(total):
+                if key in row:
+                    raise ValueError(f"Key {key} already exists in row {row}")
+                yield {**row, key: global_id}
+                global_id += 1
 
 
 def gen_corpus(
-    seed: int,
-    num_kbs: int = 10,
-    num_answers_per_kbs: tuple[int, int] = (1, 10),
-    num_sections_per_answers: tuple[int, int] = (1, 3),
+    keys: list[str],
+    size_per_step: int = 10,
 ) -> datasets.Dataset:
-    rgn = np.random.RandomState(seed)
-    data = []
-    answer_id = 0
-    section_id = 0
-    for kb_id in range(num_kbs):
-        kb_size = rgn.randint(*num_answers_per_kbs)
-        for a in range(kb_size):
-            answer_size = rgn.randint(*num_sections_per_answers)
-            for s in range(answer_size):
-                section = {"id": section_id, "kb_id": kb_id, "answer_id": answer_id}
-                data.append(section)
-                section_id += 1
-            answer_id += 1
+    """Generate a corpus using a nested structure.
+    E.g., kb_id -> answer_id -> section_id"""
+    data = None
+    for key in keys:
+        data = _gen_nested_rows(key, size_per_step, data)
 
     dataset = _convert_rows_to_dataset(data)
     return dataset
 
 
+def _search_by_value(key: str, value: Any, corpus: datasets.Dataset) -> Iterable[tuple[int, dict]]:
+    if value is None:
+        return []
+    for i, row in enumerate(corpus):
+        if row[key] == value:
+            yield i, row
+
+
 def gen_questions(
     seed: int,
     corpus: datasets.Dataset,
-    has_section_prob: float = 0.5,
+    last_level_link_prob: float = 1.0,
     num_questions: int = 10,
 ) -> datasets.Dataset:
-    """Generate question by randomly"""
+    """
+    Generate question by randomly linking to the corpus.
+    keys are sampled independently, so the nested structure is not used here..
+    """
     rgn = np.random.RandomState(seed)
-    lookups = pipes.lookup_index._build_lookups(corpus, keys=["id", "kb_id", "answer_id"])
-    unique_answer_ids = set(lookups["answer_id"].keys())
+    keys = corpus.column_names
+    lookup_tables = _build_lookup_tables(corpus, keys=keys)
+
+    def _fetch_values(match_key, match_value, output_key) -> list[int]:
+        potential_rows = {x[output_key] for i, x in _search_by_value(match_key, match_value, corpus)}
+        return list(potential_rows)
 
     data = []
-    for qid in range(num_questions):
-        is_section = rgn.random() < has_section_prob
-        if is_section:
-            row_id = rgn.choice(list(range(len(corpus))))
-            section = corpus[int(row_id)]
-            row = {
-                "question_id": qid,
-                "section_id": section["id"],
-                "answer_id": section["answer_id"],
-                "kb_id": section["kb_id"],
-            }
+    for _ in range(num_questions):
+        row = {}
+
+        # first level
+        first_key, *middle_keys, last_key = keys
+        domain_keys = list(lookup_tables[first_key].keys())
+        row[first_key] = rgn.choice(domain_keys)
+
+        # intermediate levels
+        prev_key = key = first_key
+        for key in middle_keys:
+            linked_key_values = _fetch_values(prev_key, row[prev_key], key)
+            key_value = rgn.choice(linked_key_values)
+            row[key] = key_value
+
+        # last level
+        if rgn.random() <= last_level_link_prob:
+            linked_key_values = _fetch_values(key, row[key], last_key)
+            row[last_key] = rgn.choice(linked_key_values)
         else:
-            answer_id = rgn.choice(list(unique_answer_ids))
-            row_ids = lookups["answer_id"][answer_id]
-            sections = corpus[row_ids]
-            kb_ids = set(sections["kb_id"])
-            assert len(kb_ids) == 1
-            kb_id = kb_ids.pop()
-            row = {
-                "question_id": qid,
-                "section_id": None,
-                "answer_id": answer_id,
-                "kb_id": kb_id,
-            }
+            row[last_key] = None
+
         data.append(row)
 
     return _convert_rows_to_dataset(data)
 
 
 @pytest.fixture
-def corpus(
-    seed: int,
-    num_kbs: int = 10,
-    num_answers_per_kbs: tuple[int, int] = (1, 10),
-    num_sections_per_answers: tuple[int, int] = (1, 3),
-) -> datasets.Dataset:
-    return gen_corpus(
-        seed=seed,
-        num_kbs=num_kbs,
-        num_answers_per_kbs=num_answers_per_kbs,
-        num_sections_per_answers=num_sections_per_answers,
-    )
+def corpus(size_per_step: int) -> datasets.Dataset:
+    return gen_corpus(keys=_KEYS, size_per_step=size_per_step)
 
 
 @pytest.fixture
 def questions(
     seed: int,
     corpus: datasets.Dataset,
-    has_section_prob: float = 0.5,
+    has_section_prob: float,
     num_questions: int = 10,
 ) -> datasets.Dataset:
     return gen_questions(
         seed=seed,
         corpus=corpus,
-        has_section_prob=has_section_prob,
+        last_level_link_prob=has_section_prob,
         num_questions=num_questions,
     )
 
 
 @pytest.mark.parametrize("seed", [0, 1, 2])
-@pytest.mark.parametrize("n_sections", [9, 101])
-@pytest.mark.parametrize("out_of_domain_score", [-math.inf, None])
+@pytest.mark.parametrize("size_per_step", [3, 10])
+@pytest.mark.parametrize("has_section_prob", [1, 0.5])
 def test_lookup_index(
     corpus: datasets.Dataset,
     questions: datasets.Dataset,
-    n_sections: int,
-    out_of_domain_score: int,
 ):
-    lookup_pipe = pipes.LookupIndexPipe(corpus=corpus, n_sections=n_sections, out_of_domain_score=out_of_domain_score)
+    lookup_pipe = pipes.LookupIndexPipe(corpus=corpus, keys=_KEYS)
     pipe_hash = fingerprint.Hasher.hash(lookup_pipe)
 
     # process the questions and check the output
-    output = lookup_pipe(questions[:])
+    batch = questions[:]
+    output = lookup_pipe(batch)
 
-    # check the output keys
-    assert set(output.keys()) == {
-        pipes.LookupIndexPipe._pid_key,
-        pipes.LookupIndexPipe._score_key,
-        pipes.LookupIndexPipe._label_key,
-    }
+    # check the name of the output keys
+    assert set(output.keys()) == set(lookup_pipe.keys + [lookup_pipe._output_idx_name])
 
-    # check the output consistency
-    label_keys = lookup_pipe._label_keys
-    in_domain_keys = lookup_pipe._in_domain_keys
-    for i, example in enumerate(iter_examples(output)):
-        question = questions[i]
-        # check there is at least one positive example
-        labels = example[pipes.LookupIndexPipe._label_key]
-        if not any(labels):
-            raise ValueError(f"No positive example. Example: {example}")
+    # check the output values
+    retrieved_pids = output[lookup_pipe._output_idx_name]
+    for i, pid in enumerate(retrieved_pids):
+        for key in _KEYS:
+            # search all matches in the corpus (reference data, expensive to compute)
+            eg_value = batch[key][i]
+            matched_pids = set(i for i, x in _search_by_value(key, eg_value, corpus))
 
-        for result in iter_examples(example):
-            # fetch the corresponding section
-            result_score = result[pipes.LookupIndexPipe._score_key]
-            if result_score not in (lookup_pipe._in_domain_score, lookup_pipe._out_of_domain_score):
-                raise ValueError(
-                    f"Unexpected score: {result_score}. "
-                    f"Expected {lookup_pipe._in_domain_score} or {lookup_pipe._out_of_domain_score}"
-                )
-            pid = result[pipes.LookupIndexPipe._pid_key]
-            section = corpus[pid]
+            # retrieve the matched pids in the output of the pipe
+            binary_labels = output[key][i]
+            found_pids = {int(pid) for pid, label in zip(retrieved_pids[i], binary_labels) if (label > 0 and pid >= 0)}
 
-            # check the validity of results labelled as positives
-            # positive sections should have the same labels as the question
-            # and should be defined as in-domain
-            is_labelled_as_positive = result[pipes.LookupIndexPipe._label_key]
-            if is_labelled_as_positive:
-                assert result[pipes.LookupIndexPipe._score_key] == lookup_pipe._in_domain_score
-                for q_label_key, s_label_key in label_keys.items():
-                    if question[q_label_key] is None:
-                        continue
-                    if question[q_label_key] != section[s_label_key]:
-                        raise ValueError(
-                            f"The labels are inconsistent for keys {q_label_key, s_label_key}! "
-                            f"Question={question}, Section={section}"
-                        )
-
-                # check that the label is in-domain
-                for q_domain_key, s_domain_key in in_domain_keys.items():
-                    if question[q_domain_key] is None:
-                        continue
-                    if question[q_domain_key] != section[s_domain_key]:
-                        raise ValueError(f"The domains are inconsistent! Question={question}, Section={section}")
-
-            else:
-                # check the validity of results labelled as in-domain negatives
-                # in-domain negative should have zero-score
-                if lookup_pipe._in_domain_score == lookup_pipe._out_of_domain_score:
-                    continue
-
-                is_in_domain = result_score == lookup_pipe._in_domain_score
-                if is_in_domain:
-                    for q_domain_key, s_domain_key in in_domain_keys.items():
-                        if question[q_domain_key] is None:
-                            continue
-                        if question[q_domain_key] != section[s_domain_key]:
-                            raise ValueError(
-                                f"The domain labels are inconsistent for keys {q_domain_key, s_domain_key}! "
-                                f"Question={question}, Section={section}"
-                            )
+            # check that the pids are the same
+            if matched_pids != found_pids:
+                raise RuntimeError(f"Found pids {found_pids} do not match expected pids {matched_pids}!")
 
     # test that the hash of the pipe is deterministic (it should not change after being used)
     new_pipe_hash = fingerprint.Hasher.hash(lookup_pipe)
