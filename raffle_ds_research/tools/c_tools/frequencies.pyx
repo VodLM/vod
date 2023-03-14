@@ -1,4 +1,5 @@
-from typing import Tuple, Union, Any, Optional
+import dataclasses
+from typing import Union, Any, Optional
 
 cimport cython
 import numpy as np
@@ -50,14 +51,14 @@ cdef int _unique_by_label(
         for s in range(cursor):
             buffered_value = buffer[s, 0]
             if buffered_value == v_i:
-                buffer[s, 1 + l_i] = 1
+                buffer[s, 1 + l_i] += 1
                 found = 1
                 break
 
         if found == 0:
             buffer[cursor, 0] = v_i
             buffer[cursor, 1:] = 0
-            buffer[cursor, 1 + l_i] = 1
+            buffer[cursor, 1 + l_i] += 1
             cursor += 1
 
     return cursor
@@ -87,24 +88,56 @@ cdef unsigned int [:] _batched_unique_by_label(
 
     return cursors
 
+@dataclasses.dataclass
+class Frequencies:
+    """Label frequencies for a set of unique values."""
+    values: np.ndarray
+    counts: np.ndarray
+
+    __annotations__= {
+            "values": np.ndarray,
+            "counts": np.ndarray,
+        }
+
+    def __getitem__(self, item):
+        return Frequencies(values=self.values[item], counts=self.counts[item])
 
 
-def unique_by_label(
+    def __iter__(self):
+        return zip(self.values, self.counts)
+
+    def __len__(self):
+        return len(self.values)
+
+    def __repr__(self):
+        return f"Frequencies(values={self.values}, counts={self.counts})"
+
+
+def get_frequencies(
     values: PyArray,
-    labels: PyArray,
     *,
-    n_labels: int,
+    labels: Optional[PyArray] = None,
+    n_labels: Optional[int] = None,
     max_n_unique: Optional[int] = None,
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> Frequencies:
 
+
+    # create arrays
+    values = _cast_array(values, dtype=NP_DTYPE)
+    if labels is not None:
+        if n_labels is None:
+            raise ValueError("`n_labels` must be provided if `labels` are provided.")
+        labels = _cast_array(labels, dtype=NP_DTYPE)
+    else:
+        labels = np.zeros_like(values, dtype=NP_DTYPE)
+
+    # check shapes
     if labels.max() >= n_labels:
         raise ValueError(f"labels.max() ({labels.max()}) >= n_labels ({n_labels})")
     if values.shape != labels.shape:
         raise ValueError(f"values.shape ({values.shape}) != labels.shape ({labels.shape})")
 
-    # create arrays
-    values = _cast_array(values, dtype=NP_DTYPE)
-    labels = _cast_array(labels, dtype=NP_DTYPE)
+    # check dimensions
     if max_n_unique is None:
         max_n_unique = values.shape[-1]
     ndim = len(values.shape)
@@ -125,7 +158,7 @@ def unique_by_label(
             n_labels,
         )
         uvalues =  np.asarray(buffer)
-        return uvalues[:cursor, 0], uvalues[:cursor, 1:]
+        return Frequencies(values=uvalues[:cursor, 0], counts=uvalues[:cursor, 1:])
 
     else:
         batch_size = len(values)
@@ -144,5 +177,5 @@ def unique_by_label(
         uvalues = np.asarray(buffer)
         cursors = np.asarray(cursors)
         max_cursor = cursors.max()
-        return (uvalues[:, :max_cursor, 0],
-                uvalues[:, :max_cursor, 1:])
+        return Frequencies(values=uvalues[:, :max_cursor, 0],
+                           counts=uvalues[:, :max_cursor, 1:])

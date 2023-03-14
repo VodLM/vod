@@ -9,12 +9,12 @@ from raffle_ds_research.tools import c_tools
 @pytest.mark.parametrize("max_n_unique", [1, 10, 100])
 @pytest.mark.parametrize("n_labels", [1, 3, 10])
 @pytest.mark.parametrize("seed", [0, 1, 2])
-def test_unique_by_label(n_points: int, max_n_unique: int, n_labels: int, seed: int):
+def test_get_frequencies(n_points: int, max_n_unique: int, n_labels: int, seed: int):
     np.random.set_state(np.random.RandomState(seed).get_state())
     pids = np.random.randint(0, max_n_unique, size=(n_points,), dtype=np.uint64)
     labels = np.random.randint(0, n_labels, size=(n_points,), dtype=np.uint64)
-    upids, ulabels = c_tools.unique_by_label(pids, labels, n_labels=n_labels, max_n_unique=max_n_unique)
-    _test_single(pids, labels, upids, ulabels, n_labels)
+    freqs = c_tools.get_frequencies(pids, labels=labels, n_labels=n_labels, max_n_unique=max_n_unique)
+    _test_single(pids, labels, freqs, n_labels)
 
 
 @pytest.mark.parametrize("batch_size", [1, 3, 10])
@@ -22,7 +22,7 @@ def test_unique_by_label(n_points: int, max_n_unique: int, n_labels: int, seed: 
 @pytest.mark.parametrize("max_n_unique", [1, 10, 100])
 @pytest.mark.parametrize("n_labels", [1, 3, 10])
 @pytest.mark.parametrize("seed", [0, 1, 2])
-def test_unique_by_label_batched(batch_size: int, n_points: int, max_n_unique: int, n_labels: int, seed: int):
+def test_get_frequencies_batched(batch_size: int, n_points: int, max_n_unique: int, n_labels: int, seed: int):
     np.random.set_state(np.random.RandomState(seed).get_state())
     pids = np.random.randint(
         0,
@@ -42,12 +42,14 @@ def test_unique_by_label_batched(batch_size: int, n_points: int, max_n_unique: i
         ),
         dtype=np.uint64,
     )
-    upids, ulabels = c_tools.unique_by_label(pids, labels, n_labels=n_labels, max_n_unique=max_n_unique)
+    freqs = c_tools.get_frequencies(pids, labels=labels, n_labels=n_labels, max_n_unique=max_n_unique)
     for i in range(batch_size):
-        _test_single(pids[i], labels[i], upids[i], ulabels[i], n_labels)
+        _test_single(pids[i], labels[i], freqs[i], n_labels)
 
 
-def _test_single(pids: np.ndarray, labels: np.ndarray, upids: np.ndarray, ulabels: np.ndarray, n_labels: int):
+def _test_single(pids: np.ndarray, labels: np.ndarray, freqs: c_tools.Frequencies, n_labels: int):
+    upids = freqs.values
+    ulabels = freqs.counts
     # remote the padding (set with -1)
     not_masked = upids >= 0
     upids = upids[not_masked]

@@ -19,23 +19,23 @@ if __name__ == "__main__":
         }
     )
 
-    batch_upids, batch_ulabels = c_tools.unique_by_label(
+    frequencies = c_tools.get_frequencies(
         batch_pids,
-        batch_labels,
+        labels=batch_labels,
         n_labels=n_types,
         max_n_unique=max_n_unique,
     )
     rich.print(
         {
-            "batch_upids": batch_upids,
-            "batch_ulabels": batch_ulabels,
-            "batch_upids.shape": batch_upids.shape,
+            "batch_upids": frequencies.values,
+            "batch_ulabels": frequencies.counts,
+            "batch_upids.shape": frequencies.values.shape,
         }
     )
 
     # timeit
     rtime = timeit.timeit(
-        "c_tools.unique_by_label(batch_pids, batch_labels, n_labels=n_types, max_n_unique=max_n_unique)",
+        "c_tools.get_frequencies(batch_pids, labels=batch_labels, n_labels=n_types, max_n_unique=max_n_unique)",
         globals=globals(),
         number=1_000,
     )

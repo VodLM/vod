@@ -62,9 +62,9 @@ class LookupIndexPipe(object):
         py_lookup_tables = _build_lookup_tables(corpus, keys=self._keys)
         self._lookup_tables, self._key_maps = {}, {}
         for key, lookup in py_lookup_tables.items():
-            nwors = len(lookup)
+            nrows = len(lookup)
             ncols = max(len(v) for v in lookup.values())
-            key_lookup = np.full((nwors, ncols), -1, dtype=np.int64)
+            key_lookup = np.full((nrows, ncols), -1, dtype=np.int64)
             key_map = {}
             for idx, (k, v) in enumerate(lookup.items()):
                 key_map[k] = idx
@@ -105,11 +105,11 @@ class LookupIndexPipe(object):
                 batch_labels[i, a:cursor] = j
 
         # find the unique pids and their labels
-        upids, ulabels = c_tools.unique_by_label(batch_pids, batch_labels, n_labels=len(self._keys))
+        freqs = c_tools.get_frequencies(batch_pids, labels=batch_labels, n_labels=len(self._keys))
 
         return {
-            self._output_idx_name: upids,
-            **{key: ulabels[..., i] for i, key in enumerate(self._keys)},
+            self._output_idx_name: freqs.values,
+            **{key: freqs.counts[..., i] for i, key in enumerate(self._keys)},
         }
 
 
