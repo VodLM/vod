@@ -176,7 +176,8 @@ def _predict_single(
     # validate that all store values have been initialized
     if validate_store:
         n_samples = math.inf if isinstance(validate_store, bool) else validate_store
-        zero_ids = list(_get_zero_indices(dataset, store, n_samples=n_samples))
+        logger.debug(f"Validating the store using n_samples={n_samples} (all rows must be non-zero)")
+        zero_ids = list(_get_zero_vec_indices(dataset, store, n_samples=n_samples))
         if len(zero_ids):
             raise ValueError(
                 f"Vector at indices {zero_ids} are all zeros. "
@@ -218,7 +219,7 @@ def _infer_vector_shape(
     return vector_shape
 
 
-def _get_zero_indices(dataset, store, n_samples: Number) -> Iterable[int]:
+def _get_zero_vec_indices(dataset, store, n_samples: Number) -> Iterable[int]:
     if n_samples < len(dataset):
         ids = np.random.choice(len(dataset), int(n_samples), replace=False)
     else:

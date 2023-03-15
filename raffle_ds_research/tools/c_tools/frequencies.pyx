@@ -1,10 +1,13 @@
 import dataclasses
-from typing import Union, Any, Optional
+from typing import Any, Optional, Union
 
 cimport cython
+
 import numpy as np
 import torch
+
 from cython.parallel cimport prange
+
 from typing_extensions import TypeAlias
 
 ctypedef long long DTYPE

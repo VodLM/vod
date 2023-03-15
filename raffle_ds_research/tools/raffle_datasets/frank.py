@@ -1,43 +1,44 @@
 # pylint: disable=missing-function-docstring
 from __future__ import annotations
 
+import enum
 import json
 from collections import defaultdict
-from enum import Enum
 from os import PathLike
 from pathlib import Path
-from typing import Optional, Type, Union
+from typing import Optional, Union
 
-from datasets import Dataset as HfDataset
-from datasets import DatasetDict as HfDatasetDict
-from pydantic import BaseModel, validate_arguments, validator
+import datasets
+import pydantic
+import rich
 from raffle_ds_storage import GoogleStorageInterface
 from raffle_ds_storage.utils.static import RAFFLE_PATH
+from typing_extensions import Type
 
 
-class FrankSplitName(Enum):
+class FrankSplitName(enum.Enum):
     A = "A"
     B = "B"
 
 
-class HfFrankSplit(BaseModel):
+class HfFrankSplit(pydantic.BaseModel):
     class Config:
         arbitrary_types_allowed = True
 
     split: FrankSplitName
-    qa_splits: HfDatasetDict
-    sections: HfDataset
+    qa_splits: datasets.DatasetDict
+    sections: datasets.Dataset
 
 
-class SectionModel(BaseModel):
+class SectionModel(pydantic.BaseModel):
     content: str
     title: str
     id: int
     answer_id: int
     source_id: int
-    knowledge_base_id: int
+    kb_id: int = pydantic.Field(..., alias="knowledge_base_id")
 
-    @validator("title", pre=True, always=True)
+    @pydantic.validator("title", pre=True, always=True)
     def _validate_title(cls, title):
         if title is None:
             return ""
@@ -45,7 +46,7 @@ class SectionModel(BaseModel):
         return title
 
 
-class QuestionModel(BaseModel):
+class QuestionModel(pydantic.BaseModel):
     id: int
     question: str
     category: str
@@ -53,7 +54,7 @@ class QuestionModel(BaseModel):
     data_source: str
     answer_id: int
     section_id: Optional[int]
-    knowledge_base_id: int
+    kb_id: int = pydantic.Field(..., alias="knowledge_base_id")
 
 
 def download_frank(
@@ -74,10 +75,10 @@ def download_frank(
 
 def _read_json_data_and_create_hf(
     path: PathLike | dict[str, PathLike],
-    model: Type[BaseModel],
-) -> HfDataset | HfDatasetDict:
+    model: Type[pydantic.BaseModel],
+) -> datasets.Dataset | datasets.DatasetDict:
     if isinstance(path, dict):
-        return HfDatasetDict({k: _read_json_data_and_create_hf(v, model) for k, v in path.items()})
+        return datasets.DatasetDict({k: _read_json_data_and_create_hf(v, model) for k, v in path.items()})
 
     with open(path, "r") as f:
         data = json.load(f)
@@ -95,7 +96,7 @@ def _read_json_data_and_create_hf(
         for key in column_names:
             output[key].append(clean_row[key])
 
-    return HfDataset.from_dict(output)
+    return datasets.Dataset.from_dict(output)
 
 
 def _download_and_parse_frank(
@@ -128,7 +129,7 @@ def _make_local_sync_path(cached_dir: PathLike, language: str, split: FrankSplit
     )
 
 
-@validate_arguments(config=dict(arbitrary_types_allowed=True))
+@pydantic.validate_arguments(config=dict(arbitrary_types_allowed=True))
 def load_frank(
     language: str,
     split: Union[str, FrankSplitName],
@@ -147,7 +148,7 @@ def load_frank(
 
     # if not downloaded, download and save to disk
     # todo: check hash before download
-    #       |-> implement in raffle_ds_storage and always load the base data here.
+    #       |-> implement this feature in `raffle_ds_storage`, only download if the hash is different.
     if not qa_splits_path.exists() or not sections_paths.exists():
         frank_split = _download_and_parse_frank(language, split, version)
         frank_split.qa_splits.save_to_disk(str(qa_splits_path))
@@ -155,6 +156,6 @@ def load_frank(
 
     return HfFrankSplit(
         split=split,
-        qa_splits=HfDatasetDict.load_from_disk(str(qa_splits_path), keep_in_memory=keep_in_memory),
-        sections=HfDataset.load_from_disk(str(sections_paths), keep_in_memory=keep_in_memory),
+        qa_splits=datasets.DatasetDict.load_from_disk(str(qa_splits_path), keep_in_memory=keep_in_memory),
+        sections=datasets.Dataset.load_from_disk(str(sections_paths), keep_in_memory=keep_in_memory),
     )

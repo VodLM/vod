@@ -1,13 +1,9 @@
 from __future__ import annotations
 
-import functools
-import json
 from typing import Any, Iterable, Optional
 
-import rich
 import torch
 import transformers
-from datasets import fingerprint
 
 from raffle_ds_research.tools.pipes.utils.misc import pack_examples
 
@@ -67,17 +63,30 @@ def torch_tokenize_pipe(
     tokenizer: transformers.PreTrainedTokenizer,
     lazy: bool = True,
     padding: bool = True,
+    return_token_type_ids: bool = False,
     **kwargs: Any,
 ) -> dict[str, torch.Tensor]:
     """Tokenize a text field."""
     tokenized_keys = ["input_ids", "attention_mask"]
     tokenized_keys = [f"{field}.{k}" for k in tokenized_keys]
     if lazy and all(k in batch for k in tokenized_keys):
-        return _torch_pad_tokenized_field(batch, idx, field=field, tokenizer=tokenizer, **kwargs)
+        return _torch_pad_tokenized_field(
+            batch,
+            idx,
+            field=field,
+            tokenizer=tokenizer,
+            **kwargs,
+        )
 
     text = batch[field]
-    encodings = tokenizer(text, return_tensors="pt", padding=padding, **kwargs)
-    return dict(encodings)
+    encodings = tokenizer(
+        text,
+        return_tensors="pt",
+        padding=padding,
+        return_token_type_ids=return_token_type_ids,
+        **kwargs,
+    )
+    return {f"{field}.{k}": v for k, v in encodings.items()}
 
 
 def torch_tokenize_collate(

@@ -1,8 +1,9 @@
 import os
 import shutil
-import numpy
 from distutils.command.build_ext import build_ext
 from distutils.core import Distribution, Extension
+
+import numpy
 from Cython.Build import cythonize
 
 compile_args = ["-march=native", "-O3", "-msse", "-msse2", "-mfma", "-mfpmath=sse"]

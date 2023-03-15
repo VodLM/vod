@@ -106,7 +106,7 @@ class CollateMsMarco:
 class MsMarcoBuilder(dataset_builder.HfBuilder):
     """Builder for the `MS MARCO` dataset."""
 
-    _validate_splits: list[str] = ["train", "validation"]
+    _validate_only_splits: list[str] = ["train", "validation"]
 
     def __init__(
         self,
@@ -129,8 +129,8 @@ class MsMarcoBuilder(dataset_builder.HfBuilder):
         super().__init__(
             name=name,
             load_kwargs=load_kwargs,
-            validator=None,
-            batch_validator=SupervisedRetrievalBatch,
+            row_model=None,
+            batch_model=SupervisedRetrievalBatch,
         )
         if templates is None:
             templates = DEFAULT_TEMPLATES

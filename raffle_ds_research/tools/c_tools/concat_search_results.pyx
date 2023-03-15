@@ -1,10 +1,13 @@
 import dataclasses
-from typing import Union, Optional
+from typing import Optional, Union
 
 cimport cython
+
 import numpy as np
 import torch
+
 from cython.parallel cimport prange
+
 from typing_extensions import TypeAlias
 
 ctypedef long long DTYPE_LONG
@@ -67,9 +70,11 @@ cdef DTYPE_LONG _concat_single(
 ) nogil:
 
     cdef:
-        unsigned long i
+        unsigned long i, ii
+        unsigned int found_in_a = 0
         DTYPE_LONG j = 0
         DTYPE_LONG buffered_idx
+        DTYPE_LONG buffered_idx_
         DTYPE_FLOAT buffered_score
 
     for i in range(len(a_indices)):
@@ -86,11 +91,19 @@ cdef DTYPE_LONG _concat_single(
         buffered_idx = b_indices[i]
         if buffered_idx < 0 or j >= total:
             break
-        ab_indices[j] = buffered_idx
-        ab_scores[j] = b_scores[i]
-        ab_features[j] = b_features[i]
-        ab_labels[j] = 1
-        j += 1
+
+        found_in_a = 0
+        for ii in range(len(a_indices)):
+            buffered_idx_ = a_indices[ii]
+            if buffered_idx_ == buffered_idx:
+                found_in_a = 1
+                break
+        if found_in_a < 1:
+            ab_indices[j] = buffered_idx
+            ab_scores[j] = b_scores[i]
+            ab_features[j] = b_features[i]
+            ab_labels[j] = 1
+            j += 1
 
     return j
 
@@ -133,7 +146,7 @@ cdef DTYPE_LONG [:]  _concat_batch(
     return cursors
 
 
-def concat_unique_topk(
+def concat_search_results(
     a_indices: np.ndarray,
     a_scores: np.ndarray,
     a_features: np.ndarray,
@@ -144,6 +157,11 @@ def concat_unique_topk(
     max_a: Optional[int] = None,
     truncate: bool = True,
 ) -> ConcatenatedTopk:
+    """
+    Sort w.r.t. `scores` and concatenate results from two search runs.
+    Make sure that `indices` from A are not in B.
+    `features` is an extra field that is indexed and returned along the indices and scores.
+    """
 
     # check input
     if max_a is None:

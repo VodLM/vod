@@ -25,7 +25,6 @@ if __name__ == "__main__":
     # Tokenize and collate a batch
     collate_fn = builder.get_collate_fn()
     batch = collate_fn([dataset["train"][0], dataset["train"][1]])
-    batch["text"] = ["hello world"] * len(list(iter_examples(batch)))
     pipes.pprint_batch(batch, header="ms_marco - batch")
 
     # Init the dataloader

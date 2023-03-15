@@ -14,7 +14,7 @@ from loguru import logger
 from raffle_ds_research.tools.index_tools.client import FaissMaster
 
 
-@dataclasses.dataclass()
+@dataclasses.dataclass
 class ProfileArgs:
     n_calls: int = 1_000
     nprobe: int = 10

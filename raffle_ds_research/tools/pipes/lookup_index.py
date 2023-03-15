@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from collections import defaultdict, OrderedDict
+import dataclasses
+from collections import OrderedDict, defaultdict
 from copy import copy
 from functools import partial
 from typing import Any, Iterable, Optional
@@ -11,9 +12,20 @@ from typing_extensions import TypeAlias
 
 from raffle_ds_research.tools import c_tools
 from raffle_ds_research.tools.dataset_builder import DatasetProtocol
-from raffle_ds_research.tools.pipes.utils.misc import pad_list, iter_examples
+from raffle_ds_research.tools.pipes.utils.misc import iter_examples, pad_list
 
 LookupTables: TypeAlias = OrderedDict[str, dict[int, set[int]]]
+
+
+@dataclasses.dataclass
+class LookupSearchResults:
+    indices: np.ndarray
+    frequencies: np.ndarray
+    labels: list[str]
+
+    @property
+    def mask(self) -> np.ndarray:
+        return self.indices >= 0
 
 
 def _pad_pids(pids: list[int], candidate_pids: list[int] | set[int], **kwargs):
@@ -83,7 +95,13 @@ class LookupIndexPipe(object):
         idx: Optional[list[int]] = None,
         **kwargs: Any,
     ) -> dict[str, np.ndarray]:
-        # retrieve the pids for each query and key
+        results = self.search(batch)
+        return {
+            self._output_idx_name: results.indices,
+            **{key: results.frequencies[..., i] for i, key in enumerate(results.labels)},
+        }
+
+    def search(self, batch: dict[str, Any]) -> LookupSearchResults:
         # todo: cythonize this for loop.
         nrows = len(batch[self._keys[0]])
         ncols = sum(v.shape[1] for v in self._lookup_tables.values())
@@ -103,14 +121,13 @@ class LookupIndexPipe(object):
                 cursor += len(key_pids)
                 batch_pids[i, a:cursor] = key_pids
                 batch_labels[i, a:cursor] = j
-
         # find the unique pids and their labels
         freqs = c_tools.get_frequencies(batch_pids, labels=batch_labels, n_labels=len(self._keys))
-
-        return {
-            self._output_idx_name: freqs.values,
-            **{key: freqs.counts[..., i] for i, key in enumerate(self._keys)},
-        }
+        return LookupSearchResults(
+            indices=freqs.values,
+            frequencies=freqs.counts,
+            labels=self._keys,
+        )
 
 
 @datasets.fingerprint.hashregister(LookupIndexPipe)

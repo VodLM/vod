@@ -17,6 +17,7 @@ from transformers import BertConfig, BertModel, T5EncoderModel
 
 from raffle_ds_research.core.ml_models.gradients import Gradients
 from raffle_ds_research.core.ml_models.monitor import Monitor
+from raffle_ds_research.tools.pipes import fingerprint_torch_module
 from raffle_ds_research.tools.utils.tensor_tools import serialize_tensor
 
 TransformerEncoder = Union[T5EncoderModel, BertModel]
@@ -268,9 +269,4 @@ class Ranker(pl.LightningModule):
 
 @hashregister(Ranker)
 def _hash_ranker(hasher: Hasher, value: Ranker):
-    hasher = Hasher()
-    for k, v in value.state_dict().items():
-        hasher.update(k)
-        u = serialize_tensor(v)
-        hasher.update(u)
-    return hasher.hexdigest()
+    return fingerprint_torch_module(hasher, value)
