@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from asyncio import Future
-from typing import List, Optional
+from typing import List, Optional, Any
 
-import pytorch_lightning as pl
+import lightning.pytorch as pl
 import tensorstore
 import tensorstore as ts
 import torch
-from pytorch_lightning import Callback
+from lightning.pytorch import Callback
 
 from raffle_ds_research.tools.utils.trainer import Trainer
 
@@ -46,10 +46,10 @@ class TensorStoreCallback(Callback):
         self,
         trainer: "pl.Trainer",
         pl_module: "pl.LightningModule",
-        outputs: dict,
-        batch: dict,
+        outputs: Any,
+        batch: Any,
         batch_idx: int,
-        dataloader_idx: int,
+        dataloader_idx: int = 0,
     ) -> None:
         """store the outputs of the prediction step to the cache"""
         try:

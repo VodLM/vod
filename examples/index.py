@@ -7,7 +7,7 @@ from typing import Any
 import datasets
 import faiss
 import hydra
-import pytorch_lightning as pl
+import lightning.pytorch as pl
 import rich
 import torch
 import transformers
@@ -16,7 +16,7 @@ from lightning_fabric import seed_everything
 from loguru import logger
 from omegaconf import DictConfig
 
-from raffle_ds_research.cli.utils import _set_context
+from raffle_ds_research.cli.utils import set_training_context
 from raffle_ds_research.core.builders import FrankBuilder
 from raffle_ds_research.core.ml_models import Ranker
 from raffle_ds_research.tools import index_tools, predict
@@ -59,7 +59,7 @@ def search_index(
 
 @hydra.main(config_path="../raffle_ds_research/configs/", config_name="main", version_base="1.3")
 def run(config: DictConfig):
-    _set_context()
+    set_training_context()
     print_config(config)
     exp_dir = Path()
     cache_dir = Path(config.sys.cache_dir, "examples-index/")

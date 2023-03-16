@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+from typing import Optional
+
 import faiss
 
 # faiss.contrib.torch_utils: required to handle torch.Tensor inputs.
-from faiss.contrib import torch_utils  # type: ignore
+try:
+    from faiss.contrib import torch_utils  # type: ignore
+except ImportError:
+    pass
 
 from raffle_ds_research.tools.index_tools.vector_handler import VectorType, vector_handler
 

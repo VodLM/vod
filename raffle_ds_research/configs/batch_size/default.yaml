@@ -1,5 +1,5 @@
 effective: 32
 per_device: 8
-per_device_eval: 32
+per_device_eval: 8
 per_device_predict: 512
 gradient_accumulation_steps: ${int_max:1,${int_div:${batch_size.effective},${batch_size.per_device}}}

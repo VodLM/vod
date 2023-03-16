@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
-import pytorch_lightning as pl
+import lightning.pytorch as pl
 import torch
 
 from raffle_ds_research.tools import pipes

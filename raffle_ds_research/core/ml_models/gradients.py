@@ -83,7 +83,7 @@ class KlDivGradients(Gradients):
         # set -log(eps) wherever:
         #   - the section is labelled as negative
         #   - except when all the sections for a given are negative
-        is_negative = ~data.targets
+        is_negative = data.targets < 1
         q_with_positives = ~is_negative.all(dim=-1)
         data_zero_prob = is_negative | ~q_with_positives[:, None]
         data_logits = torch.where(
@@ -105,13 +105,37 @@ class KlDivGradients(Gradients):
         kl_div = kl_div_terms.sum(dim=-1)
         loss = (q_with_positives * kl_div).sum() / q_with_positives.sum()
 
-        # import rich
-        # rich.print({
-        #     "loss": loss,
-        #     "kl_div": kl_div,
-        #     # "q_with_positives": q_with_positives,
-        #     # "model_logits": model_logits,
-        #     "data_logits": data_logits,
-        # })
+        return {
+            "loss": loss,
+            **_make_evaluation_data(
+                targets=data.targets,
+                model_logits=model_logits,
+                retrieval_scores=data.scores,
+            ),
+        }
 
-        return {"loss": loss, "_targets": data.targets, "_logits": model_logits}
+
+@torch.no_grad()
+def _make_evaluation_data(
+    targets: torch.Tensor,
+    model_logits: torch.Tensor,
+    retrieval_scores: torch.Tensor,
+) -> dict[str, torch.Tensor]:
+    sorted_ids = model_logits.argsort(dim=-1, descending=True)
+    targets_ = targets.gather(dim=-1, index=sorted_ids)
+    model_logits_ = model_logits.gather(dim=-1, index=sorted_ids)
+
+    # compute the KL divergence between the model and the data
+    is_defined = retrieval_scores.isfinite()
+    retrieval_logits_ = retrieval_scores.masked_fill(~is_defined, -math.inf)
+    retrieval_logits_ = retrieval_logits_.log_softmax(dim=-1)
+
+    kl_div_terms = -retrieval_logits_.exp() * (model_logits_ - retrieval_logits_)
+    kl_div_terms.masked_fill_(~is_defined, 0)
+    kl_div = kl_div_terms.sum(dim=-1)
+
+    return {
+        "_targets": targets_ > 0,
+        "_logits": model_logits_,
+        "kl_retrieval": kl_div.mean(),
+    }

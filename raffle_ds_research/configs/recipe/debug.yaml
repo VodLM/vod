@@ -1,0 +1,21 @@
+# @package _global_
+
+defaults:
+  - override /model/encoder: bert-tiny
+  - override /trainer/logger:
+      - csv
+  - _self_
+
+embedding_size: 64
+
+builder:
+  subset_size: 100
+
+batch_size:
+  per_device: 4
+  per_device_eval: 8
+  per_device_predict: 10
+
+resources:
+  num_workers: 1
+  num_proc: 4

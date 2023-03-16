@@ -5,14 +5,8 @@ defaults:
 
 _target_: raffle_ds_research.core.builders.FrankBuilder
 name: frank
+subset_name: A
 language: en
-split: A
 subset_size: null
-
-# builder args
 prep_map_kwargs:
   num_proc: ${resources.num_proc}
-index_max_top_k: 100
-n_sections: 8
-question_max_length: 256
-section_max_length: 512

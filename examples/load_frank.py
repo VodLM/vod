@@ -7,7 +7,7 @@ import dill
 import dotenv
 import faiss
 import pydantic
-import pytorch_lightning as pl
+import lightning.pytorch as pl
 import rich
 import torch
 import transformers
@@ -123,7 +123,7 @@ def run():
         faiss_client = faiss_master.get_client()
 
         # Instantiate the collate_fn
-        loader_config = builder.loader_config(
+        loader_config = builder.collate_config(
             faiss_client=faiss_client if args.use_faiss else None,
             question_vectors=dataset_vectors["train"] if args.use_faiss else None,
             n_sections=args.n_sections,

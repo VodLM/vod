@@ -28,13 +28,13 @@ class CollateFnProtocol(Protocol):
 D = TypeVar("D", bound=DatasetProtocol)
 DD = TypeVar("DD", bound=Union[dict[str, DatasetProtocol], datasets.DatasetDict])
 DorDD = TypeVar("DorDD", bound=Union[DatasetProtocol, dict[str, DatasetProtocol], datasets.DatasetDict])
-LoadCfg = TypeVar("LoadCfg", bound=pydantic.BaseModel)
+CollateCfg = TypeVar("LoadCfg", bound=pydantic.BaseModel)
 
 
-class DatasetBuilder(Generic[DD, LoadCfg], ABC):
+class DatasetBuilder(Generic[DD, CollateCfg], ABC):
     """Abstract object for all dataset datasets."""
 
-    _loader_config: Type[LoadCfg]
+    _collate_config: Type[CollateCfg]
 
     @abstractmethod
     def __call__(self) -> DD:
@@ -47,13 +47,13 @@ class DatasetBuilder(Generic[DD, LoadCfg], ABC):
 
     @staticmethod
     @abstractmethod
-    def get_collate_fn(config: Optional[LoadCfg] = None) -> CollateFnProtocol:
+    def get_collate_fn(config: Optional[CollateCfg] = None) -> CollateFnProtocol:
         """Return collate function for that dataset."""
         return torch.utils.data.dataloader.default_collate
 
     @property
-    def loader_config(cls) -> Type[LoadCfg]:
-        return cls._loader_config
+    def collate_config(cls) -> Type[CollateCfg]:
+        return cls._collate_config
 
 
 class ExampleValidationError(ValidationError):
@@ -64,8 +64,8 @@ class CollateRuntimeError(RuntimeError):
     ...
 
 
-class HfBuilder(DatasetBuilder[datasets.DatasetDict, LoadCfg]):
-    _loader_config: Type[LoadCfg]
+class HfBuilder(DatasetBuilder[datasets.DatasetDict, CollateCfg]):
+    _collate_config: Type[CollateCfg]
     row_model: Optional[Type[BaseModel]]
     batch_model: Optional[Type[BaseModel]]
     _validate_only_splits: Optional[list[str]]
@@ -114,8 +114,8 @@ class HfBuilder(DatasetBuilder[datasets.DatasetDict, LoadCfg]):
                 self._validate(dset_split)
         return dset
 
-    def _default_load_config(self) -> LoadCfg:
-        return self._loader_config()
+    def _default_collate_config(self) -> CollateCfg:
+        return self._collate_config()
 
     def _build_dset(self, corpus: Optional[datasets.Dataset]) -> datasets.DatasetDict:
         dset = datasets.load_dataset(
@@ -132,7 +132,7 @@ class HfBuilder(DatasetBuilder[datasets.DatasetDict, LoadCfg]):
             self.row_model(**row)
 
         # collate_fn
-        cfg = self._default_load_config()
+        cfg = self._default_collate_config()
         xs = [dset[i] for i in range(min(3, len(dset)))]
         collate_fn = self.get_collate_fn(config=cfg)
         try:
@@ -146,7 +146,7 @@ class HfBuilder(DatasetBuilder[datasets.DatasetDict, LoadCfg]):
             ) from e
 
     @staticmethod
-    def get_collate_fn(config: Optional[LoadCfg] = None):
+    def get_collate_fn(config: Optional[CollateCfg] = None):
         return torch.utils.data.dataloader.default_collate
 
     def _take_subset(self, dset: datasets.DatasetDict) -> datasets.DatasetDict:

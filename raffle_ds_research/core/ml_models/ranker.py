@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import functools
+import re
 from typing import Any, Iterable, Optional, Union
 
-import pytorch_lightning as pl
+import lightning.pytorch as pl
 import rich
 import torch
 import transformers
@@ -18,7 +19,6 @@ from transformers import BertConfig, BertModel, T5EncoderModel
 from raffle_ds_research.core.ml_models.gradients import Gradients
 from raffle_ds_research.core.ml_models.monitor import Monitor
 from raffle_ds_research.tools.pipes import fingerprint_torch_module
-from raffle_ds_research.tools.utils.tensor_tools import serialize_tensor
 
 TransformerEncoder = Union[T5EncoderModel, BertModel]
 
@@ -30,6 +30,9 @@ def only_trainable(parameters: Iterable[torch.nn.Parameter]):
 def maybe_instantiate(conf_or_obj: Union[Any, DictConfig], **kwargs):
     if isinstance(conf_or_obj, (DictConfig, dict)):
         return instantiate(conf_or_obj, **kwargs)
+
+
+PBAR_MATCH_PATTERN = re.compile(r"(loss|ndcg|mrr)$")
 
 
 class Ranker(pl.LightningModule):
@@ -170,19 +173,25 @@ class Ranker(pl.LightningModule):
             output[key] = self._forward_field(fields)
         if len(output) == 0:
             raise ValueError(
-                f"No fields to process. " f"Batch keys = {batch.keys()}. " f"Expected fields = {mapping.keys()}."
+                f"No fields to process. " f"Batch keys = {batch.keys()}. Expected fields = {mapping.keys()}."
             )
         return output
 
     @staticmethod
-    def _input_stats(batch: dict) -> dict:
+    def _input_stats(batch: dict, prefix: str = "") -> dict:
         output = {}
-        keys = ["question.input_ids", "section.input_ids"]
-        for key in keys:
+        keys = {
+            "question.input_ids": "question/input_ids",
+            "section.input_ids": "section/input_ids",
+        }
+        for key, log_key in keys.items():
             try:
                 value = batch[key]
                 if isinstance(value, torch.Tensor):
-                    output[f"{key}.length"] = float(value.shape[-1])
+                    shp = value.shape
+                    output[f"{prefix}{log_key}_length"] = float(shp[-1])
+                    if len(shp) > 2:
+                        output[f"{prefix}{log_key}_n"] = float(shp[-2])
             except KeyError:
                 logger.warning(f"Key {key} not found in batch")
         return output
@@ -190,7 +199,7 @@ class Ranker(pl.LightningModule):
     def _step(self, batch: dict, batch_idx: Optional[int] = None, *, split: str, **kwargs) -> dict:
         output = self.forward(batch)
         output = self.gradients({**batch, **output})
-        output.update(self._input_stats(batch))
+        output.update(self._input_stats(batch, prefix=f"{split}/"))
 
         if self.monitor is not None:
             self.monitor.update(output, split=split)
@@ -201,12 +210,13 @@ class Ranker(pl.LightningModule):
 
         # filter the output and log
         output = self._filter_output(output)
-        self._log_metrics(output, split=split, on_step=True, on_epoch=False)
+        on_step = split == "train"
+        self._log_metrics(output, split=split, on_step=on_step, on_epoch=not on_step)
 
         return output
 
     @torch.no_grad()
-    def _log_metrics(self, output: dict, split: str, **kwargs) -> None:
+    def _log_metrics(self, output: dict, split: str, prog_bar: Optional[bool] = None, **kwargs) -> None:
         for key, value in output.items():
             if isinstance(value, torch.Tensor):
                 if value.numel() > 1:
@@ -214,7 +224,10 @@ class Ranker(pl.LightningModule):
 
             if "/" not in key:
                 key = f"{split}/{key}"
-            self.log(key, value, **kwargs)
+
+            if prog_bar is None:
+                prog_bar = PBAR_MATCH_PATTERN.search(key) is not None
+            self.log(key, value, prog_bar=prog_bar, **kwargs)
 
     @staticmethod
     def _filter_output(output: dict) -> dict:
@@ -238,7 +251,7 @@ class Ranker(pl.LightningModule):
     def _on_epoch_end(self, split: str) -> dict:
         if self.monitor is not None:
             summary = self.monitor.compute(split=split)
-            self._log_metrics(summary, split=split, prog_bar=True)
+            self._log_metrics(summary, split=split)
             return summary
         else:
             return {}

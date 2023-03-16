@@ -1,36 +1,59 @@
 from __future__ import annotations
 
+import numbers
 from pathlib import Path
-from typing import Optional
+from typing import Any
 
 import datasets
-import pytorch_lightning as pl
+import lightning.pytorch as pl
+import omegaconf
 import torch
 import transformers
-from omegaconf import OmegaConf
 
 from raffle_ds_research.utils.config import config_to_flat_dict
 
 
-def _set_context():
+def _do_nothing(*args, **kwargs):
+    """Do nothing."""
+    pass
+
+
+def _return_same(value: Any) -> Any:
+    """Return the same value."""
+    return value
+
+
+def _cast_hps(value: Any) -> str:
+    """Cast a value to a string."""
+    formatter = {
+        numbers.Number: _return_same,
+        str: _return_same,
+        Path: lambda x: str(x.absolute()),
+    }.get(type(value), str)
+    return formatter(value)
+
+
+def set_training_context():
     """Set the general context for torch, datasets, etc."""
     datasets.utils.logging.set_verbosity_error()
     transformers.utils.logging.set_verbosity_error()
     torch.set_float32_matmul_precision("medium")
 
+    # torch.multiprocessing.set_sharing_strategy("file_system")
 
-def _log_config(trainer, config, exp_dir):
-    """Log the config as hyperparameters and save it locally and on MLFlow."""
-    trainer.logger.log_hyperparams(config_to_flat_dict(config))
-    mlflow_logger = _fetch_mlflow_logger(trainer.loggers)
+
+def log_config(trainer: pl.Trainer, config: omegaconf.DictConfig, exp_dir: Path):
+    """Log the config as hyperparameters and save it locally."""
     config_path = Path(exp_dir, "config.yaml")
     with open(config_path, "w") as f:
-        f.write(OmegaConf.to_yaml(config, resolve=True))
-    if mlflow_logger:
-        mlflow_logger._mlflow_client.log_artifact(run_id=mlflow_logger.run_id, local_path=config_path)
+        f.write(omegaconf.OmegaConf.to_yaml(config, resolve=True))
 
+    # log he config to wandb
+    try:
+        import wandb
 
-def _fetch_mlflow_logger(loggers: list[pl.loggers.base.LightningLoggerBase]) -> Optional[pl.loggers.MLFlowLogger]:
-    for logger in loggers:
-        if isinstance(logger, pl.loggers.mlflow.MLFlowLogger):
-            return logger
+        flat_config = config_to_flat_dict(config, sep="/")
+        flat_config = {k: _cast_hps(v) for k, v in flat_config.items()}
+        wandb.config.update(flat_config)
+    except ImportError:
+        ...

@@ -86,6 +86,11 @@ class FrankLoaderConfig(BaseModel):
         if self.question_vectors is not None:
             self._query_vectors = index_tools.vector_handler(self.question_vectors)
 
+    def __del__(self):
+        """Close the open ts.TensorStore object."""
+        if self._query_vectors is not None:
+            del self._query_vectors
+
     @property
     def query_vectors(self) -> index_tools.VectorHandler:
         return self._query_vectors
@@ -164,7 +169,7 @@ def sample_sections(
     positive_scores = positives.scores
     positive_logits = numpy_log_softmax(positive_scores)
     positive_logits += numpy_gumbel_like(positive_logits)
-    # overrride the positive scores to NaN
+    # overrride the positive scores to NaN # todo: fetch the model scores instead.
     # (they are not retrieved from faiss, and therefore the model score is unknown)
     positive_scores = np.where(np.isinf(positive_scores), -np.inf, np.nan)
 
@@ -186,10 +191,6 @@ def sample_sections(
         max_a=max_pos_sections,
         total=n_sections,
     )
-    if concatenated.indices.shape[-1] < n_sections:
-        raise ValueError(
-            f"Failed to fetch enough sections. " f"Found: {concatenated.indices.shape}, " f"expected: {n_sections}"
-        )
     concatenated.labels = np.where(concatenated.labels == 0, 1, 0)
     return SampledSections(
         indices=concatenated.indices,
@@ -239,7 +240,7 @@ class FrankCollate(pipes.Collate):
         # tokenize the questions
         tokenized_question = pipes.torch_tokenize_pipe(batch, tokenizer=self.tokenizer, field="question")
 
-        # fetch the positive section ids (lookup the sections with a match on `id` or `answer_id`)
+        # fetch the positive section ids (The `rule` allows keeping sections with match on either `id` or `answer_id`)
         # Todo: fetch the model scores for the positive samples. This can be done using the `faiss_client` or
         #  using the `query_vectors` and by fetching the section vectors.
         pos_lookup_input = {v: batch[k] for k, v in self.config.label_keys.items()}
@@ -301,7 +302,7 @@ class SampledSections:
 
 
 class FrankBuilder(dataset_builder.HfBuilder):
-    _loader_config = FrankLoaderConfig
+    _collate_config = FrankLoaderConfig
 
     def __init__(
         self,
@@ -379,7 +380,10 @@ class FrankBuilder(dataset_builder.HfBuilder):
             config = FrankLoaderConfig(**config)
 
         if config.faiss_not_available:
-            logger.warning("Skipping search because `question_vectors` or `faiss_client` and not set.")
+            logger.debug(
+                "Disabling `faiss` search in this instance of `collate_fn` "
+                "(missing question_vectors` or `faiss_client`)"
+            )
 
         sections = self.get_corpus()
         collate_fn = FrankCollate(

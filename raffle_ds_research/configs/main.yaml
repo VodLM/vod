@@ -12,24 +12,48 @@ defaults:
 
 seed: ${global_seed:}
 model_name: ${model.encoder.pretrained_model_name_or_path}
-exp_name: ${builder.name}-${builder.split}-${builder.language}
-run_name: ${model_name}-${model.embedding_size}-${trainer.precision}-${seed}-${rdn_name:}
+exp_name: ${builder.name}-${builder.subset_name}-${builder.language}
+run_name: ${model_name}-fp${trainer.precision}-${rdn_name:}
 
-train_loader_kwargs:
-  batch_size: ${batch_size.per_device}
-  num_workers: ${resources.num_workers}
-  pin_memory: True
-  shuffle: True
 
-eval_loader_kwargs:
-  batch_size: ${batch_size.per_device_eval}
-  num_workers: ${resources.num_workers}
-  pin_memory: True
+loader_configs:
+  # Defines the configuration for `torch.utils.data.Dataloader`
+  train:
+    batch_size: ${batch_size.per_device}
+    num_workers: ${resources.num_workers}
+    pin_memory: True
+    shuffle: True
+
+  eval:
+    batch_size: ${batch_size.per_device_eval}
+    num_workers: ${resources.num_workers}
+    pin_memory: True
+    shuffle: False
+
+  predict:
+    batch_size: ${batch_size.per_device_predict}
+    num_workers: ${resources.num_workers}
+    pin_memory: True
   shuffle: False
 
+collate_configs:
+  # Defines the configuration for `dataset_builder.HfBuilder._collate_config`
+  train:
+    n_sections: 8
+    max_pos_sections: 4
+    prefetch_n_sections: 100
+    sample_negatives: false
+  eval:
+    n_sections: 100
+    max_pos_sections: 50
+    prefetch_n_sections: 300
+    sample_negatives: false
 
-predict_loader_kwargs:
-  batch_size: ${batch_size.per_device_predict}
-  num_workers: ${resources.num_workers}
-  pin_memory: True
-  shuffle: False
+
+faiss_config:
+  # Defines configuration for `FaissMaster`
+  factory: IVF32,Flat
+  nprobe: 16
+  use_faiss: true
+  # Defines how often to update the faiss index (number of steps)
+  update_freq: 1_000

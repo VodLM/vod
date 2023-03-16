@@ -6,7 +6,12 @@ import re
 from pathlib import Path
 
 import faiss
-import faiss.contrib.torch_utils
+
+try:
+    from faiss.contrib import torch_utils  # type: ignore
+except ImportError:
+    pass
+
 import numpy as np
 import uvicorn
 from fastapi import FastAPI

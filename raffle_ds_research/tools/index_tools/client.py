@@ -134,7 +134,7 @@ class FaissMaster(object):
                     raise RuntimeError(msg)
                 break
             except requests.exceptions.ConnectionError:
-                time.sleep(0.05)
+                time.sleep(0.1)
                 continue
 
         return server_proc

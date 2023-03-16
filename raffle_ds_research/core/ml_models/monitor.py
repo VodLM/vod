@@ -96,8 +96,18 @@ class Monitor(nn.Module):
 
     @torch.no_grad()
     def compute(self, split: str) -> dict[str, torch.Tensor]:
-        """Compute the metrics"""
-        metrics = self.metrics[split].compute()
+        """Compute the metrics. Wrap with try/except to avoid raising exception when there are no
+        metrics to compute."""
+        if isinstance(self.metrics[split], MetricCollection):
+            metrics = {}
+            for key, metric in self.metrics[split].items():
+                try:
+                    metrics[key] = metric.compute()
+                except ValueError:
+                    ...
+        else:
+            metrics = self.metrics[split].compute()
+
         metrics = {f"{split}/{key}": value for key, value in metrics.items()}
         return metrics
 
@@ -129,7 +139,7 @@ def retrieval_metric_factory(name: str) -> Metric:
 
     cls = avail_cls[name]
 
-    return cls(top_k=k)
+    return cls(k=k)
 
 
 class RetrievalMetricCollection(MetricCollection):

@@ -5,7 +5,7 @@ defaults:
       - lr_monitor
   - logger:
       - csv
-      - mlflow
+      - wandb
   - _self_
 
 _target_: raffle_ds_research.tools.utils.trainer.Trainer

@@ -9,7 +9,7 @@ metrics:
     metrics: [ "ndcg", "mrr", "hitrate@3" ]
   val:
     _target_: raffle_ds_research.core.ml_models.monitor.RetrievalMetricCollection
-    metrics: [ "ndcg", "mrr", "hitrate@3", "p@3", "r@3" ]
+    metrics: [ "ndcg", "mrr", "hitrate@3", "p@3", "r@3","p@10", "r@10" ]
   test:
     _target_: raffle_ds_research.core.ml_models.monitor.RetrievalMetricCollection
-    metrics: [ "ndcg", "mrr", "hitrate@3", "p@3", "r@3" ]
+    metrics: [ "ndcg", "mrr","hitrate@3", "p@3", "r@3" , "p@10", "r@10" ]

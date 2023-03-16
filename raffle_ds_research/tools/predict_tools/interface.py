@@ -4,52 +4,29 @@ import math
 import shutil
 from numbers import Number
 from pathlib import Path
-from typing import Any, Callable, Iterable, Optional
+from typing import Any, Iterable, Optional
 
 import datasets
+import lightning.pytorch as pl
 import numpy as np
-import pytorch_lightning as pl
+import pydantic
 import tensorstore
 import torch
 from datasets import fingerprint
 from loguru import logger
 from omegaconf import DictConfig, omegaconf
-from pydantic import BaseModel, Extra, validator
 
 from raffle_ds_research.tools import pipes
 from raffle_ds_research.tools.dataset_builder.builder import DatasetProtocol
+from raffle_ds_research.tools.utils import loader_config
 from raffle_ds_research.tools.utils.tensor_tools import serialize_tensor
-
 from .callback import StorePredictions
 from .ts_utils import TensorStoreFactory
 from .wrappers import CollateWithIndices, DatasetWithIndices, _warp_as_lightning_model
 
 
-class DataLoaderForPredictKwargs(BaseModel):
-    class Config:
-        extra = Extra.forbid
-
-    batch_size: int
-    shuffle: bool = False
-    num_workers: int = 4
-    pin_memory: bool = True
-    drop_last: bool = False
-    timeout: int = 0
-    worker_init_fn: Callable = None
-    prefetch_factor: int = 2
-    persistent_workers: bool = False
-
-    @validator("drop_last", pre=True)
-    def _force_drop_last(cls, v):
-        if v:
-            logger.warning(
-                "drop_last is set to True. "
-                "This might result in processing only part of the dataset. "
-                "Forcing `drop_last` to False."
-            )
-        return False
-
-    @validator("shuffle", pre=True)
+class DataLoaderForPredictKwargs(loader_config.DataLoaderConfig):
+    @pydantic.validator("shuffle", pre=True)
     def _force_shuffle(cls, v):
         if v:
             logger.debug(
@@ -66,7 +43,7 @@ def predict(
     collate_fn: pipes.Collate = torch.utils.data.dataloader.default_collate,
     trainer: Optional[pl.Trainer] = None,
     model_output_key: Optional[str] = None,
-    loader_kwargs: Optional[dict[str, Any] | DictConfig | DataLoaderForPredictKwargs] = None,
+    loader_kwargs: Optional[dict[str, Any] | DictConfig | loader_config.DataLoaderConfig] = None,
     ts_kwargs: Optional[dict[str, Any]] = None,
     validate_store: bool | int = True,
 ) -> TensorStoreFactory | dict[str, TensorStoreFactory]:
@@ -119,7 +96,7 @@ def _predict_single(
     model: torch.nn.Module | pl.LightningModule,
     collate_fn: pipes.Collate,
     model_output_key: Optional[str] = None,
-    loader_kwargs: Optional[dict[str, Any] | DictConfig | DataLoaderForPredictKwargs] = None,
+    loader_kwargs: Optional[dict[str, Any] | DictConfig | loader_config.DataLoaderConfig] = None,
     ts_kwargs: Optional[dict[str, Any]] = None,
     validate_store: bool | int = True,
 ) -> TensorStoreFactory:
@@ -152,7 +129,7 @@ def _predict_single(
         logger.info(f"Loading TensorStore from path `{index_path}`. Shape={dset_shape}")
         store = ts_config.open(create=False)
     else:
-        logger.info(f"creating TensorStore at path `{index_path}`. Shape={dset_shape}")
+        logger.debug(f"creating TensorStore at path `{index_path}`. Shape={dset_shape}")
         store = ts_config.open(create=True, delete_existing=False)
 
         # compute the predictions
@@ -237,7 +214,7 @@ def _compute_and_store_predictions(
     model: torch.nn.Module | pl.LightningModule,
     collate_fn: pipes.Collate,
     store: tensorstore.TensorStore,
-    loader_kwargs: Optional[dict[str, Any] | DictConfig | DataLoaderForPredictKwargs] = None,
+    loader_kwargs: Optional[dict[str, Any] | DictConfig | loader_config.DataLoaderConfig] = None,
     model_output_key: Optional[str] = None,
 ) -> tensorstore.TensorStore:
     """Compute predictions for a dataset and store them in a tensorstore"""
@@ -249,11 +226,14 @@ def _compute_and_store_predictions(
     if isinstance(loader_kwargs, DictConfig):
         loader_kwargs = omegaconf.OmegaConf.to_container(loader_kwargs, resolve=True)
     if not isinstance(loader_kwargs, DataLoaderForPredictKwargs):
+        if isinstance(loader_kwargs, pydantic.BaseModel):
+            loader_kwargs = loader_kwargs.dict()
         loader_kwargs = loader_kwargs or {}
         if len(loader_kwargs) == 0:
             loader_kwargs = {"batch_size": 10}
             logger.warning("No `loader_kwargs` were provided. Using default batch_size=10. ")
         loader_kwargs = DataLoaderForPredictKwargs(**loader_kwargs)
+
     loader = torch.utils.data.DataLoader(dset_with_ids, collate_fn=collate_fn_with_ids, **loader_kwargs.dict())
 
     # process the dataset and store the predictions in the tensorstore

@@ -1,2 +1,2 @@
-question: "{{ question }}"
-section: "Title: {% if title %}{{ title }}{% else %}NO TITLE{% endif %}. {{ content }}"
+question: "Question: { question }}"
+section: "{% if title %}Title: {{ title }}. Document: {% endif %}{{ content }}"

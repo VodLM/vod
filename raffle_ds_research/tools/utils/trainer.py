@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from typing import Iterable, Optional, Union
 
-import pytorch_lightning as pl
+import lightning.pytorch as pl
 from fsspec import Callback
 from omegaconf import DictConfig
-from pytorch_lightning.loggers import Logger
+from lightning.pytorch.loggers import Logger
 
 
 class Trainer(pl.Trainer):

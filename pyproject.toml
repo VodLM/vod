@@ -28,13 +28,13 @@ python = "^3.9"
 hydra-core = "^1.3.1"
 loguru = "^0.6.0"
 datasets = "^2.10.0"
-torch = ">=1.13"
+torch = { version = ">=1.13", allow-prereleases = true }
+lightning = "^2.0.0"
+wandb = "^0.14.0"
 transformers = "^4.26.1"
 pydantic = "^1.8"
 jinja2 = ">=2.0"
-pytorch-lightning = "^1.9.2"
 stackprinter = "^0.2.10"
-mlflow = ">=1.0"
 randomname = "^0.2.1"
 sentencepiece = "^0.1.97"
 tensorstore = "^0.1.32"
@@ -43,20 +43,19 @@ rich = "^13.3.1"
 raffle-ds-storage = { git = "https://github.com/raffle-ai/ds-storage.git", branch = "main" }
 optimum = "^1.7.1"
 faiss-cpu = "^1.7"
-# below are required to fix some dependency issues
-# -------------------->
-greenlet = "=2.0.1"
-llvmlite = "^0.39.1"
-protobuf = "=3.20"
-markupsafe = "=2.0.1"
-scikit-learn = "^1"
-# <--------------------
-fastapi = "^0.92.0"
-uvicorn = "^0.20.0"
-python-multipart = "^0.0.6"
+fastapi = ">=0.80"
+uvicorn = ">=0.20.0"
 psutil = "^5.9.4"
 python-dotenv = "^1.0.0"
 cython = "^0.29.33"
+## below are required to fix some dependency issues
+## -------------------->
+#greenlet = "=2.0.1"
+#llvmlite = "^0.39.1"
+#protobuf = "=3.20"
+#markupsafe = "=2.0.1"
+#scikit-learn = "^1"
+## <--------------------
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.1"

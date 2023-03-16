@@ -1,6 +1,6 @@
 defaults:
   - encoder: bert-tiny
-  - gradients: supervised
+  - gradients: kl_div
   - optimizer: adamw # todo: lion
   - scheduler: linear
   - monitor: retrieval

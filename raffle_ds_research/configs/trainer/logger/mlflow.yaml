@@ -1,5 +1,5 @@
 mlflow:
-  _target_: pytorch_lightning.loggers.MLFlowLogger
+  _target_: lightning.pytorch.loggers.MLFlowLogger
   experiment_name: ${exp_name}
   run_name: ${run_name}
   tags:
