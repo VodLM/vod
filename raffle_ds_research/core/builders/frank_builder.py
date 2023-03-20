@@ -171,9 +171,17 @@ def sample_sections(
     positive_scores = positives.scores
     positive_logits = numpy_log_softmax(positive_scores)
     positive_logits += numpy_gumbel_like(positive_logits)
-    # overrride the positive scores to NaN # todo: fetch the model scores instead.
-    # (they are not retrieved from faiss, and therefore the model score is unknown)
+
+    # Define the positive scores:
+    # set the positive scores to NaN by default
     positive_scores = np.where(np.isinf(positive_scores), -np.inf, np.nan)
+    # replace the values of the positive scores when available in the pool of negatives (returned by faiss)
+    positive_scores = c_tools.copy_by_index(
+        a_indices=positive_indices,
+        a_values=positive_scores,
+        b_indices=negatives.indices,
+        b_values=negatives.scores,
+    )
 
     # gather the negative sections
     negative_indices = negatives.indices
@@ -311,6 +319,7 @@ class SampledSections:
 
         if as_torch:
             output = {k: torch.from_numpy(v) for k, v in output.items()}
+            output[f"{prefix}label"] = output[f"{prefix}label"].to(torch.bool)
 
         return output
 

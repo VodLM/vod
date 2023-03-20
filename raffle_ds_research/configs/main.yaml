@@ -14,7 +14,7 @@ seed: ${global_seed:}
 compile: false
 model_name: ${model.encoder.pretrained_model_name_or_path}
 exp_name: ${builder.name}-${builder.subset_name}-${builder.language}
-run_name: ${model_name}-fp${trainer.precision}-${rdn_name:}
+run_name: ${fmt_mn:${model_name}}-${rdn_name:}
 
 
 loader_configs:

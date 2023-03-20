@@ -4,7 +4,7 @@ import dataclasses
 import functools
 import tempfile
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Iterable, Optional
 
 import datasets
 import faiss
@@ -17,110 +17,14 @@ import transformers
 from lightning import pytorch as pl
 from omegaconf import DictConfig
 from rich import terminal_theme
+from rich.progress import track
 
 from raffle_ds_research.cli import utils as cli_utils
 from raffle_ds_research.core.builders import FrankBuilder
 from raffle_ds_research.core.ml_models import Ranker
+from raffle_ds_research.core.ml_models.monitor import Monitor
 from raffle_ds_research.tools import index_tools, pipes, predict_tools
 from raffle_ds_research.tools.utils import loader_config
-
-
-def _infer_update_steps(total_number_of_steps: int, update_freq: int | list[int]) -> list[int]:
-    if isinstance(update_freq, int):
-        steps = list(np.arange(0, total_number_of_steps, update_freq).tolist())
-    elif isinstance(update_freq, list):
-        if update_freq[0] != 0:
-            update_freq = [0] + update_freq
-        if update_freq[-1] == total_number_of_steps:
-            update_freq = update_freq[:-1]
-        steps = update_freq
-    else:
-        raise TypeError(f"Invalid type for `update_freq`: {type(update_freq)}")
-
-    return steps + [total_number_of_steps]
-
-
-def _pretty_steps(steps: list[int]) -> str:
-    steps = steps[:-1]
-    if len(steps) > 6:
-        return f"[{steps[0]}, {steps[1]}, {steps[2]}, {steps[3]}, {steps[4]} ... {steps[-1]}]"
-    else:
-        return str(steps)
-
-
-def train_with_index_updates(
-    ranker: Ranker,
-    trainer: pl.Trainer,
-    builder: FrankBuilder,
-    config: TrainWithIndexConfigs | DictConfig,
-) -> Ranker:
-    """Train a ranker while periodically updating the faiss index."""
-    if isinstance(config, DictConfig):
-        config = TrainWithIndexConfigs.parse(config)
-
-    total_number_of_steps = trainer.max_steps
-    update_steps = _infer_update_steps(total_number_of_steps, config.faiss.update_freq)
-    loguru.logger.info(f"Index will be updated at steps: {_pretty_steps(update_steps)}")
-    if len(update_steps) == 0:
-        raise ValueError("No index update steps were defined.")
-
-    stop_callback = PeriodicStoppingCallback(stop_at=-1)
-    trainer.callbacks.append(stop_callback)  # type: ignore
-
-    for period_idx, (start_step, end_step) in enumerate(zip(update_steps[:-1], update_steps[1:])):
-        trainer.logger.log_metrics({"trainer/period": period_idx + 1}, step=trainer.global_step)
-        loguru.logger.info(
-            f"Training period {period_idx + 1}/{len(update_steps) - 1} (step {start_step} -> {end_step})"
-        )
-
-        with IndexManager(ranker=ranker, trainer=trainer, builder=builder, config=config) as manager:
-            train_loader = manager.dataloader("train")
-            val_loader = manager.dataloader("validation")
-
-            # sample a batch and print it
-
-            with rich.status.Status("Sampling a batch to test the dataloader..."):
-                batch = next(iter(train_loader))
-            console = rich.console.Console(record=True)
-            pipes.pprint_batch(batch, header="Training batch", console=console)
-            try:
-                pipes.pprint_supervised_retrieval_batch(
-                    batch,
-                    header="Training batch",
-                    tokenizer=builder.tokenizer,
-                    console=console,
-                    skip_special_tokens=True,
-                )
-                html_path = str(Path(f"batch-period{period_idx + 1}.html"))
-                console.save_html(html_path, theme=terminal_theme.MONOKAI)
-
-                import wandb
-
-                wandb.log({"trainer/batch": wandb.Html(open(html_path))}, step=trainer.global_step)
-            except Exception as e:
-                loguru.logger.debug(f"Could not log batch to wandb: {e}")
-
-            # validate and train the ranker
-            manager.trainer.validate(manager.ranker, dataloaders=val_loader)
-
-            # train for the current period
-            trainer.should_stop = False
-            stop_callback.stop_at = end_step
-            manager.trainer.fit(manager.ranker, train_dataloaders=train_loader, val_dataloaders=val_loader)
-
-    return ranker
-
-
-class PeriodicStoppingCallback(pl.callbacks.Callback):
-    def __init__(self, stop_at: int):
-        super().__init__()
-        self.stop_at = stop_at
-
-    def on_train_batch_end(
-        self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", outputs: Any, batch: Any, batch_idx: int
-    ) -> None:
-        if trainer.global_step >= self.stop_at:
-            trainer.should_stop = True
 
 
 @dataclasses.dataclass
@@ -154,6 +58,73 @@ class TrainWithIndexConfigs:
             eval_collate=eval_collate_config,
             faiss=faiss_config,
         )
+
+
+def train_with_index_updates(
+    ranker: Ranker,
+    trainer: pl.Trainer,
+    builder: FrankBuilder,
+    config: TrainWithIndexConfigs | DictConfig,
+) -> Ranker:
+    """Train a ranker while periodically updating the faiss index."""
+    if isinstance(config, DictConfig):
+        config = TrainWithIndexConfigs.parse(config)
+
+    total_number_of_steps = trainer.max_steps
+    update_steps = _infer_update_steps(total_number_of_steps, config.faiss.update_freq)
+    loguru.logger.info(f"Index will be updated at steps: {_pretty_steps(update_steps)}")
+    if len(update_steps) == 0:
+        raise ValueError("No index update steps were defined.")
+
+    stop_callback = PeriodicStoppingCallback(stop_at=-1)
+    trainer.callbacks.append(stop_callback)  # type: ignore
+
+    for period_idx, (start_step, end_step) in enumerate(zip(update_steps[:-1], update_steps[1:])):
+        _log_metrics({"trainer/period": float(period_idx + 1)}, trainer=trainer)
+        loguru.logger.info(
+            f"Training period {period_idx + 1}/{len(update_steps) - 1} (step {start_step} -> {end_step})"
+        )
+
+        # compute question and section vectors, spin up the faiss index.
+        with IndexManager(ranker=ranker, trainer=trainer, builder=builder, config=config) as manager:
+            train_loader = manager.dataloader("train")
+            val_loader = manager.dataloader("validation")
+
+            # run the static validation & log results
+            on_first_batch_callback = functools.partial(
+                _log_retrieval_batch,
+                tokenizer=builder.tokenizer,
+                period_idx=period_idx,
+                gloabl_step=trainer.global_step,
+                max_sections=10,
+            )
+            static_eval_metrics = _run_static_evaluation(
+                loader=track(val_loader, description="Static validation"),
+                monitor=ranker.monitor.copy(log_on_step=None).reset(),
+                on_first_batch=on_first_batch_callback,
+            )
+            _log_metrics({f"static/{k}": v for k, v in static_eval_metrics.items()}, trainer=trainer)
+
+            # train for the current period
+            trainer.should_stop = False
+            stop_callback.stop_at = end_step
+            manager.trainer.fit(manager.ranker, train_dataloaders=train_loader, val_dataloaders=val_loader)
+
+    return ranker
+
+
+def _run_static_evaluation(
+    loader: Iterable[dict[str, Any]],
+    monitor: Monitor,
+    on_first_batch: Optional[Callable[[dict[str, Any]], Any]] = None,
+) -> dict[str, Any]:
+    for i, batch in enumerate(loader):
+        if i == 0 and on_first_batch is not None:
+            on_first_batch(batch)
+
+        monitor.update_from_retrieval_batch(batch, split="val")
+    metrics = monitor.compute(split="val")
+    return metrics
 
 
 class IndexManager(object):
@@ -294,3 +265,70 @@ def _compute_dataset_vectors(
         collate_fn=collate_fn,
         loader_kwargs=loader_config,
     )
+
+
+def _infer_update_steps(total_number_of_steps: int, update_freq: int | list[int]) -> list[int]:
+    if isinstance(update_freq, int):
+        steps = [int(x) for x in np.arange(0, total_number_of_steps, update_freq)]
+    elif isinstance(update_freq, list):
+        if update_freq[0] != 0:
+            update_freq = [0] + update_freq
+        if update_freq[-1] == total_number_of_steps:
+            update_freq = update_freq[:-1]
+        steps = update_freq
+    else:
+        raise TypeError(f"Invalid type for `update_freq`: {type(update_freq)}")
+
+    return steps + [total_number_of_steps]
+
+
+def _pretty_steps(steps: list[int]) -> str:
+    steps = steps[:-1]
+    if len(steps) > 6:
+        return f"[{steps[0]}, {steps[1]}, {steps[2]}, {steps[3]}, {steps[4]} ... {steps[-1]}]"
+    else:
+        return str(steps)
+
+
+def _log_metrics(metrics: dict[str, Any], trainer: pl.Trainer):
+    for logger in trainer.loggers:
+        logger.log_metrics(metrics, step=trainer.global_step)
+
+
+def _log_retrieval_batch(
+    batch: dict[str, Any],
+    tokenizer: transformers.PreTrainedTokenizer,
+    period_idx: int,
+    gloabl_step: int,
+    max_sections: int = 10,
+):
+    try:
+        console = rich.console.Console(record=True)
+        pipes.pprint_supervised_retrieval_batch(
+            batch,
+            header="Evaluation batch",
+            tokenizer=tokenizer,
+            console=console,
+            skip_special_tokens=True,
+            max_sections=max_sections,
+        )
+        html_path = str(Path(f"batch-period{period_idx + 1}.html"))
+        console.save_html(html_path, theme=terminal_theme.MONOKAI)
+
+        import wandb
+
+        wandb.log({"trainer/eval-batch": wandb.Html(open(html_path))}, step=gloabl_step)
+    except Exception as e:
+        loguru.logger.debug(f"Could not log batch to wandb: {e}")
+
+
+class PeriodicStoppingCallback(pl.callbacks.Callback):
+    def __init__(self, stop_at: int):
+        super().__init__()
+        self.stop_at = stop_at
+
+    def on_train_batch_end(
+        self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", outputs: Any, batch: Any, batch_idx: int
+    ) -> None:
+        if trainer.global_step >= self.stop_at:
+            trainer.should_stop = True

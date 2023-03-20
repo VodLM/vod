@@ -137,5 +137,5 @@ def _make_evaluation_data(
     return {
         "_targets": targets_ > 0,
         "_logits": model_logits_,
-        "kl_retrieval": kl_div.mean(),
+        "kl_sampler": kl_div.mean(),
     }

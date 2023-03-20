@@ -240,6 +240,7 @@ def pprint_supervised_retrieval_batch(
     *,
     tokenizer: transformers.PreTrainedTokenizer,
     header="Supervised retrieval batch",
+    max_sections: Optional[int] = None,
     console: Optional[rich.console.Console] = None,
     **kwargs,
 ) -> dict:
@@ -285,6 +286,8 @@ def pprint_supervised_retrieval_batch(
             section_data_str = yaml.dump(section_data, sort_keys=False)
             section_node = rich.syntax.Syntax(section_data_str, "yaml", indent_guides=False, word_wrap=True)
             question_tree.add(section_node)
+            if max_sections is not None and j >= max_sections:
+                break
 
         tree.add(question_tree)
 

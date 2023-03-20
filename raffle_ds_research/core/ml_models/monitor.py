@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import copy
+import math
 from typing import Optional, Tuple
 
 import torch
@@ -7,6 +9,8 @@ import torchmetrics
 from omegaconf import DictConfig, OmegaConf
 from torch import nn
 from torchmetrics import Metric, MetricCollection
+
+from raffle_ds_research.core.data_models import SupervisedRetrievalBatch
 
 SPLIT_NAMES = ["train", "val", "test"]
 MetricsBySplits = dict[str, dict[str, Metric]]
@@ -29,6 +33,15 @@ class Monitor(nn.Module):
                 self._log_on_step[key] = False
             else:
                 self._log_on_step[key] = log_on_step[key]
+
+    def copy(self, log_on_step: Optional[dict[str, bool]] = None) -> Monitor:
+        """Copy the monitor"""
+        if log_on_step is None:
+            log_on_step = copy.copy(self._log_on_step)
+        new_monitor = Monitor({}, None)
+        new_monitor.metrics = copy.deepcopy(self.metrics)
+        new_monitor._log_on_step = log_on_step
+        return new_monitor
 
     @staticmethod
     def _handle_metric_init(metric):
@@ -73,6 +86,8 @@ class Monitor(nn.Module):
         for split in splits:
             self.metrics[split].reset()
 
+        return self
+
     def _get_splits_arg(self, split):
         if split is None:
             splits = list(self.metrics.keys())
@@ -87,6 +102,16 @@ class Monitor(nn.Module):
             raise ValueError(f"Unknown split: {split}. Expected one of {self.metrics.keys()}.")
 
         return splits
+
+    def update_from_retrieval_batch(self, batch: dict, split: str):
+        """Update the metrics given a raw `retrieval` batch"""
+        data = SupervisedRetrievalBatch(**batch)
+        targets: torch.Tensor = data.section_label  # type: ignore
+        scores: torch.Tensor = data.section_score  # type: ignore
+        # set the retrieval to -inf when the score is undefined
+        scores = scores.masked_fill(torch.isnan(scores), -math.inf)
+        args = self._make_args({"_logits": scores, "_targets": targets})
+        self.metrics[split].update(*args)
 
     @torch.no_grad()
     def update(self, data: dict, split: str):
