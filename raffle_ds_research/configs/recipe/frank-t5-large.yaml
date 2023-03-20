@@ -1,0 +1,40 @@
+# @package _global_
+
+defaults:
+  - frank-bert-base
+  - override /model/encoder: t5-large
+  - _self_
+
+model:
+  embedding_size: null
+  use_pooler_layer: false
+  optimizer:
+    lr: 1e-4
+    weight_decay: 0
+  scheduler:
+    total_iters: 1_000
+
+
+batch_size:
+  effective: 30
+  per_device: 6
+  per_device_eval: 8
+  per_device_predict: 256
+
+trainer:
+  accelerator: gpu
+  precision: 32
+  detect_anomaly: true
+  max_steps: 100_000
+  # limit_val_batches: 10
+  val_check_interval: ${int_mul:${trainer.accumulate_grad_batches},100}
+
+
+faiss_config:
+  # Defines configuration for `FaissMaster`
+  factory: IVF32,Flat
+  nprobe: 16
+  use_faiss: true
+  debug_mode: false
+  # Defines how often to update the faiss index (number of steps)
+  update_freq: [100, 500, 1000, 2000, 3000, 5000, 8000, 15000]

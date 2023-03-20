@@ -5,7 +5,6 @@ import re
 from typing import Any, Iterable, Optional, Union
 
 import lightning.pytorch as pl
-import rich
 import torch
 import transformers
 from datasets.fingerprint import Hasher, hashregister
@@ -101,13 +100,6 @@ class Ranker(pl.LightningModule):
 
         # defile the learning rate scheduler
         lr_scheduler = self.scheduler_cls(optimizer)
-
-        rich.print(
-            {
-                "optimizer": optimizer,
-                "lr_scheduler": lr_scheduler,
-            },
-        )
 
         output = {
             "optimizer": optimizer,

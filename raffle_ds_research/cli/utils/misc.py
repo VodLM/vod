@@ -6,6 +6,7 @@ from typing import Any
 
 import datasets
 import lightning.pytorch as pl
+import loguru
 import omegaconf
 import torch
 import transformers
@@ -52,8 +53,11 @@ def log_config(trainer: pl.Trainer, config: omegaconf.DictConfig, exp_dir: Path)
     try:
         import wandb
 
-        flat_config = config_to_flat_dict(config, sep="/")
-        flat_config = {k: _cast_hps(v) for k, v in flat_config.items()}
-        wandb.config.update(flat_config)
+        try:
+            flat_config = config_to_flat_dict(config, sep="/")
+            flat_config = {k: _cast_hps(v) for k, v in flat_config.items()}
+            wandb.config.update(flat_config)
+        except wandb.errors.Error:
+            loguru.logger.debug("Could not log config to wandb")
     except ImportError:
         ...

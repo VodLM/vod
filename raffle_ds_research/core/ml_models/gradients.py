@@ -70,7 +70,7 @@ class KlDivGradients(Gradients):
         data = SupervisedGradientsInputs(**intermediate_results)
 
         # Determine the masked sections
-        is_padding = data.scores.isinf()
+        is_padding = data.scores.isinf() & (data.scores < 0)
 
         # Define the logits of the model `q_model(z)`
         # set -inf wherever:
@@ -83,9 +83,9 @@ class KlDivGradients(Gradients):
         # set -log(eps) wherever:
         #   - the section is labelled as negative
         #   - except when all the sections for a given are negative
-        is_negative = data.targets < 1
-        q_with_positives = ~is_negative.all(dim=-1)
-        data_zero_prob = is_negative | ~q_with_positives[:, None]
+        is_negative_section = data.targets < 1
+        q_with_positives = ~is_negative_section.all(dim=-1)
+        data_zero_prob = is_negative_section | ~q_with_positives[:, None]
         data_logits = torch.where(
             data_zero_prob,
             self.log_eps,

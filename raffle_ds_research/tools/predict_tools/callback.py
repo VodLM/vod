@@ -1,15 +1,12 @@
 from __future__ import annotations
 
 from asyncio import Future
-from typing import List, Optional, Any
+from typing import Any, List, Optional
 
 import lightning.pytorch as pl
 import tensorstore
 import tensorstore as ts
 import torch
-from lightning.pytorch import Callback
-
-from raffle_ds_research.tools.utils.trainer import Trainer
 
 from .wrappers import PREDICT_IDX_COL_NAME
 
@@ -17,7 +14,7 @@ from .wrappers import PREDICT_IDX_COL_NAME
 class StorePredictions(object):
     def __init__(
         self,
-        trainer: Trainer,
+        trainer: pl.Trainer,
         store: tensorstore.TensorStore,
         model_output_key: Optional[str] = None,
     ):
@@ -31,7 +28,7 @@ class StorePredictions(object):
         self.trainer.callbacks.remove(self.callback)  # type: ignore
 
 
-class TensorStoreCallback(Callback):
+class TensorStoreCallback(pl.Callback):
     """Allows storing the output of each `prediction_step` into a `ts.TensorStore`"""
 
     def __init__(

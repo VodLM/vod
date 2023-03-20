@@ -1,0 +1,34 @@
+# @package _global_
+
+defaults:
+  - override /builder: frank
+  - override /model/encoder: bert-base
+  - override /model/gradients: kl_div
+  - _self_
+
+model:
+  embedding_size: 512 # todo: false (fix index first)
+  use_pooler_layer: false # todo: true
+  optimizer:
+    lr: 1e-5
+    weight_decay: 0
+  scheduler:
+    total_iters: 1_000
+
+resources:
+  num_workers: 4
+  num_proc: 4
+
+batch_size:
+  effective: 32
+  per_device: 4
+  per_device_eval: 4
+  per_device_predict: 512
+
+trainer:
+  accelerator: gpu
+  precision: 16-mixed
+  detect_anomaly: false
+  max_steps: 100_000
+  # limit_val_batches: 10
+  val_check_interval: ${int_mul:${trainer.accumulate_grad_batches},100}

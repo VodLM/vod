@@ -1,0 +1,35 @@
+from __future__ import annotations
+
+from typing import Optional, Union
+
+import omegaconf
+import pydantic
+
+
+class DefaultCollateConfig(pydantic.BaseModel):
+    class Config:
+        extra = pydantic.Extra.forbid
+
+    n_sections: int
+    max_pos_sections: int
+    prefetch_n_sections: int
+    sample_negatives: bool
+    question_max_length: int = 512
+    section_max_length: int = 512
+
+
+class DefaultFaissConfig(pydantic.BaseModel):
+    class Config:
+        extra = pydantic.Extra.forbid
+
+    factory: str
+    nprobe: int
+    use_faiss: bool
+    update_freq: Optional[Union[int, list[int]]]
+    debug_mode: bool = False
+
+    @pydantic.validator("update_freq", pre=True)
+    def _validate_update_freq(cls, v):
+        if isinstance(v, omegaconf.ListConfig):
+            v = omegaconf.OmegaConf.to_container(v)
+        return v

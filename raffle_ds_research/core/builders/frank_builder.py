@@ -64,6 +64,8 @@ class FrankLoaderConfig(BaseModel):
     prefetch_n_sections: int = 100
     max_pos_sections: int = 3
     sample_negatives: bool = False
+    question_max_length: int = 512
+    section_max_length: int = 512
     question_vectors: Optional[index_tools.VectorType] = None
     _query_vectors: index_tools.VectorHandler = pydantic.PrivateAttr(None)
     faiss_client: Optional[index_tools.FaissClient] = None
@@ -238,7 +240,13 @@ class FrankCollate(pipes.Collate):
             )
 
         # tokenize the questions
-        tokenized_question = pipes.torch_tokenize_pipe(batch, tokenizer=self.tokenizer, field="question")
+        tokenized_question = pipes.torch_tokenize_pipe(
+            batch,
+            tokenizer=self.tokenizer,
+            field="question",
+            max_length=self.config.question_max_length,
+            truncation=True,
+        )
 
         # fetch the positive section ids (The `rule` allows keeping sections with match on either `id` or `answer_id`)
         # Todo: fetch the model scores for the positive samples. This can be done using the `faiss_client` or
@@ -263,7 +271,13 @@ class FrankCollate(pipes.Collate):
         flat_sections_content = self.corpus[flat_ids]
 
         # tokenize the sections and add them to the output
-        tokenized_sections = pipes.torch_tokenize_pipe(flat_sections_content, tokenizer=self.tokenizer, field="section")
+        tokenized_sections = pipes.torch_tokenize_pipe(
+            flat_sections_content,
+            tokenizer=self.tokenizer,
+            field="section",
+            max_length=self.config.section_max_length,
+            truncation=True,
+        )
         tokenized_sections = {k: v.view(*sections.indices.shape, -1) for k, v in tokenized_sections.items()}
 
         # make the section extras

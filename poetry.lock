@@ -3408,7 +3408,7 @@ optional = false
 python-versions = ">=3.8"
 files = [
     {file = "pytorch-lightning-2.0.0.tar.gz", hash = "sha256:632dec9af8036f726904e691c505d7650658ef0f4054a062c9e6a940ca09dfd8"},
-    {file = "lightning.pytorch-2.0.0-py3-none-any.whl", hash = "sha256:eda04e51c3ca030f92f9eb30cbb10583575b4144a155cfd6b7d17e1bb9a08ffe"},
+    {file = "pytorch_lightning-2.0.0-py3-none-any.whl", hash = "sha256:eda04e51c3ca030f92f9eb30cbb10583575b4144a155cfd6b7d17e1bb9a08ffe"},
 ]
 
 [package.dependencies]
@@ -5122,4 +5122,4 @@ testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.9"
-content-hash = "7b1293b21b728b01164c3be90a70d51d50f93d3e227557f17f1a8cb04b83df0c"
+content-hash = "90b023d6eb1fd10d048fcbc0f80521e50994a9e3ae5f804684e25dca98327997"

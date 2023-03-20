@@ -1,6 +1,7 @@
 wandb:
   _target_: lightning.pytorch.loggers.wandb.WandbLogger
   project: ds-research
+  group: ${exp_name}
   name: ${run_name}
   save_dir: "."
   offline: False
@@ -9,5 +10,4 @@ wandb:
   log_model: False
   prefix: ""
   job_type: "train"
-  group: "sandbox"
   tags: [ ]

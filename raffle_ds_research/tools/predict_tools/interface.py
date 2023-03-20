@@ -20,6 +20,7 @@ from raffle_ds_research.tools import pipes
 from raffle_ds_research.tools.dataset_builder.builder import DatasetProtocol
 from raffle_ds_research.tools.utils import loader_config
 from raffle_ds_research.tools.utils.tensor_tools import serialize_tensor
+
 from .callback import StorePredictions
 from .ts_utils import TensorStoreFactory
 from .wrappers import CollateWithIndices, DatasetWithIndices, _warp_as_lightning_model

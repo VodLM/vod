@@ -6,8 +6,8 @@ import datasets.fingerprint
 import dill
 import dotenv
 import faiss
-import pydantic
 import lightning.pytorch as pl
+import pydantic
 import rich
 import torch
 import transformers

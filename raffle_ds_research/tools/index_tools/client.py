@@ -10,6 +10,7 @@ from typing import Optional, Type
 
 import numpy as np
 import requests
+import rich
 import torch
 
 from raffle_ds_research.tools.index_tools import io
@@ -61,25 +62,47 @@ class FaissClient(object):
         return RetrievalBatch(indices=indices, scores=scores)
 
     def search(self, query_vec: Ts, top_k: int = 3) -> RetrievalBatch[Ts]:
+        if isinstance(query_vec, torch.Tensor):
+            if torch.isnan(query_vec).any():
+                raise ValueError("NaNs in query_vec")
+        elif isinstance(query_vec, np.ndarray):
+            if np.isnan(query_vec).any():
+                raise ValueError("NaNs in query_vec")
         input_type = type(query_vec)
         input_type_enum, serialized_fn = {
             torch.Tensor: (RetrievalDataType.TORCH, io.serialize_torch_tensor),
             np.ndarray: (RetrievalDataType.NUMPY, io.serialize_np_array),
         }[input_type]
         serialized_vectors = serialized_fn(query_vec)
-        response = requests.post(
-            f"{self.url}/fast-search",
-            json={
-                "vectors": serialized_vectors,
-                "top_k": top_k,
-                "array_type": input_type_enum.value,
-            },
-        )
-        response.raise_for_status()
+        payload = {
+            "vectors": serialized_vectors,
+            "top_k": top_k,
+            "array_type": input_type_enum.value,
+        }
+        response = requests.post(f"{self.url}/fast-search", json=payload)
+        try:
+            response.raise_for_status()
+        except requests.exceptions.HTTPError as exc:
+            try:
+                rich.print(response.json()["detail"])
+            except Exception:
+                rich.print(response.text)
+            raise exc
+
         data = response.json()
-        encoded_indices = data["indices"]
-        encoded_scores = data["scores"]
-        return decode_faiss_results(indices=encoded_indices, scores=encoded_scores, target_type=input_type)
+        indices_list = io.deserialize_np_array(data["indices"])
+        scores_list = io.deserialize_np_array(data["scores"])
+        cast_fn = {
+            torch.Tensor: torch.tensor,
+            np.ndarray: np.array,
+        }[input_type]
+        indices = cast_fn(indices_list)
+        scores = cast_fn(scores_list)
+        try:
+            return RetrievalBatch(indices=indices, scores=scores)
+        except Exception as exc:
+            rich.print({"indices": indices, "scores": scores})
+            raise exc
 
 
 class FaissMaster(object):
@@ -104,6 +127,7 @@ class FaissMaster(object):
         log_dir: Path = None,
         host: str = "http://localhost",
         port: int = 7678,
+        debug_mode: bool = False,
     ):
         self.index_path = Path(index_path)
         self.nprobe = nprobe
@@ -111,6 +135,7 @@ class FaissMaster(object):
         self.log_dir = log_dir
         self.host = host
         self.port = port
+        self.debug_mode = debug_mode
 
     def __enter__(self) -> "FaissMaster":
         self._server_proc = self._start_server()
@@ -124,7 +149,16 @@ class FaissMaster(object):
             raise RuntimeError("Server already running.")
         cmd = self._make_cmd()
         env = self._make_env()
-        server_proc = subprocess.Popen(cmd, env=env)
+        if self.debug_mode:
+            # redirect stdout and stderr to the console
+            extras = {
+                "stdout": subprocess.PIPE,
+                "stderr": subprocess.PIPE,
+            }
+        else:
+            extras = {}
+        server_proc = subprocess.Popen(cmd, env=env, **extras)
+
         client = self.get_client()
         while True:
             try:
@@ -182,7 +216,7 @@ class FaissMaster(object):
 
 class DoNotPickleError(Exception):
     def __init__(self, msg: Optional[str] = None):
-        msg = msg or "This object is not pickleable."
+        msg = msg or "This object cannot be pickled."
         super().__init__(msg)
 
 

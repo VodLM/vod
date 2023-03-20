@@ -6,6 +6,9 @@ import re
 from pathlib import Path
 
 import faiss
+import stackprinter
+
+from raffle_ds_research.tools.utils.exceptions import dump_exceptions_to_file
 
 try:
     from faiss.contrib import torch_utils  # type: ignore
@@ -14,7 +17,7 @@ except ImportError:
 
 import numpy as np
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from loguru import logger
 
 from raffle_ds_research.tools.index_tools import io
@@ -48,7 +51,7 @@ def init_index(args: argparse.Namespace) -> faiss.Index:
 
 args = parse_args()
 if args.log_dir is not None:
-    logger.add(Path(args.log_dir, f"{os.getpid()}-faiss_server.log"), level=args.logging_level.upper())
+    logger.add(Path(args.log_dir, f"{os.getpid()}-faiss_server.log"), level="DEBUG")  # todos
 app = FastAPI()
 logger.info("Starting API")
 faiss_index = init_index(args)
@@ -66,28 +69,36 @@ def health_check() -> str:
 
 
 @app.post("/search")
-def search(query: SearchFaissQuery) -> FaissSearchResponse:
+async def search(query: SearchFaissQuery) -> FaissSearchResponse:
     """Search the index"""
     query_vec = np.array(query.vectors, dtype=np.float32)
     scores, indices = faiss_index.search(query_vec, k=query.top_k)
     return FaissSearchResponse(scores=scores.tolist(), indices=indices.tolist())
 
 
+@dump_exceptions_to_file
 @app.post("/fast-search")
-def fast_search(query: FastSearchFaissQuery) -> FastFaissSearchResponse:
-    """Search the index. TODO: use gRPC to speed up communication."""
-    deserializer = {
-        RetrievalDataType.NUMPY: io.deserialize_np_array,
-        RetrievalDataType.TORCH: io.deserialize_torch_tensor,
-    }[query.array_type]
-    query_vec = deserializer(query.vectors)
-    if len(query_vec.shape) != 2:
-        raise ValueError(f"Expected 2D array, got {len(query_vec.shape)}D array")
-    scores, indices = faiss_index.search(query_vec, k=query.top_k)
-    return FastFaissSearchResponse(
-        scores=io.serialize_np_array(scores),
-        indices=io.serialize_np_array(indices),
-    )
+async def fast_search(query: FastSearchFaissQuery) -> FastFaissSearchResponse:
+    """Search the index.
+    TODO: use gRPC to speed up communication.
+    """
+    try:
+        deserializer = {
+            RetrievalDataType.NUMPY: io.deserialize_np_array,
+            RetrievalDataType.TORCH: io.deserialize_torch_tensor,
+        }[query.array_type]
+        query_vec = deserializer(query.vectors)
+        if len(query_vec.shape) != 2:
+            raise ValueError(f"Expected 2D array, got {len(query_vec.shape)}D array")
+        scores, indices = faiss_index.search(query_vec, k=query.top_k)
+        return FastFaissSearchResponse(
+            scores=io.serialize_np_array(scores),
+            indices=io.serialize_np_array(indices),
+        )
+    except Exception as exc:
+        # todo: find a better way to redirect errors to the client
+        trace = stackprinter.format()
+        raise HTTPException(status_code=500, detail=str(trace))
 
 
 def run_faiss_server(host: str = args.host, port: int = args.port):

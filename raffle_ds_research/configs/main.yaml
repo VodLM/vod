@@ -11,13 +11,14 @@ defaults:
   - override hydra/job_logging: colorlog
 
 seed: ${global_seed:}
+compile: false
 model_name: ${model.encoder.pretrained_model_name_or_path}
 exp_name: ${builder.name}-${builder.subset_name}-${builder.language}
 run_name: ${model_name}-fp${trainer.precision}-${rdn_name:}
 
 
 loader_configs:
-  # Defines the configuration for `torch.utils.data.Dataloader`
+  # Defines the configurations for `torch.utils.data.Dataloader`
   train:
     batch_size: ${batch_size.per_device}
     num_workers: ${resources.num_workers}
@@ -28,26 +29,30 @@ loader_configs:
     batch_size: ${batch_size.per_device_eval}
     num_workers: ${resources.num_workers}
     pin_memory: True
-    shuffle: False
+    shuffle: True
 
   predict:
     batch_size: ${batch_size.per_device_predict}
     num_workers: ${resources.num_workers}
     pin_memory: True
-  shuffle: False
+    shuffle: False
 
 collate_configs:
-  # Defines the configuration for `dataset_builder.HfBuilder._collate_config`
+  # Defines the configurations for `dataset_builder.HfBuilder._collate_config`
   train:
     n_sections: 8
     max_pos_sections: 4
     prefetch_n_sections: 100
     sample_negatives: false
+    question_max_length: 128
+    section_max_length: 200
   eval:
     n_sections: 100
     max_pos_sections: 50
     prefetch_n_sections: 300
     sample_negatives: false
+    question_max_length: 128
+    section_max_length: 200
 
 
 faiss_config:
@@ -55,5 +60,6 @@ faiss_config:
   factory: IVF32,Flat
   nprobe: 16
   use_faiss: true
+  debug_mode: false
   # Defines how often to update the faiss index (number of steps)
   update_freq: 1_000

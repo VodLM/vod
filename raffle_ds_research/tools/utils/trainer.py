@@ -4,8 +4,8 @@ from typing import Iterable, Optional, Union
 
 import lightning.pytorch as pl
 from fsspec import Callback
-from omegaconf import DictConfig
 from lightning.pytorch.loggers import Logger
+from omegaconf import DictConfig
 
 
 class Trainer(pl.Trainer):

@@ -56,6 +56,7 @@ cython = "^0.29.33"
 #markupsafe = "=2.0.1"
 #scikit-learn = "^1"
 ## <--------------------
+orjson = "^3.8.7"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.1"
@@ -119,7 +120,7 @@ exclude = '''
 [tool.pyright]
 reportOptionalMemberAccess = false
 
-[tool.pylint.main]
+[tool.z.main]
 ignore = ["tests"]
 py-version = "3.11"
 
