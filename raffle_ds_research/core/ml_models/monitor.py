@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import copy
 import math
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Any
 
 import torch
 import torchmetrics
@@ -33,15 +33,6 @@ class Monitor(nn.Module):
                 self._log_on_step[key] = False
             else:
                 self._log_on_step[key] = log_on_step[key]
-
-    def copy(self, log_on_step: Optional[dict[str, bool]] = None) -> Monitor:
-        """Copy the monitor"""
-        if log_on_step is None:
-            log_on_step = copy.copy(self._log_on_step)
-        new_monitor = Monitor({}, None)
-        new_monitor.metrics = copy.deepcopy(self.metrics)
-        new_monitor._log_on_step = log_on_step
-        return new_monitor
 
     @staticmethod
     def _handle_metric_init(metric):
@@ -145,7 +136,7 @@ class Monitor(nn.Module):
         return (preds, targets, indices)
 
 
-def retrieval_metric_factory(name: str) -> Metric:
+def retrieval_metric_factory(name: str, **kwargs) -> Metric:
     """Instantiate a torchmetrics retrieval metric from a string name."""
     if "@" in name:
         name, k = name.split("@")
@@ -164,14 +155,14 @@ def retrieval_metric_factory(name: str) -> Metric:
 
     cls = avail_cls[name]
 
-    return cls(k=k)
+    return cls(k=k, **kwargs)
 
 
 class RetrievalMetricCollection(MetricCollection):
-    def __init__(self, metrics: list[str]):
+    def __init__(self, metrics: list[str], **kwargs):
         def clean_name(x: str) -> str:
             x = x.replace("@", "_")
             return x
 
-        metrics = {clean_name(name): retrieval_metric_factory(name=name) for name in metrics}
+        metrics = {clean_name(name): retrieval_metric_factory(name=name, **kwargs) for name in metrics}
         super().__init__(metrics=metrics)

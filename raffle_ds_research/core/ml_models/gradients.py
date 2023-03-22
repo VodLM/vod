@@ -85,11 +85,11 @@ class KlDivGradients(Gradients):
         #   - except when all the sections for a given are negative
         is_negative_section = data.targets < 1
         q_with_positives = ~is_negative_section.all(dim=-1)
-        data_zero_prob = is_negative_section | ~q_with_positives[:, None]
+        where_zero_prob = is_negative_section | ~q_with_positives[:, None]
         data_logits = torch.where(
-            data_zero_prob,
-            self.log_eps,
-            torch.zeros_like(model_logits),
+            where_zero_prob,
+            self.log_eps,  # set -log(eps) ~ -inf
+            torch.zeros_like(model_logits),  # log(1) = 0
         )
         # set -inf wherever:
         #   - the section is masked (padding)

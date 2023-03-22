@@ -44,12 +44,3 @@ def deserialize_torch_tensor(encoded_tensor: str, *, dtype: Optional[torch.dtype
     if dtype is not None:
         ts = ts.to(dtype)
     return ts
-
-
-if __name__ == "__main__":
-    a = np.array([[1, 2, 3, 4], [5, 6, 7, 8]], dtype=np.float32)
-    print(a)
-    b = serialize_np_array(a)
-    print(b)
-    c = deserialize_np_array(b, dtype=np.float32)
-    print(c)

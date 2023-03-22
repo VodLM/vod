@@ -4,16 +4,18 @@ defaults:
   - override /builder: frank
   - override /model/encoder: bert-base
   - override /model/gradients: kl_div
+  - override /trainer/strategy: deepspeed
+  - override /model/optimizer: adam-cpu
   - _self_
 
 model:
-  embedding_size: 512 # todo: false (fix index first)
-  use_pooler_layer: false # todo: true
+  embedding_size: null
+  use_pooler_layer: true
   optimizer:
     lr: 1e-5
     weight_decay: 0
   scheduler:
-    total_iters: 1_000
+    total_iters: 100
 
 resources:
   num_workers: 4
@@ -21,8 +23,8 @@ resources:
 
 batch_size:
   effective: 32
-  per_device: 4
-  per_device_eval: 4
+  per_device: 2
+  per_device_eval: 8
   per_device_predict: 512
 
 trainer:
@@ -30,5 +32,23 @@ trainer:
   precision: 16-mixed
   detect_anomaly: false
   max_steps: 100_000
-  # limit_val_batches: 10
+  limit_val_batches: 20
   val_check_interval: ${int_mul:${trainer.accumulate_grad_batches},100}
+
+
+collate_configs:
+  # Defines the configurations for `dataset_builder.HfBuilder._collate_config`
+  train:
+    n_sections: 200
+    max_pos_sections: 32
+    prefetch_n_sections: 512
+    sample_negatives: false
+    question_max_length: 128
+    section_max_length: 200
+  eval:
+    n_sections: 300
+    max_pos_sections: 100
+    prefetch_n_sections: 1000
+    sample_negatives: false
+    question_max_length: 128
+    section_max_length: 200

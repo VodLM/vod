@@ -19,10 +19,8 @@ from omegaconf import DictConfig
 from raffle_ds_research.cli.utils import set_training_context
 from raffle_ds_research.core.builders import FrankBuilder
 from raffle_ds_research.core.ml_models import Ranker
-from raffle_ds_research.tools import index_tools, predict
-from raffle_ds_research.tools.index_tools import RetrievalBatch
-from raffle_ds_research.tools.index_tools.client import FaissClient, FaissMaster
-from raffle_ds_research.tools.index_tools.vector_handler import VectorHandler, vector_handler
+from raffle_ds_research.tools import predict, index_tools
+from raffle_ds_research.tools.index_tools import faiss_tools
 from raffle_ds_research.tools.utils.config import register_omgeaconf_resolvers
 from raffle_ds_research.tools.utils.pretty import print_config
 
@@ -48,8 +46,8 @@ def search_index(
     _: Any,
     idx: list[int],
     *,
-    faiss_client: FaissClient,
-    q_vectors: VectorHandler,
+    faiss_client: faiss_tools.FaissClient,
+    q_vectors: index_tools.VectorHandler,
     top_k: int = 10,
 ) -> dict[str, Any]:
     query_vec = q_vectors[idx]
@@ -115,14 +113,14 @@ def run(config: DictConfig):
 
     # create the faiss index
     index_path = Path(config.sys.cache_dir, "examples-index/index.faiss")
-    index: faiss.Index = index_tools.build_index(sections_vectors, factory_string="Flat")
+    index: faiss.Index = faiss_tools.build_index(sections_vectors, factory_string="Flat")
     faiss.write_index(index, str(index_path.absolute()))
 
     ids = [0, 101, 202]
-    with FaissMaster(index_path, nprobe=8, logging_level="critical") as faiss_master:
+    with faiss_tools.FaissMaster(index_path, nprobe=8, logging_level="critical") as faiss_master:
         faiss_client = faiss_master.get_client()
         for split, store in dataset_vectors.items():
-            q_vectors = vector_handler(store)[ids]
+            q_vectors = index_tools.vector_handler(store)[ids]
             rich.print(q_vectors)
             results = faiss_client.search(q_vectors, top_k=3)
             rich.print(results)
@@ -145,7 +143,9 @@ def run(config: DictConfig):
     rich.print(mapped_train_set)
 
 
-def _make_record(i: int, split: str, question: dict, result: RetrievalBatch, sections: datasets.Dataset) -> dict:
+def _make_record(
+    i: int, split: str, question: dict, result: index_tools.RetrievalBatch, sections: datasets.Dataset
+) -> dict:
     record = {
         "split": split,
         "i": i,

@@ -60,10 +60,6 @@ class Ranker(pl.LightningModule):
         self.scheduler_cls: functools.partial = scheduler
         self.gradients = gradients
         self.monitor = monitor
-
-        # setup the encoder
-        if better_transformers:
-            encoder = BetterTransformer.transform(encoder)
         self.encoder = encoder
 
         # projection layer
@@ -75,6 +71,10 @@ class Ranker(pl.LightningModule):
         else:
             self.proj = torch.nn.Linear(h_model, embedding_size, bias=False)
             self._output_size = embedding_size
+
+        # setup the encoder
+        if better_transformers:
+            self.encoder = BetterTransformer.transform(self.encoder)
 
     def get_output_shape(self, model_output_key: Optional[str] = None) -> tuple[int, ...]:
         """Dimension of the model output."""
@@ -243,7 +243,7 @@ class Ranker(pl.LightningModule):
     def _on_epoch_end(self, split: str) -> dict:
         if self.monitor is not None:
             summary = self.monitor.compute(split=split)
-            self._log_metrics(summary, split=split)
+            self._log_metrics(summary, split=split, sync_dist=True)
             return summary
         else:
             return {}

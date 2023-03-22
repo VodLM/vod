@@ -1,4 +1,4 @@
 _target_: torch.optim.lr_scheduler.LinearLR
 _partial_: true
-start_factor: 1e-3
+start_factor: 1e-9
 total_iters: 10_000

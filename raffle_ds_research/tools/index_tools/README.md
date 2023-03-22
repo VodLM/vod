@@ -13,7 +13,7 @@ import torch
 from raffle_ds_research.tools import index_tools
 
 vectors: np.ndarray | torch.Tensor | tensorstore.TensorStore = ...
-index: faiss.Index = index_tools.build_index(vectors=vectors, factory_string="IVF100,Flat")
+index: faiss.Index = faiss_tools.build_index(vectors=vectors, factory_string="IVF100,Flat")
 ```
 
 ## Serving indexes

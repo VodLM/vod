@@ -4,6 +4,7 @@ defaults:
   - resources: default
   - batch_size: default
   - trainer: default
+  - monitor: retrieval
   - sys: default
   - hydra: default
   # enable color logging
@@ -15,7 +16,6 @@ compile: false
 model_name: ${model.encoder.pretrained_model_name_or_path}
 exp_name: ${builder.name}-${builder.subset_name}-${builder.language}
 run_name: ${fmt_mn:${model_name}}-${rdn_name:}
-
 
 loader_configs:
   # Defines the configurations for `torch.utils.data.Dataloader`
@@ -40,26 +40,30 @@ loader_configs:
 collate_configs:
   # Defines the configurations for `dataset_builder.HfBuilder._collate_config`
   train:
-    n_sections: 8
+    n_sections: 16
     max_pos_sections: 4
-    prefetch_n_sections: 100
+    prefetch_n_sections: 300
     sample_negatives: false
     question_max_length: 128
     section_max_length: 200
   eval:
     n_sections: 100
     max_pos_sections: 50
-    prefetch_n_sections: 300
+    prefetch_n_sections: 1000
     sample_negatives: false
     question_max_length: 128
     section_max_length: 200
 
 
+# train with updates
+update_freq: 1000
 faiss_config:
   # Defines configuration for `FaissMaster`
+  enabled: false
   factory: IVF32,Flat
   nprobe: 16
-  use_faiss: true
-  debug_mode: false
-  # Defines how often to update the faiss index (number of steps)
-  update_freq: 1_000
+
+bm25_config:
+  # Defines configuration for `Bm25Master`
+  enabled: true
+  indexed_key: section

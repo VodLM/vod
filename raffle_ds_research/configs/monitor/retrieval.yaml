@@ -1,15 +1,15 @@
 _target_: raffle_ds_research.core.ml_models.monitor.Monitor
 log_on_step:
-  train: true
   val: false
   test: false
 metrics:
-  train:
-    _target_: raffle_ds_research.core.ml_models.monitor.RetrievalMetricCollection
-    metrics: [ "ndcg", "mrr", "hitrate@3" ]
   val:
     _target_: raffle_ds_research.core.ml_models.monitor.RetrievalMetricCollection
-    metrics: [ "ndcg", "mrr", "hitrate@3" ]
+    metrics: [ "ndcg", "mrr", "hitrate@3", "hitrate@10", "hitrate@30", "r@3" ]
+    compute_on_cpu: true
+    sync_on_compute: false
   test:
     _target_: raffle_ds_research.core.ml_models.monitor.RetrievalMetricCollection
-    metrics: [ "ndcg", "mrr","hitrate@3"]
+    metrics: [ "ndcg", "mrr","hitrate@3", "hitrate@10", "hitrate@30", "r@3" ]
+    compute_on_cpu: true
+    sync_on_compute: false

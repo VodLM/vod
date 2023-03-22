@@ -24,13 +24,11 @@ class ConcatenatedTopk:
     indices: np.ndarray
     scores: np.ndarray
     labels: np.ndarray
-    features: np.ndarray
 
     __annotations__ = {
         "indices": np.ndarray,
         "scores": np.ndarray,
         "labels": np.ndarray,
-        "features": np.ndarray,
     }
 
     def __getitem__(self, item):
@@ -38,12 +36,11 @@ class ConcatenatedTopk:
             indices=self.indices[item],
             scores=self.scores[item],
             labels=self.labels[item],
-            features=self.features[item],
         )
 
     def __iter__(self):
-        for idx, sco, lbl, fea in zip(self.indices, self.scores, self.labels, self.features):
-            yield type(self)(indices=idx, scores=sco, labels=lbl, features=fea)
+        for idx, sco, lbl, fea in zip(self.indices, self.scores, self.labels):
+            yield type(self)(indices=idx, scores=sco, labels=lbl)
 
     def __len__(self):
         return len(self.indices)
@@ -58,13 +55,10 @@ cdef DTYPE_LONG _concat_single(
     DTYPE_LONG [:] ab_indices,
     DTYPE_FLOAT [:] ab_scores,
     DTYPE_LONG [:] ab_labels,
-    DTYPE_FLOAT [:] ab_features,
     DTYPE_LONG [:] a_indices,
     DTYPE_FLOAT [:] a_scores,
-    DTYPE_FLOAT [:] a_features,
     DTYPE_LONG [:] b_indices,
     DTYPE_FLOAT [:] b_scores,
-    DTYPE_FLOAT [:] b_features,
     unsigned int total,
     unsigned int max_a,
 ) nogil:
@@ -83,7 +77,6 @@ cdef DTYPE_LONG _concat_single(
             break
         ab_indices[j] = buffered_idx
         ab_scores[j] = a_scores[i]
-        ab_features[j] = a_features[i]
         ab_labels[j] = 0
         j += 1
 
@@ -101,7 +94,6 @@ cdef DTYPE_LONG _concat_single(
         if found_in_a < 1:
             ab_indices[j] = buffered_idx
             ab_scores[j] = b_scores[i]
-            ab_features[j] = b_features[i]
             ab_labels[j] = 1
             j += 1
 
@@ -114,13 +106,10 @@ cdef DTYPE_LONG [:]  _concat_batch(
     DTYPE_LONG [:, :] ab_indices,
     DTYPE_FLOAT [:, :] ab_scores,
     DTYPE_LONG [:, :] ab_labels,
-    DTYPE_FLOAT [:, :] ab_features,
     DTYPE_LONG [:, :] a_indices,
     DTYPE_FLOAT [:, :] a_scores,
-    DTYPE_FLOAT [:, :] a_features,
     DTYPE_LONG [:, :] b_indices,
     DTYPE_FLOAT [:, :] b_scores,
-    DTYPE_FLOAT [:, :] b_features,
     DTYPE_LONG [:] cursors,
     unsigned long total,
     unsigned long max_a,
@@ -132,13 +121,10 @@ cdef DTYPE_LONG [:]  _concat_batch(
             ab_indices[i],
             ab_scores[i],
             ab_labels[i],
-            ab_features[i],
             a_indices[i],
             a_scores[i],
-            a_features[i],
             b_indices[i],
             b_scores[i],
-            b_features[i],
             total,
             max_a,
         )
@@ -149,10 +135,8 @@ cdef DTYPE_LONG [:]  _concat_batch(
 def concat_search_results(
     a_indices: np.ndarray,
     a_scores: np.ndarray,
-    a_features: np.ndarray,
     b_indices: np.ndarray,
     b_scores: np.ndarray,
-    b_features: np.ndarray,
     total: int,
     max_a: Optional[int] = None,
     truncate: bool = True,
@@ -160,7 +144,6 @@ def concat_search_results(
     """
     Sort w.r.t. `scores` and concatenate results from two search runs.
     Make sure that `indices` from A are not in B.
-    `features` is an extra field that is indexed and returned along the indices and scores.
     """
 
     # check input
@@ -176,14 +159,12 @@ def concat_search_results(
     a_sorted_ids = np.flip(a_sorted_ids, axis=-1)[..., :max_a]
     a_indices = np.take_along_axis(a_indices, a_sorted_ids, axis=-1)
     a_scores = np.take_along_axis(a_scores, a_sorted_ids, axis=-1)
-    a_features = np.take_along_axis(a_features, a_sorted_ids, axis=-1)
 
     # Sort B
     b_sorted_ids = np.argsort(b_scores, axis=-1)
     b_sorted_ids = np.flip(b_sorted_ids, axis=-1)
     b_indices = np.take_along_axis(b_indices, b_sorted_ids, axis=-1)
     b_scores = np.take_along_axis(b_scores, b_sorted_ids, axis=-1)
-    b_features = np.take_along_axis(b_features, b_sorted_ids, axis=-1)
 
 
     # create the buffer and run the cython function
@@ -191,18 +172,14 @@ def concat_search_results(
         ab_indices = np.full((total,), dtype=NP_DTYPE_LONG, fill_value=-1)
         ab_scores = np.full((total,), dtype=NP_DTYPE_FLOAT, fill_value=np.nan)
         ab_labels = np.full((total,), dtype=NP_DTYPE_LONG, fill_value=-1)
-        ab_features = np.full((total,), dtype=NP_DTYPE_FLOAT, fill_value=np.nan)
         cursor = _concat_single(
             ab_indices,
             ab_scores,
             ab_labels,
-            ab_features,
             a_indices.astype(NP_DTYPE_LONG),
             a_scores.astype(NP_DTYPE_FLOAT),
-            a_features.astype(NP_DTYPE_FLOAT),
             b_indices.astype(NP_DTYPE_LONG),
             b_scores.astype(NP_DTYPE_FLOAT),
-            b_features.astype(NP_DTYPE_FLOAT),
             total,
             max_a,
         )
@@ -213,7 +190,6 @@ def concat_search_results(
             indices=np.asarray(ab_indices)[:cursor],
             scores=np.asarray(ab_scores)[:cursor],
             labels=np.asarray(ab_labels)[:cursor],
-            features=np.asarray(ab_features)[:cursor],
         )
 
     elif len(a_indices == 2):
@@ -221,19 +197,15 @@ def concat_search_results(
         ab_indices = np.full((batch_size, total), dtype=NP_DTYPE_LONG, fill_value=-1)
         ab_scores = np.full((batch_size, total), dtype=NP_DTYPE_FLOAT, fill_value=np.nan)
         ab_labels = np.full((batch_size, total), dtype=NP_DTYPE_LONG, fill_value=-1)
-        ab_features = np.full((batch_size, total), dtype=NP_DTYPE_FLOAT, fill_value=np.nan)
         cursors = np.full((batch_size,), dtype=NP_DTYPE_LONG, fill_value=-1)
         cursors = _concat_batch(
             ab_indices,
             ab_scores,
             ab_labels,
-            ab_features,
             a_indices.astype(NP_DTYPE_LONG),
             a_scores.astype(NP_DTYPE_FLOAT),
-            a_features.astype(NP_DTYPE_FLOAT),
             b_indices.astype(NP_DTYPE_LONG),
             b_scores.astype(NP_DTYPE_FLOAT),
-            b_features.astype(NP_DTYPE_FLOAT),
             cursors,
             total,
             max_a,
@@ -246,7 +218,6 @@ def concat_search_results(
             indices=np.asarray(ab_indices)[:, :cursor],
             scores=np.asarray(ab_scores)[:, :cursor],
             labels=np.asarray(ab_labels)[:, :cursor],
-            features=np.asarray(ab_features)[:, :cursor],
         )
     else:
         raise ValueError(f"a_indices must be 1D or 2D. Found shape: {a_indices.shape}")

@@ -8,6 +8,13 @@ from pathlib import Path
 import faiss
 import stackprinter
 
+from raffle_ds_research.tools.index_tools.faiss_tools import SearchFaissQuery
+from raffle_ds_research.tools.index_tools.faiss_tools.models import (
+    FaissSearchResponse,
+    FastSearchFaissQuery,
+    FastFaissSearchResponse,
+)
+from raffle_ds_research.tools.index_tools.retrieval_data_type import RetrievalDataType
 from raffle_ds_research.tools.utils.exceptions import dump_exceptions_to_file
 
 try:
@@ -21,13 +28,6 @@ from fastapi import FastAPI, HTTPException
 from loguru import logger
 
 from raffle_ds_research.tools.index_tools import io
-from raffle_ds_research.tools.index_tools.data_models import (
-    FaissSearchResponse,
-    FastFaissSearchResponse,
-    FastSearchFaissQuery,
-    SearchFaissQuery,
-)
-from raffle_ds_research.tools.index_tools.retrieval_data_type import RetrievalDataType
 
 
 def parse_args() -> argparse.Namespace:

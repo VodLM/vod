@@ -1,26 +1,26 @@
 from __future__ import annotations
 
 import os
-import subprocess
 import sys
-import time
 from copy import copy
 from pathlib import Path
-from typing import Optional, Type
+from typing import Type, Optional
 
+import aiohttp
 import numpy as np
 import requests
 import rich
 import torch
 
 from raffle_ds_research.tools.index_tools import io
-from raffle_ds_research.tools.index_tools.retrieval_data_type import RetrievalBatch, RetrievalDataType, Ts
+from raffle_ds_research.tools.index_tools import retrieval_data_type as rtypes
+from raffle_ds_research.tools.index_tools import search_server
 
 # get the path to the server script
 server_run_path = Path(__file__).parent / "server.py"
 
 
-class FaissClient(object):
+class FaissClient(search_server.SearchClient):
     """Faiss client for interacting for spawning a Faiss server and querying it."""
 
     def __init__(
@@ -35,12 +35,16 @@ class FaissClient(object):
     def url(self):
         return f"{self.host}:{self.port}"
 
-    def ping(self) -> str:
-        response = requests.get(f"{self.url}/")
-        response.raise_for_status()
-        return response.text
+    def ping(self) -> bool:
+        try:
+            response = requests.get(f"{self.url}/")
+        except requests.exceptions.ConnectionError:
+            return False
 
-    def search_py(self, query_vec: Ts, top_k: int = 3) -> RetrievalBatch[Ts]:
+        response.raise_for_status()
+        return "OK" in response.text
+
+    def search_py(self, query_vec: rtypes.Ts, top_k: int = 3) -> rtypes.RetrievalBatch[rtypes.Ts]:
         input_type = type(query_vec)
         response = requests.post(
             f"{self.url}/search",
@@ -59,21 +63,17 @@ class FaissClient(object):
         }[input_type]
         indices = cast_fn(indices_list)
         scores = cast_fn(scores_list)
-        return RetrievalBatch(indices=indices, scores=scores)
+        return rtypes.RetrievalBatch(indices=indices, scores=scores)
 
-    def search(self, query_vec: Ts, top_k: int = 3) -> RetrievalBatch[Ts]:
-        if isinstance(query_vec, torch.Tensor):
-            if torch.isnan(query_vec).any():
-                raise ValueError("NaNs in query_vec")
-        elif isinstance(query_vec, np.ndarray):
-            if np.isnan(query_vec).any():
-                raise ValueError("NaNs in query_vec")
-        input_type = type(query_vec)
+    def search(
+        self, *, vector: rtypes.Ts, text: Optional[list[str]] = None, top_k: int = 3
+    ) -> rtypes.RetrievalBatch[rtypes.Ts]:
+        input_type = type(vector)
         input_type_enum, serialized_fn = {
-            torch.Tensor: (RetrievalDataType.TORCH, io.serialize_torch_tensor),
-            np.ndarray: (RetrievalDataType.NUMPY, io.serialize_np_array),
+            torch.Tensor: (rtypes.RetrievalDataType.TORCH, io.serialize_torch_tensor),
+            np.ndarray: (rtypes.RetrievalDataType.NUMPY, io.serialize_np_array),
         }[input_type]
-        serialized_vectors = serialized_fn(query_vec)
+        serialized_vectors = serialized_fn(vector)
         payload = {
             "vectors": serialized_vectors,
             "top_k": top_k,
@@ -99,79 +99,35 @@ class FaissClient(object):
         indices = cast_fn(indices_list)
         scores = cast_fn(scores_list)
         try:
-            return RetrievalBatch(indices=indices, scores=scores)
+            return rtypes.RetrievalBatch(indices=indices, scores=scores)
         except Exception as exc:
             rich.print({"indices": indices, "scores": scores})
             raise exc
 
 
-class FaissMaster(object):
+class FaissMaster(search_server.SearchMaster[FaissClient]):
     """The Faiss master client is responsible for spawning and killing the Faiss server.
 
     ```python
-    with FaissMaster(index_path, nprobe=8, logging_level="critical") as faiss_master:
-        client = faiss_master.get_client()
-
+    with FaissMaster(index_path, nprobe=8, logging_level="critical") as client:
         # do stuff with the client
         result = client.search(...)
     ```
     """
-
-    _server_proc: Optional[subprocess.Popen] = None
 
     def __init__(
         self,
         index_path: str | Path,
         nprobe: int = 8,
         logging_level: str = "CRITICAL",
-        log_dir: Path = None,
         host: str = "http://localhost",
         port: int = 7678,
-        debug_mode: bool = False,
     ):
         self.index_path = Path(index_path)
         self.nprobe = nprobe
         self.logging_level = logging_level
-        self.log_dir = log_dir
         self.host = host
         self.port = port
-        self.debug_mode = debug_mode
-
-    def __enter__(self) -> "FaissMaster":
-        self._server_proc = self._start_server()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self._server_proc.kill()
-
-    def _start_server(self) -> subprocess.Popen:
-        if self._server_proc is not None:
-            raise RuntimeError("Server already running.")
-        cmd = self._make_cmd()
-        env = self._make_env()
-        if self.debug_mode:
-            # redirect stdout and stderr to the console
-            extras = {
-                "stdout": subprocess.PIPE,
-                "stderr": subprocess.PIPE,
-            }
-        else:
-            extras = {}
-        server_proc = subprocess.Popen(cmd, env=env, **extras)
-
-        client = self.get_client()
-        while True:
-            try:
-                health_check = client.ping()
-                if "ok" not in health_check.lower():
-                    msg = f"Server health check failed: {health_check}"
-                    raise RuntimeError(msg)
-                break
-            except requests.exceptions.ConnectionError:
-                time.sleep(0.1)
-                continue
-
-        return server_proc
 
     def _make_env(self) -> dict[str, str]:
         env = copy(dict(os.environ))
@@ -196,34 +152,18 @@ class FaissMaster(object):
             "--logging-level",
             str(self.logging_level),
         ]
-        if self.log_dir is not None:
-            cmd.extend(["--log-dir", str(self.log_dir.absolute())])
         return cmd
 
     def get_client(self) -> FaissClient:
         return FaissClient(host=self.host, port=self.port)
 
-    def __getstate__(self):
-        raise DoNotPickleError(
-            "FaissMaster is not pickleable. To use in multiprocessing, using a client instead (`master.get_client()`)."
-        )
 
-    def __setstate__(self, state):
-        raise DoNotPickleError(
-            "FaissMaster is not pickleable. To use in multiprocessing, using a client instead (`master.get_client()`)."
-        )
-
-
-class DoNotPickleError(Exception):
-    def __init__(self, msg: Optional[str] = None):
-        msg = msg or "This object cannot be pickled."
-        super().__init__(msg)
-
-
-def decode_faiss_results(*, indices: str, scores: str, target_type: Type[Ts]) -> RetrievalBatch[Ts]:
+def decode_faiss_results(
+    *, indices: str, scores: str, target_type: Type[rtypes.Ts]
+) -> rtypes.RetrievalBatch[rtypes.Ts]:
     indices = io.deserialize_np_array(indices)
     scores = io.deserialize_np_array(scores)
     if target_type == torch.Tensor:
         indices = torch.from_numpy(indices)
         scores = torch.from_numpy(scores)
-    return RetrievalBatch(indices=indices, scores=scores)
+    return rtypes.RetrievalBatch(indices=indices, scores=scores)

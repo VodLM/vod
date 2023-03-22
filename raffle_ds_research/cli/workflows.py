@@ -4,12 +4,14 @@ import dataclasses
 import functools
 import tempfile
 from pathlib import Path
-from typing import Any, Callable, Iterable, Optional
+from typing import Any, Callable, Iterable, Optional, Union
 
 import datasets
 import faiss
 import loguru
 import numpy as np
+import omegaconf
+import pydantic
 import rich
 import rich.status
 import torch
@@ -24,6 +26,8 @@ from raffle_ds_research.core.builders import FrankBuilder
 from raffle_ds_research.core.ml_models import Ranker
 from raffle_ds_research.core.ml_models.monitor import Monitor
 from raffle_ds_research.tools import index_tools, pipes, predict_tools
+from raffle_ds_research.tools.index_tools import faiss_tools
+from raffle_ds_research.tools.pipes.utils.misc import keep_only_columns
 from raffle_ds_research.tools.utils import loader_config
 
 
@@ -35,6 +39,14 @@ class TrainWithIndexConfigs:
     train_collate: cli_utils.DefaultCollateConfig
     eval_collate: cli_utils.DefaultCollateConfig
     faiss: cli_utils.DefaultFaissConfig
+    bm25: cli_utils.DefaultBm25Config
+    update_freq: Optional[Union[int, list[int]]]
+
+    @pydantic.validator("update_freq", pre=True)
+    def _validate_update_freq(cls, v):
+        if isinstance(v, omegaconf.ListConfig):
+            v = omegaconf.OmegaConf.to_container(v)
+        return v
 
     @classmethod
     def parse(cls, config: DictConfig) -> "TrainWithIndexConfigs":
@@ -47,21 +59,25 @@ class TrainWithIndexConfigs:
         train_collate_config = cli_utils.DefaultCollateConfig(**config.collate_configs.train)
         eval_collate_config = cli_utils.DefaultCollateConfig(**config.collate_configs.eval)
 
-        # set the faiss config
+        # set the index configs
         faiss_config = cli_utils.DefaultFaissConfig(**config.faiss_config)
+        bm25_config = cli_utils.DefaultBm25Config(**config.bm25_config)
 
         return cls(
+            update_freq=config.update_freq,
             train_loader=train_loader_config,
             eval_loader=eval_loader_config,
             predict_loader=predict_loader_config,
             train_collate=train_collate_config,
             eval_collate=eval_collate_config,
             faiss=faiss_config,
+            bm25=bm25_config,
         )
 
 
 def train_with_index_updates(
     ranker: Ranker,
+    monitor: Monitor,
     trainer: pl.Trainer,
     builder: FrankBuilder,
     config: TrainWithIndexConfigs | DictConfig,
@@ -71,7 +87,7 @@ def train_with_index_updates(
         config = TrainWithIndexConfigs.parse(config)
 
     total_number_of_steps = trainer.max_steps
-    update_steps = _infer_update_steps(total_number_of_steps, config.faiss.update_freq)
+    update_steps = _infer_update_steps(total_number_of_steps, config.update_freq)
     loguru.logger.info(f"Index will be updated at steps: {_pretty_steps(update_steps)}")
     if len(update_steps) == 0:
         raise ValueError("No index update steps were defined.")
@@ -96,11 +112,11 @@ def train_with_index_updates(
                 tokenizer=builder.tokenizer,
                 period_idx=period_idx,
                 gloabl_step=trainer.global_step,
-                max_sections=10,
+                max_sections=5,
             )
             static_eval_metrics = _run_static_evaluation(
                 loader=track(val_loader, description="Static validation"),
-                monitor=ranker.monitor.copy(log_on_step=None).reset(),
+                monitor=monitor,
                 on_first_batch=on_first_batch_callback,
             )
             _log_metrics({f"static/{k}": v for k, v in static_eval_metrics.items()}, trainer=trainer)
@@ -131,6 +147,7 @@ class IndexManager(object):
     _dataset: Optional[datasets.DatasetDict] = None
     _tmpdir: Optional[tempfile.TemporaryDirectory] = None
     _faiss_master: Optional[index_tools.FaissMaster] = None
+    _bm25_master: Optional[index_tools.Bm25Master] = None
     _collate_fns: Optional[dict[str, pipes.Collate]] = None
 
     def __init__(
@@ -152,25 +169,36 @@ class IndexManager(object):
         self._tmpdir = tempfile.TemporaryDirectory(prefix="tmp-training-")
         tmpdir = self._tmpdir.__enter__()
 
-        if self.config.faiss.use_faiss:
+        # init the bm25 index
+        if self.config.bm25.enabled:
+            corpus = self.builder.get_corpus()
+            corpus = keep_only_columns(corpus, [self.config.bm25.indexed_key])
+            index_name = f"index-{corpus._fingerprint}"
+            self._bm25_master = index_tools.Bm25Master(
+                (row[self.config.bm25.indexed_key] for row in corpus),
+                input_size=len(corpus),
+                index_name=index_name,
+                exist_ok=True,
+                persistent=True,
+            )
+            bm25_master = self._bm25_master.__enter__()
+        else:
+            bm25_master = None
+
+        # init the faiss index
+        if self.config.faiss.enabled:
             # compute the vectors for the questions and sections
             dataset_vectors, sections_vectors = self._compute_vectors(tmpdir)
 
             # build the faiss index and save to disk
-            faiss_index = index_tools.build_index(sections_vectors, factory_string=self.config.faiss.factory)
+            faiss_index = faiss_tools.build_index(sections_vectors, factory_string=self.config.faiss.factory)
             faiss_path = Path(tmpdir, "index.faiss")
             faiss.write_index(faiss_index, str(faiss_path))
 
             # spin up the faiss server
-            # server_log_dir = Path()
-            # loguru.logger.debug(f"Starting the faiss server with log dir: {server_log_dir.absolute()}")
-            self._faiss_master = index_tools.FaissMaster(
-                faiss_path,
-                self.config.faiss.nprobe,
-                # log_dir=server_log_dir,
-                debug_mode=self.config.faiss.debug_mode,
-            )
+            self._faiss_master = index_tools.FaissMaster(faiss_path, self.config.faiss.nprobe)
             faiss_master = self._faiss_master.__enter__()
+
         else:
             dataset_vectors = {}
             faiss_master = None
@@ -179,7 +207,7 @@ class IndexManager(object):
         self._collate_fns = {}
         for split in self._dataset:
             vectors = dataset_vectors.get(split, None)
-            collate_fn = self._instantiate_collate_for_split(split, vectors, faiss_master)
+            collate_fn = self._instantiate_collate_for_split(split, vectors, faiss_master, bm25_master)
             self._collate_fns[split] = collate_fn
 
         return self
@@ -205,13 +233,20 @@ class IndexManager(object):
         )
         return dataset_vectors, sections_vectors
 
-    def _instantiate_collate_for_split(self, split, vectors, faiss_master):
+    def _instantiate_collate_for_split(
+        self,
+        split: str,
+        vectors: predict_tools.TensorStoreFactory,
+        faiss_master: Optional[index_tools.FaissMaster],
+        bm25_master: Optional[index_tools.Bm25Master],
+    ):
         base_collate_cfg = {
             "train": self.config.train_collate,
         }.get(split, self.config.eval_collate)
         full_collate_config = self.builder.collate_config(
-            faiss_client=faiss_master.get_client() if self.config.faiss.use_faiss else None,
-            question_vectors=vectors if self.config.faiss.use_faiss else None,
+            question_vectors=vectors if self.config.faiss.enabled else None,
+            faiss_client=faiss_master.get_client() if self.config.faiss.enabled else None,
+            bm25_client=bm25_master.get_client() if self.config.bm25.enabled else None,
             **base_collate_cfg.dict(),
         )
         collate_fn = self.builder.get_collate_fn(config=full_collate_config)

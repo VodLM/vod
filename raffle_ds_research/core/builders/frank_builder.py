@@ -69,6 +69,7 @@ class FrankLoaderConfig(BaseModel):
     question_vectors: Optional[index_tools.VectorType] = None
     _query_vectors: index_tools.VectorHandler = pydantic.PrivateAttr(None)
     faiss_client: Optional[index_tools.FaissClient] = None
+    bm25_client: Optional[index_tools.Bm25Client] = None
     label_keys: collections.OrderedDict[str, str] = {"answer_id": "answer_id", "section_id": "id"}
     in_domain_keys: collections.OrderedDict[str, str] = {"kb_id": "kb_id"}
 
@@ -101,6 +102,14 @@ class FrankLoaderConfig(BaseModel):
     def faiss_not_available(self) -> bool:
         return self.question_vectors is None or self.faiss_client is None
 
+    @property
+    def bm25_not_available(self) -> bool:
+        return self.bm25_client is None
+
+    @property
+    def search_not_available(self) -> bool:
+        return self.faiss_not_available and self.bm25_not_available
+
     @pydantic.validator("label_keys", pre=True)
     def _validate_label_keys(cls, v: Any) -> collections.OrderedDict[str, str]:
         if isinstance(v, collections.OrderedDict):
@@ -130,7 +139,7 @@ def _wrap_as_retrieval_batch(
     )
 
 
-def _answer_or_section_rule(results: pipes.LookupSearchResults) -> np.ndarray:
+def _matches_answer_xor_section(results: pipes.LookupSearchResults) -> np.ndarray:
     """For each row, set mark the sections as positive.
     - where there is a match on `id` (section_id).
     - else where there is a match on `answer_id` (answer_id).
@@ -166,24 +175,13 @@ def sample_sections(
     if max_pos_sections is None:
         max_pos_sections = n_sections
 
-    # gather the positive sections
+    # gather the positive sections and apply perturbations
     positive_indices = positives.indices
     positive_scores = positives.scores
     positive_logits = numpy_log_softmax(positive_scores)
     positive_logits += numpy_gumbel_like(positive_logits)
 
-    # Define the positive scores:
-    # set the positive scores to NaN by default
-    positive_scores = np.where(np.isinf(positive_scores), -np.inf, np.nan)
-    # replace the values of the positive scores when available in the pool of negatives (returned by faiss)
-    positive_scores = c_tools.copy_by_index(
-        a_indices=positive_indices,
-        a_values=positive_scores,
-        b_indices=negatives.indices,
-        b_values=negatives.scores,
-    )
-
-    # gather the negative sections
+    # gather the negative sections and apply perturbations
     negative_indices = negatives.indices
     negative_scores = negatives.scores
     negative_logits = numpy_log_softmax(negative_scores)
@@ -194,17 +192,20 @@ def sample_sections(
     concatenated = c_tools.concat_search_results(
         a_indices=positive_indices,
         a_scores=positive_logits,
-        a_features=positive_scores,
         b_indices=negative_indices,
         b_scores=negative_logits,
-        b_features=negative_scores,
         max_a=max_pos_sections,
         total=n_sections,
     )
+    # set the labels to be `1` for the positive sections (revert label ordering)
     concatenated.labels = np.where(concatenated.labels == 0, 1, 0)
+
+    # fetch the scores from the pool of negatives
+    scores = c_tools.gather_by_index(queries=concatenated.indices, keys=negatives.indices, values=negatives.scores)
+
     return SampledSections(
         indices=concatenated.indices,
-        scores=concatenated.features,
+        scores=scores,
         labels=concatenated.labels,
     )
 
@@ -234,18 +235,23 @@ class FrankCollate(pipes.Collate):
         }
 
         # fetch the negative section ids (using faiss, or by fetching sections from the same kb_id)
-        if self.config.faiss_not_available:
+        if self.config.search_not_available:
             neg_lookup_input = {v: batch[k] for k, v in self.config.in_domain_keys.items()}
             negative_samples: index_tools.RetrievalBatch = _wrap_as_retrieval_batch(
                 self.in_domain_lookup_index.search(neg_lookup_input)
             )
         else:
-            question_ids = batch[dataset_builder.ROW_IDX_COL_NAME]
-            query_vectors = self.config.query_vectors[question_ids]
-            negative_samples: index_tools.RetrievalBatch = self.config.faiss_client.search(
-                query_vectors,
+            negative_samples: index_tools.RetrievalBatch = self.config.bm25_client.search(
+                text=batch["question"],
                 top_k=self.config.prefetch_n_sections,
             )
+            # todo: use both bm25 and faiss
+            # question_ids = batch[dataset_builder.ROW_IDX_COL_NAME]
+            # query_vectors = self.config.query_vectors[question_ids]
+            # negative_samples: index_tools.RetrievalBatch = self.config.faiss_client.search(
+            #     vector=query_vectors,
+            #     top_k=self.config.prefetch_n_sections,
+            # )
 
         # tokenize the questions
         tokenized_question = pipes.torch_tokenize_pipe(
@@ -262,7 +268,7 @@ class FrankCollate(pipes.Collate):
         pos_lookup_input = {v: batch[k] for k, v in self.config.label_keys.items()}
         positive_samples: index_tools.RetrievalBatch = _wrap_as_retrieval_batch(
             self.lookup_index.search(pos_lookup_input),
-            is_defined_rule=_answer_or_section_rule,
+            is_defined_rule=_matches_answer_xor_section,
         )
 
         # sample the sections given

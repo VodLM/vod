@@ -114,7 +114,7 @@ def run():
     )
 
     # build the faiss index and save to disk
-    faiss_index = index_tools.build_index(sections_vectors, factory_string=args.factory_string)
+    faiss_index = faiss_tools.build_index(sections_vectors, factory_string=args.factory_string)
     faiss_path = Path(args.cache_dir, "index.faiss")
     faiss.write_index(faiss_index, str(faiss_path))
 

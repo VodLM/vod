@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional, Union
-
-import omegaconf
 import pydantic
 
 
@@ -24,12 +21,12 @@ class DefaultFaissConfig(pydantic.BaseModel):
 
     factory: str
     nprobe: int
-    use_faiss: bool
-    update_freq: Optional[Union[int, list[int]]]
-    debug_mode: bool = False
+    enabled: bool = True
 
-    @pydantic.validator("update_freq", pre=True)
-    def _validate_update_freq(cls, v):
-        if isinstance(v, omegaconf.ListConfig):
-            v = omegaconf.OmegaConf.to_container(v)
-        return v
+
+class DefaultBm25Config(pydantic.BaseModel):
+    class Config:
+        extra = pydantic.Extra.forbid
+
+    enabled: bool = True
+    indexed_key: str = "section"

@@ -37,4 +37,4 @@ faiss_config:
   use_faiss: true
   debug_mode: false
   # Defines how often to update the faiss index (number of steps)
-  update_freq: [100, 500, 1000, 2000, 3000, 5000, 8000, 15000]
+  update_freq: 300

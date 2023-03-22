@@ -11,7 +11,7 @@ import rich
 import torch
 from loguru import logger
 
-from raffle_ds_research.tools.index_tools.client import FaissMaster
+from raffle_ds_research.tools.index_tools import faiss_tools
 
 
 @dataclasses.dataclass
@@ -79,12 +79,10 @@ def profile_faiss_server(args: ProfileArgs) -> dict[str, float]:
         # Spawn a Faiss server and query it.
         log_dir = Path(tmpdir, "logs")
         log_dir.mkdir(parents=True, exist_ok=True)
-        with FaissMaster(index_path, log_dir=log_dir, nprobe=args.nprobe, logging_level="critical") as faiss_master:
-            faiss_client = faiss_master.get_client()
-
+        with faiss_tools.FaissMaster(index_path, nprobe=args.nprobe, logging_level="critical") as faiss_client:
             # time the API
             logger.info("Timing the API (fast)")
-            timer = timeit.Timer(lambda: faiss_client.search(query_vec, args.top_k))
+            timer = timeit.Timer(lambda: faiss_client.search(vector=query_vec, top_k=args.top_k))
             run_time = timer.timeit(number=args.n_calls)
             _log_perf(run_time, args.n_calls, "API_fast")
 
@@ -96,11 +94,11 @@ def profile_faiss_server(args: ProfileArgs) -> dict[str, float]:
 
             if args.verbose:
                 # show the results (numpy arrays)
-                search_results = faiss_client.search(query_vec[:3], args.top_k)
+                search_results = faiss_client.search(vector=query_vec[:3], top_k=args.top_k)
                 rich.print(search_results)
 
                 # show the results (torch tensors)
-                search_results = faiss_client.search(torch.from_numpy(query_vec[:3]), args.top_k)
+                search_results = faiss_client.search(vector=torch.from_numpy(query_vec[:3]), top_k=args.top_k)
                 rich.print(search_results)
 
     return benchmark
