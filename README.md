@@ -18,6 +18,11 @@ poetry install
 # --> install faiss using conda first
 # --> see `https://github.com/facebookresearch/faiss/issues/2317`
 conda install -c pytorch faiss-cpu
+
+# Install `elasticsearch`
+# https://www.elastic.co/guide/en/elasticsearch/reference/current/deb.html
+# start elasticsearch
+sudo systemctl enable elasticsearch.service --now
 ```
 
 ## Usage

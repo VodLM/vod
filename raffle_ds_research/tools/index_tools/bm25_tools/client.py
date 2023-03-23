@@ -3,11 +3,13 @@ import logging
 import uuid
 from typing import Any, Iterable, Optional
 
+import datasets
 import elasticsearch as es
 import numpy as np
 import rich.progress
 from elasticsearch import helpers as es_helpers
 
+from raffle_ds_research.tools import predict_tools
 from raffle_ds_research.tools.index_tools import retrieval_data_type as rtypes
 from raffle_ds_research.tools.index_tools import search_server
 
@@ -19,6 +21,7 @@ BODY_KEY: str = "body"
 
 
 class Bm25Client(search_server.SearchClient):
+    requires_vectors: bool = False
     _client: es.Elasticsearch
     _index_name: str
 
@@ -59,7 +62,7 @@ class Bm25Client(search_server.SearchClient):
         """Search elasticsearch for the batch of text queries using `msearch`.
         `vector` is not used here."""
         queries = self._make_queries(text, top_k)
-        responses = self._client.msearch(body=queries)
+        responses = self._client.msearch(searches=queries)
         indices, scores = [], []
         for response in responses["responses"]:
             # process the indices
@@ -89,6 +92,7 @@ class Bm25Client(search_server.SearchClient):
                 {
                     "from": 0,
                     "size": top_k,
+                    "fields": [IDX_KEY],
                     "query": {"match": {BODY_KEY: text}},
                 },
             ]
@@ -122,15 +126,17 @@ class Bm25Master(search_server.SearchMaster[Bm25Client]):
         self._exist_ok = exist_ok
 
         if input_size is None:
-            try:
+            if isinstance(input_data, (list, datasets.Dataset)):
                 input_size = len(input_data)
-            except AttributeError:
-                pass
+            elif isinstance(input_data, datasets.IterableDataset):
+                input_size = input_data.num_rows
         self._input_data_size = input_size
 
     def _on_init(self):
         stream = ({IDX_KEY: i, BODY_KEY: text} for i, text in enumerate(self._input_data))
-        stream = rich.progress.track(stream, description=f"Building ES index {self._index_name}", total=self._input_data_size)
+        stream = rich.progress.track(
+            stream, description=f"Building ES index {self._index_name}", total=self._input_data_size
+        )
         ingest_data(stream, url=self.url, index_name=self._index_name, exist_ok=self._exist_ok)
 
     def _on_exit(self):

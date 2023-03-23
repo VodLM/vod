@@ -85,6 +85,12 @@ class KlDivGradients(Gradients):
         #   - except when all the sections for a given are negative
         is_negative_section = data.targets < 1
         q_with_positives = ~is_negative_section.all(dim=-1)
+        # todo: remove this, should not be necessary on Frank.
+        #  raise an error if this is the case.
+        if not q_with_positives.all():
+            raise ValueError(
+                f"Some questions do not have any positive section. prop={q_with_positives.float().mean():.2%}"
+            )
         where_zero_prob = is_negative_section | ~q_with_positives[:, None]
         data_logits = torch.where(
             where_zero_prob,

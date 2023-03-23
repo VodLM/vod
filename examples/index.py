@@ -19,7 +19,7 @@ from omegaconf import DictConfig
 from raffle_ds_research.cli.utils import set_training_context
 from raffle_ds_research.core.builders import FrankBuilder
 from raffle_ds_research.core.ml_models import Ranker
-from raffle_ds_research.tools import predict, index_tools
+from raffle_ds_research.tools import index_tools, predict
 from raffle_ds_research.tools.index_tools import faiss_tools
 from raffle_ds_research.tools.utils.config import register_omgeaconf_resolvers
 from raffle_ds_research.tools.utils.pretty import print_config

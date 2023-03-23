@@ -83,7 +83,6 @@ requires = [
     "poetry-core",
     "Cython",
     "numpy",
-    "setuptools-rust"
 ]
 
 

@@ -17,6 +17,7 @@ from tqdm import tqdm
 from raffle_ds_research.core import builders
 from raffle_ds_research.core.ml_models.simple_ranker import SimpleRanker
 from raffle_ds_research.tools import index_tools, pipes, predict
+from raffle_ds_research.tools.index_tools import faiss_tools
 
 dotenv.load_dotenv(Path(__file__).parent / ".predict.env")
 
@@ -34,11 +35,12 @@ class LoadFrankArgs(pydantic.BaseModel):
     factory_string: str = "IVF4,Flat"
     nprobe: int = 4
     loader_batch_size: int = 10
-    num_workers: int = 2
+    num_workers: int = 0
     n_sections: int = 6
     prefetch_n_sections: int = 100
     max_pos_sections: int = 3
-    use_faiss: int = 1
+    faiss_weight: float = 1.0
+    bm25_weight: float = 1.0
 
     @pydantic.validator("cache_dir")
     def _validate_cache_dir(cls, v):
@@ -75,7 +77,8 @@ def run():
     rich.print("=== dataset ===")
     rich.print(dataset)
     rich.print("=== dataset.corpus ===")
-    rich.print(builder.get_corpus())
+    sections = builder.get_corpus()
+    rich.print(sections)
 
     # Init the model and wrap it
     model = transformers.AutoModel.from_pretrained(args.model_name)
@@ -104,7 +107,7 @@ def run():
         loader_kwargs=loader_kwargs,
     )
     sections_vectors = predict(
-        builder.get_corpus(),
+        sections,
         trainer=trainer,
         cache_dir=args.cache_dir,
         model=model,
@@ -120,52 +123,58 @@ def run():
 
     # Serve the faiss index in a separate process
     with index_tools.FaissMaster(faiss_path, args.nprobe) as faiss_master:
-        faiss_client = faiss_master.get_client()
+        sections_content = (r["content"] for r in sections)
+        with index_tools.Bm25Master(sections_content, input_size=len(sections)) as bm25_master:
+            faiss_client = faiss_master.get_client()
+            bm25_client = bm25_master.get_client()
 
-        # Instantiate the collate_fn
-        loader_config = builder.collate_config(
-            faiss_client=faiss_client if args.use_faiss else None,
-            question_vectors=dataset_vectors["train"] if args.use_faiss else None,
-            n_sections=args.n_sections,
-            prefetch_n_sections=args.prefetch_n_sections,
-            max_pos_sections=args.max_pos_sections,
-        )
-        collate_fn = builder.get_collate_fn(config=loader_config)
+            # Instantiate the collate_fn
+            loader_config = builder.collate_config(
+                question_vectors=dataset_vectors["train"],
+                clients=[
+                    {"name": "faiss", "client": faiss_client, "weight": args.faiss_weight},
+                    {"name": "bm25", "client": bm25_client, "weight": args.bm25_weight},
+                ],
+                n_sections=args.n_sections,
+                prefetch_n_sections=args.prefetch_n_sections,
+                max_pos_sections=args.max_pos_sections,
+            )
+            collate_fn = builder.get_collate_fn(config=loader_config)
 
-        # run the collate_fn on a single batch and print the result
-        batch = collate_fn([dataset["train"][0], dataset["train"][1]])
-        pipes.pprint_batch(batch, header="Frank - Batch")
-        pipes.pprint_supervised_retrieval_batch(batch, tokenizer=builder.tokenizer, skip_special_tokens=True)
+            # run the collate_fn on a single batch and print the result
+            batch = collate_fn([dataset["train"][0], dataset["train"][1]])
+            pipes.pprint_batch(batch, header="Frank - Batch")
+            pipes.pprint_supervised_retrieval_batch(batch, tokenizer=builder.tokenizer, skip_special_tokens=True)
 
-        # check if the collate_fn can be pickled
-        if dill.pickles(collate_fn):
-            logger.info(f"Collate is serializable. hash={datasets.fingerprint.Hasher.hash(collate_fn)}")
-        else:
-            logger.warning("Collate is not serializable.")
+            # check if the collate_fn can be pickled
+            if dill.pickles(collate_fn):
+                logger.info(f"Collate is serializable. hash={datasets.fingerprint.Hasher.hash(collate_fn)}")
+            else:
+                logger.warning("Collate is not serializable.")
 
-        # iterate over the batches
-        loader = torch.utils.data.DataLoader(
-            dataset["train"],
-            collate_fn=collate_fn,
-            batch_size=args.loader_batch_size,
-            num_workers=args.num_workers,
-        )
-        for batch in tqdm(loader, desc="Iterating over batches"):
-            retrieved_section_ids = batch["section.id"]
-            retrieved_section_labels = batch["section.label"]
-            for i in range(retrieved_section_ids.shape[0]):
-                # test that there is no overlap between positive and negative sections
-                ids_i = retrieved_section_ids[i, :].tolist()
-                labels_i = retrieved_section_labels[i, :].tolist()
-                pos_ids = [id_ for id_, label in zip(ids_i, labels_i) if label > 0]
-                neg_ids = [id_ for id_, label in zip(ids_i, labels_i) if label <= 0]
-                assert set.intersection(set(pos_ids), set(neg_ids)) == set()
+            # iterate over the batches
+            loader = torch.utils.data.DataLoader(
+                dataset["train"],
+                collate_fn=collate_fn,
+                batch_size=args.loader_batch_size,
+                num_workers=args.num_workers,
+            )
+            for batch in tqdm(loader, desc="Iterating over batches"):
+                retrieved_section_ids = batch["section.id"]
+                retrieved_section_labels = batch["section.label"]
+                for i in range(retrieved_section_ids.shape[0]):
+                    # test that there is no overlap between positive and negative sections
+                    ids_i = retrieved_section_ids[i, :].tolist()
+                    labels_i = retrieved_section_labels[i, :].tolist()
+                    pos_ids = [id_ for id_, label in zip(ids_i, labels_i) if label > 0]
+                    neg_ids = [id_ for id_, label in zip(ids_i, labels_i) if label <= 0]
+                    assert set.intersection(set(pos_ids), set(neg_ids)) == set()
 
-                # test that, when a section id is set, there is only one positive section
-                target_section_id = batch["question.section_id"][i]
-                if target_section_id != -1:
-                    assert target_section_id in pos_ids
-                    assert len(pos_ids) == 1
+                    # test that, when a section id is set, there is only one positive section
+                    target_section_id = batch["question.section_id"][i]
+                    if target_section_id != -1:
+                        assert target_section_id in pos_ids
+                        assert len(pos_ids) == 1
 
 
 if __name__ == "__main__":

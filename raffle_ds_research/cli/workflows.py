@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import functools
+import pathlib
 import tempfile
 from pathlib import Path
 from typing import Any, Callable, Iterable, Optional, Union
@@ -23,12 +24,19 @@ from rich.progress import track
 
 from raffle_ds_research.cli import utils as cli_utils
 from raffle_ds_research.core.builders import FrankBuilder
+from raffle_ds_research.core.builders.frank_builder import ClientConfig
 from raffle_ds_research.core.ml_models import Ranker
 from raffle_ds_research.core.ml_models.monitor import Monitor
 from raffle_ds_research.tools import index_tools, pipes, predict_tools
 from raffle_ds_research.tools.index_tools import faiss_tools
 from raffle_ds_research.tools.pipes.utils.misc import keep_only_columns
 from raffle_ds_research.tools.utils import loader_config
+
+
+@dataclasses.dataclass
+class Vectors:
+    dataset: dict[str, predict_tools.TensorStoreFactory]
+    sections: Optional[predict_tools.TensorStoreFactory] = None
 
 
 @dataclasses.dataclass
@@ -82,7 +90,10 @@ def train_with_index_updates(
     builder: FrankBuilder,
     config: TrainWithIndexConfigs | DictConfig,
 ) -> Ranker:
-    """Train a ranker while periodically updating the faiss index."""
+    """
+    Train a ranker while periodically updating the faiss index.
+    TODO: refactor. This needs to be simplified, especially how to input configs.
+    """
     if isinstance(config, DictConfig):
         config = TrainWithIndexConfigs.parse(config)
 
@@ -96,13 +107,26 @@ def train_with_index_updates(
     trainer.callbacks.append(stop_callback)  # type: ignore
 
     for period_idx, (start_step, end_step) in enumerate(zip(update_steps[:-1], update_steps[1:])):
-        _log_metrics({"trainer/period": float(period_idx + 1)}, trainer=trainer)
+        _log_metrics(
+            {
+                "trainer/period": float(period_idx + 1),
+                "trainer/faiss_weight": config.faiss.get_weight(period_idx),
+                "trainer/bm25_weight": config.bm25.get_weight(period_idx),
+            },
+            trainer=trainer,
+        )
         loguru.logger.info(
             f"Training period {period_idx + 1}/{len(update_steps) - 1} (step {start_step} -> {end_step})"
         )
 
         # compute question and section vectors, spin up the faiss index.
-        with IndexManager(ranker=ranker, trainer=trainer, builder=builder, config=config) as manager:
+        with IndexManager(
+            ranker=ranker,
+            trainer=trainer,
+            builder=builder,
+            config=config,
+            index_step=period_idx,
+        ) as manager:
             train_loader = manager.dataloader("train")
             val_loader = manager.dataloader("validation")
 
@@ -124,7 +148,11 @@ def train_with_index_updates(
             # train for the current period
             trainer.should_stop = False
             stop_callback.stop_at = end_step
-            manager.trainer.fit(manager.ranker, train_dataloaders=train_loader, val_dataloaders=val_loader)
+            manager.trainer.fit(
+                manager.ranker,
+                train_dataloaders=train_loader,
+                val_dataloaders=val_loader,
+            )
 
     return ranker
 
@@ -138,12 +166,18 @@ def _run_static_evaluation(
         if i == 0 and on_first_batch is not None:
             on_first_batch(batch)
 
+        # todo: evaluate `val/bm25/...` and `val/faiss/...` metrics
         monitor.update_from_retrieval_batch(batch, split="val")
     metrics = monitor.compute(split="val")
     return metrics
 
 
 class IndexManager(object):
+    """ "
+    build and Spin up the indexes.
+    todo: simplify; remove collate_fn initialization form here.
+    """
+
     _dataset: Optional[datasets.DatasetDict] = None
     _tmpdir: Optional[tempfile.TemporaryDirectory] = None
     _faiss_master: Optional[index_tools.FaissMaster] = None
@@ -152,15 +186,18 @@ class IndexManager(object):
 
     def __init__(
         self,
+        *,
         ranker: Ranker,
         trainer: pl.Trainer,
         builder: FrankBuilder,
         config: TrainWithIndexConfigs,
+        index_step: int,
     ) -> None:
         self.ranker = ranker
         self.trainer = trainer
         self.builder = builder
         self.config = config
+        self.index_step = index_step
 
     def __enter__(self):
         self._dataset = self.builder()
@@ -170,7 +207,8 @@ class IndexManager(object):
         tmpdir = self._tmpdir.__enter__()
 
         # init the bm25 index
-        if self.config.bm25.enabled:
+        bm25_weight = self.config.bm25.get_weight(self.index_step)
+        if bm25_weight > 0:
             corpus = self.builder.get_corpus()
             corpus = keep_only_columns(corpus, [self.config.bm25.indexed_key])
             index_name = f"index-{corpus._fingerprint}"
@@ -186,12 +224,13 @@ class IndexManager(object):
             bm25_master = None
 
         # init the faiss index
-        if self.config.faiss.enabled:
+        faiss_weight = self.config.faiss.get_weight(self.index_step)
+        if faiss_weight > 0:
             # compute the vectors for the questions and sections
-            dataset_vectors, sections_vectors = self._compute_vectors(tmpdir)
+            vectors = self._compute_vectors(tmpdir)
 
             # build the faiss index and save to disk
-            faiss_index = faiss_tools.build_index(sections_vectors, factory_string=self.config.faiss.factory)
+            faiss_index = faiss_tools.build_index(vectors.sections, factory_string=self.config.faiss.factory)
             faiss_path = Path(tmpdir, "index.faiss")
             faiss.write_index(faiss_index, str(faiss_path))
 
@@ -200,19 +239,26 @@ class IndexManager(object):
             faiss_master = self._faiss_master.__enter__()
 
         else:
-            dataset_vectors = {}
+            vectors = Vectors(dataset={})
             faiss_master = None
 
         # Create the `collate_fn` for each split
         self._collate_fns = {}
         for split in self._dataset:
-            vectors = dataset_vectors.get(split, None)
-            collate_fn = self._instantiate_collate_for_split(split, vectors, faiss_master, bm25_master)
+            vecs_for_split = vectors.dataset.get(split, None)
+            collate_fn = self._instantiate_collate_for_split(
+                split=split,
+                vectors=vecs_for_split,
+                faiss_master=faiss_master,
+                bm25_master=bm25_master,
+                faiss_weight=faiss_weight,
+                bm25_weight=bm25_weight,
+            )
             self._collate_fns[split] = collate_fn
 
         return self
 
-    def _compute_vectors(self, tmpdir):
+    def _compute_vectors(self, tmpdir: pathlib.Path) -> Vectors:
         dataset_vectors = _compute_dataset_vectors(
             dataset=self._dataset,
             trainer=self.trainer,
@@ -231,7 +277,7 @@ class IndexManager(object):
             field="section",
             loader_config=self.config.predict_loader,
         )
-        return dataset_vectors, sections_vectors
+        return Vectors(dataset=dataset_vectors, sections=sections_vectors)
 
     def _instantiate_collate_for_split(
         self,
@@ -239,14 +285,22 @@ class IndexManager(object):
         vectors: predict_tools.TensorStoreFactory,
         faiss_master: Optional[index_tools.FaissMaster],
         bm25_master: Optional[index_tools.Bm25Master],
-    ):
+        faiss_weight: float,
+        bm25_weight: float,
+    ) -> pipes.Collate:
         base_collate_cfg = {
             "train": self.config.train_collate,
         }.get(split, self.config.eval_collate)
+
+        clients = []
+        if faiss_weight > 0:
+            clients.append(ClientConfig(name="faiss", client=faiss_master.get_client(), weight=faiss_weight))
+        if bm25_weight > 0:
+            clients.append(ClientConfig(name="bm25", client=bm25_master.get_client(), weight=bm25_weight))
+
         full_collate_config = self.builder.collate_config(
-            question_vectors=vectors if self.config.faiss.enabled else None,
-            faiss_client=faiss_master.get_client() if self.config.faiss.enabled else None,
-            bm25_client=bm25_master.get_client() if self.config.bm25.enabled else None,
+            question_vectors=vectors,
+            clients=clients,
             **base_collate_cfg.dict(),
         )
         collate_fn = self.builder.get_collate_fn(config=full_collate_config)

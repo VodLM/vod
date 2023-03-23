@@ -4,7 +4,7 @@ import os
 import sys
 from copy import copy
 from pathlib import Path
-from typing import Type, Optional
+from typing import Optional, Type
 
 import aiohttp
 import numpy as np

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import copy
 import math
-from typing import Optional, Tuple, Any
+from typing import Any, Optional, Tuple
 
 import torch
 import torchmetrics

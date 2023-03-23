@@ -59,11 +59,19 @@ collate_configs:
 update_freq: 1000
 faiss_config:
   # Defines configuration for `FaissMaster`
-  enabled: false
   factory: IVF32,Flat
   nprobe: 16
+  schedule:
+    type: linear
+    start: 0.01
+    end: 1
+    period: 10
 
 bm25_config:
   # Defines configuration for `Bm25Master`
-  enabled: true
   indexed_key: section
+  schedule:
+    type: linear
+    start: 1
+    end: 0.1
+    period: 10

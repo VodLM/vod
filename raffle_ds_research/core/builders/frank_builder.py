@@ -2,15 +2,16 @@ from __future__ import annotations
 
 import collections
 import dataclasses
+import warnings
 from functools import partial
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Iterable, Optional
 
 import datasets
 import numpy as np
 import pydantic
+import rich
 import torch
 import transformers
-from loguru import logger
 from omegaconf import DictConfig
 from pydantic import BaseModel
 
@@ -28,37 +29,34 @@ DEFAULT_TEMPLATES = {
 }
 
 
-class FrankRowModel(BaseModel):
-    question: str
-    answer_id: int
-    section_id: Optional[int]
-    kb_id: int
+class ClientConfig(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+        extra = "forbid"
+
+    name: str
+    client: index_tools.SearchClient
+    weight: pydantic.PositiveFloat = 1.0
+
+    @property
+    def enabled(self):
+        return self.weight > 0
+
+    @property
+    def requires_vectors(self):
+        return self.client.requires_vectors
 
 
-def _to_tensor(x: Any, dtype: torch.dtype, replace: Optional[dict] = None) -> torch.Tensor:
-    if replace is not None:
-        if isinstance(x, list):
-            x = [replace.get(i, i) for i in x]
-        else:
-            raise TypeError(f"Cannot use `replace` with type {type(x)}")
-
-    if isinstance(x, np.ndarray):
-        x = torch.from_numpy(x).to(dtype=dtype)
-    elif isinstance(x, torch.Tensor):
-        x = x.to(dtype=dtype)
-    else:
-        x = torch.tensor(x, dtype=dtype)
-
-    return x
-
-
-class FrankLoaderConfig(BaseModel):
+class FrankCollateConfig(BaseModel):
     """Handles the variables required to instantiate the `collate_fn` for the `FrankBuilder`."""
+
+    _query_vectors: index_tools.VectorHandler = pydantic.PrivateAttr(None)
 
     class Config:
         arbitrary_types_allowed = True
         extra = "forbid"
 
+    # base config
     split: str = "train"
     n_sections: int = 10
     prefetch_n_sections: int = 100
@@ -66,15 +64,32 @@ class FrankLoaderConfig(BaseModel):
     sample_negatives: bool = False
     question_max_length: int = 512
     section_max_length: int = 512
+
+    # data required for indexing
     question_vectors: Optional[index_tools.VectorType] = None
-    _query_vectors: index_tools.VectorHandler = pydantic.PrivateAttr(None)
-    faiss_client: Optional[index_tools.FaissClient] = None
-    bm25_client: Optional[index_tools.Bm25Client] = None
+    clients: list[ClientConfig] = []
+
+    # keys for the lookup index
     label_keys: collections.OrderedDict[str, str] = {"answer_id": "answer_id", "section_id": "id"}
     in_domain_keys: collections.OrderedDict[str, str] = {"kb_id": "kb_id"}
 
+    @pydantic.validator("clients", pre=True)
+    def _validate_clients(cls, v):
+        def _parse(w):
+            if isinstance(w, ClientConfig):
+                return w
+            elif isinstance(w, (dict, DictConfig)):
+                return ClientConfig(**w)
+            else:
+                raise ValueError(f"Invalid client config: {w}")
+
+        clients = [_parse(c) for c in v]
+        clients = [c for c in clients if c.enabled]
+        return clients
+
     def __init__(self, **data: Any):
         super().__init__(**data)
+
         if self.question_vectors is not None:
             self._query_vectors = index_tools.vector_handler(self.question_vectors)
 
@@ -99,16 +114,16 @@ class FrankLoaderConfig(BaseModel):
         return self._query_vectors
 
     @property
-    def faiss_not_available(self) -> bool:
-        return self.question_vectors is None or self.faiss_client is None
+    def search_enabled(self) -> bool:
+        return any(c.enabled for c in self.clients)
 
     @property
-    def bm25_not_available(self) -> bool:
-        return self.bm25_client is None
+    def requires_vectors(self) -> bool:
+        return any(c.requires_vectors for c in self.clients)
 
     @property
-    def search_not_available(self) -> bool:
-        return self.faiss_not_available and self.bm25_not_available
+    def enabled_clients(self) -> list[ClientConfig]:
+        return [c for c in self.clients if c.enabled]
 
     @pydantic.validator("label_keys", pre=True)
     def _validate_label_keys(cls, v: Any) -> collections.OrderedDict[str, str]:
@@ -118,46 +133,6 @@ class FrankLoaderConfig(BaseModel):
             return collections.OrderedDict(v)
         else:
             raise TypeError(f"Expected dict or OrderedDict, got {type(v)}")
-
-
-def _wrap_as_retrieval_batch(
-    lookup_results: pipes.LookupSearchResults,
-    is_defined_rule: Optional[Callable[[pipes.LookupSearchResults], np.ndarray]] = None,
-) -> index_tools.RetrievalBatch:
-    """Wrap the lookup results as a `RetrievalBatch`."""
-    if is_defined_rule is None:
-        is_defined = lookup_results.frequencies.sum(axis=-1) > 0
-    else:
-        is_defined = is_defined_rule(lookup_results)
-
-    # override the scores to -1
-    scores = np.where(is_defined, 0.0, -np.inf)
-    indices = np.where(is_defined, lookup_results.indices, -1)
-    return index_tools.RetrievalBatch(
-        indices=indices,
-        scores=scores,
-    )
-
-
-def _matches_answer_xor_section(results: pipes.LookupSearchResults) -> np.ndarray:
-    """For each row, set mark the sections as positive.
-    - where there is a match on `id` (section_id).
-    - else where there is a match on `answer_id` (answer_id).
-    """
-    id_col_idx = results.labels.index("id")
-    answer_id_col_idx = results.labels.index("answer_id")
-
-    # frequencies: [batch_size, n_sections, n_labels]
-    frequencies: np.ndarray = results.frequencies
-
-    # compute the `id_defined` mask
-    has_id_match = frequencies[:, :, id_col_idx].any(axis=-1)
-    is_defined = np.where(
-        has_id_match[:, None],
-        frequencies.sum(axis=-1) > 0,
-        frequencies[:, :, answer_id_col_idx] > 0,
-    )
-    return is_defined
 
 
 def sample_sections(
@@ -216,7 +191,7 @@ class FrankCollate(pipes.Collate):
         *,
         corpus: datasets.Dataset,
         tokenizer: transformers.PreTrainedTokenizer,
-        config: FrankLoaderConfig,
+        config: FrankCollateConfig,
         **kwargs: Any,
     ):
         self.corpus = corpus
@@ -227,31 +202,34 @@ class FrankCollate(pipes.Collate):
 
     def __call__(self, examples: list[dict[str, Any]], **kwargs: Any) -> dict[str, Any]:
         batch = pack_examples(examples)
+        client_cfgs = self.config.enabled_clients
 
-        # make the question extras
-        questions_extras_keys = ["id", "section_id", "answer_id", "kb_id"]
-        questions_extras = {
-            f"question.{k}": _to_tensor(batch[k], dtype=torch.long, replace={None: -1}) for k in questions_extras_keys
-        }
-
-        # fetch the negative section ids (using faiss, or by fetching sections from the same kb_id)
-        if self.config.search_not_available:
+        if len(client_cfgs) == 0:
+            # if not search service is enabled, fetch the sections from the same kb_id
             neg_lookup_input = {v: batch[k] for k, v in self.config.in_domain_keys.items()}
-            negative_samples: index_tools.RetrievalBatch = _wrap_as_retrieval_batch(
+            candidate_samples: index_tools.RetrievalBatch = _wrap_as_retrieval_batch(
                 self.in_domain_lookup_index.search(neg_lookup_input)
             )
         else:
-            negative_samples: index_tools.RetrievalBatch = self.config.bm25_client.search(
-                text=batch["question"],
-                top_k=self.config.prefetch_n_sections,
-            )
-            # todo: use both bm25 and faiss
-            # question_ids = batch[dataset_builder.ROW_IDX_COL_NAME]
-            # query_vectors = self.config.query_vectors[question_ids]
-            # negative_samples: index_tools.RetrievalBatch = self.config.faiss_client.search(
-            #     vector=query_vectors,
-            #     top_k=self.config.prefetch_n_sections,
-            # )
+            # fetch the query vectors
+            if any(cfg.requires_vectors for cfg in client_cfgs):
+                question_ids = batch[dataset_builder.ROW_IDX_COL_NAME]
+                query_vectors = self.config.query_vectors[question_ids]
+            else:
+                query_vectors = None
+
+            # search the indexes
+            candidate_samples_ = []
+            for cfg in client_cfgs:
+                samples: index_tools.RetrievalBatch = cfg.client.search(
+                    vector=query_vectors,
+                    text=batch["question"],
+                    top_k=self.config.prefetch_n_sections,
+                )
+                candidate_samples_.append(samples)
+
+            # concatenate the results
+            candidate_samples = _merge_candidate_samples(candidate_samples_, client_cfgs)
 
         # tokenize the questions
         tokenized_question = pipes.torch_tokenize_pipe(
@@ -263,8 +241,6 @@ class FrankCollate(pipes.Collate):
         )
 
         # fetch the positive section ids (The `rule` allows keeping sections with match on either `id` or `answer_id`)
-        # Todo: fetch the model scores for the positive samples. This can be done using the `faiss_client` or
-        #  using the `query_vectors` and by fetching the section vectors.
         pos_lookup_input = {v: batch[k] for k, v in self.config.label_keys.items()}
         positive_samples: index_tools.RetrievalBatch = _wrap_as_retrieval_batch(
             self.lookup_index.search(pos_lookup_input),
@@ -273,7 +249,7 @@ class FrankCollate(pipes.Collate):
 
         # sample the sections given
         sections: SampledSections = sample_sections(
-            negatives=negative_samples,
+            negatives=candidate_samples,
             positives=positive_samples,
             n_sections=self.config.n_sections,
             max_pos_sections=self.config.max_pos_sections,
@@ -282,7 +258,16 @@ class FrankCollate(pipes.Collate):
 
         # fetch the content of each section
         flat_ids = sections.indices.flatten().tolist()
-        flat_sections_content = self.corpus[flat_ids]
+        try:
+            flat_sections_content = self.corpus[flat_ids]
+        except IndexError as e:
+            rich.print(
+                dict(
+                    candidate_samples=candidate_samples,
+                    sections=sections,
+                )
+            )
+            raise e
 
         # tokenize the sections and add them to the output
         tokenized_sections = pipes.torch_tokenize_pipe(
@@ -293,6 +278,12 @@ class FrankCollate(pipes.Collate):
             truncation=True,
         )
         tokenized_sections = {k: v.view(*sections.indices.shape, -1) for k, v in tokenized_sections.items()}
+
+        # make the question extras
+        questions_extras_keys = ["id", "section_id", "answer_id", "kb_id"]
+        questions_extras = {
+            f"question.{k}": _to_tensor(batch[k], dtype=torch.long, replace={None: -1}) for k in questions_extras_keys
+        }
 
         # make the section extras
         section_extras_keys = ["id", "answer_id", "kb_id"]
@@ -308,6 +299,77 @@ class FrankCollate(pipes.Collate):
             **sections.to_dict(prefix="section.", as_torch=True),
             **sections_extras,
         }
+
+
+def _merge_candidate_samples(
+    candidates: Iterable[index_tools.RetrievalBatch],
+    client_cfgs: list[ClientConfig],
+) -> index_tools.RetrievalBatch:
+    candidates = list(candidates)
+    if len(candidates) == 1:
+        return candidates[0]
+    elif len(candidates) == 0:
+        raise ValueError("No candidates to merge")
+
+    candidate_samples = index_tools.merge_retrieval_batches(candidates)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        min_scores = np.nanmin(candidate_samples.scores, axis=1, keepdims=True)
+        min_scores = np.where(np.isnan(min_scores), 0, min_scores)
+
+    candidate_samples.scores = np.where(
+        np.isnan(candidate_samples.scores),
+        min_scores,
+        candidate_samples.scores,
+    )
+    new_scores = np.zeros_like(candidate_samples.scores[..., 0])
+    for i, client_cfg in enumerate(client_cfgs):
+        new_scores += client_cfg.weight * candidate_samples.scores[..., i]
+    new_scores = np.where(candidate_samples.indices < 0, -np.inf, new_scores)
+    candidate_samples.scores = new_scores
+    candidate_samples = candidate_samples.sorted()
+    return candidate_samples
+
+
+def _wrap_as_retrieval_batch(
+    lookup_results: pipes.LookupSearchResults,
+    is_defined_rule: Optional[Callable[[pipes.LookupSearchResults], np.ndarray]] = None,
+) -> index_tools.RetrievalBatch:
+    """Wrap the lookup results as a `RetrievalBatch`."""
+    if is_defined_rule is None:
+        is_defined = lookup_results.frequencies.sum(axis=-1) > 0
+    else:
+        is_defined = is_defined_rule(lookup_results)
+
+    # override the scores to -1
+    scores = np.where(is_defined, 0.0, -np.inf)
+    indices = np.where(is_defined, lookup_results.indices, -1)
+    return index_tools.RetrievalBatch(
+        indices=indices,
+        scores=scores,
+    )
+
+
+def _matches_answer_xor_section(results: pipes.LookupSearchResults) -> np.ndarray:
+    """For each row, set mark the sections as positive.
+    - where there is a match on `id` (section_id).
+    - else where there is a match on `answer_id` (answer_id).
+    """
+    id_col_idx = results.labels.index("id")
+    answer_id_col_idx = results.labels.index("answer_id")
+
+    # frequencies: [batch_size, n_sections, n_labels]
+    frequencies: np.ndarray = results.frequencies
+
+    # compute the `id_defined` mask
+    has_id_match = frequencies[:, :, id_col_idx].any(axis=-1)
+    is_defined = np.where(
+        has_id_match[:, None],
+        frequencies.sum(axis=-1) > 0,
+        frequencies[:, :, answer_id_col_idx] > 0,
+    )
+    return is_defined
 
 
 @dataclasses.dataclass
@@ -331,7 +393,7 @@ class SampledSections:
 
 
 class FrankBuilder(dataset_builder.HfBuilder):
-    _collate_config = FrankLoaderConfig
+    _collate_config = FrankCollateConfig
 
     def __init__(
         self,
@@ -402,17 +464,11 @@ class FrankBuilder(dataset_builder.HfBuilder):
     def get_corpus(self) -> Optional[datasets.Dataset]:
         return self._build_sections()
 
-    def get_collate_fn(self, config: Optional[FrankLoaderConfig] = None):
+    def get_collate_fn(self, config: Optional[FrankCollateConfig] = None):
         if config is None:
-            config = FrankLoaderConfig()
+            config = FrankCollateConfig()
         if isinstance(config, (dict, DictConfig)):
-            config = FrankLoaderConfig(**config)
-
-        if config.faiss_not_available:
-            logger.debug(
-                "Disabling `faiss` search in this instance of `collate_fn` "
-                "(missing question_vectors` or `faiss_client`)"
-            )
+            config = FrankCollateConfig(**config)
 
         sections = self.get_corpus()
         collate_fn = FrankCollate(
@@ -421,3 +477,27 @@ class FrankBuilder(dataset_builder.HfBuilder):
             config=config,
         )
         return collate_fn
+
+
+class FrankRowModel(BaseModel):
+    question: str
+    answer_id: int
+    section_id: Optional[int]
+    kb_id: int
+
+
+def _to_tensor(x: Any, dtype: torch.dtype, replace: Optional[dict] = None) -> torch.Tensor:
+    if replace is not None:
+        if isinstance(x, list):
+            x = [replace.get(i, i) for i in x]
+        else:
+            raise TypeError(f"Cannot use `replace` with type {type(x)}")
+
+    if isinstance(x, np.ndarray):
+        x = torch.from_numpy(x).to(dtype=dtype)
+    elif isinstance(x, torch.Tensor):
+        x = x.to(dtype=dtype)
+    else:
+        x = torch.tensor(x, dtype=dtype)
+
+    return x

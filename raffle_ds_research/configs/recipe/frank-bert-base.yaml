@@ -23,7 +23,7 @@ resources:
 
 batch_size:
   effective: 32
-  per_device: 2
+  per_device: 16
   per_device_eval: 8
   per_device_predict: 512
 
@@ -39,8 +39,8 @@ trainer:
 collate_configs:
   # Defines the configurations for `dataset_builder.HfBuilder._collate_config`
   train:
-    n_sections: 200
-    max_pos_sections: 32
+    n_sections: 20
+    max_pos_sections: 10
     prefetch_n_sections: 512
     sample_negatives: false
     question_max_length: 128

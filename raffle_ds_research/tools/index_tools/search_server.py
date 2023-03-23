@@ -3,7 +3,7 @@ import copy
 import os
 import subprocess
 import time
-from typing import Optional, Generic, TypeVar, Any
+from typing import Any, Generic, Optional, TypeVar
 
 import loguru
 import rich.status
@@ -18,6 +18,8 @@ class DoNotPickleError(Exception):
 
 
 class SearchClient(abc.ABC):
+    requires_vectors: bool = True
+
     @abc.abstractmethod
     def ping(self) -> bool:
         raise NotImplementedError()
@@ -48,7 +50,8 @@ class SearchMaster(Generic[Sc], abc.ABC):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self._on_exit()
-        self._server_proc.kill()
+        if self._server_proc is not None:
+            self._server_proc.terminate()
 
     def _on_init(self):
         pass
@@ -67,11 +70,12 @@ class SearchMaster(Generic[Sc], abc.ABC):
     def _make_env(self) -> dict[str, Any]:
         return copy.copy(dict(os.environ))
 
-    def _start_server(self) -> subprocess.Popen:
+    def _start_server(self) -> Optional[subprocess.Popen]:
         _client = self.get_client()
         if _client.ping():
             if self._allow_existing_server:
                 loguru.logger.info(f"Using existing server {self.service_name}.")
+                return None
             else:
                 raise RuntimeError(f"Server {self.service_name} is already running.")
 
