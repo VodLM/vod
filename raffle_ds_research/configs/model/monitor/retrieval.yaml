@@ -1,15 +1,9 @@
 _target_: raffle_ds_research.core.ml_models.monitor.Monitor
+splits: [ "train", "val", "test" ]
 log_on_step:
   train: true
   val: false
   test: false
 metrics:
-  train:
-    _target_: raffle_ds_research.core.ml_models.monitor.RetrievalMetricCollection
-    metrics: [ "ndcg", "mrr", "hitrate@3" ]
-  val:
-    _target_: raffle_ds_research.core.ml_models.monitor.RetrievalMetricCollection
-    metrics: [ "ndcg", "mrr", "hitrate@3" ]
-  test:
-    _target_: raffle_ds_research.core.ml_models.monitor.RetrievalMetricCollection
-    metrics: [ "ndcg", "mrr","hitrate@3"]
+  _target_: raffle_ds_research.core.ml_models.monitor.RetrievalMetricCollection
+  metrics: [ "ndcg", "mrr", "hitrate@3" ]

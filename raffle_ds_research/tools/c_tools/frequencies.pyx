@@ -91,7 +91,7 @@ cdef unsigned int [:] _batched_unique_by_label(
 
     return cursors
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class Frequencies:
     """Label frequencies for a set of unique values."""
     values: np.ndarray

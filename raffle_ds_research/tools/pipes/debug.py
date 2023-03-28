@@ -36,6 +36,7 @@ class Properties(pydantic.BaseModel):
     mean: Optional[str] = None
     min: Optional[str] = None
     max: Optional[str] = None
+    n_nans: Optional[int] = None
 
     @pydantic.validator("py_type", pre=True)
     def _cast_py_type(cls, v: Any) -> str:
@@ -99,6 +100,7 @@ def _(x: list | set | tuple) -> Properties:
     except Exception:
         shape = f"[{len(x)}, ?]"
 
+    n_nans = sum(1 for y in _iter_leaves(x) if y is None)
     leaves_types = list({type(y) for y in _iter_leaves(x)})
     if all(issubclass(t, Number) for t in leaves_types):
         leaves_mean = np.mean([y for y in _iter_leaves(x)])
@@ -127,6 +129,7 @@ def _(x: list | set | tuple) -> Properties:
         max=leaves_max,
         device="-",
         mean=leaves_mean,
+        n_nans=n_nans,
     )
 
 

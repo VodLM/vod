@@ -28,6 +28,8 @@ cdef void _gather_by_index(
 
     for i in range(len(queries)):
         buffered_query = queries[i]
+        if buffered_query < 0:
+            continue
         for j in range(len(keys)):
             if buffered_query == keys[j]:
                 buffer[i] = values[j]
@@ -57,6 +59,7 @@ def gather_by_index(
     queries: np.ndarray,
     keys: np.ndarray,
     values: np.ndarray,
+    fill_value: float = np.nan,
 ) -> np.ndarray:
     """
     Gather values from `values` indexed by `queries` using `keys` as a lookup table.
@@ -73,7 +76,7 @@ def gather_by_index(
     queries = queries.astype(NP_DTYPE_LONG)
     keys = keys.astype(NP_DTYPE_LONG)
     values = values.astype(NP_DTYPE_FLOAT)
-    buffer = np.full(queries.shape, np.nan, dtype=NP_DTYPE_FLOAT)
+    buffer = np.full(queries.shape, fill_value, dtype=NP_DTYPE_FLOAT)
 
     # run the C function
     if dims == 1:

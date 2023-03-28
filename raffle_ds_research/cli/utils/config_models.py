@@ -15,7 +15,7 @@ class DefaultCollateConfig(pydantic.BaseModel):
     n_sections: int
     max_pos_sections: int
     prefetch_n_sections: int
-    sample_negatives: bool
+    do_sample: bool
     question_max_length: int = 512
     section_max_length: int = 512
 

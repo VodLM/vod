@@ -73,7 +73,9 @@ cdef DTYPE_LONG _concat_single(
 
     for i in range(len(a_indices)):
         buffered_idx = a_indices[i]
-        if buffered_idx < 0 or j >= total or j >= max_a:
+        if buffered_idx < 0:
+            continue
+        if j >= total or j >= max_a:
             break
         ab_indices[j] = buffered_idx
         ab_scores[j] = a_scores[i]
@@ -82,7 +84,9 @@ cdef DTYPE_LONG _concat_single(
 
     for i in range(len(b_indices)):
         buffered_idx = b_indices[i]
-        if buffered_idx < 0 or j >= total:
+        if buffered_idx < 0:
+            continue
+        if j >= total:
             break
 
         found_in_a = 0

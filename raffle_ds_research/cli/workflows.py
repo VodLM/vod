@@ -24,7 +24,7 @@ from rich.progress import track
 
 from raffle_ds_research.cli import utils as cli_utils
 from raffle_ds_research.core.builders import FrankBuilder
-from raffle_ds_research.core.builders.frank_builder import ClientConfig
+from raffle_ds_research.core.builders.retrieval_collate import SearchClientConfig
 from raffle_ds_research.core.ml_models import Ranker
 from raffle_ds_research.core.ml_models.monitor import Monitor
 from raffle_ds_research.tools import index_tools, pipes, predict_tools
@@ -143,7 +143,7 @@ def train_with_index_updates(
                 monitor=monitor,
                 on_first_batch=on_first_batch_callback,
             )
-            _log_metrics({f"static/{k}": v for k, v in static_eval_metrics.items()}, trainer=trainer)
+            _log_metrics(static_eval_metrics, trainer=trainer, console=True)
 
             # train for the current period
             trainer.should_stop = False
@@ -165,10 +165,8 @@ def _run_static_evaluation(
     for i, batch in enumerate(loader):
         if i == 0 and on_first_batch is not None:
             on_first_batch(batch)
-
-        # todo: evaluate `val/bm25/...` and `val/faiss/...` metrics
-        monitor.update_from_retrieval_batch(batch, split="val")
-    metrics = monitor.compute(split="val")
+        monitor.update_from_retrieval_batch(batch, field="section")
+    metrics = monitor.compute(prefix="val/")
     return metrics
 
 
@@ -208,7 +206,7 @@ class IndexManager(object):
 
         # init the bm25 index
         bm25_weight = self.config.bm25.get_weight(self.index_step)
-        if bm25_weight > 0:
+        if bm25_weight >= 0:
             corpus = self.builder.get_corpus()
             corpus = keep_only_columns(corpus, [self.config.bm25.indexed_key])
             index_name = f"index-{corpus._fingerprint}"
@@ -225,7 +223,7 @@ class IndexManager(object):
 
         # init the faiss index
         faiss_weight = self.config.faiss.get_weight(self.index_step)
-        if faiss_weight > 0:
+        if faiss_weight >= 0:
             # compute the vectors for the questions and sections
             vectors = self._compute_vectors(tmpdir)
 
@@ -293,10 +291,10 @@ class IndexManager(object):
         }.get(split, self.config.eval_collate)
 
         clients = []
-        if faiss_weight > 0:
-            clients.append(ClientConfig(name="faiss", client=faiss_master.get_client(), weight=faiss_weight))
-        if bm25_weight > 0:
-            clients.append(ClientConfig(name="bm25", client=bm25_master.get_client(), weight=bm25_weight))
+        if faiss_weight >= 0:
+            clients.append(SearchClientConfig(name="faiss", client=faiss_master.get_client(), weight=faiss_weight))
+        if bm25_weight >= 0:
+            clients.append(SearchClientConfig(name="bm25", client=bm25_master.get_client(), weight=bm25_weight))
 
         full_collate_config = self.builder.collate_config(
             question_vectors=vectors,
@@ -379,9 +377,37 @@ def _pretty_steps(steps: list[int]) -> str:
         return str(steps)
 
 
-def _log_metrics(metrics: dict[str, Any], trainer: pl.Trainer):
+def _log_metrics(metrics: dict[str, Any], trainer: pl.Trainer, console: bool = False):
     for logger in trainer.loggers:
         logger.log_metrics(metrics, step=trainer.global_step)
+
+    if console:
+        console = rich.console.Console()
+        table = rich.table.Table(title="Static Validation")
+        table.add_column("Metric", justify="left", style="cyan")
+        table.add_column("group", justify="left", style="green")
+        table.add_column("Value", justify="right", style="magenta")
+
+        def split_key(key: str) -> tuple[str, str]:
+            *group, metric = key.split("/")
+            group = "/".join(group)
+            return metric, group
+
+        metrics = [(*split_key(k), v) for k, v in metrics.items()]
+        metrics = sorted(metrics, key=lambda x: (x[0], x[1]))
+        prev_key = None
+        for key, group, value in metrics:
+            if prev_key is None:
+                display_key = key
+            elif key != prev_key:
+                table.add_section()
+                display_key = key
+            else:
+                display_key = ""
+            value = float(value)
+            table.add_row(display_key, group, f"{value:.2f}")
+            prev_key = key
+        console.print(table)
 
 
 def _log_retrieval_batch(

@@ -3,7 +3,7 @@ defaults:
   - templates: ${infer_model_type:${model/encoder}}
   - _self_
 
-_target_: raffle_ds_research.core.builders.FrankBuilder
+_target_: raffle_ds_research.core.builders.auto_builder
 name: frank
 subset_name: A
 language: en

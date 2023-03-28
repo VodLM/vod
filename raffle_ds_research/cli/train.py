@@ -44,7 +44,6 @@ def run(config: DictConfig):
     # load the model
     logger.info(f"Instantiating model <{config.model._target_}>")
     seed_everything(config.seed)
-    monitor = instantiate(config.monitor)
     ranker: Ranker = instantiate(config.model)
 
     # torch 2.0 - compile the model

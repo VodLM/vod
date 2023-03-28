@@ -1,5 +1,5 @@
 defaults:
-  - builder: frank
+  - builder: auto
   - model: default
   - resources: default
   - batch_size: default
@@ -43,14 +43,14 @@ collate_configs:
     n_sections: 16
     max_pos_sections: 4
     prefetch_n_sections: 300
-    sample_negatives: false
+    do_sample: true
     question_max_length: 128
     section_max_length: 200
   eval:
     n_sections: 100
     max_pos_sections: 50
     prefetch_n_sections: 1000
-    sample_negatives: false
+    do_sample: false
     question_max_length: 128
     section_max_length: 200
 
@@ -63,7 +63,7 @@ faiss_config:
   nprobe: 16
   schedule:
     type: linear
-    start: 0.01
+    start: 0
     end: 1
     period: 10
 

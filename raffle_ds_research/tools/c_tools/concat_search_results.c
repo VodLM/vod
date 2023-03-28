@@ -12,7 +12,7 @@
             "-mfpmath=sse"
         ],
         "include_dirs": [
-            "/var/folders/kw/1lgy_0012tz8ykmt_7gtv80m0000gn/T/tmprk6cnyja/.venv/lib/python3.9/site-packages/numpy/core/include"
+            "/var/folders/kw/1lgy_0012tz8ykmt_7gtv80m0000gn/T/tmpxfpbuc96/.venv/lib/python3.9/site-packages/numpy/core/include"
         ],
         "libraries": [
             "m"
@@ -3368,7 +3368,7 @@ static __pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYP
  *
  *     for i in range(len(a_indices)):             # <<<<<<<<<<<<<<
  *         buffered_idx = a_indices[i]
- *         if buffered_idx < 0 or j >= total or j >= max_a:
+ *         if buffered_idx < 0:
  */
   __pyx_t_1 = __Pyx_MemoryView_Len(__pyx_v_a_indices);
   __pyx_t_2 = __pyx_t_1;
@@ -3379,8 +3379,8 @@ static __pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYP
  *
  *     for i in range(len(a_indices)):
  *         buffered_idx = a_indices[i]             # <<<<<<<<<<<<<<
- *         if buffered_idx < 0 or j >= total or j >= max_a:
- *             break
+ *         if buffered_idx < 0:
+ *             continue
  */
     __pyx_t_4 = __pyx_v_i;
     __pyx_v_buffered_idx = (*((__pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_LONG *) ( /* dim=0 */ (__pyx_v_a_indices.data + __pyx_t_4 * __pyx_v_a_indices.strides[0]) )));
@@ -3388,47 +3388,69 @@ static __pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYP
     /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":76
  *     for i in range(len(a_indices)):
  *         buffered_idx = a_indices[i]
- *         if buffered_idx < 0 or j >= total or j >= max_a:             # <<<<<<<<<<<<<<
- *             break
- *         ab_indices[j] = buffered_idx
+ *         if buffered_idx < 0:             # <<<<<<<<<<<<<<
+ *             continue
+ *         if j >= total or j >= max_a:
  */
-    __pyx_t_6 = ((__pyx_v_buffered_idx < 0) != 0);
-    if (!__pyx_t_6) {
-    } else {
-      __pyx_t_5 = __pyx_t_6;
-      goto __pyx_L6_bool_binop_done;
-    }
-    __pyx_t_6 = ((__pyx_v_j >= __pyx_v_total) != 0);
-    if (!__pyx_t_6) {
-    } else {
-      __pyx_t_5 = __pyx_t_6;
-      goto __pyx_L6_bool_binop_done;
-    }
-    __pyx_t_6 = ((__pyx_v_j >= __pyx_v_max_a) != 0);
-    __pyx_t_5 = __pyx_t_6;
-    __pyx_L6_bool_binop_done:;
+    __pyx_t_5 = ((__pyx_v_buffered_idx < 0) != 0);
     if (__pyx_t_5) {
 
       /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":77
  *         buffered_idx = a_indices[i]
- *         if buffered_idx < 0 or j >= total or j >= max_a:
+ *         if buffered_idx < 0:
+ *             continue             # <<<<<<<<<<<<<<
+ *         if j >= total or j >= max_a:
+ *             break
+ */
+      goto __pyx_L3_continue;
+
+      /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":76
+ *     for i in range(len(a_indices)):
+ *         buffered_idx = a_indices[i]
+ *         if buffered_idx < 0:             # <<<<<<<<<<<<<<
+ *             continue
+ *         if j >= total or j >= max_a:
+ */
+    }
+
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":78
+ *         if buffered_idx < 0:
+ *             continue
+ *         if j >= total or j >= max_a:             # <<<<<<<<<<<<<<
+ *             break
+ *         ab_indices[j] = buffered_idx
+ */
+    __pyx_t_6 = ((__pyx_v_j >= __pyx_v_total) != 0);
+    if (!__pyx_t_6) {
+    } else {
+      __pyx_t_5 = __pyx_t_6;
+      goto __pyx_L7_bool_binop_done;
+    }
+    __pyx_t_6 = ((__pyx_v_j >= __pyx_v_max_a) != 0);
+    __pyx_t_5 = __pyx_t_6;
+    __pyx_L7_bool_binop_done:;
+    if (__pyx_t_5) {
+
+      /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":79
+ *             continue
+ *         if j >= total or j >= max_a:
  *             break             # <<<<<<<<<<<<<<
  *         ab_indices[j] = buffered_idx
  *         ab_scores[j] = a_scores[i]
  */
       goto __pyx_L4_break;
 
-      /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":76
- *     for i in range(len(a_indices)):
- *         buffered_idx = a_indices[i]
- *         if buffered_idx < 0 or j >= total or j >= max_a:             # <<<<<<<<<<<<<<
+      /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":78
+ *         if buffered_idx < 0:
+ *             continue
+ *         if j >= total or j >= max_a:             # <<<<<<<<<<<<<<
  *             break
  *         ab_indices[j] = buffered_idx
  */
     }
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":78
- *         if buffered_idx < 0 or j >= total or j >= max_a:
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":80
+ *         if j >= total or j >= max_a:
  *             break
  *         ab_indices[j] = buffered_idx             # <<<<<<<<<<<<<<
  *         ab_scores[j] = a_scores[i]
@@ -3437,7 +3459,7 @@ static __pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYP
     __pyx_t_7 = __pyx_v_j;
     *((__pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_LONG *) ( /* dim=0 */ (__pyx_v_ab_indices.data + __pyx_t_7 * __pyx_v_ab_indices.strides[0]) )) = __pyx_v_buffered_idx;
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":79
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":81
  *             break
  *         ab_indices[j] = buffered_idx
  *         ab_scores[j] = a_scores[i]             # <<<<<<<<<<<<<<
@@ -3448,7 +3470,7 @@ static __pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYP
     __pyx_t_7 = __pyx_v_j;
     *((__pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_FLOAT *) ( /* dim=0 */ (__pyx_v_ab_scores.data + __pyx_t_7 * __pyx_v_ab_scores.strides[0]) )) = (*((__pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_FLOAT *) ( /* dim=0 */ (__pyx_v_a_scores.data + __pyx_t_4 * __pyx_v_a_scores.strides[0]) )));
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":80
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":82
  *         ab_indices[j] = buffered_idx
  *         ab_scores[j] = a_scores[i]
  *         ab_labels[j] = 0             # <<<<<<<<<<<<<<
@@ -3458,7 +3480,7 @@ static __pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYP
     __pyx_t_7 = __pyx_v_j;
     *((__pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_LONG *) ( /* dim=0 */ (__pyx_v_ab_labels.data + __pyx_t_7 * __pyx_v_ab_labels.strides[0]) )) = 0;
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":81
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":83
  *         ab_scores[j] = a_scores[i]
  *         ab_labels[j] = 0
  *         j += 1             # <<<<<<<<<<<<<<
@@ -3466,68 +3488,89 @@ static __pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYP
  *     for i in range(len(b_indices)):
  */
     __pyx_v_j = (__pyx_v_j + 1);
+    __pyx_L3_continue:;
   }
   __pyx_L4_break:;
 
-  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":83
+  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":85
  *         j += 1
  *
  *     for i in range(len(b_indices)):             # <<<<<<<<<<<<<<
  *         buffered_idx = b_indices[i]
- *         if buffered_idx < 0 or j >= total:
+ *         if buffered_idx < 0:
  */
   __pyx_t_1 = __Pyx_MemoryView_Len(__pyx_v_b_indices);
   __pyx_t_2 = __pyx_t_1;
   for (__pyx_t_3 = 0; __pyx_t_3 < __pyx_t_2; __pyx_t_3+=1) {
     __pyx_v_i = __pyx_t_3;
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":84
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":86
  *
  *     for i in range(len(b_indices)):
  *         buffered_idx = b_indices[i]             # <<<<<<<<<<<<<<
- *         if buffered_idx < 0 or j >= total:
- *             break
+ *         if buffered_idx < 0:
+ *             continue
  */
     __pyx_t_4 = __pyx_v_i;
     __pyx_v_buffered_idx = (*((__pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_LONG *) ( /* dim=0 */ (__pyx_v_b_indices.data + __pyx_t_4 * __pyx_v_b_indices.strides[0]) )));
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":85
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":87
  *     for i in range(len(b_indices)):
  *         buffered_idx = b_indices[i]
- *         if buffered_idx < 0 or j >= total:             # <<<<<<<<<<<<<<
+ *         if buffered_idx < 0:             # <<<<<<<<<<<<<<
+ *             continue
+ *         if j >= total:
+ */
+    __pyx_t_5 = ((__pyx_v_buffered_idx < 0) != 0);
+    if (__pyx_t_5) {
+
+      /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":88
+ *         buffered_idx = b_indices[i]
+ *         if buffered_idx < 0:
+ *             continue             # <<<<<<<<<<<<<<
+ *         if j >= total:
+ *             break
+ */
+      goto __pyx_L9_continue;
+
+      /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":87
+ *     for i in range(len(b_indices)):
+ *         buffered_idx = b_indices[i]
+ *         if buffered_idx < 0:             # <<<<<<<<<<<<<<
+ *             continue
+ *         if j >= total:
+ */
+    }
+
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":89
+ *         if buffered_idx < 0:
+ *             continue
+ *         if j >= total:             # <<<<<<<<<<<<<<
  *             break
  *
  */
-    __pyx_t_6 = ((__pyx_v_buffered_idx < 0) != 0);
-    if (!__pyx_t_6) {
-    } else {
-      __pyx_t_5 = __pyx_t_6;
-      goto __pyx_L12_bool_binop_done;
-    }
-    __pyx_t_6 = ((__pyx_v_j >= __pyx_v_total) != 0);
-    __pyx_t_5 = __pyx_t_6;
-    __pyx_L12_bool_binop_done:;
+    __pyx_t_5 = ((__pyx_v_j >= __pyx_v_total) != 0);
     if (__pyx_t_5) {
 
-      /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":86
- *         buffered_idx = b_indices[i]
- *         if buffered_idx < 0 or j >= total:
+      /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":90
+ *             continue
+ *         if j >= total:
  *             break             # <<<<<<<<<<<<<<
  *
  *         found_in_a = 0
  */
       goto __pyx_L10_break;
 
-      /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":85
- *     for i in range(len(b_indices)):
- *         buffered_idx = b_indices[i]
- *         if buffered_idx < 0 or j >= total:             # <<<<<<<<<<<<<<
+      /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":89
+ *         if buffered_idx < 0:
+ *             continue
+ *         if j >= total:             # <<<<<<<<<<<<<<
  *             break
  *
  */
     }
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":88
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":92
  *             break
  *
  *         found_in_a = 0             # <<<<<<<<<<<<<<
@@ -3536,7 +3579,7 @@ static __pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYP
  */
     __pyx_v_found_in_a = 0;
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":89
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":93
  *
  *         found_in_a = 0
  *         for ii in range(len(a_indices)):             # <<<<<<<<<<<<<<
@@ -3548,7 +3591,7 @@ static __pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYP
     for (__pyx_t_9 = 0; __pyx_t_9 < __pyx_t_8; __pyx_t_9+=1) {
       __pyx_v_ii = __pyx_t_9;
 
-      /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":90
+      /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":94
  *         found_in_a = 0
  *         for ii in range(len(a_indices)):
  *             buffered_idx_ = a_indices[ii]             # <<<<<<<<<<<<<<
@@ -3558,7 +3601,7 @@ static __pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYP
       __pyx_t_10 = __pyx_v_ii;
       __pyx_v_buffered_idx_ = (*((__pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_LONG *) ( /* dim=0 */ (__pyx_v_a_indices.data + __pyx_t_10 * __pyx_v_a_indices.strides[0]) )));
 
-      /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":91
+      /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":95
  *         for ii in range(len(a_indices)):
  *             buffered_idx_ = a_indices[ii]
  *             if buffered_idx_ == buffered_idx:             # <<<<<<<<<<<<<<
@@ -3568,7 +3611,7 @@ static __pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYP
       __pyx_t_5 = ((__pyx_v_buffered_idx_ == __pyx_v_buffered_idx) != 0);
       if (__pyx_t_5) {
 
-        /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":92
+        /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":96
  *             buffered_idx_ = a_indices[ii]
  *             if buffered_idx_ == buffered_idx:
  *                 found_in_a = 1             # <<<<<<<<<<<<<<
@@ -3577,16 +3620,16 @@ static __pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYP
  */
         __pyx_v_found_in_a = 1;
 
-        /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":93
+        /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":97
  *             if buffered_idx_ == buffered_idx:
  *                 found_in_a = 1
  *                 break             # <<<<<<<<<<<<<<
  *         if found_in_a < 1:
  *             ab_indices[j] = buffered_idx
  */
-        goto __pyx_L15_break;
+        goto __pyx_L14_break;
 
-        /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":91
+        /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":95
  *         for ii in range(len(a_indices)):
  *             buffered_idx_ = a_indices[ii]
  *             if buffered_idx_ == buffered_idx:             # <<<<<<<<<<<<<<
@@ -3595,9 +3638,9 @@ static __pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYP
  */
       }
     }
-    __pyx_L15_break:;
+    __pyx_L14_break:;
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":94
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":98
  *                 found_in_a = 1
  *                 break
  *         if found_in_a < 1:             # <<<<<<<<<<<<<<
@@ -3607,7 +3650,7 @@ static __pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYP
     __pyx_t_5 = ((__pyx_v_found_in_a < 1) != 0);
     if (__pyx_t_5) {
 
-      /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":95
+      /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":99
  *                 break
  *         if found_in_a < 1:
  *             ab_indices[j] = buffered_idx             # <<<<<<<<<<<<<<
@@ -3617,7 +3660,7 @@ static __pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYP
       __pyx_t_7 = __pyx_v_j;
       *((__pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_LONG *) ( /* dim=0 */ (__pyx_v_ab_indices.data + __pyx_t_7 * __pyx_v_ab_indices.strides[0]) )) = __pyx_v_buffered_idx;
 
-      /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":96
+      /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":100
  *         if found_in_a < 1:
  *             ab_indices[j] = buffered_idx
  *             ab_scores[j] = b_scores[i]             # <<<<<<<<<<<<<<
@@ -3628,7 +3671,7 @@ static __pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYP
       __pyx_t_7 = __pyx_v_j;
       *((__pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_FLOAT *) ( /* dim=0 */ (__pyx_v_ab_scores.data + __pyx_t_7 * __pyx_v_ab_scores.strides[0]) )) = (*((__pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_FLOAT *) ( /* dim=0 */ (__pyx_v_b_scores.data + __pyx_t_4 * __pyx_v_b_scores.strides[0]) )));
 
-      /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":97
+      /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":101
  *             ab_indices[j] = buffered_idx
  *             ab_scores[j] = b_scores[i]
  *             ab_labels[j] = 1             # <<<<<<<<<<<<<<
@@ -3638,7 +3681,7 @@ static __pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYP
       __pyx_t_7 = __pyx_v_j;
       *((__pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_LONG *) ( /* dim=0 */ (__pyx_v_ab_labels.data + __pyx_t_7 * __pyx_v_ab_labels.strides[0]) )) = 1;
 
-      /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":98
+      /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":102
  *             ab_scores[j] = b_scores[i]
  *             ab_labels[j] = 1
  *             j += 1             # <<<<<<<<<<<<<<
@@ -3647,7 +3690,7 @@ static __pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYP
  */
       __pyx_v_j = (__pyx_v_j + 1);
 
-      /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":94
+      /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":98
  *                 found_in_a = 1
  *                 break
  *         if found_in_a < 1:             # <<<<<<<<<<<<<<
@@ -3655,10 +3698,11 @@ static __pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYP
  *             ab_scores[j] = b_scores[i]
  */
     }
+    __pyx_L9_continue:;
   }
   __pyx_L10_break:;
 
-  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":100
+  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":104
  *             j += 1
  *
  *     return j             # <<<<<<<<<<<<<<
@@ -3681,7 +3725,7 @@ static __pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYP
   return __pyx_r;
 }
 
-/* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":105
+/* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":109
  * @cython.boundscheck(False)  # turn off bounds-checking for entire function
  * @cython.wraparound(False)  # turn off negative index wrapping for entire function
  * cdef DTYPE_LONG [:]  _concat_batch(             # <<<<<<<<<<<<<<
@@ -3705,7 +3749,7 @@ static __Pyx_memviewslice __pyx_f_18raffle_ds_research_5tools_7c_tools_21concat_
   __Pyx_memviewslice __pyx_t_10 = { 0, 0, { 0 }, { 0 }, { 0 } };
   size_t __pyx_t_11;
 
-  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":118
+  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":122
  * ) nogil:
  *     cdef unsigned long i
  *     cdef unsigned long batch_size = a_indices.shape[0]             # <<<<<<<<<<<<<<
@@ -3714,7 +3758,7 @@ static __Pyx_memviewslice __pyx_f_18raffle_ds_research_5tools_7c_tools_21concat_
  */
   __pyx_v_batch_size = (__pyx_v_a_indices.shape[0]);
 
-  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":119
+  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":123
  *     cdef unsigned long i
  *     cdef unsigned long batch_size = a_indices.shape[0]
  *     for i in prange(batch_size, nogil=True):             # <<<<<<<<<<<<<<
@@ -3751,7 +3795,7 @@ static __Pyx_memviewslice __pyx_f_18raffle_ds_research_5tools_7c_tools_21concat_
                         {
                             __pyx_v_i = (unsigned long)(0 + 1 * __pyx_t_2);
 
-                            /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":121
+                            /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":125
  *     for i in prange(batch_size, nogil=True):
  *         cursors[i] = _concat_single(
  *             ab_indices[i],             # <<<<<<<<<<<<<<
@@ -3773,7 +3817,7 @@ __pyx_t_4.strides[0] = __pyx_v_ab_indices.strides[1];
 
 __pyx_t_5.data = __pyx_v_ab_scores.data;
 
-                            /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":122
+                            /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":126
  *         cursors[i] = _concat_single(
  *             ab_indices[i],
  *             ab_scores[i],             # <<<<<<<<<<<<<<
@@ -3794,7 +3838,7 @@ __pyx_t_5.strides[0] = __pyx_v_ab_scores.strides[1];
 
 __pyx_t_6.data = __pyx_v_ab_labels.data;
 
-                            /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":123
+                            /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":127
  *             ab_indices[i],
  *             ab_scores[i],
  *             ab_labels[i],             # <<<<<<<<<<<<<<
@@ -3815,7 +3859,7 @@ __pyx_t_6.strides[0] = __pyx_v_ab_labels.strides[1];
 
 __pyx_t_7.data = __pyx_v_a_indices.data;
 
-                            /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":124
+                            /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":128
  *             ab_scores[i],
  *             ab_labels[i],
  *             a_indices[i],             # <<<<<<<<<<<<<<
@@ -3836,7 +3880,7 @@ __pyx_t_7.strides[0] = __pyx_v_a_indices.strides[1];
 
 __pyx_t_8.data = __pyx_v_a_scores.data;
 
-                            /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":125
+                            /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":129
  *             ab_labels[i],
  *             a_indices[i],
  *             a_scores[i],             # <<<<<<<<<<<<<<
@@ -3857,7 +3901,7 @@ __pyx_t_8.strides[0] = __pyx_v_a_scores.strides[1];
 
 __pyx_t_9.data = __pyx_v_b_indices.data;
 
-                            /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":126
+                            /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":130
  *             a_indices[i],
  *             a_scores[i],
  *             b_indices[i],             # <<<<<<<<<<<<<<
@@ -3878,7 +3922,7 @@ __pyx_t_9.strides[0] = __pyx_v_b_indices.strides[1];
 
 __pyx_t_10.data = __pyx_v_b_scores.data;
 
-                            /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":127
+                            /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":131
  *             a_scores[i],
  *             b_indices[i],
  *             b_scores[i],             # <<<<<<<<<<<<<<
@@ -3899,7 +3943,7 @@ __pyx_t_10.strides[0] = __pyx_v_b_scores.strides[1];
 
 __pyx_t_11 = __pyx_v_i;
 
-                            /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":120
+                            /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":124
  *     cdef unsigned long batch_size = a_indices.shape[0]
  *     for i in prange(batch_size, nogil=True):
  *         cursors[i] = _concat_single(             # <<<<<<<<<<<<<<
@@ -3941,7 +3985,7 @@ __pyx_t_11 = __pyx_v_i;
         #endif
       }
 
-      /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":119
+      /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":123
  *     cdef unsigned long i
  *     cdef unsigned long batch_size = a_indices.shape[0]
  *     for i in prange(batch_size, nogil=True):             # <<<<<<<<<<<<<<
@@ -3960,7 +4004,7 @@ __pyx_t_11 = __pyx_v_i;
       }
   }
 
-  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":132
+  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":136
  *         )
  *
  *     return cursors             # <<<<<<<<<<<<<<
@@ -3971,7 +4015,7 @@ __pyx_t_11 = __pyx_v_i;
   __pyx_r = __pyx_v_cursors;
   goto __pyx_L0;
 
-  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":105
+  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":109
  * @cython.boundscheck(False)  # turn off bounds-checking for entire function
  * @cython.wraparound(False)  # turn off negative index wrapping for entire function
  * cdef DTYPE_LONG [:]  _concat_batch(             # <<<<<<<<<<<<<<
@@ -3987,7 +4031,7 @@ __pyx_t_11 = __pyx_v_i;
   return __pyx_r;
 }
 
-/* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":135
+/* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":139
  *
  *
  * def concat_search_results(             # <<<<<<<<<<<<<<
@@ -4017,7 +4061,7 @@ static PyObject *__pyx_pw_18raffle_ds_research_5tools_7c_tools_21concat_search_r
     static PyObject **__pyx_pyargnames[] = {&__pyx_n_s_a_indices,&__pyx_n_s_a_scores,&__pyx_n_s_b_indices,&__pyx_n_s_b_scores,&__pyx_n_s_total,&__pyx_n_s_max_a,&__pyx_n_s_truncate,0};
     PyObject* values[7] = {0,0,0,0,0,0,0};
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":141
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":145
  *     b_scores: np.ndarray,
  *     total: int,
  *     max_a: Optional[int] = None,             # <<<<<<<<<<<<<<
@@ -4026,7 +4070,7 @@ static PyObject *__pyx_pw_18raffle_ds_research_5tools_7c_tools_21concat_search_r
  */
     values[5] = ((PyObject *)((PyObject *)Py_None));
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":142
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":146
  *     total: int,
  *     max_a: Optional[int] = None,
  *     truncate: bool = True,             # <<<<<<<<<<<<<<
@@ -4064,25 +4108,25 @@ static PyObject *__pyx_pw_18raffle_ds_research_5tools_7c_tools_21concat_search_r
         case  1:
         if (likely((values[1] = __Pyx_PyDict_GetItemStr(__pyx_kwds, __pyx_n_s_a_scores)) != 0)) kw_args--;
         else {
-          __Pyx_RaiseArgtupleInvalid("concat_search_results", 0, 5, 7, 1); __PYX_ERR(0, 135, __pyx_L3_error)
+          __Pyx_RaiseArgtupleInvalid("concat_search_results", 0, 5, 7, 1); __PYX_ERR(0, 139, __pyx_L3_error)
         }
         CYTHON_FALLTHROUGH;
         case  2:
         if (likely((values[2] = __Pyx_PyDict_GetItemStr(__pyx_kwds, __pyx_n_s_b_indices)) != 0)) kw_args--;
         else {
-          __Pyx_RaiseArgtupleInvalid("concat_search_results", 0, 5, 7, 2); __PYX_ERR(0, 135, __pyx_L3_error)
+          __Pyx_RaiseArgtupleInvalid("concat_search_results", 0, 5, 7, 2); __PYX_ERR(0, 139, __pyx_L3_error)
         }
         CYTHON_FALLTHROUGH;
         case  3:
         if (likely((values[3] = __Pyx_PyDict_GetItemStr(__pyx_kwds, __pyx_n_s_b_scores)) != 0)) kw_args--;
         else {
-          __Pyx_RaiseArgtupleInvalid("concat_search_results", 0, 5, 7, 3); __PYX_ERR(0, 135, __pyx_L3_error)
+          __Pyx_RaiseArgtupleInvalid("concat_search_results", 0, 5, 7, 3); __PYX_ERR(0, 139, __pyx_L3_error)
         }
         CYTHON_FALLTHROUGH;
         case  4:
         if (likely((values[4] = __Pyx_PyDict_GetItemStr(__pyx_kwds, __pyx_n_s_total)) != 0)) kw_args--;
         else {
-          __Pyx_RaiseArgtupleInvalid("concat_search_results", 0, 5, 7, 4); __PYX_ERR(0, 135, __pyx_L3_error)
+          __Pyx_RaiseArgtupleInvalid("concat_search_results", 0, 5, 7, 4); __PYX_ERR(0, 139, __pyx_L3_error)
         }
         CYTHON_FALLTHROUGH;
         case  5:
@@ -4098,7 +4142,7 @@ static PyObject *__pyx_pw_18raffle_ds_research_5tools_7c_tools_21concat_search_r
         }
       }
       if (unlikely(kw_args > 0)) {
-        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_pyargnames, 0, values, pos_args, "concat_search_results") < 0)) __PYX_ERR(0, 135, __pyx_L3_error)
+        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_pyargnames, 0, values, pos_args, "concat_search_results") < 0)) __PYX_ERR(0, 139, __pyx_L3_error)
       }
     } else {
       switch (PyTuple_GET_SIZE(__pyx_args)) {
@@ -4125,7 +4169,7 @@ static PyObject *__pyx_pw_18raffle_ds_research_5tools_7c_tools_21concat_search_r
   }
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("concat_search_results", 0, 5, 7, PyTuple_GET_SIZE(__pyx_args)); __PYX_ERR(0, 135, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("concat_search_results", 0, 5, 7, PyTuple_GET_SIZE(__pyx_args)); __PYX_ERR(0, 139, __pyx_L3_error)
   __pyx_L3_error:;
   __Pyx_AddTraceback("raffle_ds_research.tools.c_tools.concat_search_results.concat_search_results", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
@@ -4133,7 +4177,7 @@ static PyObject *__pyx_pw_18raffle_ds_research_5tools_7c_tools_21concat_search_r
   __pyx_L4_argument_unpacking_done:;
   __pyx_r = __pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_results_concat_search_results(__pyx_self, __pyx_v_a_indices, __pyx_v_a_scores, __pyx_v_b_indices, __pyx_v_b_scores, __pyx_v_total, __pyx_v_max_a, __pyx_v_truncate);
 
-  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":135
+  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":139
  *
  *
  * def concat_search_results(             # <<<<<<<<<<<<<<
@@ -4193,7 +4237,7 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
   __Pyx_INCREF(__pyx_v_b_scores);
   __Pyx_INCREF(__pyx_v_max_a);
 
-  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":150
+  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":154
  *
  *     # check input
  *     if max_a is None:             # <<<<<<<<<<<<<<
@@ -4204,20 +4248,20 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
   __pyx_t_2 = (__pyx_t_1 != 0);
   if (__pyx_t_2) {
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":151
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":155
  *     # check input
  *     if max_a is None:
  *         max_a = len(a_indices)             # <<<<<<<<<<<<<<
  *     else:
  *         max_a = min(max_a, len(a_indices))
  */
-    __pyx_t_3 = PyObject_Length(__pyx_v_a_indices); if (unlikely(__pyx_t_3 == ((Py_ssize_t)-1))) __PYX_ERR(0, 151, __pyx_L1_error)
-    __pyx_t_4 = PyInt_FromSsize_t(__pyx_t_3); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 151, __pyx_L1_error)
+    __pyx_t_3 = PyObject_Length(__pyx_v_a_indices); if (unlikely(__pyx_t_3 == ((Py_ssize_t)-1))) __PYX_ERR(0, 155, __pyx_L1_error)
+    __pyx_t_4 = PyInt_FromSsize_t(__pyx_t_3); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 155, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
     __Pyx_DECREF_SET(__pyx_v_max_a, __pyx_t_4);
     __pyx_t_4 = 0;
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":150
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":154
  *
  *     # check input
  *     if max_a is None:             # <<<<<<<<<<<<<<
@@ -4227,7 +4271,7 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
     goto __pyx_L3;
   }
 
-  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":153
+  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":157
  *         max_a = len(a_indices)
  *     else:
  *         max_a = min(max_a, len(a_indices))             # <<<<<<<<<<<<<<
@@ -4235,17 +4279,17 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
  *     assert b_indices.shape == b_scores.shape
  */
   /*else*/ {
-    __pyx_t_3 = PyObject_Length(__pyx_v_a_indices); if (unlikely(__pyx_t_3 == ((Py_ssize_t)-1))) __PYX_ERR(0, 153, __pyx_L1_error)
+    __pyx_t_3 = PyObject_Length(__pyx_v_a_indices); if (unlikely(__pyx_t_3 == ((Py_ssize_t)-1))) __PYX_ERR(0, 157, __pyx_L1_error)
     __Pyx_INCREF(__pyx_v_max_a);
     __pyx_t_4 = __pyx_v_max_a;
-    __pyx_t_6 = PyInt_FromSsize_t(__pyx_t_3); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 153, __pyx_L1_error)
+    __pyx_t_6 = PyInt_FromSsize_t(__pyx_t_3); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 157, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_7 = PyObject_RichCompare(__pyx_t_6, __pyx_t_4, Py_LT); __Pyx_XGOTREF(__pyx_t_7); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 153, __pyx_L1_error)
+    __pyx_t_7 = PyObject_RichCompare(__pyx_t_6, __pyx_t_4, Py_LT); __Pyx_XGOTREF(__pyx_t_7); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 157, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    __pyx_t_2 = __Pyx_PyObject_IsTrue(__pyx_t_7); if (unlikely(__pyx_t_2 < 0)) __PYX_ERR(0, 153, __pyx_L1_error)
+    __pyx_t_2 = __Pyx_PyObject_IsTrue(__pyx_t_7); if (unlikely(__pyx_t_2 < 0)) __PYX_ERR(0, 157, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
     if (__pyx_t_2) {
-      __pyx_t_7 = PyInt_FromSsize_t(__pyx_t_3); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 153, __pyx_L1_error)
+      __pyx_t_7 = PyInt_FromSsize_t(__pyx_t_3); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 157, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_7);
       __pyx_t_5 = __pyx_t_7;
       __pyx_t_7 = 0;
@@ -4262,7 +4306,7 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
   }
   __pyx_L3:;
 
-  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":154
+  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":158
  *     else:
  *         max_a = min(max_a, len(a_indices))
  *     assert a_indices.shape == a_scores.shape             # <<<<<<<<<<<<<<
@@ -4271,23 +4315,23 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
  */
   #ifndef CYTHON_WITHOUT_ASSERTIONS
   if (unlikely(!Py_OptimizeFlag)) {
-    __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_v_a_indices, __pyx_n_s_shape); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 154, __pyx_L1_error)
+    __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_v_a_indices, __pyx_n_s_shape); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 158, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
-    __pyx_t_5 = __Pyx_PyObject_GetAttrStr(__pyx_v_a_scores, __pyx_n_s_shape); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 154, __pyx_L1_error)
+    __pyx_t_5 = __Pyx_PyObject_GetAttrStr(__pyx_v_a_scores, __pyx_n_s_shape); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 158, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
-    __pyx_t_7 = PyObject_RichCompare(__pyx_t_4, __pyx_t_5, Py_EQ); __Pyx_XGOTREF(__pyx_t_7); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 154, __pyx_L1_error)
+    __pyx_t_7 = PyObject_RichCompare(__pyx_t_4, __pyx_t_5, Py_EQ); __Pyx_XGOTREF(__pyx_t_7); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 158, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
     __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
-    __pyx_t_2 = __Pyx_PyObject_IsTrue(__pyx_t_7); if (unlikely(__pyx_t_2 < 0)) __PYX_ERR(0, 154, __pyx_L1_error)
+    __pyx_t_2 = __Pyx_PyObject_IsTrue(__pyx_t_7); if (unlikely(__pyx_t_2 < 0)) __PYX_ERR(0, 158, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
     if (unlikely(!__pyx_t_2)) {
       PyErr_SetNone(PyExc_AssertionError);
-      __PYX_ERR(0, 154, __pyx_L1_error)
+      __PYX_ERR(0, 158, __pyx_L1_error)
     }
   }
   #endif
 
-  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":155
+  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":159
  *         max_a = min(max_a, len(a_indices))
  *     assert a_indices.shape == a_scores.shape
  *     assert b_indices.shape == b_scores.shape             # <<<<<<<<<<<<<<
@@ -4296,43 +4340,43 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
  */
   #ifndef CYTHON_WITHOUT_ASSERTIONS
   if (unlikely(!Py_OptimizeFlag)) {
-    __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_v_b_indices, __pyx_n_s_shape); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 155, __pyx_L1_error)
+    __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_v_b_indices, __pyx_n_s_shape); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 159, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
-    __pyx_t_5 = __Pyx_PyObject_GetAttrStr(__pyx_v_b_scores, __pyx_n_s_shape); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 155, __pyx_L1_error)
+    __pyx_t_5 = __Pyx_PyObject_GetAttrStr(__pyx_v_b_scores, __pyx_n_s_shape); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 159, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
-    __pyx_t_4 = PyObject_RichCompare(__pyx_t_7, __pyx_t_5, Py_EQ); __Pyx_XGOTREF(__pyx_t_4); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 155, __pyx_L1_error)
+    __pyx_t_4 = PyObject_RichCompare(__pyx_t_7, __pyx_t_5, Py_EQ); __Pyx_XGOTREF(__pyx_t_4); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 159, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
     __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
-    __pyx_t_2 = __Pyx_PyObject_IsTrue(__pyx_t_4); if (unlikely(__pyx_t_2 < 0)) __PYX_ERR(0, 155, __pyx_L1_error)
+    __pyx_t_2 = __Pyx_PyObject_IsTrue(__pyx_t_4); if (unlikely(__pyx_t_2 < 0)) __PYX_ERR(0, 159, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
     if (unlikely(!__pyx_t_2)) {
       PyErr_SetNone(PyExc_AssertionError);
-      __PYX_ERR(0, 155, __pyx_L1_error)
+      __PYX_ERR(0, 159, __pyx_L1_error)
     }
   }
   #endif
 
-  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":158
+  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":162
  *
  *     # Sort A
  *     a_sorted_ids = np.argsort(a_scores, axis=-1)             # <<<<<<<<<<<<<<
  *     a_sorted_ids = np.flip(a_sorted_ids, axis=-1)[..., :max_a]
  *     a_indices = np.take_along_axis(a_indices, a_sorted_ids, axis=-1)
  */
-  __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_np); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 158, __pyx_L1_error)
+  __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_np); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 162, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
-  __pyx_t_5 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_argsort); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 158, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_argsort); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 162, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-  __pyx_t_4 = PyTuple_New(1); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 158, __pyx_L1_error)
+  __pyx_t_4 = PyTuple_New(1); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 162, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
   __Pyx_INCREF(__pyx_v_a_scores);
   __Pyx_GIVEREF(__pyx_v_a_scores);
   PyTuple_SET_ITEM(__pyx_t_4, 0, __pyx_v_a_scores);
-  __pyx_t_7 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 158, __pyx_L1_error)
+  __pyx_t_7 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 162, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_7);
-  if (PyDict_SetItem(__pyx_t_7, __pyx_n_s_axis, __pyx_int_neg_1) < 0) __PYX_ERR(0, 158, __pyx_L1_error)
-  __pyx_t_6 = __Pyx_PyObject_Call(__pyx_t_5, __pyx_t_4, __pyx_t_7); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 158, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_7, __pyx_n_s_axis, __pyx_int_neg_1) < 0) __PYX_ERR(0, 162, __pyx_L1_error)
+  __pyx_t_6 = __Pyx_PyObject_Call(__pyx_t_5, __pyx_t_4, __pyx_t_7); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 162, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_6);
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
@@ -4340,34 +4384,34 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
   __pyx_v_a_sorted_ids = __pyx_t_6;
   __pyx_t_6 = 0;
 
-  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":159
+  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":163
  *     # Sort A
  *     a_sorted_ids = np.argsort(a_scores, axis=-1)
  *     a_sorted_ids = np.flip(a_sorted_ids, axis=-1)[..., :max_a]             # <<<<<<<<<<<<<<
  *     a_indices = np.take_along_axis(a_indices, a_sorted_ids, axis=-1)
  *     a_scores = np.take_along_axis(a_scores, a_sorted_ids, axis=-1)
  */
-  __Pyx_GetModuleGlobalName(__pyx_t_6, __pyx_n_s_np); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 159, __pyx_L1_error)
+  __Pyx_GetModuleGlobalName(__pyx_t_6, __pyx_n_s_np); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 163, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_6);
-  __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_t_6, __pyx_n_s_flip); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 159, __pyx_L1_error)
+  __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_t_6, __pyx_n_s_flip); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 163, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_7);
   __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-  __pyx_t_6 = PyTuple_New(1); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 159, __pyx_L1_error)
+  __pyx_t_6 = PyTuple_New(1); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 163, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_6);
   __Pyx_INCREF(__pyx_v_a_sorted_ids);
   __Pyx_GIVEREF(__pyx_v_a_sorted_ids);
   PyTuple_SET_ITEM(__pyx_t_6, 0, __pyx_v_a_sorted_ids);
-  __pyx_t_4 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 159, __pyx_L1_error)
+  __pyx_t_4 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 163, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
-  if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_axis, __pyx_int_neg_1) < 0) __PYX_ERR(0, 159, __pyx_L1_error)
-  __pyx_t_5 = __Pyx_PyObject_Call(__pyx_t_7, __pyx_t_6, __pyx_t_4); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 159, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_axis, __pyx_int_neg_1) < 0) __PYX_ERR(0, 163, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_PyObject_Call(__pyx_t_7, __pyx_t_6, __pyx_t_4); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 163, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
   __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-  __pyx_t_4 = PySlice_New(Py_None, __pyx_v_max_a, Py_None); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 159, __pyx_L1_error)
+  __pyx_t_4 = PySlice_New(Py_None, __pyx_v_max_a, Py_None); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 163, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
-  __pyx_t_6 = PyTuple_New(2); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 159, __pyx_L1_error)
+  __pyx_t_6 = PyTuple_New(2); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 163, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_6);
   __Pyx_INCREF(Py_Ellipsis);
   __Pyx_GIVEREF(Py_Ellipsis);
@@ -4375,26 +4419,26 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
   __Pyx_GIVEREF(__pyx_t_4);
   PyTuple_SET_ITEM(__pyx_t_6, 1, __pyx_t_4);
   __pyx_t_4 = 0;
-  __pyx_t_4 = __Pyx_PyObject_GetItem(__pyx_t_5, __pyx_t_6); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 159, __pyx_L1_error)
+  __pyx_t_4 = __Pyx_PyObject_GetItem(__pyx_t_5, __pyx_t_6); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 163, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
   __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
   __Pyx_DECREF_SET(__pyx_v_a_sorted_ids, __pyx_t_4);
   __pyx_t_4 = 0;
 
-  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":160
+  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":164
  *     a_sorted_ids = np.argsort(a_scores, axis=-1)
  *     a_sorted_ids = np.flip(a_sorted_ids, axis=-1)[..., :max_a]
  *     a_indices = np.take_along_axis(a_indices, a_sorted_ids, axis=-1)             # <<<<<<<<<<<<<<
  *     a_scores = np.take_along_axis(a_scores, a_sorted_ids, axis=-1)
  *
  */
-  __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_np); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 160, __pyx_L1_error)
+  __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_np); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 164, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
-  __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_take_along_axis); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 160, __pyx_L1_error)
+  __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_take_along_axis); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 164, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_6);
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-  __pyx_t_4 = PyTuple_New(2); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 160, __pyx_L1_error)
+  __pyx_t_4 = PyTuple_New(2); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 164, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
   __Pyx_INCREF(__pyx_v_a_indices);
   __Pyx_GIVEREF(__pyx_v_a_indices);
@@ -4402,10 +4446,10 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
   __Pyx_INCREF(__pyx_v_a_sorted_ids);
   __Pyx_GIVEREF(__pyx_v_a_sorted_ids);
   PyTuple_SET_ITEM(__pyx_t_4, 1, __pyx_v_a_sorted_ids);
-  __pyx_t_5 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 160, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 164, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
-  if (PyDict_SetItem(__pyx_t_5, __pyx_n_s_axis, __pyx_int_neg_1) < 0) __PYX_ERR(0, 160, __pyx_L1_error)
-  __pyx_t_7 = __Pyx_PyObject_Call(__pyx_t_6, __pyx_t_4, __pyx_t_5); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 160, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_5, __pyx_n_s_axis, __pyx_int_neg_1) < 0) __PYX_ERR(0, 164, __pyx_L1_error)
+  __pyx_t_7 = __Pyx_PyObject_Call(__pyx_t_6, __pyx_t_4, __pyx_t_5); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 164, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_7);
   __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
@@ -4413,19 +4457,19 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
   __Pyx_DECREF_SET(__pyx_v_a_indices, __pyx_t_7);
   __pyx_t_7 = 0;
 
-  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":161
+  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":165
  *     a_sorted_ids = np.flip(a_sorted_ids, axis=-1)[..., :max_a]
  *     a_indices = np.take_along_axis(a_indices, a_sorted_ids, axis=-1)
  *     a_scores = np.take_along_axis(a_scores, a_sorted_ids, axis=-1)             # <<<<<<<<<<<<<<
  *
  *     # Sort B
  */
-  __Pyx_GetModuleGlobalName(__pyx_t_7, __pyx_n_s_np); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 161, __pyx_L1_error)
+  __Pyx_GetModuleGlobalName(__pyx_t_7, __pyx_n_s_np); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 165, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_7);
-  __pyx_t_5 = __Pyx_PyObject_GetAttrStr(__pyx_t_7, __pyx_n_s_take_along_axis); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 161, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_PyObject_GetAttrStr(__pyx_t_7, __pyx_n_s_take_along_axis); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 165, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-  __pyx_t_7 = PyTuple_New(2); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 161, __pyx_L1_error)
+  __pyx_t_7 = PyTuple_New(2); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 165, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_7);
   __Pyx_INCREF(__pyx_v_a_scores);
   __Pyx_GIVEREF(__pyx_v_a_scores);
@@ -4433,10 +4477,10 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
   __Pyx_INCREF(__pyx_v_a_sorted_ids);
   __Pyx_GIVEREF(__pyx_v_a_sorted_ids);
   PyTuple_SET_ITEM(__pyx_t_7, 1, __pyx_v_a_sorted_ids);
-  __pyx_t_4 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 161, __pyx_L1_error)
+  __pyx_t_4 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 165, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
-  if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_axis, __pyx_int_neg_1) < 0) __PYX_ERR(0, 161, __pyx_L1_error)
-  __pyx_t_6 = __Pyx_PyObject_Call(__pyx_t_5, __pyx_t_7, __pyx_t_4); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 161, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_axis, __pyx_int_neg_1) < 0) __PYX_ERR(0, 165, __pyx_L1_error)
+  __pyx_t_6 = __Pyx_PyObject_Call(__pyx_t_5, __pyx_t_7, __pyx_t_4); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 165, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_6);
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
   __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
@@ -4444,27 +4488,27 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
   __Pyx_DECREF_SET(__pyx_v_a_scores, __pyx_t_6);
   __pyx_t_6 = 0;
 
-  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":164
+  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":168
  *
  *     # Sort B
  *     b_sorted_ids = np.argsort(b_scores, axis=-1)             # <<<<<<<<<<<<<<
  *     b_sorted_ids = np.flip(b_sorted_ids, axis=-1)
  *     b_indices = np.take_along_axis(b_indices, b_sorted_ids, axis=-1)
  */
-  __Pyx_GetModuleGlobalName(__pyx_t_6, __pyx_n_s_np); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 164, __pyx_L1_error)
+  __Pyx_GetModuleGlobalName(__pyx_t_6, __pyx_n_s_np); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 168, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_6);
-  __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_6, __pyx_n_s_argsort); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 164, __pyx_L1_error)
+  __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_6, __pyx_n_s_argsort); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 168, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
   __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-  __pyx_t_6 = PyTuple_New(1); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 164, __pyx_L1_error)
+  __pyx_t_6 = PyTuple_New(1); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 168, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_6);
   __Pyx_INCREF(__pyx_v_b_scores);
   __Pyx_GIVEREF(__pyx_v_b_scores);
   PyTuple_SET_ITEM(__pyx_t_6, 0, __pyx_v_b_scores);
-  __pyx_t_7 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 164, __pyx_L1_error)
+  __pyx_t_7 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 168, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_7);
-  if (PyDict_SetItem(__pyx_t_7, __pyx_n_s_axis, __pyx_int_neg_1) < 0) __PYX_ERR(0, 164, __pyx_L1_error)
-  __pyx_t_5 = __Pyx_PyObject_Call(__pyx_t_4, __pyx_t_6, __pyx_t_7); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 164, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_7, __pyx_n_s_axis, __pyx_int_neg_1) < 0) __PYX_ERR(0, 168, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_PyObject_Call(__pyx_t_4, __pyx_t_6, __pyx_t_7); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 168, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
   __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
@@ -4472,27 +4516,27 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
   __pyx_v_b_sorted_ids = __pyx_t_5;
   __pyx_t_5 = 0;
 
-  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":165
+  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":169
  *     # Sort B
  *     b_sorted_ids = np.argsort(b_scores, axis=-1)
  *     b_sorted_ids = np.flip(b_sorted_ids, axis=-1)             # <<<<<<<<<<<<<<
  *     b_indices = np.take_along_axis(b_indices, b_sorted_ids, axis=-1)
  *     b_scores = np.take_along_axis(b_scores, b_sorted_ids, axis=-1)
  */
-  __Pyx_GetModuleGlobalName(__pyx_t_5, __pyx_n_s_np); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 165, __pyx_L1_error)
+  __Pyx_GetModuleGlobalName(__pyx_t_5, __pyx_n_s_np); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 169, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
-  __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_t_5, __pyx_n_s_flip); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 165, __pyx_L1_error)
+  __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_t_5, __pyx_n_s_flip); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 169, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_7);
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
-  __pyx_t_5 = PyTuple_New(1); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 165, __pyx_L1_error)
+  __pyx_t_5 = PyTuple_New(1); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 169, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   __Pyx_INCREF(__pyx_v_b_sorted_ids);
   __Pyx_GIVEREF(__pyx_v_b_sorted_ids);
   PyTuple_SET_ITEM(__pyx_t_5, 0, __pyx_v_b_sorted_ids);
-  __pyx_t_6 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 165, __pyx_L1_error)
+  __pyx_t_6 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 169, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_6);
-  if (PyDict_SetItem(__pyx_t_6, __pyx_n_s_axis, __pyx_int_neg_1) < 0) __PYX_ERR(0, 165, __pyx_L1_error)
-  __pyx_t_4 = __Pyx_PyObject_Call(__pyx_t_7, __pyx_t_5, __pyx_t_6); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 165, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_6, __pyx_n_s_axis, __pyx_int_neg_1) < 0) __PYX_ERR(0, 169, __pyx_L1_error)
+  __pyx_t_4 = __Pyx_PyObject_Call(__pyx_t_7, __pyx_t_5, __pyx_t_6); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 169, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
   __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
@@ -4500,19 +4544,19 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
   __Pyx_DECREF_SET(__pyx_v_b_sorted_ids, __pyx_t_4);
   __pyx_t_4 = 0;
 
-  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":166
+  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":170
  *     b_sorted_ids = np.argsort(b_scores, axis=-1)
  *     b_sorted_ids = np.flip(b_sorted_ids, axis=-1)
  *     b_indices = np.take_along_axis(b_indices, b_sorted_ids, axis=-1)             # <<<<<<<<<<<<<<
  *     b_scores = np.take_along_axis(b_scores, b_sorted_ids, axis=-1)
  *
  */
-  __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_np); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 166, __pyx_L1_error)
+  __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_np); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 170, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
-  __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_take_along_axis); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 166, __pyx_L1_error)
+  __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_take_along_axis); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 170, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_6);
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-  __pyx_t_4 = PyTuple_New(2); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 166, __pyx_L1_error)
+  __pyx_t_4 = PyTuple_New(2); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 170, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
   __Pyx_INCREF(__pyx_v_b_indices);
   __Pyx_GIVEREF(__pyx_v_b_indices);
@@ -4520,10 +4564,10 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
   __Pyx_INCREF(__pyx_v_b_sorted_ids);
   __Pyx_GIVEREF(__pyx_v_b_sorted_ids);
   PyTuple_SET_ITEM(__pyx_t_4, 1, __pyx_v_b_sorted_ids);
-  __pyx_t_5 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 166, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 170, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
-  if (PyDict_SetItem(__pyx_t_5, __pyx_n_s_axis, __pyx_int_neg_1) < 0) __PYX_ERR(0, 166, __pyx_L1_error)
-  __pyx_t_7 = __Pyx_PyObject_Call(__pyx_t_6, __pyx_t_4, __pyx_t_5); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 166, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_5, __pyx_n_s_axis, __pyx_int_neg_1) < 0) __PYX_ERR(0, 170, __pyx_L1_error)
+  __pyx_t_7 = __Pyx_PyObject_Call(__pyx_t_6, __pyx_t_4, __pyx_t_5); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 170, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_7);
   __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
@@ -4531,19 +4575,19 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
   __Pyx_DECREF_SET(__pyx_v_b_indices, __pyx_t_7);
   __pyx_t_7 = 0;
 
-  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":167
+  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":171
  *     b_sorted_ids = np.flip(b_sorted_ids, axis=-1)
  *     b_indices = np.take_along_axis(b_indices, b_sorted_ids, axis=-1)
  *     b_scores = np.take_along_axis(b_scores, b_sorted_ids, axis=-1)             # <<<<<<<<<<<<<<
  *
  *
  */
-  __Pyx_GetModuleGlobalName(__pyx_t_7, __pyx_n_s_np); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 167, __pyx_L1_error)
+  __Pyx_GetModuleGlobalName(__pyx_t_7, __pyx_n_s_np); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 171, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_7);
-  __pyx_t_5 = __Pyx_PyObject_GetAttrStr(__pyx_t_7, __pyx_n_s_take_along_axis); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 167, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_PyObject_GetAttrStr(__pyx_t_7, __pyx_n_s_take_along_axis); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 171, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-  __pyx_t_7 = PyTuple_New(2); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 167, __pyx_L1_error)
+  __pyx_t_7 = PyTuple_New(2); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 171, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_7);
   __Pyx_INCREF(__pyx_v_b_scores);
   __Pyx_GIVEREF(__pyx_v_b_scores);
@@ -4551,10 +4595,10 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
   __Pyx_INCREF(__pyx_v_b_sorted_ids);
   __Pyx_GIVEREF(__pyx_v_b_sorted_ids);
   PyTuple_SET_ITEM(__pyx_t_7, 1, __pyx_v_b_sorted_ids);
-  __pyx_t_4 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 167, __pyx_L1_error)
+  __pyx_t_4 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 171, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
-  if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_axis, __pyx_int_neg_1) < 0) __PYX_ERR(0, 167, __pyx_L1_error)
-  __pyx_t_6 = __Pyx_PyObject_Call(__pyx_t_5, __pyx_t_7, __pyx_t_4); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 167, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_axis, __pyx_int_neg_1) < 0) __PYX_ERR(0, 171, __pyx_L1_error)
+  __pyx_t_6 = __Pyx_PyObject_Call(__pyx_t_5, __pyx_t_7, __pyx_t_4); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 171, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_6);
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
   __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
@@ -4562,50 +4606,50 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
   __Pyx_DECREF_SET(__pyx_v_b_scores, __pyx_t_6);
   __pyx_t_6 = 0;
 
-  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":171
+  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":175
  *
  *     # create the buffer and run the cython function
  *     if len(a_indices.shape) == 1:             # <<<<<<<<<<<<<<
  *         ab_indices = np.full((total,), dtype=NP_DTYPE_LONG, fill_value=-1)
  *         ab_scores = np.full((total,), dtype=NP_DTYPE_FLOAT, fill_value=np.nan)
  */
-  __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_v_a_indices, __pyx_n_s_shape); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 171, __pyx_L1_error)
+  __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_v_a_indices, __pyx_n_s_shape); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 175, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_6);
-  __pyx_t_3 = PyObject_Length(__pyx_t_6); if (unlikely(__pyx_t_3 == ((Py_ssize_t)-1))) __PYX_ERR(0, 171, __pyx_L1_error)
+  __pyx_t_3 = PyObject_Length(__pyx_t_6); if (unlikely(__pyx_t_3 == ((Py_ssize_t)-1))) __PYX_ERR(0, 175, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
   __pyx_t_2 = ((__pyx_t_3 == 1) != 0);
   if (__pyx_t_2) {
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":172
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":176
  *     # create the buffer and run the cython function
  *     if len(a_indices.shape) == 1:
  *         ab_indices = np.full((total,), dtype=NP_DTYPE_LONG, fill_value=-1)             # <<<<<<<<<<<<<<
  *         ab_scores = np.full((total,), dtype=NP_DTYPE_FLOAT, fill_value=np.nan)
  *         ab_labels = np.full((total,), dtype=NP_DTYPE_LONG, fill_value=-1)
  */
-    __Pyx_GetModuleGlobalName(__pyx_t_6, __pyx_n_s_np); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 172, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_6, __pyx_n_s_np); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 176, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_6, __pyx_n_s_full); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 172, __pyx_L1_error)
+    __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_6, __pyx_n_s_full); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 176, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    __pyx_t_6 = PyTuple_New(1); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 172, __pyx_L1_error)
+    __pyx_t_6 = PyTuple_New(1); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 176, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_INCREF(__pyx_v_total);
     __Pyx_GIVEREF(__pyx_v_total);
     PyTuple_SET_ITEM(__pyx_t_6, 0, __pyx_v_total);
-    __pyx_t_7 = PyTuple_New(1); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 172, __pyx_L1_error)
+    __pyx_t_7 = PyTuple_New(1); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 176, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_GIVEREF(__pyx_t_6);
     PyTuple_SET_ITEM(__pyx_t_7, 0, __pyx_t_6);
     __pyx_t_6 = 0;
-    __pyx_t_6 = __Pyx_PyDict_NewPresized(2); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 172, __pyx_L1_error)
+    __pyx_t_6 = __Pyx_PyDict_NewPresized(2); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 176, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
-    __Pyx_GetModuleGlobalName(__pyx_t_5, __pyx_n_s_NP_DTYPE_LONG); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 172, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_5, __pyx_n_s_NP_DTYPE_LONG); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 176, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
-    if (PyDict_SetItem(__pyx_t_6, __pyx_n_s_dtype, __pyx_t_5) < 0) __PYX_ERR(0, 172, __pyx_L1_error)
+    if (PyDict_SetItem(__pyx_t_6, __pyx_n_s_dtype, __pyx_t_5) < 0) __PYX_ERR(0, 176, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
-    if (PyDict_SetItem(__pyx_t_6, __pyx_n_s_fill_value, __pyx_int_neg_1) < 0) __PYX_ERR(0, 172, __pyx_L1_error)
-    __pyx_t_5 = __Pyx_PyObject_Call(__pyx_t_4, __pyx_t_7, __pyx_t_6); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 172, __pyx_L1_error)
+    if (PyDict_SetItem(__pyx_t_6, __pyx_n_s_fill_value, __pyx_int_neg_1) < 0) __PYX_ERR(0, 176, __pyx_L1_error)
+    __pyx_t_5 = __Pyx_PyObject_Call(__pyx_t_4, __pyx_t_7, __pyx_t_6); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 176, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
@@ -4613,42 +4657,42 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
     __pyx_v_ab_indices = __pyx_t_5;
     __pyx_t_5 = 0;
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":173
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":177
  *     if len(a_indices.shape) == 1:
  *         ab_indices = np.full((total,), dtype=NP_DTYPE_LONG, fill_value=-1)
  *         ab_scores = np.full((total,), dtype=NP_DTYPE_FLOAT, fill_value=np.nan)             # <<<<<<<<<<<<<<
  *         ab_labels = np.full((total,), dtype=NP_DTYPE_LONG, fill_value=-1)
  *         cursor = _concat_single(
  */
-    __Pyx_GetModuleGlobalName(__pyx_t_5, __pyx_n_s_np); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 173, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_5, __pyx_n_s_np); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 177, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
-    __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_t_5, __pyx_n_s_full); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 173, __pyx_L1_error)
+    __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_t_5, __pyx_n_s_full); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 177, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
-    __pyx_t_5 = PyTuple_New(1); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 173, __pyx_L1_error)
+    __pyx_t_5 = PyTuple_New(1); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 177, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
     __Pyx_INCREF(__pyx_v_total);
     __Pyx_GIVEREF(__pyx_v_total);
     PyTuple_SET_ITEM(__pyx_t_5, 0, __pyx_v_total);
-    __pyx_t_7 = PyTuple_New(1); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 173, __pyx_L1_error)
+    __pyx_t_7 = PyTuple_New(1); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 177, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_GIVEREF(__pyx_t_5);
     PyTuple_SET_ITEM(__pyx_t_7, 0, __pyx_t_5);
     __pyx_t_5 = 0;
-    __pyx_t_5 = __Pyx_PyDict_NewPresized(2); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 173, __pyx_L1_error)
+    __pyx_t_5 = __Pyx_PyDict_NewPresized(2); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 177, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
-    __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_NP_DTYPE_FLOAT); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 173, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_NP_DTYPE_FLOAT); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 177, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
-    if (PyDict_SetItem(__pyx_t_5, __pyx_n_s_dtype, __pyx_t_4) < 0) __PYX_ERR(0, 173, __pyx_L1_error)
+    if (PyDict_SetItem(__pyx_t_5, __pyx_n_s_dtype, __pyx_t_4) < 0) __PYX_ERR(0, 177, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-    __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_np); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 173, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_np); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 177, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
-    __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_nan); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 173, __pyx_L1_error)
+    __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_nan); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 177, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_8);
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-    if (PyDict_SetItem(__pyx_t_5, __pyx_n_s_fill_value, __pyx_t_8) < 0) __PYX_ERR(0, 173, __pyx_L1_error)
+    if (PyDict_SetItem(__pyx_t_5, __pyx_n_s_fill_value, __pyx_t_8) < 0) __PYX_ERR(0, 177, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
-    __pyx_t_8 = __Pyx_PyObject_Call(__pyx_t_6, __pyx_t_7, __pyx_t_5); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 173, __pyx_L1_error)
+    __pyx_t_8 = __Pyx_PyObject_Call(__pyx_t_6, __pyx_t_7, __pyx_t_5); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 177, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_8);
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
@@ -4656,36 +4700,36 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
     __pyx_v_ab_scores = __pyx_t_8;
     __pyx_t_8 = 0;
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":174
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":178
  *         ab_indices = np.full((total,), dtype=NP_DTYPE_LONG, fill_value=-1)
  *         ab_scores = np.full((total,), dtype=NP_DTYPE_FLOAT, fill_value=np.nan)
  *         ab_labels = np.full((total,), dtype=NP_DTYPE_LONG, fill_value=-1)             # <<<<<<<<<<<<<<
  *         cursor = _concat_single(
  *             ab_indices,
  */
-    __Pyx_GetModuleGlobalName(__pyx_t_8, __pyx_n_s_np); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 174, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_8, __pyx_n_s_np); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 178, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_8);
-    __pyx_t_5 = __Pyx_PyObject_GetAttrStr(__pyx_t_8, __pyx_n_s_full); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 174, __pyx_L1_error)
+    __pyx_t_5 = __Pyx_PyObject_GetAttrStr(__pyx_t_8, __pyx_n_s_full); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 178, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
     __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
-    __pyx_t_8 = PyTuple_New(1); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 174, __pyx_L1_error)
+    __pyx_t_8 = PyTuple_New(1); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 178, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_8);
     __Pyx_INCREF(__pyx_v_total);
     __Pyx_GIVEREF(__pyx_v_total);
     PyTuple_SET_ITEM(__pyx_t_8, 0, __pyx_v_total);
-    __pyx_t_7 = PyTuple_New(1); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 174, __pyx_L1_error)
+    __pyx_t_7 = PyTuple_New(1); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 178, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_GIVEREF(__pyx_t_8);
     PyTuple_SET_ITEM(__pyx_t_7, 0, __pyx_t_8);
     __pyx_t_8 = 0;
-    __pyx_t_8 = __Pyx_PyDict_NewPresized(2); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 174, __pyx_L1_error)
+    __pyx_t_8 = __Pyx_PyDict_NewPresized(2); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 178, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_8);
-    __Pyx_GetModuleGlobalName(__pyx_t_6, __pyx_n_s_NP_DTYPE_LONG); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 174, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_6, __pyx_n_s_NP_DTYPE_LONG); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 178, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
-    if (PyDict_SetItem(__pyx_t_8, __pyx_n_s_dtype, __pyx_t_6) < 0) __PYX_ERR(0, 174, __pyx_L1_error)
+    if (PyDict_SetItem(__pyx_t_8, __pyx_n_s_dtype, __pyx_t_6) < 0) __PYX_ERR(0, 178, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    if (PyDict_SetItem(__pyx_t_8, __pyx_n_s_fill_value, __pyx_int_neg_1) < 0) __PYX_ERR(0, 174, __pyx_L1_error)
-    __pyx_t_6 = __Pyx_PyObject_Call(__pyx_t_5, __pyx_t_7, __pyx_t_8); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 174, __pyx_L1_error)
+    if (PyDict_SetItem(__pyx_t_8, __pyx_n_s_fill_value, __pyx_int_neg_1) < 0) __PYX_ERR(0, 178, __pyx_L1_error)
+    __pyx_t_6 = __Pyx_PyObject_Call(__pyx_t_5, __pyx_t_7, __pyx_t_8); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 178, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
@@ -4693,43 +4737,43 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
     __pyx_v_ab_labels = __pyx_t_6;
     __pyx_t_6 = 0;
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":176
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":180
  *         ab_labels = np.full((total,), dtype=NP_DTYPE_LONG, fill_value=-1)
  *         cursor = _concat_single(
  *             ab_indices,             # <<<<<<<<<<<<<<
  *             ab_scores,
  *             ab_labels,
  */
-    __pyx_t_9 = __Pyx_PyObject_to_MemoryviewSlice_ds_nn___pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_LONG(__pyx_v_ab_indices, PyBUF_WRITABLE); if (unlikely(!__pyx_t_9.memview)) __PYX_ERR(0, 176, __pyx_L1_error)
+    __pyx_t_9 = __Pyx_PyObject_to_MemoryviewSlice_ds_nn___pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_LONG(__pyx_v_ab_indices, PyBUF_WRITABLE); if (unlikely(!__pyx_t_9.memview)) __PYX_ERR(0, 180, __pyx_L1_error)
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":177
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":181
  *         cursor = _concat_single(
  *             ab_indices,
  *             ab_scores,             # <<<<<<<<<<<<<<
  *             ab_labels,
  *             a_indices.astype(NP_DTYPE_LONG),
  */
-    __pyx_t_10 = __Pyx_PyObject_to_MemoryviewSlice_ds_nn___pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_FLOAT(__pyx_v_ab_scores, PyBUF_WRITABLE); if (unlikely(!__pyx_t_10.memview)) __PYX_ERR(0, 177, __pyx_L1_error)
+    __pyx_t_10 = __Pyx_PyObject_to_MemoryviewSlice_ds_nn___pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_FLOAT(__pyx_v_ab_scores, PyBUF_WRITABLE); if (unlikely(!__pyx_t_10.memview)) __PYX_ERR(0, 181, __pyx_L1_error)
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":178
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":182
  *             ab_indices,
  *             ab_scores,
  *             ab_labels,             # <<<<<<<<<<<<<<
  *             a_indices.astype(NP_DTYPE_LONG),
  *             a_scores.astype(NP_DTYPE_FLOAT),
  */
-    __pyx_t_11 = __Pyx_PyObject_to_MemoryviewSlice_ds_nn___pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_LONG(__pyx_v_ab_labels, PyBUF_WRITABLE); if (unlikely(!__pyx_t_11.memview)) __PYX_ERR(0, 178, __pyx_L1_error)
+    __pyx_t_11 = __Pyx_PyObject_to_MemoryviewSlice_ds_nn___pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_LONG(__pyx_v_ab_labels, PyBUF_WRITABLE); if (unlikely(!__pyx_t_11.memview)) __PYX_ERR(0, 182, __pyx_L1_error)
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":179
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":183
  *             ab_scores,
  *             ab_labels,
  *             a_indices.astype(NP_DTYPE_LONG),             # <<<<<<<<<<<<<<
  *             a_scores.astype(NP_DTYPE_FLOAT),
  *             b_indices.astype(NP_DTYPE_LONG),
  */
-    __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_v_a_indices, __pyx_n_s_astype); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 179, __pyx_L1_error)
+    __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_v_a_indices, __pyx_n_s_astype); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 183, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_8);
-    __Pyx_GetModuleGlobalName(__pyx_t_7, __pyx_n_s_NP_DTYPE_LONG); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 179, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_7, __pyx_n_s_NP_DTYPE_LONG); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 183, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
     __pyx_t_5 = NULL;
     if (CYTHON_UNPACK_METHODS && likely(PyMethod_Check(__pyx_t_8))) {
@@ -4744,22 +4788,22 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
     __pyx_t_6 = (__pyx_t_5) ? __Pyx_PyObject_Call2Args(__pyx_t_8, __pyx_t_5, __pyx_t_7) : __Pyx_PyObject_CallOneArg(__pyx_t_8, __pyx_t_7);
     __Pyx_XDECREF(__pyx_t_5); __pyx_t_5 = 0;
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-    if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 179, __pyx_L1_error)
+    if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 183, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
-    __pyx_t_12 = __Pyx_PyObject_to_MemoryviewSlice_ds_nn___pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_LONG(__pyx_t_6, PyBUF_WRITABLE); if (unlikely(!__pyx_t_12.memview)) __PYX_ERR(0, 179, __pyx_L1_error)
+    __pyx_t_12 = __Pyx_PyObject_to_MemoryviewSlice_ds_nn___pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_LONG(__pyx_t_6, PyBUF_WRITABLE); if (unlikely(!__pyx_t_12.memview)) __PYX_ERR(0, 183, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":180
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":184
  *             ab_labels,
  *             a_indices.astype(NP_DTYPE_LONG),
  *             a_scores.astype(NP_DTYPE_FLOAT),             # <<<<<<<<<<<<<<
  *             b_indices.astype(NP_DTYPE_LONG),
  *             b_scores.astype(NP_DTYPE_FLOAT),
  */
-    __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_v_a_scores, __pyx_n_s_astype); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 180, __pyx_L1_error)
+    __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_v_a_scores, __pyx_n_s_astype); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 184, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_8);
-    __Pyx_GetModuleGlobalName(__pyx_t_7, __pyx_n_s_NP_DTYPE_FLOAT); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 180, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_7, __pyx_n_s_NP_DTYPE_FLOAT); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 184, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
     __pyx_t_5 = NULL;
     if (CYTHON_UNPACK_METHODS && likely(PyMethod_Check(__pyx_t_8))) {
@@ -4774,22 +4818,22 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
     __pyx_t_6 = (__pyx_t_5) ? __Pyx_PyObject_Call2Args(__pyx_t_8, __pyx_t_5, __pyx_t_7) : __Pyx_PyObject_CallOneArg(__pyx_t_8, __pyx_t_7);
     __Pyx_XDECREF(__pyx_t_5); __pyx_t_5 = 0;
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-    if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 180, __pyx_L1_error)
+    if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 184, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
-    __pyx_t_13 = __Pyx_PyObject_to_MemoryviewSlice_ds_nn___pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_FLOAT(__pyx_t_6, PyBUF_WRITABLE); if (unlikely(!__pyx_t_13.memview)) __PYX_ERR(0, 180, __pyx_L1_error)
+    __pyx_t_13 = __Pyx_PyObject_to_MemoryviewSlice_ds_nn___pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_FLOAT(__pyx_t_6, PyBUF_WRITABLE); if (unlikely(!__pyx_t_13.memview)) __PYX_ERR(0, 184, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":181
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":185
  *             a_indices.astype(NP_DTYPE_LONG),
  *             a_scores.astype(NP_DTYPE_FLOAT),
  *             b_indices.astype(NP_DTYPE_LONG),             # <<<<<<<<<<<<<<
  *             b_scores.astype(NP_DTYPE_FLOAT),
  *             total,
  */
-    __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_v_b_indices, __pyx_n_s_astype); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 181, __pyx_L1_error)
+    __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_v_b_indices, __pyx_n_s_astype); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 185, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_8);
-    __Pyx_GetModuleGlobalName(__pyx_t_7, __pyx_n_s_NP_DTYPE_LONG); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 181, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_7, __pyx_n_s_NP_DTYPE_LONG); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 185, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
     __pyx_t_5 = NULL;
     if (CYTHON_UNPACK_METHODS && likely(PyMethod_Check(__pyx_t_8))) {
@@ -4804,22 +4848,22 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
     __pyx_t_6 = (__pyx_t_5) ? __Pyx_PyObject_Call2Args(__pyx_t_8, __pyx_t_5, __pyx_t_7) : __Pyx_PyObject_CallOneArg(__pyx_t_8, __pyx_t_7);
     __Pyx_XDECREF(__pyx_t_5); __pyx_t_5 = 0;
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-    if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 181, __pyx_L1_error)
+    if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 185, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
-    __pyx_t_14 = __Pyx_PyObject_to_MemoryviewSlice_ds_nn___pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_LONG(__pyx_t_6, PyBUF_WRITABLE); if (unlikely(!__pyx_t_14.memview)) __PYX_ERR(0, 181, __pyx_L1_error)
+    __pyx_t_14 = __Pyx_PyObject_to_MemoryviewSlice_ds_nn___pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_LONG(__pyx_t_6, PyBUF_WRITABLE); if (unlikely(!__pyx_t_14.memview)) __PYX_ERR(0, 185, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":182
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":186
  *             a_scores.astype(NP_DTYPE_FLOAT),
  *             b_indices.astype(NP_DTYPE_LONG),
  *             b_scores.astype(NP_DTYPE_FLOAT),             # <<<<<<<<<<<<<<
  *             total,
  *             max_a,
  */
-    __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_v_b_scores, __pyx_n_s_astype); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 182, __pyx_L1_error)
+    __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_v_b_scores, __pyx_n_s_astype); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 186, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_8);
-    __Pyx_GetModuleGlobalName(__pyx_t_7, __pyx_n_s_NP_DTYPE_FLOAT); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 182, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_7, __pyx_n_s_NP_DTYPE_FLOAT); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 186, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
     __pyx_t_5 = NULL;
     if (CYTHON_UNPACK_METHODS && likely(PyMethod_Check(__pyx_t_8))) {
@@ -4834,38 +4878,38 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
     __pyx_t_6 = (__pyx_t_5) ? __Pyx_PyObject_Call2Args(__pyx_t_8, __pyx_t_5, __pyx_t_7) : __Pyx_PyObject_CallOneArg(__pyx_t_8, __pyx_t_7);
     __Pyx_XDECREF(__pyx_t_5); __pyx_t_5 = 0;
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-    if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 182, __pyx_L1_error)
+    if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 186, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
-    __pyx_t_15 = __Pyx_PyObject_to_MemoryviewSlice_ds_nn___pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_FLOAT(__pyx_t_6, PyBUF_WRITABLE); if (unlikely(!__pyx_t_15.memview)) __PYX_ERR(0, 182, __pyx_L1_error)
+    __pyx_t_15 = __Pyx_PyObject_to_MemoryviewSlice_ds_nn___pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_FLOAT(__pyx_t_6, PyBUF_WRITABLE); if (unlikely(!__pyx_t_15.memview)) __PYX_ERR(0, 186, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":183
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":187
  *             b_indices.astype(NP_DTYPE_LONG),
  *             b_scores.astype(NP_DTYPE_FLOAT),
  *             total,             # <<<<<<<<<<<<<<
  *             max_a,
  *         )
  */
-    __pyx_t_16 = __Pyx_PyInt_As_unsigned_int(__pyx_v_total); if (unlikely((__pyx_t_16 == (unsigned int)-1) && PyErr_Occurred())) __PYX_ERR(0, 183, __pyx_L1_error)
+    __pyx_t_16 = __Pyx_PyInt_As_unsigned_int(__pyx_v_total); if (unlikely((__pyx_t_16 == (unsigned int)-1) && PyErr_Occurred())) __PYX_ERR(0, 187, __pyx_L1_error)
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":184
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":188
  *             b_scores.astype(NP_DTYPE_FLOAT),
  *             total,
  *             max_a,             # <<<<<<<<<<<<<<
  *         )
  *         if not truncate:
  */
-    __pyx_t_17 = __Pyx_PyInt_As_unsigned_int(__pyx_v_max_a); if (unlikely((__pyx_t_17 == (unsigned int)-1) && PyErr_Occurred())) __PYX_ERR(0, 184, __pyx_L1_error)
+    __pyx_t_17 = __Pyx_PyInt_As_unsigned_int(__pyx_v_max_a); if (unlikely((__pyx_t_17 == (unsigned int)-1) && PyErr_Occurred())) __PYX_ERR(0, 188, __pyx_L1_error)
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":175
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":179
  *         ab_scores = np.full((total,), dtype=NP_DTYPE_FLOAT, fill_value=np.nan)
  *         ab_labels = np.full((total,), dtype=NP_DTYPE_LONG, fill_value=-1)
  *         cursor = _concat_single(             # <<<<<<<<<<<<<<
  *             ab_indices,
  *             ab_scores,
  */
-    __pyx_t_6 = __Pyx_PyInt_From_PY_LONG_LONG(__pyx_f_18raffle_ds_research_5tools_7c_tools_21concat_search_results__concat_single(__pyx_t_9, __pyx_t_10, __pyx_t_11, __pyx_t_12, __pyx_t_13, __pyx_t_14, __pyx_t_15, __pyx_t_16, __pyx_t_17)); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 175, __pyx_L1_error)
+    __pyx_t_6 = __Pyx_PyInt_From_PY_LONG_LONG(__pyx_f_18raffle_ds_research_5tools_7c_tools_21concat_search_results__concat_single(__pyx_t_9, __pyx_t_10, __pyx_t_11, __pyx_t_12, __pyx_t_13, __pyx_t_14, __pyx_t_15, __pyx_t_16, __pyx_t_17)); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 179, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
     __PYX_XDEC_MEMVIEW(&__pyx_t_9, 1);
     __pyx_t_9.memview = NULL;
@@ -4891,18 +4935,18 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
     __pyx_v_cursor = __pyx_t_6;
     __pyx_t_6 = 0;
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":186
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":190
  *             max_a,
  *         )
  *         if not truncate:             # <<<<<<<<<<<<<<
  *             cursor = None
  *
  */
-    __pyx_t_2 = __Pyx_PyObject_IsTrue(__pyx_v_truncate); if (unlikely(__pyx_t_2 < 0)) __PYX_ERR(0, 186, __pyx_L1_error)
+    __pyx_t_2 = __Pyx_PyObject_IsTrue(__pyx_v_truncate); if (unlikely(__pyx_t_2 < 0)) __PYX_ERR(0, 190, __pyx_L1_error)
     __pyx_t_1 = ((!__pyx_t_2) != 0);
     if (__pyx_t_1) {
 
-      /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":187
+      /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":191
  *         )
  *         if not truncate:
  *             cursor = None             # <<<<<<<<<<<<<<
@@ -4912,7 +4956,7 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
       __Pyx_INCREF(Py_None);
       __Pyx_DECREF_SET(__pyx_v_cursor, Py_None);
 
-      /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":186
+      /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":190
  *             max_a,
  *         )
  *         if not truncate:             # <<<<<<<<<<<<<<
@@ -4921,7 +4965,7 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
  */
     }
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":189
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":193
  *             cursor = None
  *
  *         return ConcatenatedTopk(             # <<<<<<<<<<<<<<
@@ -4929,21 +4973,21 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
  *             scores=np.asarray(ab_scores)[:cursor],
  */
     __Pyx_XDECREF(__pyx_r);
-    __Pyx_GetModuleGlobalName(__pyx_t_6, __pyx_n_s_ConcatenatedTopk); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 189, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_6, __pyx_n_s_ConcatenatedTopk); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 193, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":190
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":194
  *
  *         return ConcatenatedTopk(
  *             indices=np.asarray(ab_indices)[:cursor],             # <<<<<<<<<<<<<<
  *             scores=np.asarray(ab_scores)[:cursor],
  *             labels=np.asarray(ab_labels)[:cursor],
  */
-    __pyx_t_8 = __Pyx_PyDict_NewPresized(3); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 190, __pyx_L1_error)
+    __pyx_t_8 = __Pyx_PyDict_NewPresized(3); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 194, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_8);
-    __Pyx_GetModuleGlobalName(__pyx_t_5, __pyx_n_s_np); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 190, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_5, __pyx_n_s_np); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 194, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
-    __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_5, __pyx_n_s_asarray); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 190, __pyx_L1_error)
+    __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_5, __pyx_n_s_asarray); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 194, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
     __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
     __pyx_t_5 = NULL;
@@ -4958,25 +5002,25 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
     }
     __pyx_t_7 = (__pyx_t_5) ? __Pyx_PyObject_Call2Args(__pyx_t_4, __pyx_t_5, __pyx_v_ab_indices) : __Pyx_PyObject_CallOneArg(__pyx_t_4, __pyx_v_ab_indices);
     __Pyx_XDECREF(__pyx_t_5); __pyx_t_5 = 0;
-    if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 190, __pyx_L1_error)
+    if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 194, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-    __pyx_t_4 = __Pyx_PyObject_GetSlice(__pyx_t_7, 0, 0, NULL, &__pyx_v_cursor, NULL, 0, 0, 1); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 190, __pyx_L1_error)
+    __pyx_t_4 = __Pyx_PyObject_GetSlice(__pyx_t_7, 0, 0, NULL, &__pyx_v_cursor, NULL, 0, 0, 1); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 194, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-    if (PyDict_SetItem(__pyx_t_8, __pyx_n_s_indices, __pyx_t_4) < 0) __PYX_ERR(0, 190, __pyx_L1_error)
+    if (PyDict_SetItem(__pyx_t_8, __pyx_n_s_indices, __pyx_t_4) < 0) __PYX_ERR(0, 194, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":191
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":195
  *         return ConcatenatedTopk(
  *             indices=np.asarray(ab_indices)[:cursor],
  *             scores=np.asarray(ab_scores)[:cursor],             # <<<<<<<<<<<<<<
  *             labels=np.asarray(ab_labels)[:cursor],
  *         )
  */
-    __Pyx_GetModuleGlobalName(__pyx_t_7, __pyx_n_s_np); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 191, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_7, __pyx_n_s_np); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 195, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
-    __pyx_t_5 = __Pyx_PyObject_GetAttrStr(__pyx_t_7, __pyx_n_s_asarray); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 191, __pyx_L1_error)
+    __pyx_t_5 = __Pyx_PyObject_GetAttrStr(__pyx_t_7, __pyx_n_s_asarray); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 195, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
     __pyx_t_7 = NULL;
@@ -4991,25 +5035,25 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
     }
     __pyx_t_4 = (__pyx_t_7) ? __Pyx_PyObject_Call2Args(__pyx_t_5, __pyx_t_7, __pyx_v_ab_scores) : __Pyx_PyObject_CallOneArg(__pyx_t_5, __pyx_v_ab_scores);
     __Pyx_XDECREF(__pyx_t_7); __pyx_t_7 = 0;
-    if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 191, __pyx_L1_error)
+    if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 195, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
     __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
-    __pyx_t_5 = __Pyx_PyObject_GetSlice(__pyx_t_4, 0, 0, NULL, &__pyx_v_cursor, NULL, 0, 0, 1); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 191, __pyx_L1_error)
+    __pyx_t_5 = __Pyx_PyObject_GetSlice(__pyx_t_4, 0, 0, NULL, &__pyx_v_cursor, NULL, 0, 0, 1); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 195, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-    if (PyDict_SetItem(__pyx_t_8, __pyx_n_s_scores, __pyx_t_5) < 0) __PYX_ERR(0, 190, __pyx_L1_error)
+    if (PyDict_SetItem(__pyx_t_8, __pyx_n_s_scores, __pyx_t_5) < 0) __PYX_ERR(0, 194, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":192
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":196
  *             indices=np.asarray(ab_indices)[:cursor],
  *             scores=np.asarray(ab_scores)[:cursor],
  *             labels=np.asarray(ab_labels)[:cursor],             # <<<<<<<<<<<<<<
  *         )
  *
  */
-    __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_np); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 192, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_np); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 196, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
-    __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_asarray); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 192, __pyx_L1_error)
+    __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_asarray); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 196, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
     __pyx_t_4 = NULL;
@@ -5024,23 +5068,23 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
     }
     __pyx_t_5 = (__pyx_t_4) ? __Pyx_PyObject_Call2Args(__pyx_t_7, __pyx_t_4, __pyx_v_ab_labels) : __Pyx_PyObject_CallOneArg(__pyx_t_7, __pyx_v_ab_labels);
     __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
-    if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 192, __pyx_L1_error)
+    if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 196, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-    __pyx_t_7 = __Pyx_PyObject_GetSlice(__pyx_t_5, 0, 0, NULL, &__pyx_v_cursor, NULL, 0, 0, 1); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 192, __pyx_L1_error)
+    __pyx_t_7 = __Pyx_PyObject_GetSlice(__pyx_t_5, 0, 0, NULL, &__pyx_v_cursor, NULL, 0, 0, 1); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 196, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
-    if (PyDict_SetItem(__pyx_t_8, __pyx_n_s_labels, __pyx_t_7) < 0) __PYX_ERR(0, 190, __pyx_L1_error)
+    if (PyDict_SetItem(__pyx_t_8, __pyx_n_s_labels, __pyx_t_7) < 0) __PYX_ERR(0, 194, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":189
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":193
  *             cursor = None
  *
  *         return ConcatenatedTopk(             # <<<<<<<<<<<<<<
  *             indices=np.asarray(ab_indices)[:cursor],
  *             scores=np.asarray(ab_scores)[:cursor],
  */
-    __pyx_t_7 = __Pyx_PyObject_Call(__pyx_t_6, __pyx_empty_tuple, __pyx_t_8); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 189, __pyx_L1_error)
+    __pyx_t_7 = __Pyx_PyObject_Call(__pyx_t_6, __pyx_empty_tuple, __pyx_t_8); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 193, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
     __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
@@ -5048,7 +5092,7 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
     __pyx_t_7 = 0;
     goto __pyx_L0;
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":171
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":175
  *
  *     # create the buffer and run the cython function
  *     if len(a_indices.shape) == 1:             # <<<<<<<<<<<<<<
@@ -5057,48 +5101,48 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
  */
   }
 
-  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":195
+  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":199
  *         )
  *
  *     elif len(a_indices == 2):             # <<<<<<<<<<<<<<
  *         batch_size = a_indices.shape[0]
  *         ab_indices = np.full((batch_size, total), dtype=NP_DTYPE_LONG, fill_value=-1)
  */
-  __pyx_t_7 = __Pyx_PyInt_EqObjC(__pyx_v_a_indices, __pyx_int_2, 2, 0); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 195, __pyx_L1_error)
+  __pyx_t_7 = __Pyx_PyInt_EqObjC(__pyx_v_a_indices, __pyx_int_2, 2, 0); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 199, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_7);
-  __pyx_t_3 = PyObject_Length(__pyx_t_7); if (unlikely(__pyx_t_3 == ((Py_ssize_t)-1))) __PYX_ERR(0, 195, __pyx_L1_error)
+  __pyx_t_3 = PyObject_Length(__pyx_t_7); if (unlikely(__pyx_t_3 == ((Py_ssize_t)-1))) __PYX_ERR(0, 199, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
   __pyx_t_1 = (__pyx_t_3 != 0);
   if (likely(__pyx_t_1)) {
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":196
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":200
  *
  *     elif len(a_indices == 2):
  *         batch_size = a_indices.shape[0]             # <<<<<<<<<<<<<<
  *         ab_indices = np.full((batch_size, total), dtype=NP_DTYPE_LONG, fill_value=-1)
  *         ab_scores = np.full((batch_size, total), dtype=NP_DTYPE_FLOAT, fill_value=np.nan)
  */
-    __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_v_a_indices, __pyx_n_s_shape); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 196, __pyx_L1_error)
+    __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_v_a_indices, __pyx_n_s_shape); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 200, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
-    __pyx_t_8 = __Pyx_GetItemInt(__pyx_t_7, 0, long, 1, __Pyx_PyInt_From_long, 0, 0, 1); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 196, __pyx_L1_error)
+    __pyx_t_8 = __Pyx_GetItemInt(__pyx_t_7, 0, long, 1, __Pyx_PyInt_From_long, 0, 0, 1); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 200, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_8);
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
     __pyx_v_batch_size = __pyx_t_8;
     __pyx_t_8 = 0;
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":197
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":201
  *     elif len(a_indices == 2):
  *         batch_size = a_indices.shape[0]
  *         ab_indices = np.full((batch_size, total), dtype=NP_DTYPE_LONG, fill_value=-1)             # <<<<<<<<<<<<<<
  *         ab_scores = np.full((batch_size, total), dtype=NP_DTYPE_FLOAT, fill_value=np.nan)
  *         ab_labels = np.full((batch_size, total), dtype=NP_DTYPE_LONG, fill_value=-1)
  */
-    __Pyx_GetModuleGlobalName(__pyx_t_8, __pyx_n_s_np); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 197, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_8, __pyx_n_s_np); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 201, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_8);
-    __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_t_8, __pyx_n_s_full); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 197, __pyx_L1_error)
+    __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_t_8, __pyx_n_s_full); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 201, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
-    __pyx_t_8 = PyTuple_New(2); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 197, __pyx_L1_error)
+    __pyx_t_8 = PyTuple_New(2); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 201, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_8);
     __Pyx_INCREF(__pyx_v_batch_size);
     __Pyx_GIVEREF(__pyx_v_batch_size);
@@ -5106,19 +5150,19 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
     __Pyx_INCREF(__pyx_v_total);
     __Pyx_GIVEREF(__pyx_v_total);
     PyTuple_SET_ITEM(__pyx_t_8, 1, __pyx_v_total);
-    __pyx_t_6 = PyTuple_New(1); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 197, __pyx_L1_error)
+    __pyx_t_6 = PyTuple_New(1); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 201, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_GIVEREF(__pyx_t_8);
     PyTuple_SET_ITEM(__pyx_t_6, 0, __pyx_t_8);
     __pyx_t_8 = 0;
-    __pyx_t_8 = __Pyx_PyDict_NewPresized(2); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 197, __pyx_L1_error)
+    __pyx_t_8 = __Pyx_PyDict_NewPresized(2); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 201, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_8);
-    __Pyx_GetModuleGlobalName(__pyx_t_5, __pyx_n_s_NP_DTYPE_LONG); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 197, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_5, __pyx_n_s_NP_DTYPE_LONG); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 201, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
-    if (PyDict_SetItem(__pyx_t_8, __pyx_n_s_dtype, __pyx_t_5) < 0) __PYX_ERR(0, 197, __pyx_L1_error)
+    if (PyDict_SetItem(__pyx_t_8, __pyx_n_s_dtype, __pyx_t_5) < 0) __PYX_ERR(0, 201, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
-    if (PyDict_SetItem(__pyx_t_8, __pyx_n_s_fill_value, __pyx_int_neg_1) < 0) __PYX_ERR(0, 197, __pyx_L1_error)
-    __pyx_t_5 = __Pyx_PyObject_Call(__pyx_t_7, __pyx_t_6, __pyx_t_8); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 197, __pyx_L1_error)
+    if (PyDict_SetItem(__pyx_t_8, __pyx_n_s_fill_value, __pyx_int_neg_1) < 0) __PYX_ERR(0, 201, __pyx_L1_error)
+    __pyx_t_5 = __Pyx_PyObject_Call(__pyx_t_7, __pyx_t_6, __pyx_t_8); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 201, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
@@ -5126,19 +5170,19 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
     __pyx_v_ab_indices = __pyx_t_5;
     __pyx_t_5 = 0;
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":198
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":202
  *         batch_size = a_indices.shape[0]
  *         ab_indices = np.full((batch_size, total), dtype=NP_DTYPE_LONG, fill_value=-1)
  *         ab_scores = np.full((batch_size, total), dtype=NP_DTYPE_FLOAT, fill_value=np.nan)             # <<<<<<<<<<<<<<
  *         ab_labels = np.full((batch_size, total), dtype=NP_DTYPE_LONG, fill_value=-1)
  *         cursors = np.full((batch_size,), dtype=NP_DTYPE_LONG, fill_value=-1)
  */
-    __Pyx_GetModuleGlobalName(__pyx_t_5, __pyx_n_s_np); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 198, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_5, __pyx_n_s_np); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 202, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
-    __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_t_5, __pyx_n_s_full); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 198, __pyx_L1_error)
+    __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_t_5, __pyx_n_s_full); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 202, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_8);
     __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
-    __pyx_t_5 = PyTuple_New(2); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 198, __pyx_L1_error)
+    __pyx_t_5 = PyTuple_New(2); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 202, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
     __Pyx_INCREF(__pyx_v_batch_size);
     __Pyx_GIVEREF(__pyx_v_batch_size);
@@ -5146,25 +5190,25 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
     __Pyx_INCREF(__pyx_v_total);
     __Pyx_GIVEREF(__pyx_v_total);
     PyTuple_SET_ITEM(__pyx_t_5, 1, __pyx_v_total);
-    __pyx_t_6 = PyTuple_New(1); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 198, __pyx_L1_error)
+    __pyx_t_6 = PyTuple_New(1); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 202, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_GIVEREF(__pyx_t_5);
     PyTuple_SET_ITEM(__pyx_t_6, 0, __pyx_t_5);
     __pyx_t_5 = 0;
-    __pyx_t_5 = __Pyx_PyDict_NewPresized(2); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 198, __pyx_L1_error)
+    __pyx_t_5 = __Pyx_PyDict_NewPresized(2); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 202, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
-    __Pyx_GetModuleGlobalName(__pyx_t_7, __pyx_n_s_NP_DTYPE_FLOAT); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 198, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_7, __pyx_n_s_NP_DTYPE_FLOAT); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 202, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
-    if (PyDict_SetItem(__pyx_t_5, __pyx_n_s_dtype, __pyx_t_7) < 0) __PYX_ERR(0, 198, __pyx_L1_error)
+    if (PyDict_SetItem(__pyx_t_5, __pyx_n_s_dtype, __pyx_t_7) < 0) __PYX_ERR(0, 202, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-    __Pyx_GetModuleGlobalName(__pyx_t_7, __pyx_n_s_np); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 198, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_7, __pyx_n_s_np); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 202, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
-    __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_7, __pyx_n_s_nan); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 198, __pyx_L1_error)
+    __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_7, __pyx_n_s_nan); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 202, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-    if (PyDict_SetItem(__pyx_t_5, __pyx_n_s_fill_value, __pyx_t_4) < 0) __PYX_ERR(0, 198, __pyx_L1_error)
+    if (PyDict_SetItem(__pyx_t_5, __pyx_n_s_fill_value, __pyx_t_4) < 0) __PYX_ERR(0, 202, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-    __pyx_t_4 = __Pyx_PyObject_Call(__pyx_t_8, __pyx_t_6, __pyx_t_5); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 198, __pyx_L1_error)
+    __pyx_t_4 = __Pyx_PyObject_Call(__pyx_t_8, __pyx_t_6, __pyx_t_5); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 202, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
     __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
@@ -5172,19 +5216,19 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
     __pyx_v_ab_scores = __pyx_t_4;
     __pyx_t_4 = 0;
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":199
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":203
  *         ab_indices = np.full((batch_size, total), dtype=NP_DTYPE_LONG, fill_value=-1)
  *         ab_scores = np.full((batch_size, total), dtype=NP_DTYPE_FLOAT, fill_value=np.nan)
  *         ab_labels = np.full((batch_size, total), dtype=NP_DTYPE_LONG, fill_value=-1)             # <<<<<<<<<<<<<<
  *         cursors = np.full((batch_size,), dtype=NP_DTYPE_LONG, fill_value=-1)
  *         cursors = _concat_batch(
  */
-    __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_np); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 199, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_np); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 203, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
-    __pyx_t_5 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_full); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 199, __pyx_L1_error)
+    __pyx_t_5 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_full); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 203, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-    __pyx_t_4 = PyTuple_New(2); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 199, __pyx_L1_error)
+    __pyx_t_4 = PyTuple_New(2); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 203, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
     __Pyx_INCREF(__pyx_v_batch_size);
     __Pyx_GIVEREF(__pyx_v_batch_size);
@@ -5192,19 +5236,19 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
     __Pyx_INCREF(__pyx_v_total);
     __Pyx_GIVEREF(__pyx_v_total);
     PyTuple_SET_ITEM(__pyx_t_4, 1, __pyx_v_total);
-    __pyx_t_6 = PyTuple_New(1); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 199, __pyx_L1_error)
+    __pyx_t_6 = PyTuple_New(1); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 203, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_GIVEREF(__pyx_t_4);
     PyTuple_SET_ITEM(__pyx_t_6, 0, __pyx_t_4);
     __pyx_t_4 = 0;
-    __pyx_t_4 = __Pyx_PyDict_NewPresized(2); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 199, __pyx_L1_error)
+    __pyx_t_4 = __Pyx_PyDict_NewPresized(2); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 203, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
-    __Pyx_GetModuleGlobalName(__pyx_t_8, __pyx_n_s_NP_DTYPE_LONG); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 199, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_8, __pyx_n_s_NP_DTYPE_LONG); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 203, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_8);
-    if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_dtype, __pyx_t_8) < 0) __PYX_ERR(0, 199, __pyx_L1_error)
+    if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_dtype, __pyx_t_8) < 0) __PYX_ERR(0, 203, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
-    if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_fill_value, __pyx_int_neg_1) < 0) __PYX_ERR(0, 199, __pyx_L1_error)
-    __pyx_t_8 = __Pyx_PyObject_Call(__pyx_t_5, __pyx_t_6, __pyx_t_4); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 199, __pyx_L1_error)
+    if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_fill_value, __pyx_int_neg_1) < 0) __PYX_ERR(0, 203, __pyx_L1_error)
+    __pyx_t_8 = __Pyx_PyObject_Call(__pyx_t_5, __pyx_t_6, __pyx_t_4); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 203, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_8);
     __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
@@ -5212,36 +5256,36 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
     __pyx_v_ab_labels = __pyx_t_8;
     __pyx_t_8 = 0;
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":200
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":204
  *         ab_scores = np.full((batch_size, total), dtype=NP_DTYPE_FLOAT, fill_value=np.nan)
  *         ab_labels = np.full((batch_size, total), dtype=NP_DTYPE_LONG, fill_value=-1)
  *         cursors = np.full((batch_size,), dtype=NP_DTYPE_LONG, fill_value=-1)             # <<<<<<<<<<<<<<
  *         cursors = _concat_batch(
  *             ab_indices,
  */
-    __Pyx_GetModuleGlobalName(__pyx_t_8, __pyx_n_s_np); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 200, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_8, __pyx_n_s_np); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 204, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_8);
-    __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_8, __pyx_n_s_full); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 200, __pyx_L1_error)
+    __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_8, __pyx_n_s_full); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 204, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
     __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
-    __pyx_t_8 = PyTuple_New(1); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 200, __pyx_L1_error)
+    __pyx_t_8 = PyTuple_New(1); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 204, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_8);
     __Pyx_INCREF(__pyx_v_batch_size);
     __Pyx_GIVEREF(__pyx_v_batch_size);
     PyTuple_SET_ITEM(__pyx_t_8, 0, __pyx_v_batch_size);
-    __pyx_t_6 = PyTuple_New(1); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 200, __pyx_L1_error)
+    __pyx_t_6 = PyTuple_New(1); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 204, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_GIVEREF(__pyx_t_8);
     PyTuple_SET_ITEM(__pyx_t_6, 0, __pyx_t_8);
     __pyx_t_8 = 0;
-    __pyx_t_8 = __Pyx_PyDict_NewPresized(2); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 200, __pyx_L1_error)
+    __pyx_t_8 = __Pyx_PyDict_NewPresized(2); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 204, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_8);
-    __Pyx_GetModuleGlobalName(__pyx_t_5, __pyx_n_s_NP_DTYPE_LONG); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 200, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_5, __pyx_n_s_NP_DTYPE_LONG); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 204, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
-    if (PyDict_SetItem(__pyx_t_8, __pyx_n_s_dtype, __pyx_t_5) < 0) __PYX_ERR(0, 200, __pyx_L1_error)
+    if (PyDict_SetItem(__pyx_t_8, __pyx_n_s_dtype, __pyx_t_5) < 0) __PYX_ERR(0, 204, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
-    if (PyDict_SetItem(__pyx_t_8, __pyx_n_s_fill_value, __pyx_int_neg_1) < 0) __PYX_ERR(0, 200, __pyx_L1_error)
-    __pyx_t_5 = __Pyx_PyObject_Call(__pyx_t_4, __pyx_t_6, __pyx_t_8); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 200, __pyx_L1_error)
+    if (PyDict_SetItem(__pyx_t_8, __pyx_n_s_fill_value, __pyx_int_neg_1) < 0) __PYX_ERR(0, 204, __pyx_L1_error)
+    __pyx_t_5 = __Pyx_PyObject_Call(__pyx_t_4, __pyx_t_6, __pyx_t_8); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 204, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
@@ -5249,43 +5293,43 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
     __pyx_v_cursors = __pyx_t_5;
     __pyx_t_5 = 0;
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":202
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":206
  *         cursors = np.full((batch_size,), dtype=NP_DTYPE_LONG, fill_value=-1)
  *         cursors = _concat_batch(
  *             ab_indices,             # <<<<<<<<<<<<<<
  *             ab_scores,
  *             ab_labels,
  */
-    __pyx_t_18 = __Pyx_PyObject_to_MemoryviewSlice_dsds_nn___pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_LONG(__pyx_v_ab_indices, PyBUF_WRITABLE); if (unlikely(!__pyx_t_18.memview)) __PYX_ERR(0, 202, __pyx_L1_error)
+    __pyx_t_18 = __Pyx_PyObject_to_MemoryviewSlice_dsds_nn___pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_LONG(__pyx_v_ab_indices, PyBUF_WRITABLE); if (unlikely(!__pyx_t_18.memview)) __PYX_ERR(0, 206, __pyx_L1_error)
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":203
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":207
  *         cursors = _concat_batch(
  *             ab_indices,
  *             ab_scores,             # <<<<<<<<<<<<<<
  *             ab_labels,
  *             a_indices.astype(NP_DTYPE_LONG),
  */
-    __pyx_t_19 = __Pyx_PyObject_to_MemoryviewSlice_dsds_nn___pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_FLOAT(__pyx_v_ab_scores, PyBUF_WRITABLE); if (unlikely(!__pyx_t_19.memview)) __PYX_ERR(0, 203, __pyx_L1_error)
+    __pyx_t_19 = __Pyx_PyObject_to_MemoryviewSlice_dsds_nn___pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_FLOAT(__pyx_v_ab_scores, PyBUF_WRITABLE); if (unlikely(!__pyx_t_19.memview)) __PYX_ERR(0, 207, __pyx_L1_error)
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":204
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":208
  *             ab_indices,
  *             ab_scores,
  *             ab_labels,             # <<<<<<<<<<<<<<
  *             a_indices.astype(NP_DTYPE_LONG),
  *             a_scores.astype(NP_DTYPE_FLOAT),
  */
-    __pyx_t_20 = __Pyx_PyObject_to_MemoryviewSlice_dsds_nn___pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_LONG(__pyx_v_ab_labels, PyBUF_WRITABLE); if (unlikely(!__pyx_t_20.memview)) __PYX_ERR(0, 204, __pyx_L1_error)
+    __pyx_t_20 = __Pyx_PyObject_to_MemoryviewSlice_dsds_nn___pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_LONG(__pyx_v_ab_labels, PyBUF_WRITABLE); if (unlikely(!__pyx_t_20.memview)) __PYX_ERR(0, 208, __pyx_L1_error)
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":205
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":209
  *             ab_scores,
  *             ab_labels,
  *             a_indices.astype(NP_DTYPE_LONG),             # <<<<<<<<<<<<<<
  *             a_scores.astype(NP_DTYPE_FLOAT),
  *             b_indices.astype(NP_DTYPE_LONG),
  */
-    __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_v_a_indices, __pyx_n_s_astype); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 205, __pyx_L1_error)
+    __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_v_a_indices, __pyx_n_s_astype); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 209, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_8);
-    __Pyx_GetModuleGlobalName(__pyx_t_6, __pyx_n_s_NP_DTYPE_LONG); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 205, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_6, __pyx_n_s_NP_DTYPE_LONG); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 209, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
     __pyx_t_4 = NULL;
     if (CYTHON_UNPACK_METHODS && likely(PyMethod_Check(__pyx_t_8))) {
@@ -5300,22 +5344,22 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
     __pyx_t_5 = (__pyx_t_4) ? __Pyx_PyObject_Call2Args(__pyx_t_8, __pyx_t_4, __pyx_t_6) : __Pyx_PyObject_CallOneArg(__pyx_t_8, __pyx_t_6);
     __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 205, __pyx_L1_error)
+    if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 209, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
     __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
-    __pyx_t_21 = __Pyx_PyObject_to_MemoryviewSlice_dsds_nn___pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_LONG(__pyx_t_5, PyBUF_WRITABLE); if (unlikely(!__pyx_t_21.memview)) __PYX_ERR(0, 205, __pyx_L1_error)
+    __pyx_t_21 = __Pyx_PyObject_to_MemoryviewSlice_dsds_nn___pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_LONG(__pyx_t_5, PyBUF_WRITABLE); if (unlikely(!__pyx_t_21.memview)) __PYX_ERR(0, 209, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":206
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":210
  *             ab_labels,
  *             a_indices.astype(NP_DTYPE_LONG),
  *             a_scores.astype(NP_DTYPE_FLOAT),             # <<<<<<<<<<<<<<
  *             b_indices.astype(NP_DTYPE_LONG),
  *             b_scores.astype(NP_DTYPE_FLOAT),
  */
-    __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_v_a_scores, __pyx_n_s_astype); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 206, __pyx_L1_error)
+    __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_v_a_scores, __pyx_n_s_astype); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 210, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_8);
-    __Pyx_GetModuleGlobalName(__pyx_t_6, __pyx_n_s_NP_DTYPE_FLOAT); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 206, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_6, __pyx_n_s_NP_DTYPE_FLOAT); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 210, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
     __pyx_t_4 = NULL;
     if (CYTHON_UNPACK_METHODS && likely(PyMethod_Check(__pyx_t_8))) {
@@ -5330,22 +5374,22 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
     __pyx_t_5 = (__pyx_t_4) ? __Pyx_PyObject_Call2Args(__pyx_t_8, __pyx_t_4, __pyx_t_6) : __Pyx_PyObject_CallOneArg(__pyx_t_8, __pyx_t_6);
     __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 206, __pyx_L1_error)
+    if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 210, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
     __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
-    __pyx_t_22 = __Pyx_PyObject_to_MemoryviewSlice_dsds_nn___pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_FLOAT(__pyx_t_5, PyBUF_WRITABLE); if (unlikely(!__pyx_t_22.memview)) __PYX_ERR(0, 206, __pyx_L1_error)
+    __pyx_t_22 = __Pyx_PyObject_to_MemoryviewSlice_dsds_nn___pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_FLOAT(__pyx_t_5, PyBUF_WRITABLE); if (unlikely(!__pyx_t_22.memview)) __PYX_ERR(0, 210, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":207
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":211
  *             a_indices.astype(NP_DTYPE_LONG),
  *             a_scores.astype(NP_DTYPE_FLOAT),
  *             b_indices.astype(NP_DTYPE_LONG),             # <<<<<<<<<<<<<<
  *             b_scores.astype(NP_DTYPE_FLOAT),
  *             cursors,
  */
-    __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_v_b_indices, __pyx_n_s_astype); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 207, __pyx_L1_error)
+    __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_v_b_indices, __pyx_n_s_astype); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 211, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_8);
-    __Pyx_GetModuleGlobalName(__pyx_t_6, __pyx_n_s_NP_DTYPE_LONG); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 207, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_6, __pyx_n_s_NP_DTYPE_LONG); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 211, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
     __pyx_t_4 = NULL;
     if (CYTHON_UNPACK_METHODS && likely(PyMethod_Check(__pyx_t_8))) {
@@ -5360,22 +5404,22 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
     __pyx_t_5 = (__pyx_t_4) ? __Pyx_PyObject_Call2Args(__pyx_t_8, __pyx_t_4, __pyx_t_6) : __Pyx_PyObject_CallOneArg(__pyx_t_8, __pyx_t_6);
     __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 207, __pyx_L1_error)
+    if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 211, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
     __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
-    __pyx_t_23 = __Pyx_PyObject_to_MemoryviewSlice_dsds_nn___pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_LONG(__pyx_t_5, PyBUF_WRITABLE); if (unlikely(!__pyx_t_23.memview)) __PYX_ERR(0, 207, __pyx_L1_error)
+    __pyx_t_23 = __Pyx_PyObject_to_MemoryviewSlice_dsds_nn___pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_LONG(__pyx_t_5, PyBUF_WRITABLE); if (unlikely(!__pyx_t_23.memview)) __PYX_ERR(0, 211, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":208
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":212
  *             a_scores.astype(NP_DTYPE_FLOAT),
  *             b_indices.astype(NP_DTYPE_LONG),
  *             b_scores.astype(NP_DTYPE_FLOAT),             # <<<<<<<<<<<<<<
  *             cursors,
  *             total,
  */
-    __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_v_b_scores, __pyx_n_s_astype); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 208, __pyx_L1_error)
+    __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_v_b_scores, __pyx_n_s_astype); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 212, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_8);
-    __Pyx_GetModuleGlobalName(__pyx_t_6, __pyx_n_s_NP_DTYPE_FLOAT); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 208, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_6, __pyx_n_s_NP_DTYPE_FLOAT); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 212, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
     __pyx_t_4 = NULL;
     if (CYTHON_UNPACK_METHODS && likely(PyMethod_Check(__pyx_t_8))) {
@@ -5390,47 +5434,47 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
     __pyx_t_5 = (__pyx_t_4) ? __Pyx_PyObject_Call2Args(__pyx_t_8, __pyx_t_4, __pyx_t_6) : __Pyx_PyObject_CallOneArg(__pyx_t_8, __pyx_t_6);
     __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 208, __pyx_L1_error)
+    if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 212, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
     __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
-    __pyx_t_24 = __Pyx_PyObject_to_MemoryviewSlice_dsds_nn___pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_FLOAT(__pyx_t_5, PyBUF_WRITABLE); if (unlikely(!__pyx_t_24.memview)) __PYX_ERR(0, 208, __pyx_L1_error)
+    __pyx_t_24 = __Pyx_PyObject_to_MemoryviewSlice_dsds_nn___pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_FLOAT(__pyx_t_5, PyBUF_WRITABLE); if (unlikely(!__pyx_t_24.memview)) __PYX_ERR(0, 212, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":209
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":213
  *             b_indices.astype(NP_DTYPE_LONG),
  *             b_scores.astype(NP_DTYPE_FLOAT),
  *             cursors,             # <<<<<<<<<<<<<<
  *             total,
  *             max_a,
  */
-    __pyx_t_14 = __Pyx_PyObject_to_MemoryviewSlice_ds_nn___pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_LONG(__pyx_v_cursors, PyBUF_WRITABLE); if (unlikely(!__pyx_t_14.memview)) __PYX_ERR(0, 209, __pyx_L1_error)
+    __pyx_t_14 = __Pyx_PyObject_to_MemoryviewSlice_ds_nn___pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_LONG(__pyx_v_cursors, PyBUF_WRITABLE); if (unlikely(!__pyx_t_14.memview)) __PYX_ERR(0, 213, __pyx_L1_error)
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":210
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":214
  *             b_scores.astype(NP_DTYPE_FLOAT),
  *             cursors,
  *             total,             # <<<<<<<<<<<<<<
  *             max_a,
  *         )
  */
-    __pyx_t_25 = __Pyx_PyInt_As_unsigned_long(__pyx_v_total); if (unlikely((__pyx_t_25 == (unsigned long)-1) && PyErr_Occurred())) __PYX_ERR(0, 210, __pyx_L1_error)
+    __pyx_t_25 = __Pyx_PyInt_As_unsigned_long(__pyx_v_total); if (unlikely((__pyx_t_25 == (unsigned long)-1) && PyErr_Occurred())) __PYX_ERR(0, 214, __pyx_L1_error)
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":211
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":215
  *             cursors,
  *             total,
  *             max_a,             # <<<<<<<<<<<<<<
  *         )
  *         if truncate:
  */
-    __pyx_t_26 = __Pyx_PyInt_As_unsigned_long(__pyx_v_max_a); if (unlikely((__pyx_t_26 == (unsigned long)-1) && PyErr_Occurred())) __PYX_ERR(0, 211, __pyx_L1_error)
+    __pyx_t_26 = __Pyx_PyInt_As_unsigned_long(__pyx_v_max_a); if (unlikely((__pyx_t_26 == (unsigned long)-1) && PyErr_Occurred())) __PYX_ERR(0, 215, __pyx_L1_error)
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":201
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":205
  *         ab_labels = np.full((batch_size, total), dtype=NP_DTYPE_LONG, fill_value=-1)
  *         cursors = np.full((batch_size,), dtype=NP_DTYPE_LONG, fill_value=-1)
  *         cursors = _concat_batch(             # <<<<<<<<<<<<<<
  *             ab_indices,
  *             ab_scores,
  */
-    __pyx_t_12 = __pyx_f_18raffle_ds_research_5tools_7c_tools_21concat_search_results__concat_batch(__pyx_t_18, __pyx_t_19, __pyx_t_20, __pyx_t_21, __pyx_t_22, __pyx_t_23, __pyx_t_24, __pyx_t_14, __pyx_t_25, __pyx_t_26); if (unlikely(!__pyx_t_12.memview)) __PYX_ERR(0, 201, __pyx_L1_error)
+    __pyx_t_12 = __pyx_f_18raffle_ds_research_5tools_7c_tools_21concat_search_results__concat_batch(__pyx_t_18, __pyx_t_19, __pyx_t_20, __pyx_t_21, __pyx_t_22, __pyx_t_23, __pyx_t_24, __pyx_t_14, __pyx_t_25, __pyx_t_26); if (unlikely(!__pyx_t_12.memview)) __PYX_ERR(0, 205, __pyx_L1_error)
     __PYX_XDEC_MEMVIEW(&__pyx_t_18, 1);
     __pyx_t_18.memview = NULL;
     __pyx_t_18.data = NULL;
@@ -5455,7 +5499,7 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
     __PYX_XDEC_MEMVIEW(&__pyx_t_14, 1);
     __pyx_t_14.memview = NULL;
     __pyx_t_14.data = NULL;
-    __pyx_t_5 = __pyx_memoryview_fromslice(__pyx_t_12, 1, (PyObject *(*)(char *)) __pyx_memview_get_nn___pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_LONG, (int (*)(char *, PyObject *)) __pyx_memview_set_nn___pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_LONG, 0);; if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 201, __pyx_L1_error)
+    __pyx_t_5 = __pyx_memoryview_fromslice(__pyx_t_12, 1, (PyObject *(*)(char *)) __pyx_memview_get_nn___pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_LONG, (int (*)(char *, PyObject *)) __pyx_memview_set_nn___pyx_t_18raffle_ds_research_5tools_7c_tools_21concat_search_results_DTYPE_LONG, 0);; if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 205, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
     __PYX_XDEC_MEMVIEW(&__pyx_t_12, 1);
     __pyx_t_12.memview = NULL;
@@ -5463,26 +5507,26 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
     __Pyx_DECREF_SET(__pyx_v_cursors, __pyx_t_5);
     __pyx_t_5 = 0;
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":213
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":217
  *             max_a,
  *         )
  *         if truncate:             # <<<<<<<<<<<<<<
  *             cursor = np.min(cursors)
  *         else:
  */
-    __pyx_t_1 = __Pyx_PyObject_IsTrue(__pyx_v_truncate); if (unlikely(__pyx_t_1 < 0)) __PYX_ERR(0, 213, __pyx_L1_error)
+    __pyx_t_1 = __Pyx_PyObject_IsTrue(__pyx_v_truncate); if (unlikely(__pyx_t_1 < 0)) __PYX_ERR(0, 217, __pyx_L1_error)
     if (__pyx_t_1) {
 
-      /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":214
+      /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":218
  *         )
  *         if truncate:
  *             cursor = np.min(cursors)             # <<<<<<<<<<<<<<
  *         else:
  *             cursor = None
  */
-      __Pyx_GetModuleGlobalName(__pyx_t_8, __pyx_n_s_np); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 214, __pyx_L1_error)
+      __Pyx_GetModuleGlobalName(__pyx_t_8, __pyx_n_s_np); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 218, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_8);
-      __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_t_8, __pyx_n_s_min); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 214, __pyx_L1_error)
+      __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_t_8, __pyx_n_s_min); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 218, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_6);
       __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
       __pyx_t_8 = NULL;
@@ -5497,13 +5541,13 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
       }
       __pyx_t_5 = (__pyx_t_8) ? __Pyx_PyObject_Call2Args(__pyx_t_6, __pyx_t_8, __pyx_v_cursors) : __Pyx_PyObject_CallOneArg(__pyx_t_6, __pyx_v_cursors);
       __Pyx_XDECREF(__pyx_t_8); __pyx_t_8 = 0;
-      if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 214, __pyx_L1_error)
+      if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 218, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_5);
       __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
       __pyx_v_cursor = __pyx_t_5;
       __pyx_t_5 = 0;
 
-      /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":213
+      /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":217
  *             max_a,
  *         )
  *         if truncate:             # <<<<<<<<<<<<<<
@@ -5513,7 +5557,7 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
       goto __pyx_L6;
     }
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":216
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":220
  *             cursor = np.min(cursors)
  *         else:
  *             cursor = None             # <<<<<<<<<<<<<<
@@ -5526,7 +5570,7 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
     }
     __pyx_L6:;
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":217
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":221
  *         else:
  *             cursor = None
  *         return ConcatenatedTopk(             # <<<<<<<<<<<<<<
@@ -5534,21 +5578,21 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
  *             scores=np.asarray(ab_scores)[:, :cursor],
  */
     __Pyx_XDECREF(__pyx_r);
-    __Pyx_GetModuleGlobalName(__pyx_t_5, __pyx_n_s_ConcatenatedTopk); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 217, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_5, __pyx_n_s_ConcatenatedTopk); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 221, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":218
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":222
  *             cursor = None
  *         return ConcatenatedTopk(
  *             indices=np.asarray(ab_indices)[:, :cursor],             # <<<<<<<<<<<<<<
  *             scores=np.asarray(ab_scores)[:, :cursor],
  *             labels=np.asarray(ab_labels)[:, :cursor],
  */
-    __pyx_t_6 = __Pyx_PyDict_NewPresized(3); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 218, __pyx_L1_error)
+    __pyx_t_6 = __Pyx_PyDict_NewPresized(3); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 222, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
-    __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_np); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 218, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_np); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 222, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
-    __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_asarray); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 218, __pyx_L1_error)
+    __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_asarray); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 222, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
     __pyx_t_4 = NULL;
@@ -5563,12 +5607,12 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
     }
     __pyx_t_8 = (__pyx_t_4) ? __Pyx_PyObject_Call2Args(__pyx_t_7, __pyx_t_4, __pyx_v_ab_indices) : __Pyx_PyObject_CallOneArg(__pyx_t_7, __pyx_v_ab_indices);
     __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
-    if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 218, __pyx_L1_error)
+    if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 222, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_8);
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-    __pyx_t_7 = PySlice_New(Py_None, __pyx_v_cursor, Py_None); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 218, __pyx_L1_error)
+    __pyx_t_7 = PySlice_New(Py_None, __pyx_v_cursor, Py_None); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 222, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
-    __pyx_t_4 = PyTuple_New(2); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 218, __pyx_L1_error)
+    __pyx_t_4 = PyTuple_New(2); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 222, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
     __Pyx_INCREF(__pyx_slice__3);
     __Pyx_GIVEREF(__pyx_slice__3);
@@ -5576,23 +5620,23 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
     __Pyx_GIVEREF(__pyx_t_7);
     PyTuple_SET_ITEM(__pyx_t_4, 1, __pyx_t_7);
     __pyx_t_7 = 0;
-    __pyx_t_7 = __Pyx_PyObject_GetItem(__pyx_t_8, __pyx_t_4); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 218, __pyx_L1_error)
+    __pyx_t_7 = __Pyx_PyObject_GetItem(__pyx_t_8, __pyx_t_4); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 222, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-    if (PyDict_SetItem(__pyx_t_6, __pyx_n_s_indices, __pyx_t_7) < 0) __PYX_ERR(0, 218, __pyx_L1_error)
+    if (PyDict_SetItem(__pyx_t_6, __pyx_n_s_indices, __pyx_t_7) < 0) __PYX_ERR(0, 222, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":219
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":223
  *         return ConcatenatedTopk(
  *             indices=np.asarray(ab_indices)[:, :cursor],
  *             scores=np.asarray(ab_scores)[:, :cursor],             # <<<<<<<<<<<<<<
  *             labels=np.asarray(ab_labels)[:, :cursor],
  *         )
  */
-    __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_np); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 219, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_np); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 223, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
-    __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_asarray); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 219, __pyx_L1_error)
+    __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_asarray); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 223, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_8);
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
     __pyx_t_4 = NULL;
@@ -5607,12 +5651,12 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
     }
     __pyx_t_7 = (__pyx_t_4) ? __Pyx_PyObject_Call2Args(__pyx_t_8, __pyx_t_4, __pyx_v_ab_scores) : __Pyx_PyObject_CallOneArg(__pyx_t_8, __pyx_v_ab_scores);
     __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
-    if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 219, __pyx_L1_error)
+    if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 223, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
-    __pyx_t_8 = PySlice_New(Py_None, __pyx_v_cursor, Py_None); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 219, __pyx_L1_error)
+    __pyx_t_8 = PySlice_New(Py_None, __pyx_v_cursor, Py_None); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 223, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_8);
-    __pyx_t_4 = PyTuple_New(2); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 219, __pyx_L1_error)
+    __pyx_t_4 = PyTuple_New(2); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 223, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
     __Pyx_INCREF(__pyx_slice__3);
     __Pyx_GIVEREF(__pyx_slice__3);
@@ -5620,23 +5664,23 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
     __Pyx_GIVEREF(__pyx_t_8);
     PyTuple_SET_ITEM(__pyx_t_4, 1, __pyx_t_8);
     __pyx_t_8 = 0;
-    __pyx_t_8 = __Pyx_PyObject_GetItem(__pyx_t_7, __pyx_t_4); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 219, __pyx_L1_error)
+    __pyx_t_8 = __Pyx_PyObject_GetItem(__pyx_t_7, __pyx_t_4); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 223, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_8);
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-    if (PyDict_SetItem(__pyx_t_6, __pyx_n_s_scores, __pyx_t_8) < 0) __PYX_ERR(0, 218, __pyx_L1_error)
+    if (PyDict_SetItem(__pyx_t_6, __pyx_n_s_scores, __pyx_t_8) < 0) __PYX_ERR(0, 222, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":220
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":224
  *             indices=np.asarray(ab_indices)[:, :cursor],
  *             scores=np.asarray(ab_scores)[:, :cursor],
  *             labels=np.asarray(ab_labels)[:, :cursor],             # <<<<<<<<<<<<<<
  *         )
  *     else:
  */
-    __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_np); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 220, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_np); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 224, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
-    __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_asarray); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 220, __pyx_L1_error)
+    __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_asarray); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 224, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
     __pyx_t_4 = NULL;
@@ -5651,12 +5695,12 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
     }
     __pyx_t_8 = (__pyx_t_4) ? __Pyx_PyObject_Call2Args(__pyx_t_7, __pyx_t_4, __pyx_v_ab_labels) : __Pyx_PyObject_CallOneArg(__pyx_t_7, __pyx_v_ab_labels);
     __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
-    if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 220, __pyx_L1_error)
+    if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 224, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_8);
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-    __pyx_t_7 = PySlice_New(Py_None, __pyx_v_cursor, Py_None); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 220, __pyx_L1_error)
+    __pyx_t_7 = PySlice_New(Py_None, __pyx_v_cursor, Py_None); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 224, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
-    __pyx_t_4 = PyTuple_New(2); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 220, __pyx_L1_error)
+    __pyx_t_4 = PyTuple_New(2); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 224, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
     __Pyx_INCREF(__pyx_slice__3);
     __Pyx_GIVEREF(__pyx_slice__3);
@@ -5664,21 +5708,21 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
     __Pyx_GIVEREF(__pyx_t_7);
     PyTuple_SET_ITEM(__pyx_t_4, 1, __pyx_t_7);
     __pyx_t_7 = 0;
-    __pyx_t_7 = __Pyx_PyObject_GetItem(__pyx_t_8, __pyx_t_4); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 220, __pyx_L1_error)
+    __pyx_t_7 = __Pyx_PyObject_GetItem(__pyx_t_8, __pyx_t_4); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 224, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-    if (PyDict_SetItem(__pyx_t_6, __pyx_n_s_labels, __pyx_t_7) < 0) __PYX_ERR(0, 218, __pyx_L1_error)
+    if (PyDict_SetItem(__pyx_t_6, __pyx_n_s_labels, __pyx_t_7) < 0) __PYX_ERR(0, 222, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":217
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":221
  *         else:
  *             cursor = None
  *         return ConcatenatedTopk(             # <<<<<<<<<<<<<<
  *             indices=np.asarray(ab_indices)[:, :cursor],
  *             scores=np.asarray(ab_scores)[:, :cursor],
  */
-    __pyx_t_7 = __Pyx_PyObject_Call(__pyx_t_5, __pyx_empty_tuple, __pyx_t_6); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 217, __pyx_L1_error)
+    __pyx_t_7 = __Pyx_PyObject_Call(__pyx_t_5, __pyx_empty_tuple, __pyx_t_6); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 221, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
@@ -5686,7 +5730,7 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
     __pyx_t_7 = 0;
     goto __pyx_L0;
 
-    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":195
+    /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":199
  *         )
  *
  *     elif len(a_indices == 2):             # <<<<<<<<<<<<<<
@@ -5695,29 +5739,29 @@ static PyObject *__pyx_pf_18raffle_ds_research_5tools_7c_tools_21concat_search_r
  */
   }
 
-  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":223
+  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":227
  *         )
  *     else:
  *         raise ValueError(f"a_indices must be 1D or 2D. Found shape: {a_indices.shape}")             # <<<<<<<<<<<<<<
  */
   /*else*/ {
-    __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_v_a_indices, __pyx_n_s_shape); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 223, __pyx_L1_error)
+    __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_v_a_indices, __pyx_n_s_shape); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 227, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
-    __pyx_t_6 = __Pyx_PyObject_FormatSimple(__pyx_t_7, __pyx_empty_unicode); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 223, __pyx_L1_error)
+    __pyx_t_6 = __Pyx_PyObject_FormatSimple(__pyx_t_7, __pyx_empty_unicode); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 227, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-    __pyx_t_7 = __Pyx_PyUnicode_Concat(__pyx_kp_u_a_indices_must_be_1D_or_2D_Found, __pyx_t_6); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 223, __pyx_L1_error)
+    __pyx_t_7 = __Pyx_PyUnicode_Concat(__pyx_kp_u_a_indices_must_be_1D_or_2D_Found, __pyx_t_6); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 227, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    __pyx_t_6 = __Pyx_PyObject_CallOneArg(__pyx_builtin_ValueError, __pyx_t_7); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 223, __pyx_L1_error)
+    __pyx_t_6 = __Pyx_PyObject_CallOneArg(__pyx_builtin_ValueError, __pyx_t_7); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 227, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
     __Pyx_Raise(__pyx_t_6, 0, 0, 0);
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    __PYX_ERR(0, 223, __pyx_L1_error)
+    __PYX_ERR(0, 227, __pyx_L1_error)
   }
 
-  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":135
+  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":139
  *
  *
  * def concat_search_results(             # <<<<<<<<<<<<<<
@@ -19899,7 +19943,7 @@ static __Pyx_StringTabEntry __pyx_string_tab[] = {
 static CYTHON_SMALL_CODE int __Pyx_InitCachedBuiltins(void) {
   __pyx_builtin_zip = __Pyx_GetBuiltinName(__pyx_n_s_zip); if (!__pyx_builtin_zip) __PYX_ERR(0, 42, __pyx_L1_error)
   __pyx_builtin_range = __Pyx_GetBuiltinName(__pyx_n_s_range); if (!__pyx_builtin_range) __PYX_ERR(0, 74, __pyx_L1_error)
-  __pyx_builtin_ValueError = __Pyx_GetBuiltinName(__pyx_n_s_ValueError); if (!__pyx_builtin_ValueError) __PYX_ERR(0, 223, __pyx_L1_error)
+  __pyx_builtin_ValueError = __Pyx_GetBuiltinName(__pyx_n_s_ValueError); if (!__pyx_builtin_ValueError) __PYX_ERR(0, 227, __pyx_L1_error)
   __pyx_builtin_MemoryError = __Pyx_GetBuiltinName(__pyx_n_s_MemoryError); if (!__pyx_builtin_MemoryError) __PYX_ERR(1, 149, __pyx_L1_error)
   __pyx_builtin_enumerate = __Pyx_GetBuiltinName(__pyx_n_s_enumerate); if (!__pyx_builtin_enumerate) __PYX_ERR(1, 152, __pyx_L1_error)
   __pyx_builtin_TypeError = __Pyx_GetBuiltinName(__pyx_n_s_TypeError); if (!__pyx_builtin_TypeError) __PYX_ERR(1, 2, __pyx_L1_error)
@@ -19915,14 +19959,14 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("__Pyx_InitCachedConstants", 0);
 
-  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":218
+  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":222
  *             cursor = None
  *         return ConcatenatedTopk(
  *             indices=np.asarray(ab_indices)[:, :cursor],             # <<<<<<<<<<<<<<
  *             scores=np.asarray(ab_scores)[:, :cursor],
  *             labels=np.asarray(ab_labels)[:, :cursor],
  */
-  __pyx_slice__3 = PySlice_New(Py_None, Py_None, Py_None); if (unlikely(!__pyx_slice__3)) __PYX_ERR(0, 218, __pyx_L1_error)
+  __pyx_slice__3 = PySlice_New(Py_None, Py_None, Py_None); if (unlikely(!__pyx_slice__3)) __PYX_ERR(0, 222, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_slice__3);
   __Pyx_GIVEREF(__pyx_slice__3);
 
@@ -20158,18 +20202,18 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
   __Pyx_GIVEREF(__pyx_tuple__27);
   __pyx_codeobj__28 = (PyObject*)__Pyx_PyCode_New(1, 0, 1, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__27, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_raffle_ds_research_tools_c_tools_2, __pyx_n_s_repr, 48, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__28)) __PYX_ERR(0, 48, __pyx_L1_error)
 
-  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":135
+  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":139
  *
  *
  * def concat_search_results(             # <<<<<<<<<<<<<<
  *     a_indices: np.ndarray,
  *     a_scores: np.ndarray,
  */
-  __pyx_tuple__29 = PyTuple_Pack(15, __pyx_n_s_a_indices, __pyx_n_s_a_scores, __pyx_n_s_b_indices, __pyx_n_s_b_scores, __pyx_n_s_total, __pyx_n_s_max_a, __pyx_n_s_truncate, __pyx_n_s_a_sorted_ids, __pyx_n_s_b_sorted_ids, __pyx_n_s_ab_indices, __pyx_n_s_ab_scores, __pyx_n_s_ab_labels, __pyx_n_s_cursor, __pyx_n_s_batch_size, __pyx_n_s_cursors); if (unlikely(!__pyx_tuple__29)) __PYX_ERR(0, 135, __pyx_L1_error)
+  __pyx_tuple__29 = PyTuple_Pack(15, __pyx_n_s_a_indices, __pyx_n_s_a_scores, __pyx_n_s_b_indices, __pyx_n_s_b_scores, __pyx_n_s_total, __pyx_n_s_max_a, __pyx_n_s_truncate, __pyx_n_s_a_sorted_ids, __pyx_n_s_b_sorted_ids, __pyx_n_s_ab_indices, __pyx_n_s_ab_scores, __pyx_n_s_ab_labels, __pyx_n_s_cursor, __pyx_n_s_batch_size, __pyx_n_s_cursors); if (unlikely(!__pyx_tuple__29)) __PYX_ERR(0, 139, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__29);
   __Pyx_GIVEREF(__pyx_tuple__29);
-  __pyx_codeobj__30 = (PyObject*)__Pyx_PyCode_New(7, 0, 15, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__29, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_raffle_ds_research_tools_c_tools_2, __pyx_n_s_concat_search_results, 135, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__30)) __PYX_ERR(0, 135, __pyx_L1_error)
-  __pyx_tuple__31 = PyTuple_Pack(2, ((PyObject *)Py_None), ((PyObject *)Py_True)); if (unlikely(!__pyx_tuple__31)) __PYX_ERR(0, 135, __pyx_L1_error)
+  __pyx_codeobj__30 = (PyObject*)__Pyx_PyCode_New(7, 0, 15, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__29, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_raffle_ds_research_tools_c_tools_2, __pyx_n_s_concat_search_results, 139, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__30)) __PYX_ERR(0, 139, __pyx_L1_error)
+  __pyx_tuple__31 = PyTuple_Pack(2, ((PyObject *)Py_None), ((PyObject *)Py_True)); if (unlikely(!__pyx_tuple__31)) __PYX_ERR(0, 139, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__31);
   __Pyx_GIVEREF(__pyx_tuple__31);
 
@@ -20902,126 +20946,126 @@ if (!__Pyx_RefNanny) {
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":135
+  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":139
  *
  *
  * def concat_search_results(             # <<<<<<<<<<<<<<
  *     a_indices: np.ndarray,
  *     a_scores: np.ndarray,
  */
-  __pyx_t_4 = __Pyx_PyDict_NewPresized(8); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 135, __pyx_L1_error)
+  __pyx_t_4 = __Pyx_PyDict_NewPresized(8); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 139, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
 
-  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":136
+  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":140
  *
  * def concat_search_results(
  *     a_indices: np.ndarray,             # <<<<<<<<<<<<<<
  *     a_scores: np.ndarray,
  *     b_indices: np.ndarray,
  */
-  __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_np); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 136, __pyx_L1_error)
+  __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_np); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 140, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
-  __pyx_t_1 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_ndarray); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 136, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_ndarray); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 140, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-  if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_a_indices, __pyx_t_1) < 0) __PYX_ERR(0, 135, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_a_indices, __pyx_t_1) < 0) __PYX_ERR(0, 139, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":137
+  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":141
  * def concat_search_results(
  *     a_indices: np.ndarray,
  *     a_scores: np.ndarray,             # <<<<<<<<<<<<<<
  *     b_indices: np.ndarray,
  *     b_scores: np.ndarray,
  */
-  __Pyx_GetModuleGlobalName(__pyx_t_1, __pyx_n_s_np); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 137, __pyx_L1_error)
+  __Pyx_GetModuleGlobalName(__pyx_t_1, __pyx_n_s_np); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 141, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
-  __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_t_1, __pyx_n_s_ndarray); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 137, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_t_1, __pyx_n_s_ndarray); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 141, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
-  if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_a_scores, __pyx_t_2) < 0) __PYX_ERR(0, 135, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_a_scores, __pyx_t_2) < 0) __PYX_ERR(0, 139, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":138
+  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":142
  *     a_indices: np.ndarray,
  *     a_scores: np.ndarray,
  *     b_indices: np.ndarray,             # <<<<<<<<<<<<<<
  *     b_scores: np.ndarray,
  *     total: int,
  */
-  __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_np); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 138, __pyx_L1_error)
+  __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_np); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 142, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
-  __pyx_t_1 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_ndarray); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 138, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_ndarray); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 142, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-  if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_b_indices, __pyx_t_1) < 0) __PYX_ERR(0, 135, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_b_indices, __pyx_t_1) < 0) __PYX_ERR(0, 139, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":139
+  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":143
  *     a_scores: np.ndarray,
  *     b_indices: np.ndarray,
  *     b_scores: np.ndarray,             # <<<<<<<<<<<<<<
  *     total: int,
  *     max_a: Optional[int] = None,
  */
-  __Pyx_GetModuleGlobalName(__pyx_t_1, __pyx_n_s_np); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 139, __pyx_L1_error)
+  __Pyx_GetModuleGlobalName(__pyx_t_1, __pyx_n_s_np); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 143, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
-  __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_t_1, __pyx_n_s_ndarray); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 139, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_t_1, __pyx_n_s_ndarray); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 143, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
-  if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_b_scores, __pyx_t_2) < 0) __PYX_ERR(0, 135, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_b_scores, __pyx_t_2) < 0) __PYX_ERR(0, 139, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-  if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_total, __pyx_n_u_int) < 0) __PYX_ERR(0, 135, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_total, __pyx_n_u_int) < 0) __PYX_ERR(0, 139, __pyx_L1_error)
 
-  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":141
+  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":145
  *     b_scores: np.ndarray,
  *     total: int,
  *     max_a: Optional[int] = None,             # <<<<<<<<<<<<<<
  *     truncate: bool = True,
  * ) -> ConcatenatedTopk:
  */
-  __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_Optional); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 141, __pyx_L1_error)
+  __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_Optional); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 145, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
-  __pyx_t_1 = __Pyx_PyObject_GetItem(__pyx_t_2, ((PyObject *)(&PyInt_Type))); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 141, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyObject_GetItem(__pyx_t_2, ((PyObject *)(&PyInt_Type))); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 145, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-  if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_max_a, __pyx_t_1) < 0) __PYX_ERR(0, 135, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_max_a, __pyx_t_1) < 0) __PYX_ERR(0, 139, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":142
+  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":146
  *     total: int,
  *     max_a: Optional[int] = None,
  *     truncate: bool = True,             # <<<<<<<<<<<<<<
  * ) -> ConcatenatedTopk:
  *     """
  */
-  if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_truncate, ((PyObject*)&PyBool_Type)) < 0) __PYX_ERR(0, 135, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_truncate, ((PyObject*)&PyBool_Type)) < 0) __PYX_ERR(0, 139, __pyx_L1_error)
 
-  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":143
+  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":147
  *     max_a: Optional[int] = None,
  *     truncate: bool = True,
  * ) -> ConcatenatedTopk:             # <<<<<<<<<<<<<<
  *     """
  *     Sort w.r.t. `scores` and concatenate results from two search runs.
  */
-  __Pyx_GetModuleGlobalName(__pyx_t_1, __pyx_n_s_ConcatenatedTopk); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 143, __pyx_L1_error)
+  __Pyx_GetModuleGlobalName(__pyx_t_1, __pyx_n_s_ConcatenatedTopk); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 147, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
-  if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_return, __pyx_t_1) < 0) __PYX_ERR(0, 135, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_return, __pyx_t_1) < 0) __PYX_ERR(0, 139, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":135
+  /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":139
  *
  *
  * def concat_search_results(             # <<<<<<<<<<<<<<
  *     a_indices: np.ndarray,
  *     a_scores: np.ndarray,
  */
-  __pyx_t_1 = __Pyx_CyFunction_New(&__pyx_mdef_18raffle_ds_research_5tools_7c_tools_21concat_search_results_1concat_search_results, 0, __pyx_n_s_concat_search_results, NULL, __pyx_n_s_raffle_ds_research_tools_c_tools, __pyx_d, ((PyObject *)__pyx_codeobj__30)); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 135, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_CyFunction_New(&__pyx_mdef_18raffle_ds_research_5tools_7c_tools_21concat_search_results_1concat_search_results, 0, __pyx_n_s_concat_search_results, NULL, __pyx_n_s_raffle_ds_research_tools_c_tools, __pyx_d, ((PyObject *)__pyx_codeobj__30)); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 139, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __Pyx_CyFunction_SetDefaultsTuple(__pyx_t_1, __pyx_tuple__31);
   __Pyx_CyFunction_SetAnnotationsDict(__pyx_t_1, __pyx_t_4);
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-  if (PyDict_SetItem(__pyx_d, __pyx_n_s_concat_search_results, __pyx_t_1) < 0) __PYX_ERR(0, 135, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_d, __pyx_n_s_concat_search_results, __pyx_t_1) < 0) __PYX_ERR(0, 139, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
   /* "raffle_ds_research/tools/c_tools/concat_search_results.pyx":1

@@ -4,13 +4,14 @@ import copy
 import math
 from typing import Any, Optional, Tuple
 
+import hydra
+import omegaconf
 import torch
 import torchmetrics
-from omegaconf import DictConfig, OmegaConf
 from torch import nn
 from torchmetrics import Metric, MetricCollection
 
-from raffle_ds_research.core.data_models import SupervisedRetrievalBatch
+from raffle_ds_research.tools import pipes
 
 SPLIT_NAMES = ["train", "val", "test"]
 MetricsBySplits = dict[str, dict[str, Metric]]
@@ -23,41 +24,31 @@ class Monitor(nn.Module):
     metrics: dict[str, MetricCollection]
     _log_on_step: dict[str, bool]
 
-    def __init__(self, metrics: MetricsBySplits, log_on_step: dict[str, bool] = None):
+    def __init__(
+        self,
+        metrics: MetricCollection | dict[str, MetricCollection],
+        splits: list[str] = None,
+        log_on_step: bool | dict[str, bool] = False,
+    ):
         super().__init__()
-        self.metrics, self._log_on_step = {}, {}
-        for key, metric in metrics.items():
-            metric = self._handle_metric_init(metric)
-            self.metrics[key] = metric
-            if log_on_step is None:
-                self._log_on_step[key] = False
-            else:
-                self._log_on_step[key] = log_on_step[key]
+        if splits is None:
+            splits = copy.copy(SPLIT_NAMES)
 
-    @staticmethod
-    def _handle_metric_init(metric):
-        if isinstance(
-            metric,
-            (
-                dict,
-                DictConfig,
-            ),
-        ):
-            if isinstance(metric, DictConfig):
-                metric = OmegaConf.to_container(metric)
-            metric = MetricCollection(metric)
-        elif isinstance(
-            metric,
-            (
-                Metric,
-                MetricCollection,
-                RetrievalMetricCollection,
-            ),
-        ):
-            pass
+        if isinstance(log_on_step, dict):
+            assert set(log_on_step.keys()) == set(SPLIT_NAMES)
         else:
-            raise TypeError(f"Unknown metric type: {type(metric)}")
-        return metric
+            log_on_step = {split: log_on_step for split in splits}
+
+        if isinstance(metrics, omegaconf.DictConfig):
+            metrics = hydra.utils.instantiate(metrics)
+
+        if isinstance(metrics, dict):
+            assert set(metrics.keys()) == set(SPLIT_NAMES)
+        else:
+            metrics = {split: copy.deepcopy(metrics) for split in splits}
+
+        self._log_on_step = log_on_step
+        self.metrics = metrics
 
     def log_on_step(self, split: str) -> bool:
         """Return True if the metrics should be logged on step"""
@@ -94,15 +85,18 @@ class Monitor(nn.Module):
 
         return splits
 
-    def update_from_retrieval_batch(self, batch: dict, split: str):
+    def update_from_retrieval_batch(self, batch: dict[str, Any], field: str = "section"):
         """Update the metrics given a raw `retrieval` batch"""
-        data = SupervisedRetrievalBatch(**batch)
-        targets: torch.Tensor = data.section_label  # type: ignore
-        scores: torch.Tensor = data.section_score  # type: ignore
-        # set the retrieval to -inf when the score is undefined
-        scores = scores.masked_fill(torch.isnan(scores), -math.inf)
-        args = self._make_args({"_logits": scores, "_targets": targets})
-        self.metrics[split].update(*args)
+        for key in self.metrics:
+            targets: torch.Tensor = batch[f"{field}.label"]
+            try:
+                scores: torch.Tensor = batch[f"{field}.{key}"]
+            except KeyError:
+                continue
+            # set the retrieval to -inf when the score is undefined
+            scores = scores.masked_fill(torch.isnan(scores), -math.inf)
+            args = self._make_args({"_logits": scores, "_targets": targets})
+            self.metrics[key].update(*args)
 
     @torch.no_grad()
     def update(self, data: dict, split: str):
@@ -111,9 +105,15 @@ class Monitor(nn.Module):
         self.metrics[split].update(*args)
 
     @torch.no_grad()
-    def compute(self, split: str) -> dict[str, torch.Tensor]:
+    def compute(self, split: Optional[str] = None, prefix: str = "") -> dict[str, torch.Tensor]:
         """Compute the metrics. Wrap with try/except to avoid raising exception when there are no
         metrics to compute."""
+        if split is None:
+            metrics = {}
+            for split in self.metrics:
+                metrics.update(self.compute(split=split, prefix=prefix))
+            return metrics
+
         if isinstance(self.metrics[split], MetricCollection):
             metrics = {}
             for key, metric in self.metrics[split].items():
@@ -124,16 +124,22 @@ class Monitor(nn.Module):
         else:
             metrics = self.metrics[split].compute()
 
-        metrics = {f"{split}/{key}": value for key, value in metrics.items()}
+        metrics = {f"{prefix}{split}/{key}": value for key, value in metrics.items()}
         return metrics
 
     @staticmethod
     def _make_args(data: dict) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         preds: torch.Tensor = data["_logits"]
         targets: torch.Tensor = data["_targets"]
+
+        # todo: remove
+        sort_ids = torch.argsort(preds, dim=-1, descending=True)
+        preds = preds.gather(-1, sort_ids)
+        targets = targets.gather(-1, sort_ids)
+
         indices = torch.arange(len(preds), device=preds.device)
         indices = indices.unsqueeze(-1).expand(-1, preds.shape[-1])
-        return (preds, targets, indices)
+        return preds, targets, indices
 
 
 def retrieval_metric_factory(name: str, **kwargs) -> Metric:

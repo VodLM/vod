@@ -1,15 +1,10 @@
 _target_: raffle_ds_research.core.ml_models.monitor.Monitor
+splits: [ "score", "faiss", "bm25" ]
 log_on_step:
   val: false
   test: false
 metrics:
-  val:
-    _target_: raffle_ds_research.core.ml_models.monitor.RetrievalMetricCollection
-    metrics: [ "ndcg", "mrr", "hitrate@3", "hitrate@10", "hitrate@30", "r@3" ]
-    compute_on_cpu: true
-    sync_on_compute: false
-  test:
-    _target_: raffle_ds_research.core.ml_models.monitor.RetrievalMetricCollection
-    metrics: [ "ndcg", "mrr","hitrate@3", "hitrate@10", "hitrate@30", "r@3" ]
-    compute_on_cpu: true
-    sync_on_compute: false
+  _target_: raffle_ds_research.core.ml_models.monitor.RetrievalMetricCollection
+  metrics: [ "ndcg", "mrr","hitrate@3", "hitrate@10", "hitrate@30", "r@3" ]
+  compute_on_cpu: true
+  sync_on_compute: false

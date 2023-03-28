@@ -17,7 +17,7 @@ from raffle_ds_research.tools.pipes.utils.misc import iter_examples, pad_list
 LookupTables: TypeAlias = OrderedDict[str, dict[int, set[int]]]
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class LookupSearchResults:
     indices: np.ndarray
     frequencies: np.ndarray

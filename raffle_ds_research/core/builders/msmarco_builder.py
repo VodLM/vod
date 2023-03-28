@@ -10,7 +10,7 @@ from loguru import logger
 from omegaconf import DictConfig, OmegaConf
 from transformers import PreTrainedTokenizerBase
 
-from raffle_ds_research.core.builders.frank_builder import DEFAULT_TEMPLATES
+from raffle_ds_research.core.builders.retrieval_builder import DEFAULT_TEMPLATES
 from raffle_ds_research.core.data_models.supervised_retrieval import SupervisedRetrievalBatch
 from raffle_ds_research.tools import dataset_builder
 
@@ -103,8 +103,10 @@ class CollateMsMarco:
         return batch
 
 
-class MsMarcoBuilder(dataset_builder.HfBuilder):
-    """Builder for the `MS MARCO` dataset."""
+class MsMarcoBuilder:
+    """Builder for the `MS MARCO` dataset.
+    TODO: rewrite this
+    """
 
     _validate_only_splits: list[str] = ["train", "validation"]
 

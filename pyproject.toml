@@ -69,6 +69,7 @@ isort = "^5.12.0"
 pre-commit = "^3.0.4"
 commitizen = "^2.42.0"
 seaborn = "^0.12.2"
+inflect = "^6.0.2"
 
 
 [tool.poetry.group.cuda]
