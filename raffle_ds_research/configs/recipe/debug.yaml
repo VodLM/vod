@@ -2,6 +2,8 @@
 
 defaults:
   - override /model/encoder: bert-tiny
+  - override /trainer/callbacks:
+      - rich_progress_bar
   - override /trainer/logger:
       - csv
   - _self_

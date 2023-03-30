@@ -6,7 +6,6 @@ from copy import copy
 from pathlib import Path
 from typing import Optional, Type
 
-import aiohttp
 import numpy as np
 import requests
 import rich
@@ -66,7 +65,12 @@ class FaissClient(search_server.SearchClient):
         return rtypes.RetrievalBatch(indices=indices, scores=scores)
 
     def search(
-        self, *, vector: rtypes.Ts, text: Optional[list[str]] = None, top_k: int = 3
+        self,
+        *,
+        vector: rtypes.Ts,
+        text: Optional[list[str]] = None,
+        label: Optional[list[str | int]] = None,
+        top_k: int = 3,
     ) -> rtypes.RetrievalBatch[rtypes.Ts]:
         input_type = type(vector)
         input_type_enum, serialized_fn = {

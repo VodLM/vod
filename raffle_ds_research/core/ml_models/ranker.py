@@ -208,7 +208,9 @@ class Ranker(pl.LightningModule):
         return output
 
     @torch.no_grad()
-    def _log_metrics(self, output: dict, split: str, prog_bar: Optional[bool] = None, **kwargs) -> None:
+    def _log_metrics(
+        self, output: dict, split: str, prog_bar: Optional[bool] = None, on_epoch: Optional[bool] = None, **kwargs
+    ) -> None:
         for key, value in output.items():
             if isinstance(value, torch.Tensor):
                 if value.numel() > 1:
@@ -219,7 +221,9 @@ class Ranker(pl.LightningModule):
 
             if prog_bar is None:
                 prog_bar = PBAR_MATCH_PATTERN.search(key) is not None
-            self.log(key, value, prog_bar=prog_bar, **kwargs)
+            if on_epoch is True:
+                kwargs = {**kwargs, "sync_dist": True}
+            self.log(key, value, prog_bar=prog_bar, on_epoch=on_epoch, **kwargs)
 
     @staticmethod
     def _filter_output(output: dict) -> dict:
@@ -243,7 +247,7 @@ class Ranker(pl.LightningModule):
     def _on_epoch_end(self, split: str) -> dict:
         if self.monitor is not None:
             summary = self.monitor.compute(split=split)
-            self._log_metrics(summary, split=split, sync_dist=True)
+            self._log_metrics(summary, split=split)
             return summary
         else:
             return {}

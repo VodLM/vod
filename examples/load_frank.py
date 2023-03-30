@@ -1,181 +1,44 @@
-import argparse
-from functools import partial
-from pathlib import Path
-
-import datasets.fingerprint
-import dill
-import dotenv
-import faiss
-import lightning.pytorch as pl
-import pydantic
 import rich
-import torch
-import transformers
-from loguru import logger
-from tqdm import tqdm
 
-from raffle_ds_research.core import builders
-from raffle_ds_research.core.ml_models.simple_ranker import SimpleRanker
-from raffle_ds_research.tools import index_tools, pipes, predict
-from raffle_ds_research.tools.index_tools import faiss_tools
-
-dotenv.load_dotenv(Path(__file__).parent / ".predict.env")
+from raffle_ds_research.tools import arguantic
+from raffle_ds_research.tools import raffle_datasets
 
 
-class LoadFrankArgs(pydantic.BaseModel):
-    """Arguments for the script."""
-
-    model_name: str = "google/bert_uncased_L-4_H-256_A-4"
+class Args(arguantic.Arguantic):
     language: str = "en"
-    subset_name: str = "A"
-    seed: int = 1
-    accelerator: str = "cpu"
-    batch_size: int = 10
-    cache_dir: Path = Path("~/.raffle/cache/index-example/")
-    factory_string: str = "IVF4,Flat"
-    nprobe: int = 4
-    loader_batch_size: int = 10
-    num_workers: int = 0
-    n_sections: int = 6
-    prefetch_n_sections: int = 100
-    max_pos_sections: int = 3
-    faiss_weight: float = 1.0
-    bm25_weight: float = 1.0
-
-    @pydantic.validator("cache_dir")
-    def _validate_cache_dir(cls, v):
-        return Path(v).expanduser().resolve()
-
-    @classmethod
-    def from_args(cls):
-        parser = argparse.ArgumentParser()
-        for field in cls.__fields__.values():
-            parser.add_argument(f"--{field.name}", type=field.type_, default=field.default)
-
-        args = parser.parse_args()
-        return cls(**vars(args))
-
-
-def run():
-    """Load the Frank dataset, load a model, index Frank, and iterate over the train set.
-    While iterating through the train set, check a few properties.
-    """
-    args = LoadFrankArgs.from_args()
-    args.cache_dir.mkdir(parents=True, exist_ok=True)
-    logger.info(f"Using cache dir: {args.cache_dir.absolute()}")
-    tokenizer = transformers.AutoTokenizer.from_pretrained(args.model_name)
-    logger.info(f"{type(tokenizer).__name__}: hash={datasets.fingerprint.Hasher.hash(tokenizer)}")
-    builder = builders.FrankBuilder(
-        language=args.language,
-        subset_name=args.subset_name,
-        prep_map_kwargs=dict(num_proc=4, batch_size=1000),
-        tokenizer=tokenizer,
-    )
-
-    # Build the dataset
-    dataset = builder()
-    rich.print("=== dataset ===")
-    rich.print(dataset)
-    rich.print("=== dataset.corpus ===")
-    sections = builder.get_corpus()
-    rich.print(sections)
-
-    # Init the model and wrap it
-    model = transformers.AutoModel.from_pretrained(args.model_name)
-    model = SimpleRanker(model, fields=["question", "section"], vector_name="vector")
-    logger.info(f"model hash: {datasets.fingerprint.Hasher.hash(model)}")
-
-    # Init the trainer
-    logger.info(f"Instantiating the Trainer")
-    trainer = pl.Trainer(accelerator=args.accelerator)
-
-    # define the collates and dataloader args
-    loader_kwargs = dict(batch_size=args.batch_size, num_workers=4, pin_memory=True)
-    question_collate = partial(pipes.torch_tokenize_collate, tokenizer=builder.tokenizer, field="question")
-    logger.info(f"question_collate: hash={datasets.fingerprint.Hasher.hash(question_collate)}")
-    section_collate = partial(pipes.torch_tokenize_collate, tokenizer=builder.tokenizer, field="section")
-    logger.info(f"section_collate: hash={datasets.fingerprint.Hasher.hash(section_collate)}")
-
-    # Predict - compute the vectors for the question datasets and the sections
-    dataset_vectors = predict(
-        dataset,
-        trainer=trainer,
-        cache_dir=args.cache_dir,
-        model=model,
-        model_output_key="question.vector",
-        collate_fn=question_collate,
-        loader_kwargs=loader_kwargs,
-    )
-    sections_vectors = predict(
-        sections,
-        trainer=trainer,
-        cache_dir=args.cache_dir,
-        model=model,
-        model_output_key="section.vector",
-        collate_fn=section_collate,
-        loader_kwargs=loader_kwargs,
-    )
-
-    # build the faiss index and save to disk
-    faiss_index = faiss_tools.build_index(sections_vectors, factory_string=args.factory_string)
-    faiss_path = Path(args.cache_dir, "index.faiss")
-    faiss.write_index(faiss_index, str(faiss_path))
-
-    # Serve the faiss index in a separate process
-    with index_tools.FaissMaster(faiss_path, args.nprobe) as faiss_master:
-        sections_content = (r["content"] for r in sections)
-        with index_tools.Bm25Master(sections_content, input_size=len(sections)) as bm25_master:
-            faiss_client = faiss_master.get_client()
-            bm25_client = bm25_master.get_client()
-
-            # Instantiate the collate_fn
-            loader_config = builder.collate_config(
-                question_vectors=dataset_vectors["train"],
-                clients=[
-                    {"name": "faiss", "client": faiss_client, "weight": args.faiss_weight},
-                    {"name": "bm25", "client": bm25_client, "weight": args.bm25_weight},
-                ],
-                n_sections=args.n_sections,
-                prefetch_n_sections=args.prefetch_n_sections,
-                max_pos_sections=args.max_pos_sections,
-            )
-            collate_fn = builder.get_collate_fn(config=loader_config)
-
-            # run the collate_fn on a single batch and print the result
-            batch = collate_fn([dataset["train"][0], dataset["train"][1]])
-            pipes.pprint_batch(batch, header="Frank - Batch")
-            pipes.pprint_supervised_retrieval_batch(batch, tokenizer=builder.tokenizer, skip_special_tokens=True)
-
-            # check if the collate_fn can be pickled
-            if dill.pickles(collate_fn):
-                logger.info(f"Collate is serializable. hash={datasets.fingerprint.Hasher.hash(collate_fn)}")
-            else:
-                logger.warning("Collate is not serializable.")
-
-            # iterate over the batches
-            loader = torch.utils.data.DataLoader(
-                dataset["train"],
-                collate_fn=collate_fn,
-                batch_size=args.loader_batch_size,
-                num_workers=args.num_workers,
-            )
-            for batch in tqdm(loader, desc="Iterating over batches"):
-                retrieved_section_ids = batch["section.id"]
-                retrieved_section_labels = batch["section.label"]
-                for i in range(retrieved_section_ids.shape[0]):
-                    # test that there is no overlap between positive and negative sections
-                    ids_i = retrieved_section_ids[i, :].tolist()
-                    labels_i = retrieved_section_labels[i, :].tolist()
-                    pos_ids = [id_ for id_, label in zip(ids_i, labels_i) if label > 0]
-                    neg_ids = [id_ for id_, label in zip(ids_i, labels_i) if label <= 0]
-                    assert set.intersection(set(pos_ids), set(neg_ids)) == set()
-
-                    # test that, when a section id is set, there is only one positive section
-                    target_section_id = batch["question.section_id"][i]
-                    if target_section_id != -1:
-                        assert target_section_id in pos_ids
-                        assert len(pos_ids) == 1
+    split: str = "A"
+    version: int = 0
+    invalidate_cache: int = 1
+    sample_idx: int = 42
 
 
 if __name__ == "__main__":
-    run()
+    args = Args.parse()
+
+    frank = raffle_datasets.load_frank(
+        language=args.language,
+        split=args.split,
+        version=args.version,
+        only_positive_sections=True,
+        invalidate_cache=bool(args.invalidate_cache),
+    )
+    rich.print(dict(frank_only_positives=frank))
+    n_sections_small = len(frank.sections)
+
+    frank = raffle_datasets.load_frank(
+        language=args.language,
+        split=args.split,
+        version=args.version,
+        only_positive_sections=False,
+        invalidate_cache=bool(args.invalidate_cache),
+    )
+    rich.print(dict(frank_full=frank))
+    n_sections_full = len(frank.sections)
+
+    rich.print(f"Fraction of sections in the small version: {n_sections_small / n_sections_full:.2%}")
+
+    for split, questions in frank.qa_splits.items():
+        n_questions_with_single_section = sum(len(question["section_ids"]) == 1 for question in questions)
+        rich.print(f"   {split}: {n_questions_with_single_section / len(questions):.2%} questions with a single section")
+
+    rich.print({f"training-question-{args.sample_idx}": frank.qa_splits["train"][0]})

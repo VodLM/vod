@@ -1,8 +1,9 @@
 defaults:
-  - strategy: default
+  - strategy: single_device
   - callbacks:
       - rich_progress_bar
       - lr_monitor
+      - checkpoint
   - logger:
       - csv
       - wandb

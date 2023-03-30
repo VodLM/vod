@@ -1,6 +1,7 @@
 from typing import Any
 
-from raffle_ds_research.core.builders import FrankBuilder, retrieval_builder
+from raffle_ds_research.core.builders import retrieval_builder
+from raffle_ds_research.core.builders.frank_builder import FrankBuilder
 from raffle_ds_research.core.builders.test_builder import TestBuilder
 
 BUILDERS = {
@@ -10,7 +11,7 @@ BUILDERS = {
 
 
 def auto_builder(**config: Any) -> retrieval_builder.RetrievalBuilder:
-    """Builds a dataset from a config."""
+    """Builds a dataset from a configuration."""
     try:
         builder_name = config["name"]
     except KeyError:

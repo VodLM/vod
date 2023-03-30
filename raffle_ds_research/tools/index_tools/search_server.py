@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import abc
 import copy
 import os
@@ -7,6 +9,7 @@ from typing import Any, Generic, Optional, TypeVar
 
 import loguru
 import rich.status
+from typing_extensions import Self
 
 from raffle_ds_research.tools.index_tools import retrieval_data_type as rtypes
 
@@ -30,6 +33,7 @@ class SearchClient(abc.ABC):
         *,
         text: list[str],
         vector: rtypes.Ts,
+        label: Optional[list[str | int]] = None,
         top_k: int = 3,
     ) -> rtypes.RetrievalBatch[rtypes.Ts]:
         raise NotImplementedError()
@@ -48,15 +52,15 @@ class SearchMaster(Generic[Sc], abc.ABC):
         self._on_init()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         self._on_exit()
         if self._server_proc is not None:
             self._server_proc.terminate()
 
-    def _on_init(self):
+    def _on_init(self) -> None:
         pass
 
-    def _on_exit(self):
+    def _on_exit(self) -> None:
         pass
 
     @abc.abstractmethod
@@ -103,14 +107,14 @@ class SearchMaster(Generic[Sc], abc.ABC):
     def service_name(self) -> str:
         return self.__class__.__name__.lower()
 
-    def __getstate__(self):
+    def __getstate__(self) -> dict[str, Any]:
         raise DoNotPickleError(
-            f"{type(self.__name__)} is not pickleable. "
+            f"{type(self).__name__} is not pickleable. "
             f"To use in multiprocessing, using a client instead (`server.get_client()`)."
         )
 
-    def __setstate__(self, state):
+    def __setstate__(self, state) -> None:
         raise DoNotPickleError(
-            f"{type(self.__name__)} is not pickleable. "
+            f"{type(self).__name__} is not pickleable. "
             f"To use in multiprocessing, using a client instead (`server.get_client()`)."
         )

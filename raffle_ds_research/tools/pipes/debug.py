@@ -194,7 +194,7 @@ _FORMATTERS = {
 }
 
 
-def _format_field(field_name, field_value):
+def _format_field(field_name: str, field_value: Any) -> str:
     formatter = _FORMATTERS.get(field_name, _default_formatter)
     return formatter(field_value)
 
@@ -237,6 +237,13 @@ def _iter_leaves(x: Iterable) -> Iterable:
             yield i
 
 
+def _safe_yaml(section: str) -> str:
+    """Escape special characters in a YAML section."""
+    section = section.replace(": ", "\:")
+    section = section.encode("unicode_escape").decode("utf-8")
+    return section
+
+
 def pprint_supervised_retrieval_batch(
     batch: dict[str, Any],
     idx: Optional[list[int]] = None,
@@ -256,15 +263,17 @@ def pprint_supervised_retrieval_batch(
     def _format(x: Any):
         if isinstance(x, torch.Tensor) and x.numel() == 1:
             x = x.item()
+        elif isinstance(x, torch.Tensor) and x.numel() > 1:
+            x = x.tolist()
         elif isinstance(x, np.ndarray) and x.size == 1:
             x = x.item()
 
         return x
 
     tree = rich.tree.Tree(header, guide_style="dim")
-    question_keys = ["id", "section_id", "answer_id", "kb_id"]
+    question_keys = ["id", "section_ids", "answer_id", "kb_id", "language"]
     question_keys = [f"question.{key}" for key in question_keys]
-    section_keys = ["id", "answer_id", "kb_id", "score", "label"]
+    section_keys = ["id", "answer_id", "kb_id", "score", "label", "language"]
     section_keys = [f"section.{key}" for key in section_keys]
 
     # get the data
@@ -275,7 +284,7 @@ def pprint_supervised_retrieval_batch(
         question = tokenizer.decode(question_input_ids[i], **kwargs)
         question_data = {
             **{key: _format(batch[key][i]) for key in question_keys if key in batch},
-            "question.content": question,
+            "question.content": _safe_yaml(question),
         }
         question_data_str = yaml.dump(question_data, sort_keys=False)
         question_node = rich.syntax.Syntax(question_data_str, "yaml", indent_guides=False, word_wrap=True)
@@ -284,11 +293,16 @@ def pprint_supervised_retrieval_batch(
             section = tokenizer.decode(section_input_ids[i][j], **kwargs)
             section_data = {
                 **{key: _format(batch[key][i][j]) for key in section_keys if key in batch},
-                "section.content": section,
+                "section.content": _safe_yaml(section),
             }
             section_data_str = yaml.dump(section_data, sort_keys=False)
             section_node = rich.syntax.Syntax(section_data_str, "yaml", indent_guides=False, word_wrap=True)
-            question_tree.add(section_node)
+            if section_data.get("section.label", False):
+                node_style = "bold cyan"
+            else:
+                node_style = "white"
+
+            question_tree.add(section_node, style=node_style)
             if max_sections is not None and j >= max_sections:
                 break
 

@@ -72,16 +72,15 @@ RetrievalCfg = TypeVar("RetrievalCfg", bound=RetrievalBuilderConfig)
 
 class QuestionModel(pydantic.BaseModel):
     id: int
-    question: str
-    answer_id: int
-    section_id: Optional[int]
+    text: str
+    section_ids: list[int]
     kb_id: int
 
 
 class SectionModel(pydantic.BaseModel):
-    section: str
+    content: str
+    title: str
     id: int
-    answer_id: int
     kb_id: int
 
 

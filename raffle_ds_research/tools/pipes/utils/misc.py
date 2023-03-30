@@ -24,8 +24,12 @@ def iter_examples(batch: dict[str, list], keys: Iterable[str] = None) -> Iterabl
 def pack_examples(examples: Iterable[dict[T, Any]], keys: Optional[list[T]] = None) -> dict[T, list[Any]]:
     output = defaultdict(list)
     for example in examples:
-        iter_keys = keys or example.keys()
-        for key in iter_keys:
+        if keys is None:
+            keys = set(example.keys())
+        else:
+            if not set(keys).issubset(example.keys()):
+                raise ValueError(f"Expected keys {set(keys)}, got {set(example.keys())}")
+        for key in keys:
             output[key].append(example[key])
     return dict(output)
 
@@ -55,7 +59,7 @@ def keep_only_columns(dataset: HfDataset, columns: Iterable[str], strict: bool =
     columns = set(columns)
     if strict and not columns.issubset(dataset.column_names):
         raise ValueError(
-            f"Columns {columns - set(dataset.column_names)} not in dataset " f"and are required with strict=True"
+            f"Columns {columns - set(dataset.column_names)} not in dataset and are required with argument `strict=True`"
         )
     cols_to_remove = set(dataset.column_names) - columns
     cols_to_remove = list(sorted(cols_to_remove))

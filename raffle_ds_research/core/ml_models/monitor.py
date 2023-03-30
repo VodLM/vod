@@ -11,17 +11,21 @@ import torchmetrics
 from torch import nn
 from torchmetrics import Metric, MetricCollection
 
-from raffle_ds_research.tools import pipes
-
 SPLIT_NAMES = ["train", "val", "test"]
 MetricsBySplits = dict[str, dict[str, Metric]]
+
+
+def _safe_split(split: str) -> str:
+    """Return a safe split name for a torch.nn.ModuleDict to avoid conflicts with the parameter name `train`"""
+    return f"_{split}"
 
 
 class Monitor(nn.Module):
     """A Monitor is an object that monitors the training process by
     computing and collecting metrics"""
 
-    metrics: dict[str, MetricCollection]
+    _splits = list[str]
+    metrics: torch.nn.ModuleDict[str, MetricCollection]
     _log_on_step: dict[str, bool]
 
     def __init__(
@@ -48,7 +52,8 @@ class Monitor(nn.Module):
             metrics = {split: copy.deepcopy(metrics) for split in splits}
 
         self._log_on_step = log_on_step
-        self.metrics = metrics
+        self._splits = splits
+        self.metrics = torch.nn.ModuleDict({_safe_split(split): metric for split, metric in metrics.items()})
 
     def log_on_step(self, split: str) -> bool:
         """Return True if the metrics should be logged on step"""
@@ -58,7 +63,7 @@ class Monitor(nn.Module):
 
     def forward(self, data: dict, split: str) -> dict:
         """Compute the metrics"""
-        metric = self.metrics[split]
+        metric = self.metrics[_safe_split(split)]
         args = self._make_args(data)
         return metric.forward(*args)
 
@@ -66,13 +71,13 @@ class Monitor(nn.Module):
         """Reset the metrics"""
         splits = self._get_splits_arg(split)
         for split in splits:
-            self.metrics[split].reset()
+            self.metrics[_safe_split(split)].reset()
 
         return self
 
     def _get_splits_arg(self, split):
         if split is None:
-            splits = list(self.metrics.keys())
+            splits = self._splits
         elif isinstance(split, str):
             splits = [split]
         elif isinstance(split, list):
@@ -80,14 +85,14 @@ class Monitor(nn.Module):
         else:
             raise TypeError(f"Unknown split type: {type(split)}")
 
-        if not set(splits).issubset(self.metrics.keys()):
-            raise ValueError(f"Unknown split: {split}. Expected one of {self.metrics.keys()}.")
+        if not set(splits).issubset(self._splits):
+            raise ValueError(f"Unknown split: {split}. Expected one of {self._splits}.")
 
         return splits
 
     def update_from_retrieval_batch(self, batch: dict[str, Any], field: str = "section"):
         """Update the metrics given a raw `retrieval` batch"""
-        for key in self.metrics:
+        for key in self._splits:
             targets: torch.Tensor = batch[f"{field}.label"]
             try:
                 scores: torch.Tensor = batch[f"{field}.{key}"]
@@ -96,13 +101,13 @@ class Monitor(nn.Module):
             # set the retrieval to -inf when the score is undefined
             scores = scores.masked_fill(torch.isnan(scores), -math.inf)
             args = self._make_args({"_logits": scores, "_targets": targets})
-            self.metrics[key].update(*args)
+            self.metrics[_safe_split(key)].update(*args)
 
     @torch.no_grad()
     def update(self, data: dict, split: str):
         """Update the metrics"""
         args = self._make_args(data)
-        self.metrics[split].update(*args)
+        self.metrics[_safe_split(split)].update(*args)
 
     @torch.no_grad()
     def compute(self, split: Optional[str] = None, prefix: str = "") -> dict[str, torch.Tensor]:
@@ -110,58 +115,116 @@ class Monitor(nn.Module):
         metrics to compute."""
         if split is None:
             metrics = {}
-            for split in self.metrics:
+            for split in self._splits:
                 metrics.update(self.compute(split=split, prefix=prefix))
             return metrics
 
-        if isinstance(self.metrics[split], MetricCollection):
+        if isinstance(self.metrics[_safe_split(split)], MetricCollection):
             metrics = {}
-            for key, metric in self.metrics[split].items():
+            for key, metric in self.metrics[_safe_split(split)].items():
                 try:
                     metrics[key] = metric.compute()
                 except ValueError:
                     ...
         else:
-            metrics = self.metrics[split].compute()
+            metrics = self.metrics[_safe_split(split)].compute()
 
         metrics = {f"{prefix}{split}/{key}": value for key, value in metrics.items()}
         return metrics
 
     @staticmethod
-    def _make_args(data: dict) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def _make_args(data: dict) -> Tuple[torch.Tensor, torch.Tensor]:
         preds: torch.Tensor = data["_logits"]
         targets: torch.Tensor = data["_targets"]
+        return preds, targets
 
-        # todo: remove
-        sort_ids = torch.argsort(preds, dim=-1, descending=True)
-        preds = preds.gather(-1, sort_ids)
-        targets = targets.gather(-1, sort_ids)
 
-        indices = torch.arange(len(preds), device=preds.device)
-        indices = indices.unsqueeze(-1).expand(-1, preds.shape[-1])
-        return preds, targets, indices
+def _rank_labels(*, labels: torch.Tensor, scores: torch.Tensor) -> torch.Tensor:
+    sort_ids = torch.argsort(scores, dim=-1, descending=True)
+    ranked_labels = torch.gather(labels, dim=-1, index=sort_ids)
+    return ranked_labels
+
+
+def _mask_inputs(preds: torch.Tensor, target: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    mask = preds.isnan()
+    preds = preds.masked_fill(mask, -math.inf)
+    mask = mask | preds.isinf()
+    target = target.masked_fill(mask, 0)
+    return preds, target
+
+
+class HitRate(torchmetrics.Metric):
+    is_differentiable: bool = False
+    higher_is_better: bool = True
+    full_state_update: bool = False
+
+    def __init__(self, top_k: int, **kwargs):
+        super().__init__(**kwargs)
+        self.top_k = top_k
+        self.add_state("hits", default=torch.tensor(0), dist_reduce_fx="sum")
+        self.add_state("total", default=torch.tensor(0), dist_reduce_fx="sum")
+
+    def update(self, preds: torch.Tensor, target: torch.Tensor) -> None:
+        preds, target = _mask_inputs(preds, target)
+        ranked_labels = _rank_labels(labels=target, scores=preds)
+        ranked_labels = ranked_labels[..., : self.top_k]
+        hits = (ranked_labels > 0).any(dim=-1)
+        self.hits += hits.sum().to(self.hits)
+        self.total += hits.numel()
+
+    def compute(self) -> torch.Tensor:
+        return self.hits.float() / self.total
+
+
+class MeanReciprocalRank(torchmetrics.MeanMetric):
+    def update(self, preds: torch.Tensor, target: torch.Tensor) -> None:
+        preds, target = _mask_inputs(preds, target)
+        ranked_labels = _rank_labels(labels=target, scores=preds)
+        idx_first_non_zero = _arg_first_non_zero(ranked_labels)
+        has_positive = (ranked_labels > 0).sum(dim=-1) > 0
+        mrr = 1.0 / (1 + idx_first_non_zero)
+        mmr = torch.where(has_positive, mrr, 0)
+        value = mmr.mean()
+        weight = preds[..., 0].numel()
+        super().update(value, weight)
+
+
+def _arg_first_non_zero(values: torch.Tensor) -> torch.Tensor:
+    ids = torch.arange(values.shape[-1], device=values.device)
+    nnz_ordered_values = torch.where(values > 0, ids, 1 + ids.max())
+    idx_first_non_zero = nnz_ordered_values.argmin(dim=-1)
+    return idx_first_non_zero
+
+
+class NormalizedDCG(torchmetrics.MeanMetric):
+    def __init__(self, top_k: Optional[int] = None, **kwargs):
+        super().__init__(**kwargs)
+        self.top_k = top_k
+
+    def update(self, preds: torch.Tensor, target: torch.Tensor) -> None:
+        preds, target = _mask_inputs(preds, target)
+        value = torchmetrics.functional.retrieval_normalized_dcg(preds=preds, target=target, k=self.top_k)
+        weight = preds[..., 0].numel()
+        super().update(value, weight)
 
 
 def retrieval_metric_factory(name: str, **kwargs) -> Metric:
     """Instantiate a torchmetrics retrieval metric from a string name."""
     if "@" in name:
         name, k = name.split("@")
-        k = int(k)
+        top_k = int(k)
     else:
-        k = None
+        top_k = None
 
     avail_cls = {
-        "mrr": torchmetrics.RetrievalMRR,
-        "map": torchmetrics.RetrievalMAP,
-        "ndcg": torchmetrics.RetrievalNormalizedDCG,
-        "p": torchmetrics.RetrievalPrecision,
-        "r": torchmetrics.RetrievalRecall,
-        "hitrate": torchmetrics.RetrievalHitRate,
+        "mrr": MeanReciprocalRank,
+        "ndcg": NormalizedDCG,
+        "hitrate": HitRate,
     }
 
     cls = avail_cls[name]
 
-    return cls(k=k, **kwargs)
+    return cls(top_k=top_k, **kwargs)
 
 
 class RetrievalMetricCollection(MetricCollection):

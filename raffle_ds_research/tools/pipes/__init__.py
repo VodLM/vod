@@ -1,7 +1,6 @@
 from .compose import Sequential
 from .debug import pprint_batch, pprint_supervised_retrieval_batch
 from .hashing import _register_special_hashers, fingerprint_torch_module
-from .lookup_index import LookupIndexPipe, LookupSearchResults
 from .protocols import Collate, Pipe
 from .template import template_pipe
 from .tokenize import tokenize_pipe, torch_tokenize_collate, torch_tokenize_pipe

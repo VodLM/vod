@@ -1,6 +1,10 @@
+from __future__ import annotations
+
 import asyncio
+import itertools
 import logging
 import uuid
+import warnings
 from typing import Any, Iterable, Optional
 
 import datasets
@@ -9,7 +13,6 @@ import numpy as np
 import rich.progress
 from elasticsearch import helpers as es_helpers
 
-from raffle_ds_research.tools import predict_tools
 from raffle_ds_research.tools.index_tools import retrieval_data_type as rtypes
 from raffle_ds_research.tools.index_tools import search_server
 
@@ -18,6 +21,7 @@ es_logger.setLevel(logging.WARNING)
 
 IDX_KEY = "__idx__"
 BODY_KEY: str = "body"
+LABEL_KEY: str = "label"
 
 
 class Bm25Client(search_server.SearchClient):
@@ -25,10 +29,11 @@ class Bm25Client(search_server.SearchClient):
     _client: es.Elasticsearch
     _index_name: str
 
-    def __init__(self, url: str, index_name: str):
+    def __init__(self, url: str, index_name: str, supports_label: bool = False):
         self.url = url
         self._client = es.Elasticsearch(url)
         self._index_name = index_name
+        self.supports_label = supports_label
 
     def ping(self) -> bool:
         try:
@@ -57,11 +62,15 @@ class Bm25Client(search_server.SearchClient):
         *,
         text: list[str],
         vector: Optional[rtypes.Ts] = None,
+        label: Optional[list[str | int]] = None,
         top_k: int = 3,
     ) -> rtypes.RetrievalBatch[rtypes.Ts]:
         """Search elasticsearch for the batch of text queries using `msearch`.
         `vector` is not used here."""
-        queries = self._make_queries(text, top_k)
+        if self.supports_label and label is None:
+            warnings.warn(f"This index supports labels, but no label is provided.")
+
+        queries = self._make_queries(text, top_k=top_k, labels=label)
         responses = self._client.msearch(searches=queries)
         indices, scores = [], []
         for response in responses["responses"]:
@@ -75,7 +84,7 @@ class Bm25Client(search_server.SearchClient):
             indices.append(indices_)
             scores_ = (hit["_score"] for hit in hits[:top_k])
             scores_ = np.fromiter(scores_, dtype=np.float32)
-            scores_ = np.pad(scores_, (0, top_k - len(scores_)), constant_values=-1)
+            scores_ = np.pad(scores_, (0, top_k - len(scores_)), constant_values=-np.inf)
             scores.append(scores_)
 
         return rtypes.RetrievalBatch(
@@ -83,17 +92,26 @@ class Bm25Client(search_server.SearchClient):
             scores=np.stack(scores),
         )
 
-    def _make_queries(self, text, top_k):
+    def _make_queries(self, texts: list[str], *, top_k: int, labels: Optional[list[str | int]] = None):
+        if labels is None:
+            labels = []
+
+        def _make_search_body(text: str, label: Optional[str | int] = None):
+            body = {"should": {"match": {BODY_KEY: text}}}
+            if label is not None:
+                body["filter"] = {"term": {LABEL_KEY: label}}
+            return {"query": {"bool": body}}
+
         queries = [
             part
-            for text in text
+            for text, label in itertools.zip_longest(texts, labels)
             for part in [
                 {"index": self._index_name},
                 {
                     "from": 0,
                     "size": top_k,
                     "fields": [IDX_KEY],
-                    "query": {"match": {BODY_KEY: text}},
+                    **_make_search_body(text, label=label),
                 },
             ]
         ]
@@ -105,8 +123,9 @@ class Bm25Master(search_server.SearchMaster[Bm25Client]):
 
     def __init__(
         self,
-        input_data: Iterable[str],
+        texts: Iterable[str],
         *,
+        labels: Optional[Iterable[str | int]] = None,
         host: str = "http://localhost",
         port: int = 9200,  # hardcoded for now
         index_name: Optional[str] = None,
@@ -118,7 +137,9 @@ class Bm25Master(search_server.SearchMaster[Bm25Client]):
         self.host = host
         self.port = port
         self.proc_kwargs = proc_kwargs
-        self._input_data = input_data
+        self._input_texts = texts
+        self._input_labels = labels
+        self.supports_label = labels is not None
         if index_name is None:
             index_name = f"auto-{uuid.uuid4().hex}"
         self._index_name = index_name
@@ -126,14 +147,20 @@ class Bm25Master(search_server.SearchMaster[Bm25Client]):
         self._exist_ok = exist_ok
 
         if input_size is None:
-            if isinstance(input_data, (list, datasets.Dataset)):
-                input_size = len(input_data)
-            elif isinstance(input_data, datasets.IterableDataset):
-                input_size = input_data.num_rows
+            if isinstance(texts, (list, datasets.Dataset)):
+                input_size = len(texts)
+            elif isinstance(texts, datasets.IterableDataset):
+                input_size = texts.num_rows
         self._input_data_size = input_size
 
     def _on_init(self):
-        stream = ({IDX_KEY: i, BODY_KEY: text} for i, text in enumerate(self._input_data))
+        if not self.supports_label:
+            stream = ({IDX_KEY: i, BODY_KEY: text} for i, text in enumerate(self._input_texts))
+        else:
+            stream = (
+                {IDX_KEY: i, BODY_KEY: text, LABEL_KEY: label}
+                for i, (text, label) in enumerate(itertools.zip_longest(self._input_texts, self._input_labels))
+            )
         stream = rich.progress.track(
             stream, description=f"Building ES index {self._index_name}", total=self._input_data_size
         )
@@ -152,7 +179,7 @@ class Bm25Master(search_server.SearchMaster[Bm25Client]):
         return f"{self.host}:{self.port}"
 
     def get_client(self):
-        return Bm25Client(self.url, index_name=self._index_name)
+        return Bm25Client(self.url, index_name=self._index_name, supports_label=self.supports_label)
 
 
 def ingest_data(

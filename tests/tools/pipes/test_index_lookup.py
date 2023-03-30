@@ -8,7 +8,7 @@ import pytest
 from datasets import fingerprint
 
 from raffle_ds_research.tools import pipes
-from raffle_ds_research.tools.pipes.lookup_index import _build_lookup_tables
+from raffle_ds_research.tools.index_tools.lookup_index import _build_lookup_tables
 from raffle_ds_research.tools.pipes.utils.misc import pack_examples
 
 _KEYS = ["kb_id", "answer_id", "section_id"]
@@ -122,7 +122,7 @@ def questions(
 def test_lookup_index(
     corpus: datasets.Dataset,
     questions: datasets.Dataset,
-):
+) -> None:
     lookup_pipe = pipes.LookupIndexPipe(corpus=corpus, keys=_KEYS)
     pipe_hash = fingerprint.Hasher.hash(lookup_pipe)
 

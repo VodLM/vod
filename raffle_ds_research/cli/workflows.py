@@ -31,6 +31,7 @@ from raffle_ds_research.tools import index_tools, pipes, predict_tools
 from raffle_ds_research.tools.index_tools import faiss_tools
 from raffle_ds_research.tools.pipes.utils.misc import keep_only_columns
 from raffle_ds_research.tools.utils import loader_config
+from raffle_ds_research.utils.pretty import print_metric_groups
 
 
 @dataclasses.dataclass
@@ -162,11 +163,13 @@ def _run_static_evaluation(
     monitor: Monitor,
     on_first_batch: Optional[Callable[[dict[str, Any]], Any]] = None,
 ) -> dict[str, Any]:
+    monitor.reset()
     for i, batch in enumerate(loader):
         if i == 0 and on_first_batch is not None:
             on_first_batch(batch)
         monitor.update_from_retrieval_batch(batch, field="section")
     metrics = monitor.compute(prefix="val/")
+    monitor.reset()
     return metrics
 
 
@@ -203,15 +206,17 @@ class IndexManager(object):
         # create a temporary working directory
         self._tmpdir = tempfile.TemporaryDirectory(prefix="tmp-training-")
         tmpdir = self._tmpdir.__enter__()
+        loguru.logger.info(f"Setting up index at `{tmpdir}`")
 
         # init the bm25 index
         bm25_weight = self.config.bm25.get_weight(self.index_step)
         if bm25_weight >= 0:
             corpus = self.builder.get_corpus()
-            corpus = keep_only_columns(corpus, [self.config.bm25.indexed_key])
+            corpus = keep_only_columns(corpus, [self.config.bm25.indexed_key, self.config.bm25.label_key])
             index_name = f"index-{corpus._fingerprint}"
             self._bm25_master = index_tools.Bm25Master(
-                (row[self.config.bm25.indexed_key] for row in corpus),
+                texts=(row[self.config.bm25.indexed_key] for row in corpus),
+                labels=(row[self.config.bm25.label_key] for row in corpus) if self.config.bm25.use_labels else None,
                 input_size=len(corpus),
                 index_name=index_name,
                 exist_ok=True,
@@ -225,6 +230,7 @@ class IndexManager(object):
         faiss_weight = self.config.faiss.get_weight(self.index_step)
         if faiss_weight >= 0:
             # compute the vectors for the questions and sections
+            vectors = self._compute_vectors(tmpdir)
             vectors = self._compute_vectors(tmpdir)
 
             # build the faiss index and save to disk
@@ -292,9 +298,23 @@ class IndexManager(object):
 
         clients = []
         if faiss_weight >= 0:
-            clients.append(SearchClientConfig(name="faiss", client=faiss_master.get_client(), weight=faiss_weight))
+            clients.append(
+                SearchClientConfig(
+                    name="faiss",
+                    client=faiss_master.get_client(),
+                    weight=faiss_weight,
+                    label_key=self.config.faiss.label_key,
+                )
+            )
         if bm25_weight >= 0:
-            clients.append(SearchClientConfig(name="bm25", client=bm25_master.get_client(), weight=bm25_weight))
+            clients.append(
+                SearchClientConfig(
+                    name="bm25",
+                    client=bm25_master.get_client(),
+                    weight=bm25_weight,
+                    label_key=self.config.bm25.label_key,
+                )
+            )
 
         full_collate_config = self.builder.collate_config(
             question_vectors=vectors,
@@ -335,13 +355,16 @@ def _compute_dataset_vectors(
     cache_dir: Path,
     tokenizer: transformers.PreTrainedTokenizer,
     field: str,
+    max_length: int = 512,  # todo: don't hardcode this
     loader_config: loader_config.DataLoaderConfig,
 ) -> predict_tools.TensorStoreFactory | dict[str, predict_tools.TensorStoreFactory]:
     output_key = {"question": "hq", "section": "hd"}[field]
     collate_fn = functools.partial(
         pipes.torch_tokenize_collate,
         tokenizer=tokenizer,
-        field=field,
+        prefix_key=f"{field}.",
+        max_length=max_length,
+        truncation=True,
     )
     return predict_tools.predict(
         dataset,
@@ -382,32 +405,7 @@ def _log_metrics(metrics: dict[str, Any], trainer: pl.Trainer, console: bool = F
         logger.log_metrics(metrics, step=trainer.global_step)
 
     if console:
-        console = rich.console.Console()
-        table = rich.table.Table(title="Static Validation")
-        table.add_column("Metric", justify="left", style="cyan")
-        table.add_column("group", justify="left", style="green")
-        table.add_column("Value", justify="right", style="magenta")
-
-        def split_key(key: str) -> tuple[str, str]:
-            *group, metric = key.split("/")
-            group = "/".join(group)
-            return metric, group
-
-        metrics = [(*split_key(k), v) for k, v in metrics.items()]
-        metrics = sorted(metrics, key=lambda x: (x[0], x[1]))
-        prev_key = None
-        for key, group, value in metrics:
-            if prev_key is None:
-                display_key = key
-            elif key != prev_key:
-                table.add_section()
-                display_key = key
-            else:
-                display_key = ""
-            value = float(value)
-            table.add_row(display_key, group, f"{value:.2f}")
-            prev_key = key
-        console.print(table)
+        print_metric_groups(metrics)
 
 
 def _log_retrieval_batch(

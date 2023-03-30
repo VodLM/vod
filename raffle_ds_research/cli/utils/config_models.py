@@ -25,6 +25,7 @@ class SearchConfig(pydantic.BaseModel):
         extra = pydantic.Extra.forbid
 
     schedule: Union[float, ScheduleConfig] = 1.0
+    label_key: str = "kb_id"
 
     @pydantic.validator("schedule")
     def _validate_schedule(cls, v):
@@ -54,4 +55,5 @@ class DefaultFaissConfig(SearchConfig):
 
 
 class DefaultBm25Config(SearchConfig):
-    indexed_key: str = "section"
+    indexed_key: str = "text"
+    use_labels: bool = True

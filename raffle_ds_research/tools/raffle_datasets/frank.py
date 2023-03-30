@@ -1,19 +1,28 @@
-# pylint: disable=missing-function-docstring
 from __future__ import annotations
 
+import collections
 import enum
 import json
-from collections import defaultdict
+import shutil
 from os import PathLike
 from pathlib import Path
-from typing import Optional, Union
+from typing import Any, Iterable, Optional, Union
 
 import datasets
+import fsspec
+import loguru
 import pydantic
 import rich
-from raffle_ds_storage import GoogleStorageInterface
-from raffle_ds_storage.utils.static import RAFFLE_PATH
-from typing_extensions import Type
+from rich.progress import track
+
+from raffle_ds_research.tools.raffle_datasets.base import (
+    DATASETS_CACHE_PATH,
+    QueryModel,
+    RetrievalDataset,
+    SectionModel,
+    init_gcloud_filesystem,
+    silent_huggingface,
+)
 
 
 class FrankSplitName(enum.Enum):
@@ -21,107 +30,138 @@ class FrankSplitName(enum.Enum):
     B = "B"
 
 
-class HfFrankSplit(pydantic.BaseModel):
-    class Config:
-        arbitrary_types_allowed = True
+class FrankSectionModel(SectionModel):
+    kb_id: int = pydantic.Field(..., alias="knowledge_base_id")
+    answer_id: int
 
+
+class FrankQueryModel(QueryModel):
+    text: str = pydantic.Field(..., alias="question")
+    category: Optional[str] = None
+    label_method_type: Optional[str] = None
+    answer_id: int
+    kb_id: int = pydantic.Field(..., alias="knowledge_base_id")
+
+
+class HfFrankPart(RetrievalDataset):
     split: FrankSplitName
-    qa_splits: datasets.DatasetDict
-    sections: datasets.Dataset
+
+    def __add__(self, other: "HfFrankPart") -> "HfFrankPart":
+        if not isinstance(other, HfFrankPart):
+            raise TypeError(f"Expected HfFrankPart, got {type(other)}")
+        if not self.split == other.split:
+            raise ValueError(f"Expected split {self.split}, got {other.split}")
+
+        if not set(self.qa_splits.keys()) == set(other.qa_splits.keys()):
+            raise ValueError(f"Expected qa_splits {set(self.qa_splits.keys())}, got {set(other.qa_splits.keys())}")
+
+        qa_splits = datasets.DatasetDict(
+            {k: datasets.concatenate_datasets([self.qa_splits[k], other.qa_splits[k]]) for k in self.qa_splits.keys()}
+        )
+
+        sections = datasets.concatenate_datasets([self.sections, other.sections])
+
+        return HfFrankPart(split=self.split, qa_splits=qa_splits, sections=sections)
 
 
-class SectionModel(pydantic.BaseModel):
-    content: str
-    title: str
-    id: int
-    answer_id: int
-    source_id: int
-    kb_id: int = pydantic.Field(..., alias="knowledge_base_id")
-
-    @pydantic.validator("title", pre=True, always=True)
-    def _validate_title(cls, title):
-        if title is None:
-            return ""
-
-        return title
-
-
-class QuestionModel(pydantic.BaseModel):
-    id: int
-    question: str
-    category: str
-    label_method_type: str
-    data_source: str
-    answer_id: int
-    section_id: Optional[int]
-    kb_id: int = pydantic.Field(..., alias="knowledge_base_id")
-
-
-def download_frank(
-    language: str,
-    version: int = 0,
-    split: FrankSplitName = FrankSplitName.A,
-    progress_bar: bool = True,
-) -> Path:
-    """Download a Frank dataset from Google Storage.
-
-    TODO: add all sections, and not only the positive ones.
-    """
-    storage = GoogleStorageInterface.from_alias("datasets", progress_bar=progress_bar)
-    frank_path = Path(f"datasets/frank/{language}/translated_da_frank_V{version}{split.value}/")
-    storage.print_content(frank_path, recursive=True, exclude_pattern=r"kb_indexes")
-    return storage.download(frank_path, exclude_pattern=r"kb_indexes")
-
-
-def _read_json_data_and_create_hf(
-    path: PathLike | dict[str, PathLike],
-    model: Type[pydantic.BaseModel],
-) -> datasets.Dataset | datasets.DatasetDict:
-    if isinstance(path, dict):
-        return datasets.DatasetDict({k: _read_json_data_and_create_hf(v, model) for k, v in path.items()})
-
-    with open(path, "r") as f:
+def _iter_examples_from_json(
+    path: PathLike | dict[str, PathLike], *, fs: fsspec.AbstractFileSystem
+) -> Iterable[dict[str, Any]]:
+    with fs.open(path) as f:  # type: ignore
         data = json.load(f)
-
     if not isinstance(data, list):
         raise ValueError(f"Expected a list of dicts, got {type(data)}")
 
-    output = defaultdict(list)
-    column_names = None
-    for row in data:
-        clean_row = model(**row).dict()
-        if column_names is None:
-            column_names = list(clean_row.keys())
-
-        for key in column_names:
-            output[key].append(clean_row[key])
-
-    return datasets.Dataset.from_dict(output)
+    for example in data:
+        yield example
 
 
+@silent_huggingface()
 def _download_and_parse_frank(
     language: str,
     split: FrankSplitName,
     version: int = 0,
-) -> HfFrankSplit:
-    local_frank_path = download_frank(language, version, split)
+    only_positive_sections: bool = False,
+) -> HfFrankPart:
+    fs = init_gcloud_filesystem()
+    if only_positive_sections:
+        path = f"raffle-datasets-1/datasets/frank/{language}/translated_da_frank_V{version}{split.value}/"
+        loguru.logger.debug(f"Reading Frank from {path} using {fs}")
+        if not fs.exists(path):
+            raise FileNotFoundError(f"Path {path} does not exist on storage {fs}.")
+        return _pase_frank_dir(path, split, language=language, fs=fs)  # type: ignore
+    else:
+        path = f"raffle-datasets-1/datasets/frank/{language}/translated_da_frank_V{version}{split.value}/kb_indexes/"
+        loguru.logger.debug(f"Reading Frank from {path} using {fs}")
+        if not fs.exists(path):
+            raise FileNotFoundError(f"Path {path} does not exist on storage {fs}.")
+        full_frank_split = None
+        for part_path in track(fs.ls(path), description=f"Processing Frank {split}"):
+            if not fs.exists(Path(part_path, "sections.json")):
+                rich.print(f"Skipping {part_path} (no sections.json)")
+                continue
+            frank_part = _pase_frank_dir(part_path, split, language=language, fs=fs)  # type: ignore
+            if full_frank_split is None:
+                full_frank_split = frank_part
+            else:
+                full_frank_split += frank_part
+        return full_frank_split
+
+
+def _pase_frank_dir(local_frank_path: str, split: str, language: str, *, fs: fsspec.AbstractFileSystem) -> HfFrankPart:
     sections_path = Path(local_frank_path, "sections.json")
     qa_splits_paths = {
         "train": Path(local_frank_path, "train_80.json"),
         "validation": Path(local_frank_path, "test.json"),
     }
-    sections = _read_json_data_and_create_hf(sections_path, SectionModel)
-    qa_splits = _read_json_data_and_create_hf(qa_splits_paths, QuestionModel)
 
-    return HfFrankSplit(split=split, qa_splits=qa_splits, sections=sections)
+    def gen_sections() -> Iterable[dict[str, Any]]:
+        for section in _iter_examples_from_json(sections_path, fs=fs):
+            row = FrankSectionModel(language=language, **section)
+            yield row.dict()
+
+    # generate sections
+    sections = datasets.Dataset.from_generator(gen_sections)
+
+    # build `answer2section`
+    answer2section: dict[int, list[int]] = collections.defaultdict(list)
+    for section in _iter_examples_from_json(sections_path, fs=fs):
+        section_id = int(section["answer_id"])
+        answer2section[section_id].append(int(section["id"]))
+
+    # generate QA splits
+    qa_splits = {}
+    for split_name, qa_split_path in qa_splits_paths.items():
+
+        def gen_qa_split() -> Iterable[dict[str, Any]]:
+            for row in _iter_examples_from_json(qa_split_path, fs=fs):
+                answer_id = int(row["answer_id"])
+                section_id = row["section_id"]
+                if section_id is None:
+                    section_ids = answer2section[answer_id]
+                    section_ids = [i for i in sorted(section_ids)]
+                    row["section_ids"] = section_ids
+                else:
+                    section_id = int(section_id)
+                    row["section_ids"] = [section_id]
+                row = FrankQueryModel(language=language, **row)
+                yield row.dict()
+
+        qa_splits[split_name] = datasets.Dataset.from_generator(gen_qa_split)
+    qa_splits = datasets.DatasetDict(qa_splits)
+
+    return HfFrankPart(split=split, qa_splits=qa_splits, sections=sections)
 
 
-def _make_local_sync_path(cached_dir: PathLike, language: str, split: FrankSplitName, version: int):
+def _make_local_sync_path(
+    cache_dir: PathLike,
+    language: str,
+    split: FrankSplitName,
+    version: int,
+    only_positive_sections: bool = False,
+):
     base_path = Path(
-        cached_dir,
-        "raffle_datasets",
-        "frank",
-        language,
+        cache_dir, "raffle_datasets", "frank", language, "only-positives" if only_positive_sections else "full"
     )
     return (
         Path(base_path, f"frank_V{version}{split.value}_qa_splits.hf"),
@@ -131,30 +171,43 @@ def _make_local_sync_path(cached_dir: PathLike, language: str, split: FrankSplit
 
 @pydantic.validate_arguments(config=dict(arbitrary_types_allowed=True))
 def load_frank(
-    language: str,
-    split: Union[str, FrankSplitName],
+    language: str = "en",
+    split: Union[str, FrankSplitName] = "A",
     version: int = 0,
     cache_dir: Optional[PathLike] = None,
     keep_in_memory: Optional[bool] = None,
-) -> HfFrankSplit:
+    only_positive_sections: bool = False,
+    invalidate_cache: bool = False,
+) -> HfFrankPart:
     """Load the Frank dataset"""
     if cache_dir is None:
-        cache_dir = RAFFLE_PATH
+        cache_dir = DATASETS_CACHE_PATH
     if isinstance(split, str):
         split = FrankSplitName(split)
 
     # define the local paths
-    qa_splits_path, sections_paths = _make_local_sync_path(cache_dir, language=language, split=split, version=version)
+    qa_splits_path, sections_paths = _make_local_sync_path(
+        cache_dir,
+        language=language,
+        split=split,
+        version=version,
+        only_positive_sections=only_positive_sections,
+    )
+    if invalidate_cache:
+        loguru.logger.debug(f"Invalidating cache `{qa_splits_path}` and `{sections_paths}`")
+        if qa_splits_path.exists():
+            shutil.rmtree(qa_splits_path)
+        if sections_paths.exists():
+            shutil.rmtree(sections_paths)
 
-    # if not downloaded, download and save to disk
-    # todo: check hash before download
-    #       |-> implement this feature in `raffle_ds_storage`, only download if the hash is different.
+    # if not downloaded, download, process and save to disk
     if not qa_splits_path.exists() or not sections_paths.exists():
-        frank_split = _download_and_parse_frank(language, split, version)
+        frank_split = _download_and_parse_frank(language, split, version, only_positive_sections)
         frank_split.qa_splits.save_to_disk(str(qa_splits_path))
         frank_split.sections.save_to_disk(str(sections_paths))
 
-    return HfFrankSplit(
+    loguru.logger.info(f"Loading Frank dataset from {qa_splits_path} and {sections_paths}")
+    return HfFrankPart(
         split=split,
         qa_splits=datasets.DatasetDict.load_from_disk(str(qa_splits_path), keep_in_memory=keep_in_memory),
         sections=datasets.Dataset.load_from_disk(str(sections_paths), keep_in_memory=keep_in_memory),

@@ -17,8 +17,8 @@ class FrankBuilderConfig(retrieval_builder.RetrievalBuilderConfig):
 
 
 class FrankBuilder(retrieval_builder.RetrievalBuilder[FrankBuilderConfig]):
-    def _load_frank_split(self, frank_split: frank.FrankSplitName) -> frank.HfFrankSplit:
-        return frank.load_frank(self.config.language, split=frank_split)
+    def _load_frank_split(self, frank_split: frank.FrankSplitName) -> frank.HfFrankPart:
+        return frank.load_frank(self.config.language, split=frank_split, only_positive_sections=True)
 
     def _build_dset(self, corpus: Optional[datasets.Dataset]) -> datasets.DatasetDict:
         frank_split = self._load_frank_split(self.config.subset_name)
@@ -37,6 +37,6 @@ class FrankBuilder(retrieval_builder.RetrievalBuilder[FrankBuilderConfig]):
             pipes.template_pipe,
             template=self.config.templates["section"],
             input_keys=["title", "content"],
-            output_key="section",
+            output_key="text",
         )
         return section_prep

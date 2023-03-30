@@ -1,167 +1,221 @@
-from __future__ import annotations
-
-from functools import partial
+import functools
+import math
 from pathlib import Path
-from typing import Any
+from typing import Optional
 
-import datasets
+import datasets.fingerprint
+import dill
+import dotenv
 import faiss
-import hydra
 import lightning.pytorch as pl
+import pydantic
 import rich
 import torch
+import torchmetrics
 import transformers
-from hydra.utils import instantiate
-from lightning_fabric import seed_everything
 from loguru import logger
-from omegaconf import DictConfig
+from tqdm import tqdm
 
-from raffle_ds_research.cli.utils import set_training_context
-from raffle_ds_research.core.builders import FrankBuilder
-from raffle_ds_research.core.ml_models import Ranker
-from raffle_ds_research.tools import index_tools, predict
+from raffle_ds_research.core import builders
+from raffle_ds_research.core.ml_models.monitor import (
+    HitRate,
+    MeanReciprocalRank,
+    Monitor,
+    NormalizedDCG,
+    RetrievalMetricCollection,
+)
+from raffle_ds_research.core.ml_models.simple_ranker import SimpleRanker
+from raffle_ds_research.tools import arguantic, index_tools, pipes, predict
 from raffle_ds_research.tools.index_tools import faiss_tools
-from raffle_ds_research.tools.utils.config import register_omgeaconf_resolvers
-from raffle_ds_research.tools.utils.pretty import print_config
+from raffle_ds_research.utils.pretty import print_metric_groups
 
-register_omgeaconf_resolvers()
-
-
-def collate_tokenized_field(
-    egs: list[dict],
-    *,
-    tokenizer: transformers.PreTrainedTokenizer,
-    field: str = "question",
-) -> dict[str, torch.Tensor]:
-    keys = ["input_ids", "attention_mask"]
-    keys = [f"{field}.{k}" for k in keys]
-    if any(k not in egs[0] for k in keys):
-        raise ValueError(f"Missing keys {keys} in examples. Found keys: {egs[0].keys()}")
-    egs = [{str(k).replace(f"{field}.", ""): eg[k] for k in keys} for eg in egs]
-    output = tokenizer.pad(egs, return_tensors="pt")
-    return {f"{field}.{k}": v for k, v in output.items()}
+dotenv.load_dotenv(Path(__file__).parent / ".predict.env")
 
 
-def search_index(
-    _: Any,
-    idx: list[int],
-    *,
-    faiss_client: faiss_tools.FaissClient,
-    q_vectors: index_tools.VectorHandler,
-    top_k: int = 10,
-) -> dict[str, Any]:
-    query_vec = q_vectors[idx]
-    results = faiss_client.search(query_vec, top_k=top_k)
-    return results.to_dict()
+class Args(arguantic.Arguantic):
+    """Arguments for the script."""
+
+    dset_name: str = "frank"
+    model_name: str = "google/bert_uncased_L-4_H-256_A-4"
+    language: str = "en"
+    subset_name: str = "A"
+    seed: int = 1
+    accelerator: str = "cpu"
+    batch_size: int = 10
+    cache_dir: Path = Path("~/.raffle/cache/index-example/")
+    factory_string: str = "IVF4,Flat"
+    nprobe: int = 4
+    loader_batch_size: int = 10
+    num_workers: int = 0
+    n_sections: int = 50
+    prefetch_n_sections: int = 300
+    max_pos_sections: int = 10
+    faiss_weight: float = 1.0
+    bm25_weight: float = 1.0
+
+    @pydantic.validator("cache_dir")
+    def _validate_cache_dir(cls, v):
+        return Path(v).expanduser().resolve()
 
 
-@hydra.main(config_path="../raffle_ds_research/configs/", config_name="main", version_base="1.3")
-def run(config: DictConfig):
-    set_training_context()
-    print_config(config)
-    exp_dir = Path()
-    cache_dir = Path(config.sys.cache_dir, "examples-index/")
-    logger.info(f"Experiment directory: {exp_dir.absolute()}")
-    logger.info(f"Cache directory: {cache_dir.absolute()}")
+def run():
+    """Load retrieval dataset, load a model, index, and iterate over the train set.
+    While iterating through the train set, check a few properties.
+    """
+    args = Args.parse()
+    args.cache_dir.mkdir(parents=True, exist_ok=True)
+    logger.info(f"Using cache dir: {args.cache_dir.absolute()}")
+    tokenizer = transformers.AutoTokenizer.from_pretrained(args.model_name)
+    logger.info(f"{type(tokenizer).__name__}: hash={datasets.fingerprint.Hasher.hash(tokenizer)}")
+    builder = builders.auto_builder(
+        name=args.dset_name,
+        language=args.language,
+        subset_name=args.subset_name,
+        prep_map_kwargs=dict(num_proc=4, batch_size=1000),
+        tokenizer=tokenizer,
+    )
 
-    # Instantiate the dataset builder
-    logger.info(f"Instantiating builder <{config.builder._target_}>")
-    builder: FrankBuilder = instantiate(config.builder)
-
-    # build the Frank dataset, get the collate_fn
-    logger.info(f"Building `{config.builder.name}` dataset..")
-    seed_everything(config.seed)
+    # Build the dataset
     dataset = builder()
+    rich.print("=== dataset ===")
     rich.print(dataset)
+    rich.print("=== dataset.corpus ===")
     sections = builder.get_corpus()
-    if sections is None:
-        raise ValueError(f"No corpus found for builder {type(builder)}")
     rich.print(sections)
 
-    # load the model
-    logger.info(f"Instantiating model <{config.model._target_}>")
-    seed_everything(config.seed)
-    ranker: Ranker = instantiate(config.model)
-    ranker.eval()
-    ranker.freeze()
+    # Init the model and wrap it
+    model = transformers.AutoModel.from_pretrained(args.model_name)
+    model = SimpleRanker(model, fields=["question", "section"], vector_name="vector")
+    logger.info(f"model hash: {datasets.fingerprint.Hasher.hash(model)}")
 
     # Init the trainer
-    logger.info(f"Instantiating model <{config.trainer._target_}>")
-    trainer: pl.Trainer = instantiate(config.trainer)
+    logger.info(f"Instantiating the Trainer")
+    trainer = pl.Trainer(accelerator=args.accelerator)
 
-    # compute the vectors
+    # define the collates and dataloader args
+    loader_kwargs = dict(batch_size=args.batch_size, num_workers=4, pin_memory=True)
+    question_collate = functools.partial(
+        pipes.torch_tokenize_collate,
+        tokenizer=builder.tokenizer,
+        prefix_key="question.",
+    )
+    logger.info(f"question_collate: hash={datasets.fingerprint.Hasher.hash(question_collate)}")
+    section_collate = functools.partial(
+        pipes.torch_tokenize_collate,
+        tokenizer=builder.tokenizer,
+        prefix_key="section.",
+    )
+    logger.info(f"section_collate: hash={datasets.fingerprint.Hasher.hash(section_collate)}")
+
+    # Predict - compute the vectors for the question datasets and the sections
     dataset_vectors = predict(
         dataset,
         trainer=trainer,
-        cache_dir=cache_dir,
-        model=ranker,
-        model_output_key="hq",
-        collate_fn=partial(collate_tokenized_field, tokenizer=builder.tokenizer, field="question"),
-        loader_kwargs=config.predict_loader_kwargs,
+        cache_dir=args.cache_dir,
+        model=model,
+        model_output_key="question.vector",
+        collate_fn=question_collate,
+        loader_kwargs=loader_kwargs,
     )
-    rich.print(dataset_vectors)
     sections_vectors = predict(
         sections,
         trainer=trainer,
-        cache_dir=cache_dir,
-        model=ranker,
-        model_output_key="hd",
-        collate_fn=partial(collate_tokenized_field, tokenizer=builder.tokenizer, field="section"),
-        loader_kwargs=config.predict_loader_kwargs,
+        cache_dir=args.cache_dir,
+        model=model,
+        model_output_key="section.vector",
+        collate_fn=section_collate,
+        loader_kwargs=loader_kwargs,
     )
-    rich.print(sections_vectors)
 
-    # create the faiss index
-    index_path = Path(config.sys.cache_dir, "examples-index/index.faiss")
-    index: faiss.Index = faiss_tools.build_index(sections_vectors, factory_string="Flat")
-    faiss.write_index(index, str(index_path.absolute()))
+    # build the faiss index and save to disk
+    faiss_index = faiss_tools.build_index(sections_vectors, factory_string=args.factory_string)
+    faiss_path = Path(args.cache_dir, "index.faiss")
+    faiss.write_index(faiss_index, str(faiss_path))
 
-    ids = [0, 101, 202]
-    with faiss_tools.FaissMaster(index_path, nprobe=8, logging_level="critical") as faiss_master:
-        faiss_client = faiss_master.get_client()
-        for split, store in dataset_vectors.items():
-            q_vectors = index_tools.vector_handler(store)[ids]
-            rich.print(q_vectors)
-            results = faiss_client.search(q_vectors, top_k=3)
-            rich.print(results)
+    # Serve the faiss index in a separate process
+    with index_tools.FaissMaster(faiss_path, args.nprobe) as faiss_master:
+        sections_content = (r["content"] for r in sections)
+        sections_label = (r["kb_id"] for r in sections)
+        with index_tools.Bm25Master(sections_content, labels=sections_label, input_size=len(sections)) as bm25_master:
+            faiss_client = faiss_master.get_client()
+            bm25_client = bm25_master.get_client()
 
-            for i, result in enumerate(results):
-                question = dataset[split][ids[i]]
-                record = _make_record(i, split, question, result, sections)
-                rich.print(record)
+            # Instantiate the collate_fn
+            loader_config = builder.collate_config(
+                question_vectors=dataset_vectors["train"],
+                clients=[
+                    {"name": "faiss", "client": faiss_client, "weight": args.faiss_weight},
+                    {"name": "bm25", "client": bm25_client, "weight": args.bm25_weight},
+                ],
+                n_sections=args.n_sections,
+                prefetch_n_sections=args.prefetch_n_sections,
+                max_pos_sections=args.max_pos_sections,
+            )
+            collate_fn = builder.get_collate_fn(config=loader_config)
 
-    # call within multiprocessing
-    logger.info("Testing multiprocessing: search sections for the training set..")
-    search_pipe = partial(
-        search_index,
-        faiss_client=faiss_client,
-        q_vectors=dataset_vectors["train"],
-        top_k=3,
-    )
-    map_kwargs = dict(batched=True, with_indices=True, batch_size=32, num_proc=4)
-    mapped_train_set = dataset["train"].map(search_pipe, **map_kwargs)
-    rich.print(mapped_train_set)
+            # run the collate_fn on a single batch and print the result
+            batch = collate_fn([dataset["train"][0], dataset["train"][1]])
+            pipes.pprint_batch(batch, header="Frank - Batch")
+            pipes.pprint_supervised_retrieval_batch(batch, tokenizer=builder.tokenizer, skip_special_tokens=True)
 
+            # check if the collate_fn can be pickled
+            if dill.pickles(collate_fn):
+                logger.info(f"Collate is serializable. hash={datasets.fingerprint.Hasher.hash(collate_fn)}")
+            else:
+                logger.warning("Collate is not serializable.")
 
-def _make_record(
-    i: int, split: str, question: dict, result: index_tools.RetrievalBatch, sections: datasets.Dataset
-) -> dict:
-    record = {
-        "split": split,
-        "i": i,
-        **{k: v for k, v in question.items() if k in ["question", "knowledge_base_id"]},
-        "sections": [],
-    }
-    for j, (s, k) in enumerate(zip(result.scores, result.indices)):
-        sec = sections[int(k)]
-        record["sections"].append(
-            {
-                "index": s,
-                "score": k,
-                **{k: v for k, v in sec.items() if k in ["title", "content", "knowledge_base_id"]},
-            }
-        )
-    return record
+            # iterate over the batches
+            loader = torch.utils.data.DataLoader(
+                dataset["train"],
+                collate_fn=collate_fn,
+                batch_size=args.loader_batch_size,
+                num_workers=args.num_workers,
+                shuffle=False,
+            )
+
+            monitor = Monitor(
+                metrics=RetrievalMetricCollection(
+                    metrics=["ndcg", "mrr", "hitrate@01", "hitrate@03", "hitrate@10", "hitrate@30"]
+                ),
+                splits=["score", "bm25", "faiss"],
+            )
+
+            hits = {"score": [], "bm25": [], "faiss": []}
+            for idx, batch in enumerate(tqdm(loader, desc="Iterating over batches")):
+                if idx > 10:
+                    break
+
+                monitor.update_from_retrieval_batch(batch, field="section")
+                for key, hit in hits.items():
+                    logits = batch[f"section.{key}"]
+                    targets = batch["section.label"]
+                    for ls, ts in zip(logits, targets):
+                        ls = ls.masked_fill(ts.isnan(), -math.inf)
+                        ts = ts.masked_fill(ls.isinf(), 0)
+                        ids = torch.argsort(ls, descending=True)
+                        ts = ts[ids]
+                        r = {f"hitrate@{k}": (ts[:k] > 0).any().item() for k in [1, 3, 10, 30]}
+                        hit.append(r)
+
+                retrieved_section_ids = batch["section.id"]
+                retrieved_section_labels = batch["section.label"]
+                for i in range(retrieved_section_ids.shape[0]):
+                    # test that there is no overlap between positive and negative sections
+                    ids_i = retrieved_section_ids[i, :].tolist()
+                    labels_i = retrieved_section_labels[i, :].tolist()
+                    pos_ids = [id_ for id_, label in zip(ids_i, labels_i) if label > 0]
+                    neg_ids = [id_ for id_, label in zip(ids_i, labels_i) if label <= 0]
+                    assert set.intersection(set(pos_ids), set(neg_ids)) == set()
+
+            metrics = monitor.compute()
+            print_metric_groups(metrics)
+
+            # show the python metrics for comparison
+            py_metrics = {}
+            for key, key_hits in hits.items():
+                keys = key_hits[0].keys()
+                py_metrics[key] = {k: sum([r[k] for r in key_hits]) / len(hit) for k in keys}
+            rich.print(py_metrics)
 
 
 if __name__ == "__main__":

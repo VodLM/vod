@@ -1,6 +1,4 @@
 # pylint: disable=missing-function-docstring
-import argparse
-import dataclasses
 import tempfile
 import timeit
 from pathlib import Path
@@ -11,36 +9,19 @@ import rich
 import torch
 from loguru import logger
 
+from raffle_ds_research.tools import arguantic
 from raffle_ds_research.tools.index_tools import faiss_tools
 
 
-@dataclasses.dataclass
-class ProfileArgs:
+class ProfileArgs(arguantic.Arguantic):
     n_calls: int = 1_000
     nprobe: int = 10
     batch_size: int = 10
     dataset_size: int = 1_000
-    vector_size: int = (64,)
+    vector_size: tuple[int, ...] = (64,)
     index_factory: str = "IVF100,Flat"
     top_k: int = 10
-    verbose: bool = False
-
-    @classmethod
-    def from_args(cls, args: argparse.Namespace):
-        return cls(**vars(args))
-
-
-def parse_args() -> ProfileArgs:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--n_calls", type=int, default=1_000)
-    parser.add_argument("--nprobe", type=int, default=1)
-    parser.add_argument("--batch_size", type=int, default=10)
-    parser.add_argument("--dataset_size", type=int, default=100_000)
-    parser.add_argument("--vector_size", type=int, default=512)
-    parser.add_argument("--index_factory", type=str, default="Flat")
-    parser.add_argument("--top_k", type=int, default=100)
-    parser.add_argument("--verbose", type=bool, default=True)
-    return ProfileArgs.from_args(parser.parse_args())
+    verbose: int = 0
 
 
 def profile_faiss_server(args: ProfileArgs) -> dict[str, float]:

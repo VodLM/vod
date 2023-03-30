@@ -15,7 +15,7 @@ seed: ${global_seed:}
 compile: false
 model_name: ${model.encoder.pretrained_model_name_or_path}
 exp_name: ${builder.name}-${builder.subset_name}-${builder.language}
-run_name: ${fmt_mn:${model_name}}-${rdn_name:}
+run_name: ${fmt_mn:${model_name}}--${rdn_name:}
 
 loader_configs:
   # Defines the configurations for `torch.utils.data.Dataloader`
@@ -43,7 +43,7 @@ collate_configs:
     n_sections: 16
     max_pos_sections: 4
     prefetch_n_sections: 300
-    do_sample: true
+    do_sample: false
     question_max_length: 128
     section_max_length: 200
   eval:
@@ -69,7 +69,8 @@ faiss_config:
 
 bm25_config:
   # Defines configuration for `Bm25Master`
-  indexed_key: section
+  indexed_key: text
+  use_labels: true
   schedule:
     type: linear
     start: 1

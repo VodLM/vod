@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import collections
 import copy
 import dataclasses
 import warnings
-from typing import Any, Callable, Iterable, Optional, Tuple
+from typing import Any, Iterable, Optional, Tuple
 
 import datasets
 import numpy as np
@@ -141,109 +140,56 @@ class RetrievalCollate(pipes.Collate):
         **kwargs: Any,
     ):
         self.corpus = corpus
-        self.lookup_index = pipes.LookupIndexPipe(corpus, keys=list(config.label_keys.values()))
-        self.in_domain_lookup_index = pipes.LookupIndexPipe(corpus, keys=list(config.in_domain_keys.values()))
+        self.section_id_lookup = index_tools.LookupIndex(corpus, key=config.section_id_keys.section)
+        self.kb_id_lookup = index_tools.LookupIndex(corpus, key=config.kb_id_keys.section)
         self.tokenizer = tokenizer
         self.config = config
 
     def __call__(self, examples: list[dict[str, Any]], **kwargs: Any) -> dict[str, Any]:
         batch = pack_examples(examples)
-        client_cfgs = list(self.config.enabled_clients)
 
-        if len(client_cfgs) == 0:
+        if not self.config.search_enabled:
             # if not search service is enabled, fetch the sections from the same kb_id
-            neg_lookup_input = {v: batch[k] for k, v in self.config.in_domain_keys.items()}
-            candidate_samples: index_tools.RetrievalBatch = _wrap_as_retrieval_batch(
-                self.in_domain_lookup_index.search(neg_lookup_input),
-                fill_value=0.0,
-            )
+            kb_ids = batch[self.config.kb_id_keys.query]
+            candidate_samples: index_tools.RetrievalBatch = self.kb_id_lookup.search(kb_ids)
             client_scores = {}
-            candidate_samples_ = [candidate_samples]
         else:
             # fetch the query vectors
-            if any(cfg.requires_vectors for cfg in client_cfgs):
+            if self.config.requires_vectors:
                 question_ids = batch[ROW_IDX_COL_NAME]
                 query_vectors = self.config.query_vectors[question_ids]
+                if np.all(query_vectors == 0):
+                    raise ValueError("Query vectors are all zeros.")
             else:
                 query_vectors = None
 
             # search the indexes
-            candidate_samples_ = []
-            for cfg in client_cfgs:
+            samples_: list[ClientResults] = []
+            for cfg in self.config.enabled_clients:
                 samples: index_tools.RetrievalBatch = cfg.client.search(
                     vector=query_vectors,
-                    text=batch["question"],
+                    text=batch["text"],
+                    label=batch[cfg.label_key],
                     top_k=self.config.prefetch_n_sections,
                 )
-                candidate_samples_.append(samples)
+                samples_.append(ClientResults(samples=samples, cfg=cfg))
 
             # concatenate the results
-            candidate_samples, client_scores = _merge_candidate_samples(copy.deepcopy(candidate_samples_), client_cfgs)
-
-            # ----------------------------------------------------------------
-            # TESTING - TODO: remove
-            if TEST_MODE:
-                for i in range(len(batch["question"])):
-                    for k, (pid, sco) in enumerate(zip(candidate_samples.indices[i], candidate_samples.scores[i])):
-                        if pid < 0:
-                            continue
-                        pid_found = False
-                        for j, ori_samples in enumerate(candidate_samples_):
-                            cfg = client_cfgs[j]
-                            ori_indices = ori_samples.indices[i].tolist()
-                            ori_scores = ori_samples.scores[i].tolist()
-                            agg_scores = client_scores[cfg.name][i].tolist()
-                            agg_indices = candidate_samples.indices[i].tolist()
-                            if pid not in ori_indices:
-                                continue
-                            pid_found = True
-                            pid_loc = ori_indices.index(pid)
-                            ori_scores_at_pid = ori_scores[pid_loc]
-                            agg_scores_at_pid = agg_scores[k]
-                            if not np.allclose(agg_scores_at_pid, ori_scores_at_pid):
-                                rich.print(
-                                    dict(
-                                        i=i,
-                                        j=j,
-                                        client=cfg.name,
-                                        pid=pid,
-                                        aggr=[(agg_indices[t], agg_scores[t]) for t in range(len(agg_indices))],
-                                        orig=[(ori_indices[t], ori_scores[t]) for t in range(len(ori_indices))],
-                                    )
-                                )
-                                raise ValueError(
-                                    f"[{i}, {j}; pid={pid}] score {agg_scores_at_pid} != {ori_scores_at_pid} in {cfg.name} index"
-                                )
-                        if not pid_found:
-                            rich.print(
-                                [
-                                    (cfg.name, sample.indices[i].tolist())
-                                    for cfg, sample in zip(client_cfgs, candidate_samples_)
-                                ]
-                                + [
-                                    ("agg", candidate_samples.indices[i].tolist()),
-                                ]
-                            )
-                            raise ValueError(f"[{i}; pid={pid}] not found in any index")
-            # ----------------------------------------------------------------
+            candidate_samples, client_scores = _merge_candidate_samples(samples_)
 
         # tokenize the questions
         tokenized_question = pipes.torch_tokenize_pipe(
             batch,
             tokenizer=self.tokenizer,
-            field="question",
+            text_key="text",
+            prefix_key="question.",
             max_length=self.config.question_max_length,
             truncation=True,
         )
 
-        # fetch the positive section ids (The `rule` allows keeping sections with match on either `id` or `answer_id`)
-        pos_lookup_input = {v: batch[k] for k, v in self.config.label_keys.items()}
-        pos_lookup_results = self.lookup_index.search(pos_lookup_input)
-        positive_samples: index_tools.RetrievalBatch = _wrap_as_retrieval_batch(
-            pos_lookup_results,
-            is_positive_section=_matches_answer_xor_section,
-            fill_value=np.nan,
-        )
+        # fetch the positive `section_ids`
+        query_section_ids = batch[self.config.section_id_keys.query]
+        positive_samples: index_tools.RetrievalBatch = self.section_id_lookup.search(query_section_ids)
 
         # sample the sections given the positive ones and the pool of candidates
         sections: SampledSections = sample_sections(
@@ -255,93 +201,71 @@ class RetrievalCollate(pipes.Collate):
             other_scores=client_scores,
         )
 
-        # ----------------------------------------------------------------
-        # TESTING - TODO: remove
-        if TEST_MODE:
-            for i in range(len(batch["question"])):
-                if not sections.labels[i].any():
-                    rich.print(
-                        dict(
-                            positive_samples=positive_samples,
-                            sections_labels=sections.labels,
-                        )
-                    )
-                    raise ValueError(f"No positive section found. i={i}")
-                for pid, sco in zip(sections.indices[i], sections.scores[i]):
-                    if pid < 0:
-                        continue
-                    pid_found = False
-                    for j, ori_samples in enumerate(candidate_samples_):
-                        cfg = client_cfgs[j]
-                        if pid not in ori_samples.indices[i]:
-                            if pid in positive_samples.indices[i]:
-                                pid_found = True
-                            else:
-                                raise ValueError(f"pid {pid} not found in {cfg.name} index, nor in positive index")
-
-                        else:
-                            pid_found = True
-                            pid_loc = ori_samples.indices[i].tolist().index(pid)
-
-                    if not pid_found:
-                        rich.print(
-                            [
-                                {"client": client_cfgs[j].name, "pids": sample.indices[i].tolist()}
-                                for j, sample in enumerate(candidate_samples_)
-                            ]
-                        )
-                        raise ValueError(f"pid {pid} not found in any index")
-        # ----------------------------------------------------------------
-
-        # fetch the content of each section
+        # fetch the content of each section from the huggingface `datasets.Dataset`
         flat_ids = sections.indices.flatten().tolist()
-        flat_sections_content = self.corpus[flat_ids]  # type: ignore
+        flat_sections_content: dict[str, Any] = self.corpus[flat_ids]  # type: ignore
 
         # tokenize the sections and add them to the output
         tokenized_sections = pipes.torch_tokenize_pipe(
             flat_sections_content,
             tokenizer=self.tokenizer,
-            field="section",
+            text_key="text",
+            prefix_key="section.",
             max_length=self.config.section_max_length,
             truncation=True,
         )
         tokenized_sections = {k: v.view(*sections.indices.shape, -1) for k, v in tokenized_sections.items()}
 
-        # question extras
-        questions_extras_keys = ["id", "section_id", "answer_id", "kb_id"]
-        questions_extras = {
-            f"question.{k}": _to_tensor(batch[k], dtype=torch.long, replace={None: -1}) for k in questions_extras_keys
-        }
-
-        # section extras
-        section_extras_keys = ["id", "answer_id", "kb_id"]
-        sections_extras = {
-            f"section.{k}": _to_tensor(flat_sections_content[k], dtype=torch.long) for k in section_extras_keys
-        }
-        sections_extras = {k: v.view(*sections.indices.shape) for k, v in sections_extras.items()}
-
         batch = {
-            **questions_extras,
             **tokenized_question,
             **tokenized_sections,
             **sections.to_dict(prefix="section.", as_torch=True),
-            **sections_extras,
+            **self._get_extras(batch, flat_sections_content, sections_shape=sections.indices.shape),
         }
 
         return batch
 
+    def _get_extras(
+        self,
+        batch: dict[str, Any],
+        flat_sections_content: dict[str, Any],
+        sections_shape: tuple[int, ...],
+    ) -> dict[str, Any]:
+        questions_extras_keys = ["id", "answer_id", "kb_id"]
+        question_extras = {
+            f"question.{k}": _to_tensor(batch[k], dtype=torch.long, replace={None: -1}) for k in questions_extras_keys
+        }
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=UserWarning)
+            query_section_ids = torch.nested.nested_tensor(batch[self.config.section_id_keys.query])
+            question_extras["question.section_ids"] = torch.nested.to_padded_tensor(query_section_ids, padding=-1)
+
+        section_extras_keys = ["id", "answer_id", "kb_id"]
+        sections_extras = {
+            f"section.{k}": _to_tensor(flat_sections_content[k], dtype=torch.long) for k in section_extras_keys
+        }
+        sections_extras = {k: v.view(sections_shape) for k, v in sections_extras.items()}
+
+        return {**question_extras, **sections_extras}
+
+
+@dataclasses.dataclass(frozen=True)
+class ClientResults:
+    samples: index_tools.RetrievalBatch
+    cfg: SearchClientConfig
+
 
 def _merge_candidate_samples(
-    candidates: Iterable[index_tools.RetrievalBatch],
-    client_cfgs: list[SearchClientConfig],
+    candidates: Iterable[ClientResults],
 ) -> Tuple[index_tools.RetrievalBatch, dict[str, np.ndarray]]:
     candidates = list(candidates)
     if len(candidates) == 1:
-        return candidates[0], {client_cfgs[0].name: candidates[0].scores}
+        candidate = candidates[0]
+        return candidate.samples, {candidate.cfg.name: candidate.samples.scores}
     elif len(candidates) == 0:
         raise ValueError("No candidates to merge")
 
-    candidate_samples = index_tools.merge_retrieval_batches(candidates)
+    candidate_samples = index_tools.merge_retrieval_batches([c.samples for c in candidates])
 
     # replace nan scores with the minimum score
     candidate_samples.scores = _fill_nans_with_min(values=candidate_samples.scores, offset_min_value=-1, axis=1)
@@ -349,7 +273,7 @@ def _merge_candidate_samples(
     # Aggregate the scores
     new_scores = np.zeros_like(candidate_samples.scores[..., 0])
     client_scores = {}
-    for i, client_cfg in enumerate(client_cfgs):
+    for i, client_cfg in enumerate(c.cfg for c in candidates):
         client_scores_i = np.copy(candidate_samples.scores[..., i])
         new_scores += client_cfg.weight * client_scores_i
         client_scores[client_cfg.name] = client_scores_i
@@ -367,49 +291,6 @@ def _merge_candidate_samples(
         client_scores[k] = np.take_along_axis(v, sort_ids, axis=-1)
 
     return candidate_samples, client_scores
-
-
-def _wrap_as_retrieval_batch(
-    lookup_results: pipes.LookupSearchResults,
-    is_positive_section: Optional[Callable[[pipes.LookupSearchResults], np.ndarray]] = None,
-    fill_value: float = np.nan,
-) -> index_tools.RetrievalBatch:
-    """Wrap the lookup results as a `RetrievalBatch`."""
-    if is_positive_section is None:
-        is_positive_section = lookup_results.frequencies.sum(axis=-1) > 0
-    else:
-        is_positive_section = is_positive_section(lookup_results)
-
-    # override the scores to NaN for positives, -inf for negatives
-    scores = np.where(is_positive_section, fill_value, -np.inf)
-    indices = np.where(is_positive_section, lookup_results.indices, -1)
-    return index_tools.RetrievalBatch(indices=indices, scores=scores)
-
-
-def _matches_answer_xor_section(results: pipes.LookupSearchResults) -> np.ndarray:
-    """For each row, set mark the sections as positive.
-    - where there is a match on `id` (section_id).
-    - else where there is a match on `answer_id` (answer_id).
-    """
-    id_col_idx = results.labels.index("id")
-    answer_id_col_idx = results.labels.index("answer_id")
-
-    # frequencies: [batch_size, n_sections, n_labels]
-    frequencies: np.ndarray = results.frequencies
-
-    # compute the `id_defined` mask
-    has_section_id_match = (frequencies[:, :, id_col_idx] > 0).any(axis=-1)
-    is_positive_section = np.where(
-        has_section_id_match[:, None],
-        frequencies[:, :, id_col_idx] > 0,  # positive ids are the ones at the section level
-        frequencies[:, :, answer_id_col_idx] > 0,  # positive ids are the ones at the answer level
-    )
-
-    if np.any(is_positive_section.sum(axis=-1) == 0):
-        rich.print(results)
-        raise ValueError("No positive section found")
-
-    return is_positive_section
 
 
 @dataclasses.dataclass(frozen=True)
@@ -463,6 +344,7 @@ class SearchClientConfig(pydantic.BaseModel):
     name: str
     client: index_tools.SearchClient
     weight: float = 1.0
+    label_key: str = "kb_id"
 
     @property
     def enabled(self):
@@ -471,6 +353,14 @@ class SearchClientConfig(pydantic.BaseModel):
     @property
     def requires_vectors(self):
         return self.client.requires_vectors
+
+
+class KeyMap(pydantic.BaseModel):
+    class Config:
+        extra = "forbid"
+
+    query: str
+    section: str
 
 
 class RetrievalCollateConfig(pydantic.BaseModel):
@@ -496,8 +386,8 @@ class RetrievalCollateConfig(pydantic.BaseModel):
     clients: list[SearchClientConfig] = []
 
     # keys for the lookup index
-    label_keys: collections.OrderedDict[str, str] = {"answer_id": "answer_id", "section_id": "id"}
-    in_domain_keys: collections.OrderedDict[str, str] = {"kb_id": "kb_id"}
+    section_id_keys: KeyMap = KeyMap(query="section_ids", section="id")
+    kb_id_keys: KeyMap = KeyMap(query="kb_id", section="kb_id")
 
     @pydantic.validator("clients", pre=True)
     def _validate_clients(cls, v):
@@ -550,12 +440,3 @@ class RetrievalCollateConfig(pydantic.BaseModel):
     @property
     def enabled_clients(self) -> list[SearchClientConfig]:
         return [c for c in self.clients if c.enabled]
-
-    @pydantic.validator("label_keys", pre=True)
-    def _validate_label_keys(cls, v: Any) -> collections.OrderedDict[str, str]:
-        if isinstance(v, collections.OrderedDict):
-            return v
-        elif isinstance(v, dict):
-            return collections.OrderedDict(v)
-        else:
-            raise TypeError(f"Expected dict or OrderedDict, got {type(v)}")

@@ -46,10 +46,16 @@ def register_omgeaconf_resolvers():
     def _default_trainer_accelerator(*args, **kwargs):
         if N_GPUS == 0:
             return "cpu"
-        elif N_GPUS == 1:
+        else:
             return "gpu"
-        elif N_GPUS > 1:
-            return "ddp"
+
+    def _default_trainer_single_device(*args, **kwargs):
+        if N_GPUS == 0:
+            return "cpu"
+        elif N_GPUS == 1:
+            return "cuda:0"
+        else:
+            raise ValueError("N_GPUS > 1. Please specify the device.")
 
     def _infer_model_type(model_name: str):
         known_model_types = ["bert", "t5"]
@@ -82,6 +88,7 @@ def register_omgeaconf_resolvers():
     OmegaConf.register_new_resolver("os_expanduser", os.path.expanduser)
     OmegaConf.register_new_resolver("rdn_name", randomname.get_name)
     OmegaConf.register_new_resolver("default_trainer_accelerator", _default_trainer_accelerator)
+    OmegaConf.register_new_resolver("default_trainer_single_device", _default_trainer_single_device)
     OmegaConf.register_new_resolver("infer_model_type", _infer_model_type)
     OmegaConf.register_new_resolver("randint", randint)
     OmegaConf.register_new_resolver("global_seed", lambda *_: SEED)

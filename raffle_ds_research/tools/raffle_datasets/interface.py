@@ -4,7 +4,7 @@ import datasets
 from datasets import Dataset as HfDataset
 from datasets import DatasetDict as HfDatasetDict
 
-from .frank import FrankSplitName, HfFrankSplit, load_frank
+from .frank import FrankSplitName, HfFrankPart, load_frank
 
 FRANK_SPLITS = [x.value for x in FrankSplitName]
 FRANK_TYPES = ["qa_splits", "sections"]
@@ -63,7 +63,7 @@ def _load_dataset_frank(
         raise ValueError(
             f"Invalid type: {type_}. Must be one of {FRANK_TYPES} " f"Name should be of the form `language.split.type`."
         )
-    frank: HfFrankSplit = load_frank(language, split=frank_split, cache_dir=cache_dir, keep_in_memory=keep_in_memory)
+    frank: HfFrankPart = load_frank(language, split=frank_split, cache_dir=cache_dir, keep_in_memory=keep_in_memory)
     dset = {
         "qa_splits": frank.qa_splits,
         "sections": frank.sections,

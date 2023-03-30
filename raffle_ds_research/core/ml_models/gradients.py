@@ -59,12 +59,20 @@ class SelfSupervisedGradients(Gradients):
 class KlDivGradients(Gradients):
     """Compute the KL divergence between the model and the data."""
 
-    def __init__(self, eps: Optional[float] = None):
+    def __init__(
+        self,
+        eps: Optional[float] = None,
+        bm25_guidance_weight: float = 0.0,
+        self_supervision_weight: float = 1.0,
+    ):
         super().__init__()
         if eps:
             self.log_eps = math.log(eps)
         else:
             self.log_eps = -math.inf
+
+        self.bm25_guidance_weight = bm25_guidance_weight
+        self.self_supervision_weight = self_supervision_weight
 
     def forward(self, intermediate_results: dict) -> dict:
         data = SupervisedGradientsInputs(**intermediate_results)
@@ -110,6 +118,8 @@ class KlDivGradients(Gradients):
         kl_div_terms = torch.where(mask, 0, -data_logits.exp() * (model_logits - data_logits))
         kl_div = kl_div_terms.sum(dim=-1)
         loss = (q_with_positives * kl_div).sum() / q_with_positives.sum()
+
+        # todo: `bm25_guidance_weight` and `self_supervision_weight` are not used
 
         return {
             "loss": loss,

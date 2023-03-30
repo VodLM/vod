@@ -39,3 +39,12 @@ def key_map_wrapper(pipe, Pipe, key_map: dict[str, str]) -> Pipe:
         return pipe(input_batch, idx, **kwargs)
 
     return wrapper
+
+
+class Partial(Pipe):
+    def __init__(self, pipe: Pipe, **kwargs: Any):
+        self.pipe = pipe
+        self.kwargs = kwargs
+
+    def __call__(self, batch: dict[str, Any], idx: Optional[list[int]] = None, **kwargs: Any) -> dict[str, Any]:
+        return self.pipe(batch, idx, **self.kwargs, **kwargs)

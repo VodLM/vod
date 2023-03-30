@@ -32,6 +32,8 @@ class SimpleRanker(torch.nn.Module):
                 model_output = self.model(*args)
                 output_vector = model_output.pooler_output
                 output[f"{field}.{self._output_vector_name}"] = output_vector
+        if not output:
+            raise ValueError(f"Missing keys in batch: fields={self._fields}. Found: {list(batch.keys())}")
 
         return output
 

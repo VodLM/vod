@@ -6,4 +6,4 @@ log_on_step:
   test: false
 metrics:
   _target_: raffle_ds_research.core.ml_models.monitor.RetrievalMetricCollection
-  metrics: [ "ndcg", "mrr", "hitrate@3" ]
+  metrics: [ "ndcg", "mrr", "hitrate@1", "hitrate@3" ]

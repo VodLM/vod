@@ -5,6 +5,7 @@ log_on_step:
   test: false
 metrics:
   _target_: raffle_ds_research.core.ml_models.monitor.RetrievalMetricCollection
-  metrics: [ "ndcg", "mrr","hitrate@3", "hitrate@10", "hitrate@30", "r@3" ]
+  metrics: [ "ndcg", "mrr","hitrate@01", "hitrate@03", "hitrate@10", "hitrate@30" ]
   compute_on_cpu: true
-  sync_on_compute: false
+  dist_sync_on_step: true
+  sync_on_compute: false # todo: remove this line, this is needed in this version of lightning, otherwise it will crash.

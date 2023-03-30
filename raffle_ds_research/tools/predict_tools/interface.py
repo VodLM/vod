@@ -15,6 +15,7 @@ import torch
 from datasets import fingerprint
 from loguru import logger
 from omegaconf import DictConfig, omegaconf
+from rich.progress import track
 
 from raffle_ds_research.tools import pipes
 from raffle_ds_research.tools.dataset_builder.builder import DatasetProtocol
@@ -154,14 +155,15 @@ def _predict_single(
     # validate that all store values have been initialized
     if validate_store:
         n_samples = math.inf if isinstance(validate_store, bool) else validate_store
-        logger.debug(f"Validating the store using n_samples={n_samples} (all rows must be non-zero)")
-        zero_ids = list(_get_zero_vec_indices(dataset, store, n_samples=n_samples))
+        logger.debug(f"Validating the store using `{n_samples}` samples (all rows must be non-zero)")
+        zero_ids = list(_get_zero_vec_indices(store, n_samples=n_samples))
         if len(zero_ids):
+            zero_ids_ = zero_ids if len(zero_ids) < 5 else [str(x) for x in zero_ids[:5]] + ["..."]
             raise ValueError(
-                f"Vector at indices {zero_ids} are all zeros. "
+                f"Vector at indices {zero_ids_} are all zeros. "
                 f"This happens if the store has been initialized but not updated with predictions. "
-                f"Please delete the store at {index_path} and try again. "
-                f"NB: this could happen if the model outputs a zero vector."
+                f"Please delete the store at `{index_path}` and try again. "
+                f"NB: this could happen if the model outputs zero vectors."
             )
 
     # close the store and return the config
@@ -197,13 +199,22 @@ def _infer_vector_shape(
     return vector_shape
 
 
-def _get_zero_vec_indices(dataset, store, n_samples: Number) -> Iterable[int]:
-    if n_samples < len(dataset):
-        ids = np.random.choice(len(dataset), int(n_samples), replace=False)
+def _get_zero_vec_indices(store: tensorstore.TensorStore, n_samples: Number) -> Iterable[int]:
+    store_size = store.shape[0]
+    if n_samples < store_size:
+        ids = np.random.choice(store_size, int(n_samples), replace=False)
     else:
-        ids = range(len(dataset))
-    for i in ids:
-        vec = store[i].read()
+        ids = range(store_size)
+    prefetched, i = None, 0
+    for i in track(ids, description="Validating store"):
+        if prefetched is not None:
+            vec = prefetched.result()
+            if np.all(vec == 0):
+                yield i - 1
+        prefetched = store[i].read()
+
+    if prefetched is not None:
+        vec = prefetched.result()
         if np.all(vec == 0):
             yield i
 

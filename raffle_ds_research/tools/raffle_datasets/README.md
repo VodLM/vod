@@ -15,6 +15,7 @@ frank: datasets.DatasetDict = load_raffle_dataset("frank", name="en.A.qa_splits"
 
 ```python
 from raffle_ds_research.tools.raffle_datasets import frank
-dset: frank.HfFrankSplit = frank.load_frank(language="en", split="A")
+
+dset: frank.HfFrankPart = frank.load_frank(language="en", split="A")
 ```
 ```
