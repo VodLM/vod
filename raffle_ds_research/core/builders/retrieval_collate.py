@@ -163,7 +163,7 @@ class RetrievalCollate(pipes.Collate):
             else:
                 query_vectors = None
 
-            # search the indexes
+            # search the indexes # todo: asyncio
             samples_: list[ClientResults] = []
             for cfg in self.config.enabled_clients:
                 samples: index_tools.RetrievalBatch = cfg.client.search(

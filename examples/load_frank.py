@@ -1,7 +1,6 @@
 import rich
 
-from raffle_ds_research.tools import arguantic
-from raffle_ds_research.tools import raffle_datasets
+from raffle_ds_research.tools import arguantic, raffle_datasets
 
 
 class Args(arguantic.Arguantic):
@@ -39,6 +38,8 @@ if __name__ == "__main__":
 
     for split, questions in frank.qa_splits.items():
         n_questions_with_single_section = sum(len(question["section_ids"]) == 1 for question in questions)
-        rich.print(f"   {split}: {n_questions_with_single_section / len(questions):.2%} questions with a single section")
+        rich.print(
+            f"   {split}: {n_questions_with_single_section / len(questions):.2%} questions with a single section"
+        )
 
     rich.print({f"training-question-{args.sample_idx}": frank.qa_splits["train"][0]})

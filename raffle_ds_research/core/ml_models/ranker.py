@@ -5,6 +5,7 @@ import re
 from typing import Any, Iterable, Optional, Union
 
 import lightning.pytorch as pl
+import rich
 import torch
 import transformers
 from datasets.fingerprint import Hasher, hashregister
@@ -169,36 +170,16 @@ class Ranker(pl.LightningModule):
             )
         return output
 
-    @staticmethod
-    def _input_stats(batch: dict, prefix: str = "") -> dict:
-        output = {}
-        keys = {
-            "question.input_ids": "question/input_ids",
-            "section.input_ids": "section/input_ids",
-        }
-        for key, log_key in keys.items():
-            try:
-                value = batch[key]
-                if isinstance(value, torch.Tensor):
-                    shp = value.shape
-                    output[f"{prefix}{log_key}_length"] = float(shp[-1])
-                    if len(shp) > 2:
-                        output[f"{prefix}{log_key}_n"] = float(shp[-2])
-            except KeyError:
-                logger.warning(f"Key {key} not found in batch")
-        return output
-
     def _step(self, batch: dict, batch_idx: Optional[int] = None, *, split: str, **kwargs) -> dict:
         output = self.forward(batch)
         output = self.gradients({**batch, **output})
-        output.update(self._input_stats(batch, prefix=f"{split}/"))
+        output.update(_compute_input_stats(batch, prefix=f"{split}/"))
 
         if self.monitor is not None:
-            self.monitor.update(output, split=split)
-            if self.monitor.log_on_step(split):
-                metrics = self.monitor.compute(split=split)
-                output.update(metrics)
-                self.monitor.reset(split=split)
+            if self.monitor.on_step(split):
+                output.update(self.monitor.forward(output, split=split))
+            else:
+                self.monitor.update(output, split=split)
 
         # filter the output and log
         output = self._filter_output(output)
@@ -209,15 +190,16 @@ class Ranker(pl.LightningModule):
 
     @torch.no_grad()
     def _log_metrics(
-        self, output: dict, split: str, prog_bar: Optional[bool] = None, on_epoch: Optional[bool] = None, **kwargs
+        self, output: dict, split: str, prog_bar: Optional[bool] = None, on_epoch: Optional[bool] = False, **kwargs
     ) -> None:
         for key, value in output.items():
             if isinstance(value, torch.Tensor):
                 if value.numel() > 1:
                     value = value.mean()
 
-            if "/" not in key:
-                key = f"{split}/{key}"
+            if key == "loss":
+                key = f"{split}/loss"
+                value = value.detach()
 
             if prog_bar is None:
                 prog_bar = PBAR_MATCH_PATTERN.search(key) is not None
@@ -227,7 +209,7 @@ class Ranker(pl.LightningModule):
 
     @staticmethod
     def _filter_output(output: dict) -> dict:
-        def fn(key, value):
+        def fn(key: str, value: torch.Tensor) -> bool:
             return not str(key).startswith("_")
 
         output = {key: value for key, value in output.items() if fn(key, value)}
@@ -245,9 +227,9 @@ class Ranker(pl.LightningModule):
 
     # Compute metrics
     def _on_epoch_end(self, split: str) -> dict:
-        if self.monitor is not None:
+        if self.monitor is not None and not self.monitor.on_step(split):
             summary = self.monitor.compute(split=split)
-            self._log_metrics(summary, split=split)
+            self._log_metrics(summary, split=split, on_epoch=True)
             return summary
         else:
             return {}
@@ -274,6 +256,25 @@ class Ranker(pl.LightningModule):
 
     def on_test_epoch_start(self) -> None:
         self._on_epoch_start(split="test")
+
+
+def _compute_input_stats(batch: dict, prefix: str = "") -> dict[str, float]:
+    output = {}
+    keys = {
+        "question.input_ids": "question/input_ids",
+        "section.input_ids": "section/input_ids",
+    }
+    for key, log_key in keys.items():
+        try:
+            value = batch[key]
+            if isinstance(value, torch.Tensor):
+                shp = value.shape
+                output[f"{prefix}{log_key}_length"] = float(shp[-1])
+                if len(shp) > 2:
+                    output[f"{prefix}{log_key}_n"] = float(shp[-2])
+        except KeyError:
+            logger.warning(f"Key {key} not found in batch")
+    return output
 
 
 @hashregister(Ranker)

@@ -6,7 +6,7 @@ from typing import Iterable
 import datasets
 import numpy as np
 
-from raffle_ds_research.tools.index_tools import RetrievalBatch
+from raffle_ds_research.tools.index_tools.retrieval_data_type import RetrievalBatch
 
 
 def _build_lookup_table(labels: Iterable[int]) -> dict[int, set[int]]:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import math
+from abc import ABC
 from typing import Any, Optional, Tuple
 
 import hydra
@@ -38,8 +39,12 @@ class Monitor(nn.Module):
         if splits is None:
             splits = copy.copy(SPLIT_NAMES)
 
+        if isinstance(log_on_step, omegaconf.DictConfig):
+            log_on_step = omegaconf.OmegaConf.to_object(log_on_step)
+
         if isinstance(log_on_step, dict):
-            assert set(log_on_step.keys()) == set(SPLIT_NAMES)
+            if set(log_on_step.keys()) != set(splits):
+                raise ValueError(f"Expected log_on_step to have keys {splits}, but got {list(log_on_step.keys())}")
         else:
             log_on_step = {split: log_on_step for split in splits}
 
@@ -47,7 +52,8 @@ class Monitor(nn.Module):
             metrics = hydra.utils.instantiate(metrics)
 
         if isinstance(metrics, dict):
-            assert set(metrics.keys()) == set(SPLIT_NAMES)
+            if set(metrics.keys()) != set(splits):
+                raise ValueError(f"Expected metrics to have keys {splits}, but got {list(metrics.keys())}")
         else:
             metrics = {split: copy.deepcopy(metrics) for split in splits}
 
@@ -55,10 +61,10 @@ class Monitor(nn.Module):
         self._splits = splits
         self.metrics = torch.nn.ModuleDict({_safe_split(split): metric for split, metric in metrics.items()})
 
-    def log_on_step(self, split: str) -> bool:
-        """Return True if the metrics should be logged on step"""
-        if split not in SPLIT_NAMES:
-            raise TypeError(f"Unknown split type: {type(split)}")
+    def on_step(self, split: str) -> bool:
+        """Return True if the metrics should be computed and logged on step"""
+        if split not in self._log_on_step.keys():
+            raise TypeError(f"Unknown split type: {type(split)}. Expected one of {self._log_on_step.keys()}.")
         return self._log_on_step[split]
 
     def forward(self, data: dict, split: str) -> dict:
@@ -176,7 +182,25 @@ class HitRate(torchmetrics.Metric):
         return self.hits.float() / self.total
 
 
-class MeanReciprocalRank(torchmetrics.MeanMetric):
+class AveragedMetric(torchmetrics.Metric, ABC):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.add_state("value", default=torch.tensor(0.0), dist_reduce_fx="sum")
+        self.add_state("weight", default=torch.tensor(0.0), dist_reduce_fx="sum")
+
+    def _update(self, values: torch.Tensor) -> None:
+        self.value += values.sum().to(self.value)
+        self.weight += values.numel()
+
+    def compute(self) -> torch.Tensor:
+        return self.value / self.weight
+
+
+class MeanReciprocalRank(AveragedMetric):
+    is_differentiable: bool = False
+    higher_is_better: bool = True
+    full_state_update: bool = False
+
     def update(self, preds: torch.Tensor, target: torch.Tensor) -> None:
         preds, target = _mask_inputs(preds, target)
         ranked_labels = _rank_labels(labels=target, scores=preds)
@@ -184,9 +208,7 @@ class MeanReciprocalRank(torchmetrics.MeanMetric):
         has_positive = (ranked_labels > 0).sum(dim=-1) > 0
         mrr = 1.0 / (1 + idx_first_non_zero)
         mmr = torch.where(has_positive, mrr, 0)
-        value = mmr.mean()
-        weight = preds[..., 0].numel()
-        super().update(value, weight)
+        self._update(mmr)
 
 
 def _arg_first_non_zero(values: torch.Tensor) -> torch.Tensor:
@@ -196,16 +218,23 @@ def _arg_first_non_zero(values: torch.Tensor) -> torch.Tensor:
     return idx_first_non_zero
 
 
-class NormalizedDCG(torchmetrics.MeanMetric):
+class NormalizedDCG(AveragedMetric):
+    is_differentiable: bool = False
+    higher_is_better: bool = True
+    full_state_update: bool = False
+
     def __init__(self, top_k: Optional[int] = None, **kwargs):
         super().__init__(**kwargs)
         self.top_k = top_k
 
     def update(self, preds: torch.Tensor, target: torch.Tensor) -> None:
         preds, target = _mask_inputs(preds, target)
-        value = torchmetrics.functional.retrieval_normalized_dcg(preds=preds, target=target, k=self.top_k)
-        weight = preds[..., 0].numel()
-        super().update(value, weight)
+        batch_size = preds[..., 0].numel()
+        ndcg = torchmetrics.functional.retrieval_normalized_dcg(preds=preds, target=target, k=self.top_k)
+        # `retrieval_normalized_dcg` returns the mean over the batch,
+        # so we need to multiply by the batch size to get the sum
+        ndcg = ndcg.repeat(batch_size)
+        self._update(ndcg)
 
 
 def retrieval_metric_factory(name: str, **kwargs) -> Metric:

@@ -56,8 +56,13 @@ collate_configs:
 
 update_freq: 1_000
 faiss_config:
-  factory: Flat
-  schedule: 0
+  factory: IVF32,Flat
+  nprobe: 16
+  schedule:
+    type: linear
+    start: 0
+    end: 1
+    period: 10
 bm25_config:
   use_labels: true
   schedule: 1
