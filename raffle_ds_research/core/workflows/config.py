@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import Union
+from typing import Optional, Union
 
 import omegaconf
 import pydantic
 
-from raffle_ds_research.cli.utils.schedule import ScheduleConfig
+from raffle_ds_research.core.workflows.schedule import ScheduleConfig
 
 
 class DefaultCollateConfig(pydantic.BaseModel):
@@ -57,3 +57,33 @@ class DefaultFaissConfig(SearchConfig):
 class DefaultBm25Config(SearchConfig):
     indexed_key: str = "text"
     use_labels: bool = True
+
+
+class MultiIndexConfig(pydantic.BaseModel):
+    update_freq: Optional[Union[int, list[int]]]
+    faiss: DefaultFaissConfig
+    bm25: DefaultBm25Config
+
+    @pydantic.validator("update_freq", pre=True)
+    def _validate_update_freq(cls, v):
+        if isinstance(v, omegaconf.ListConfig):
+            v = omegaconf.OmegaConf.to_container(v)
+        return v
+
+    @pydantic.validator("faiss")
+    def _validate_faiss(cls, v):
+        if isinstance(v, DefaultFaissConfig):
+            return v
+        elif isinstance(v, (dict, omegaconf.DictConfig)):
+            return DefaultFaissConfig(**v)
+
+        raise ValueError(f"Invalid faiss config: {v}")
+
+    @pydantic.validator("bm25")
+    def _validate_bm25(cls, v):
+        if isinstance(v, DefaultBm25Config):
+            return v
+        elif isinstance(v, (dict, omegaconf.DictConfig)):
+            return DefaultBm25Config(**v)
+
+        raise ValueError(f"Invalid bm25 config: {v}")

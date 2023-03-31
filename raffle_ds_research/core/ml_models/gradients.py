@@ -2,6 +2,7 @@ import abc
 import math
 from typing import Optional
 
+import rich
 import torch.nn
 from pydantic.fields import Field
 from pydantic.main import BaseModel
@@ -29,6 +30,16 @@ class SupervisedGradientsInputs(BaseModel):
         ...,
         description="Retrieval scores.",
         alias="section.score",
+    )
+    bm25: Optional[torch.Tensor] = Field(
+        None,
+        description="bm25 Retrieval scores.",
+        alias="section.bm25",
+    )
+    faiss: Optional[torch.Tensor] = Field(
+        None,
+        description="faiss Retrieval scores.",
+        alias="section.faiss",
     )
 
 
@@ -77,6 +88,7 @@ class KlDivGradients(Gradients):
     def forward(self, intermediate_results: dict) -> dict:
         data = SupervisedGradientsInputs(**intermediate_results)
 
+        # 1. Compute the KL divergence between the model and the data
         # Determine the masked sections
         is_padding = data.scores.isinf() & (data.scores < 0)
 
@@ -93,8 +105,6 @@ class KlDivGradients(Gradients):
         #   - except when all the sections for a given are negative
         is_negative_section = data.targets < 1
         q_with_positives = ~is_negative_section.all(dim=-1)
-        # todo: remove this, should not be necessary on Frank.
-        #  raise an error if this is the case.
         if not q_with_positives.all():
             raise ValueError(
                 f"Some questions do not have any positive section. prop={q_with_positives.float().mean():.2%}"
@@ -117,41 +127,78 @@ class KlDivGradients(Gradients):
         mask = (data_logits.isinf() & (data_logits < 0)) | is_padding | ~q_with_positives[:, None]
         kl_div_terms = torch.where(mask, 0, -data_logits.exp() * (model_logits - data_logits))
         kl_div = kl_div_terms.sum(dim=-1)
-        loss = (q_with_positives * kl_div).sum() / q_with_positives.sum()
+        kl_div_loss = (q_with_positives * kl_div).sum() / q_with_positives.sum()
 
-        # todo: `bm25_guidance_weight` and `self_supervision_weight` are not used
+        # 2. Compute the self-supervision loss
+        is_multi_targets = ((data.targets > 0).sum(dim=-1) > 1).float()
+        ref_scores_where_positives = torch.where(data.targets, data.scores, -torch.inf)
+        model_scores_where_positives = torch.where(data.targets, model_scores, -torch.inf)
+        self_supervised_target = ref_scores_where_positives.argmax(dim=-1)
+        self_supervised_loss = torch.nn.functional.cross_entropy(
+            model_scores_where_positives,
+            self_supervised_target,
+            reduction="none",
+        )
+        self_supervised_loss = (is_multi_targets * self_supervised_loss).sum() / is_multi_targets.sum()
 
-        return {
+        # 3. Compute the KL divergences between the model and the sampling distributions
+        # KL ( p_model(z) || p_ref(z)) for `p_ref` = score, bm25, faiss
+        kls = {
+            key: _compute_kld(model_logits, ref_scores)
+            for key, ref_scores in {"score": data.scores, "bm25": data.bm25, "faiss": data.faiss}.items()
+            if ref_scores is not None
+        }
+
+        # 4. Add the bm25 guidance loss
+        kl_bm25 = kls.get("bm25", None)
+        if self.bm25_guidance_weight > 0 and kl_bm25 is None:
+            raise ValueError(f"bm25_guidance_weight={self.bm25_guidance_weight} but no bm25 scores are provided.")
+        if kl_bm25 is not None:
+            kl_bm25 = kl_bm25.mean()
+        else:
+            kl_bm25 = 0.0
+
+        # 5. compute the final loss
+        loss = kl_div_loss
+        if self.bm25_guidance_weight > 0:
+            loss += self.bm25_guidance_weight * kl_bm25
+        if self.self_supervision_weight > 0:
+            loss += self.self_supervision_weight * self_supervised_loss
+
+        output = {
             "loss": loss,
+            "kl_div_loss": kl_div_loss,
+            "self_supervised_loss": self_supervised_loss,
             **_make_evaluation_data(
                 targets=data.targets,
                 model_logits=model_logits,
-                retrieval_scores=data.scores,
             ),
+            **{f"kl_{k}": kl.mean().detach() for k, kl in kls.items()},
         }
+        return output
+
+
+def _compute_kld(
+    model_logits: torch.Tensor,
+    ref_scores: torch.Tensor,
+):
+    # compute the KL divergence between the model and the data
+    is_defined = ref_scores.isfinite()
+    ref_logits_ = ref_scores.masked_fill(~is_defined, -math.inf)
+    ref_logits_ = ref_logits_.log_softmax(dim=-1)
+
+    kl_div_terms = -ref_logits_.exp() * (model_logits - ref_logits_)
+    kl_div_terms.masked_fill_(~is_defined, 0)
+    kl_div = kl_div_terms.sum(dim=-1)
+    return kl_div
 
 
 @torch.no_grad()
 def _make_evaluation_data(
     targets: torch.Tensor,
     model_logits: torch.Tensor,
-    retrieval_scores: torch.Tensor,
 ) -> dict[str, torch.Tensor]:
-    sorted_ids = model_logits.argsort(dim=-1, descending=True)
-    targets_ = targets.gather(dim=-1, index=sorted_ids)
-    model_logits_ = model_logits.gather(dim=-1, index=sorted_ids)
-
-    # compute the KL divergence between the model and the data
-    is_defined = retrieval_scores.isfinite()
-    retrieval_logits_ = retrieval_scores.masked_fill(~is_defined, -math.inf)
-    retrieval_logits_ = retrieval_logits_.log_softmax(dim=-1)
-
-    kl_div_terms = -retrieval_logits_.exp() * (model_logits_ - retrieval_logits_)
-    kl_div_terms.masked_fill_(~is_defined, 0)
-    kl_div = kl_div_terms.sum(dim=-1)
-
     return {
-        "_targets": targets_ > 0,
-        "_logits": model_logits_,
-        "kl_sampler": kl_div.mean(),
+        "_targets": targets > 0,
+        "_logits": model_logits,
     }

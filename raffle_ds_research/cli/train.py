@@ -18,7 +18,7 @@ from loguru import logger
 from omegaconf import DictConfig
 
 from raffle_ds_research.cli import utils as cli_utils
-from raffle_ds_research.cli import workflows
+from raffle_ds_research.core import workflows
 from raffle_ds_research.core.builders import FrankBuilder
 from raffle_ds_research.core.ml_models import Ranker
 from raffle_ds_research.tools.utils.config import register_omgeaconf_resolvers

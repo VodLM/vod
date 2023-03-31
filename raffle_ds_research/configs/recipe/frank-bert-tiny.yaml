@@ -26,10 +26,11 @@ batch_size:
   per_device_predict: 1024
 
 
-update_freq: 2_000
-faiss_config:
-  factory: Flat
-  schedule: 0
-bm25_config:
-  use_labels: true
-  schedule: 1
+indexes:
+  update_freq: 2_000
+  faiss:
+    factory: Flat
+    schedule: 0
+  bm25:
+    use_labels: true
+    schedule: 1

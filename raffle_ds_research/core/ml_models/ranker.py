@@ -197,9 +197,8 @@ class Ranker(pl.LightningModule):
                 if value.numel() > 1:
                     value = value.mean()
 
-            if key == "loss":
-                key = f"{split}/loss"
-                value = value.detach()
+            if "/" not in key:
+                key = f"{split}/{key}"
 
             if prog_bar is None:
                 prog_bar = PBAR_MATCH_PATTERN.search(key) is not None

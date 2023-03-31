@@ -127,7 +127,9 @@ class RetrievalBuilder(dataset_builder.DatasetBuilder[datasets.DatasetDict, Retr
         )
         return dset
 
-    def get_collate_fn(self, config: Optional[retrieval_collate.RetrievalCollateConfig] = None):
+    def get_collate_fn(
+        self, config: Optional[retrieval_collate.RetrievalCollateConfig] = None
+    ) -> retrieval_collate.RetrievalCollate:
         if config is None:
             config = retrieval_collate.RetrievalCollateConfig()
         if isinstance(config, (dict, omegaconf.DictConfig)):

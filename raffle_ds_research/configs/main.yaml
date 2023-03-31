@@ -24,13 +24,11 @@ loader_configs:
     num_workers: ${resources.num_workers}
     pin_memory: True
     shuffle: True
-
   eval:
     batch_size: ${batch_size.per_device_eval}
     num_workers: ${resources.num_workers}
     pin_memory: True
     shuffle: True
-
   predict:
     batch_size: ${batch_size.per_device_predict}
     num_workers: ${resources.num_workers}
@@ -40,6 +38,7 @@ loader_configs:
 collate_configs:
   # Defines the configurations for `dataset_builder.HfBuilder._collate_config`
   train:
+    # Configuration for the training `Collate`
     n_sections: 16
     max_pos_sections: 4
     prefetch_n_sections: 300
@@ -47,7 +46,16 @@ collate_configs:
     question_max_length: 128
     section_max_length: 200
   eval:
-    n_sections: 100
+    # Configuration for the eval. `Collate`
+    n_sections: 16
+    max_pos_sections: 4
+    prefetch_n_sections: 300
+    do_sample: false
+    question_max_length: 128
+    section_max_length: 200
+  static_eval:
+    # Configuration for the static eval. `Collate`
+    n_sections: 500
     max_pos_sections: 50
     prefetch_n_sections: 1000
     do_sample: false
@@ -55,24 +63,19 @@ collate_configs:
     section_max_length: 200
 
 
-# train with updates
-update_freq: 1000
-faiss_config:
-  # Defines configuration for `FaissMaster`
-  factory: IVF32,Flat
-  nprobe: 16
-  schedule:
-    type: linear
-    start: 0
-    end: 1
-    period: 10
-
-bm25_config:
-  # Defines configuration for `Bm25Master`
-  indexed_key: text
-  use_labels: true
-  schedule:
-    type: linear
-    start: 1
-    end: 0.1
-    period: 10
+indexes:
+  # Defines the configuration for the multi-index
+  update_freq: 1000
+  faiss:
+    factory: IVF16,Flat
+    nprobe: 16
+    schedule:
+      # progressively increase the model score weight
+      type: linear
+      start: 0
+      end: 1
+      period: 10
+  bm25:
+    indexed_key: text
+    use_labels: true
+    schedule: 1
