@@ -1,0 +1,6 @@
+defaults:
+  - auto
+
+name: frank
+subset_name: A
+language: en

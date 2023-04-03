@@ -14,7 +14,7 @@ import rich
 import torch
 import transformers
 
-from raffle_ds_research.core.builders.utils import numpy_gumbel_like, numpy_log_softmax
+from raffle_ds_research.core.dataset_builders.utils import numpy_gumbel_like, numpy_log_softmax
 from raffle_ds_research.tools import c_tools, index_tools, pipes
 from raffle_ds_research.tools.pipes.utils.misc import pack_examples
 
@@ -417,12 +417,12 @@ class RetrievalCollateConfig(pydantic.BaseModel):
 
     @pydantic.validator("clients", pre=True)
     def _validate_clients(cls, values: list[SearchClientConfig | omegaconf.DictConfig]) -> list[SearchClientConfig]:
-        def _parse(one_value: SearchClientConfig | omegaconf.DictConfig) -> SearchClientConfig:
-            if isinstance(one_value, SearchClientConfig):
-                return one_value
-            if isinstance(one_value, (dict, omegaconf.DictConfig)):
-                return SearchClientConfig(**one_value)
-            raise ValueError(f"Invalid client config: {one_value}")
+        def _parse(x: SearchClientConfig | omegaconf.DictConfig) -> SearchClientConfig:
+            if isinstance(x, SearchClientConfig):
+                return x
+            if isinstance(x, (dict, omegaconf.DictConfig)):
+                return SearchClientConfig(**x)
+            raise ValueError(f"Invalid client config: type={type(x)}, value={x}")
 
         clients = [_parse(one_value) for one_value in values]
         clients = [one_client for one_client in clients if one_client.enabled]

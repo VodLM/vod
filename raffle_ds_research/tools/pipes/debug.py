@@ -44,7 +44,7 @@ class Properties(pydantic.BaseModel):
     n_nans: Optional[int] = None
 
     @pydantic.validator("py_type", pre=True)
-    def _cast_py_type(self, value: Any) -> str:
+    def _cast_py_type(cls, value: Any) -> str:
         if value is None:
             return "None"
         if isinstance(value, type):
@@ -307,7 +307,7 @@ def pprint_supervised_retrieval_batch(
         for j in range(len(section_input_ids[i])):
             section = tokenizer.decode(section_input_ids[i][j], **kwargs)
             section_data = {
-                **{key: str(_format(batch[key][i][j])) for key in section_keys if key in batch},
+                **{key: _format(batch[key][i][j]) for key in section_keys if key in batch},
                 "section.content": _safe_yaml(section),
             }
             section_data_str = yaml.dump(section_data, sort_keys=False)

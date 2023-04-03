@@ -18,7 +18,7 @@ import transformers
 from loguru import logger
 from tqdm import tqdm
 
-from raffle_ds_research.core import builders
+from raffle_ds_research.core import dataset_builders
 from raffle_ds_research.core.ml_models.monitor import Monitor, RetrievalMetricCollection
 from raffle_ds_research.core.ml_models.simple_ranker import SimpleRanker
 from raffle_ds_research.tools import arguantic, index_tools, pipes, predict
@@ -63,7 +63,7 @@ def run() -> None:
     logger.info(f"Using cache dir: {args.cache_dir.absolute()}")
     tokenizer = transformers.AutoTokenizer.from_pretrained(args.model_name)
     logger.info(f"{type(tokenizer).__name__}: hash={datasets.fingerprint.Hasher.hash(tokenizer)}")
-    builder = builders.auto_builder(
+    builder = dataset_builders.auto_builder(
         name=args.dset_name,
         language=args.language,
         subset_name=args.subset_name,

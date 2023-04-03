@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import dataclasses
 from typing import Optional, Union
 
 import omegaconf
 import pydantic
+from omegaconf import DictConfig
 
 from raffle_ds_research.core.workflows.schedule import ScheduleConfig
+from raffle_ds_research.tools.utils import loader_config
 
 
 class DefaultCollateConfig(pydantic.BaseModel):
@@ -44,7 +47,7 @@ class SearchConfig(pydantic.BaseModel):
 
         raise ValueError(f"Invalid schedule: {v}")
 
-    def get_weight(self, step: int) -> float:
+    def get_weight(self, step: float) -> float:
         """Get the weight for the given step."""
         if isinstance(self.schedule, float):
             return self.schedule
@@ -99,3 +102,48 @@ class MultiIndexConfig(pydantic.BaseModel):
             return DefaultBm25Config(**v)
 
         raise ValueError(f"Invalid bm25 config: {v}")
+
+
+@dataclasses.dataclass
+class DataLoaderConfigs:
+    train: Optional[loader_config.DataLoaderConfig]
+    eval: Optional[loader_config.DataLoaderConfig]
+    predict: Optional[loader_config.DataLoaderConfig]
+
+    @classmethod
+    def parse(cls, config: DictConfig) -> "DataLoaderConfigs":
+        return cls(
+            train=loader_config.DataLoaderConfig(**config.train) if config.train is not None else None,
+            eval=loader_config.DataLoaderConfig(**config.eval) if config.eval is not None else None,
+            predict=loader_config.DataLoaderConfig(**config.predict) if config.predict is not None else None,
+        )
+
+
+@dataclasses.dataclass
+class CollateConfigs:
+    train: Optional[DefaultCollateConfig]
+    eval: Optional[DefaultCollateConfig]
+    static: Optional[DefaultCollateConfig]
+
+    @classmethod
+    def parse(cls, config: DictConfig) -> "CollateConfigs":
+        return cls(
+            train=DefaultCollateConfig(**config.train) if config.train is not None else None,
+            eval=DefaultCollateConfig(**config.eval) if config.eval is not None else None,
+            static=DefaultCollateConfig(**config.static) if config.static is not None else None,
+        )
+
+
+@dataclasses.dataclass
+class TrainWithIndexConfigs:
+    dataloaders: DataLoaderConfigs
+    collates: CollateConfigs
+    indexes: MultiIndexConfig
+
+    @classmethod
+    def parse(cls, config: DictConfig) -> "TrainWithIndexConfigs":
+        dataloaders = DataLoaderConfigs.parse(config.dataloaders)
+        collates = CollateConfigs.parse(config.collates)
+        indexes_config = MultiIndexConfig(**config.indexes)
+
+        return cls(dataloaders=dataloaders, collates=collates, indexes=indexes_config)

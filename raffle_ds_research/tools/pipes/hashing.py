@@ -1,5 +1,6 @@
 import functools
 import json
+from typing import Callable
 
 import torch
 import transformers
@@ -21,12 +22,12 @@ _TOKENIZERS_CLASSES = [
 
 def _register_special_hashers() -> None:
     """Register special hashers for some classes."""
-    rules = [
+    rules: list[tuple[Callable, list[type]]] = [
         (_hash_tokenizer, _TOKENIZERS_CLASSES),
         (_hash_partial, [functools.partial]),
     ]
     for rule in rules:
-        fingerprint.hashregister(rule[1])(rule[0])
+        fingerprint.hashregister(*rule[1])(rule[0])
 
 
 def _hash_tokenizer(hasher: fingerprint.Hasher, value: transformers.PreTrainedTokenizer) -> str:

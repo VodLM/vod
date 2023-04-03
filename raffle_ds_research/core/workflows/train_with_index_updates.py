@@ -1,75 +1,34 @@
 from __future__ import annotations
 
-import dataclasses
 import functools
-from pathlib import Path
-from typing import Any, Callable, Iterable, Optional
+from typing import Any, Optional
 
 import loguru
 import numpy as np
-import rich
-import rich.status
-import torch
-import transformers
 from lightning import pytorch as pl
 from omegaconf import DictConfig
-from rich import terminal_theme
 from rich.progress import track
 
-import raffle_ds_research.core.workflows.config
-from raffle_ds_research.core.builders import FrankBuilder
-from raffle_ds_research.core.builders.retrieval_builder import RetrievalBuilder
+from raffle_ds_research.core.dataset_builders import retrieval_builder
 from raffle_ds_research.core.ml_models import Ranker
 from raffle_ds_research.core.ml_models.monitor import Monitor
-from raffle_ds_research.core.workflows import index_manager
-from raffle_ds_research.core.workflows.config import DefaultCollateConfig
-from raffle_ds_research.tools import pipes
-from raffle_ds_research.tools.utils import loader_config
-from raffle_ds_research.utils.pretty import print_metric_groups
-
-
-@dataclasses.dataclass
-class TrainWithIndexConfigs:
-    train_loader: loader_config.DataLoaderConfig
-    eval_loader: loader_config.DataLoaderConfig
-    predict_loader: loader_config.DataLoaderConfig
-    train_collate: DefaultCollateConfig
-    eval_collate: DefaultCollateConfig
-    static_eval_collate: DefaultCollateConfig
-    indexes: raffle_ds_research.core.workflows.config.MultiIndexConfig
-
-    @classmethod
-    def parse(cls, config: DictConfig) -> "TrainWithIndexConfigs":
-        # get the dataloader configs
-        train_loader_config = loader_config.DataLoaderConfig(**config.loader_configs.train)
-        eval_loader_config = loader_config.DataLoaderConfig(**config.loader_configs.eval)
-        predict_loader_config = loader_config.DataLoaderConfig(**config.loader_configs.predict)
-
-        # get te collate configs
-        train_collate_config = DefaultCollateConfig(**config.collate_configs.train)
-        eval_collate_config = DefaultCollateConfig(**config.collate_configs.eval)
-        static_eval_collate_config = DefaultCollateConfig(**config.collate_configs.static_eval)
-
-        # set the index configs
-        indexes_config = raffle_ds_research.core.workflows.config.MultiIndexConfig(**config.indexes)
-
-        return cls(
-            train_loader=train_loader_config,
-            eval_loader=eval_loader_config,
-            predict_loader=predict_loader_config,
-            train_collate=train_collate_config,
-            eval_collate=eval_collate_config,
-            static_eval_collate=static_eval_collate_config,
-            indexes=indexes_config,
-        )
+from raffle_ds_research.core.workflows import benchmark, index_manager
+from raffle_ds_research.core.workflows.config import TrainWithIndexConfigs
+from raffle_ds_research.core.workflows.utils import (
+    _log_eval_metrics,
+    _log_retrieval_batch,
+    _run_static_evaluation,
+    instantiate_retrieval_dataloader,
+)
 
 
 def train_with_index_updates(
     ranker: Ranker,
     monitor: Monitor,
     trainer: pl.Trainer,
-    builder: FrankBuilder,
+    builder: retrieval_builder.RetrievalBuilder,
     config: TrainWithIndexConfigs | DictConfig,
+    benchmark_builders: Optional[list[retrieval_builder.RetrievalBuilder]] = None,
 ) -> Ranker:
     """Train a ranker while periodically updating the faiss index."""
     if isinstance(config, DictConfig):
@@ -85,7 +44,7 @@ def train_with_index_updates(
     trainer.callbacks.append(stop_callback)  # type: ignore
 
     for period_idx, (start_step, end_step) in enumerate(zip(update_steps[:-1], update_steps[1:])):
-        _log_metrics(
+        _log_eval_metrics(
             {
                 "trainer/period": float(period_idx + 1),
                 "trainer/faiss_weight": config.indexes.faiss.get_weight(period_idx),
@@ -102,16 +61,16 @@ def train_with_index_updates(
             ranker=ranker,
             trainer=trainer,
             builder=builder,
-            config=config.indexes,
-            loader_config=config.predict_loader,
+            index_cfg=config.indexes,
+            loader_cfg=config.dataloaders.predict,
             index_step=period_idx,
         ) as manager:
             # run the static validation & log results
             static_val_loader = instantiate_retrieval_dataloader(
                 builder=builder,
                 manager=manager,
-                loader_config=config.eval_loader,
-                collate_config=config.static_eval_collate,
+                loader_cfg=config.dataloaders.eval,
+                collate_config=config.collates.static,
                 dset_split="validation",
             )
             static_eval_metrics = _run_static_evaluation(
@@ -125,21 +84,21 @@ def train_with_index_updates(
                     max_sections=5,
                 ),
             )
-            _log_metrics(static_eval_metrics, trainer=trainer, console=True)
+            _log_eval_metrics(static_eval_metrics, trainer=trainer, console=True)
 
             # train the model for the given period
             train_loader = instantiate_retrieval_dataloader(
                 builder=builder,
                 manager=manager,
-                loader_config=config.train_loader,
-                collate_config=config.train_collate,
+                loader_cfg=config.dataloaders.train,
+                collate_config=config.collates.train,
                 dset_split="train",
             )
             val_loader = instantiate_retrieval_dataloader(
                 builder=builder,
                 manager=manager,
-                loader_config=config.eval_loader,
-                collate_config=config.eval_collate,
+                loader_cfg=config.dataloaders.eval,
+                collate_config=config.collates.eval,
                 dset_split="validation",
             )
 
@@ -151,44 +110,21 @@ def train_with_index_updates(
                 val_dataloaders=val_loader,
             )
 
+        # run the benchmarks
+        if benchmark_builders is not None:
+            loguru.logger.info("Training period done. Running benchmarks...")
+            benchmark.benchmark(
+                ranker=ranker,
+                trainer=trainer,
+                builders=benchmark_builders,
+                loader_cfg=config.dataloaders,
+                collate_cfg=config.collates,
+                index_cfg=config.indexes,
+                monitor=monitor,
+                index_step=period_idx,
+            )
+
     return ranker
-
-
-def _run_static_evaluation(
-    loader: Iterable[dict[str, Any]],
-    monitor: Monitor,
-    on_first_batch: Optional[Callable[[dict[str, Any]], Any]] = None,
-) -> dict[str, Any]:
-    monitor.reset()
-    for i, batch in enumerate(loader):
-        if i == 0 and on_first_batch is not None:
-            on_first_batch(batch)
-        monitor.update_from_retrieval_batch(batch, field="section")
-    metrics = monitor.compute(prefix="val/")
-    monitor.reset()
-    return metrics
-
-
-def instantiate_retrieval_dataloader(
-    *,
-    builder: RetrievalBuilder,
-    manager: index_manager.IndexManager,
-    collate_config: DefaultCollateConfig,
-    loader_config: loader_config.DataLoaderConfig,
-    dset_split: str,
-) -> torch.utils.data.DataLoader:
-    full_collate_config = builder.collate_config(
-        question_vectors=manager.vectors.dataset.get(dset_split, None),
-        clients=manager.clients,
-        **collate_config.dict(),
-    )
-    collate_fn = builder.get_collate_fn(config=full_collate_config)
-
-    return torch.utils.data.DataLoader(
-        manager.dataset[dset_split],
-        collate_fn=collate_fn,
-        **loader_config.dict(),
-    )
 
 
 def _infer_update_steps(total_number_of_steps: int, update_freq: int | list[int]) -> list[int]:
@@ -212,41 +148,6 @@ def _pretty_steps(steps: list[int]) -> str:
         return f"[{steps[0]}, {steps[1]}, {steps[2]}, {steps[3]}, {steps[4]} ... {steps[-1]}]"
     else:
         return str(steps)
-
-
-def _log_metrics(metrics: dict[str, Any], trainer: pl.Trainer, console: bool = False) -> None:
-    for logger in trainer.loggers:
-        logger.log_metrics(metrics, step=trainer.global_step)
-
-    if console:
-        print_metric_groups(metrics)
-
-
-def _log_retrieval_batch(
-    batch: dict[str, Any],
-    tokenizer: transformers.PreTrainedTokenizer,
-    period_idx: int,
-    gloabl_step: int,
-    max_sections: int = 10,
-) -> None:
-    try:
-        console = rich.console.Console(record=True)
-        pipes.pprint_supervised_retrieval_batch(
-            batch,
-            header="Evaluation batch",
-            tokenizer=tokenizer,
-            console=console,
-            skip_special_tokens=True,
-            max_sections=max_sections,
-        )
-        html_path = str(Path(f"batch-period{period_idx + 1}.html"))
-        console.save_html(html_path, theme=terminal_theme.MONOKAI)
-
-        import wandb
-
-        wandb.log({"trainer/eval-batch": wandb.Html(open(html_path))}, step=gloabl_step)
-    except Exception as e:
-        loguru.logger.debug(f"Could not log batch to wandb: {e}")
 
 
 class PeriodicStoppingCallback(pl.callbacks.Callback):

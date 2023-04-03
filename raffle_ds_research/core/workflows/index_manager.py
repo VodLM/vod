@@ -17,8 +17,8 @@ import torch
 import transformers
 from lightning import pytorch as pl
 
-from raffle_ds_research.core.builders import FrankBuilder
-from raffle_ds_research.core.builders.retrieval_collate import SearchClientConfig
+from raffle_ds_research.core.dataset_builders import FrankBuilder, retrieval_builder
+from raffle_ds_research.core.dataset_builders.retrieval_collate import SearchClientConfig
 from raffle_ds_research.core.ml_models import Ranker
 from raffle_ds_research.core.workflows.config import MultiIndexConfig
 from raffle_ds_research.tools import index_tools, pipes, predict_tools
@@ -50,16 +50,16 @@ class IndexManager:
         *,
         ranker: Ranker,
         trainer: pl.Trainer,
-        builder: FrankBuilder,
-        config: MultiIndexConfig,
-        loader_config: DataLoaderConfig,
-        index_step: int,
+        builder: retrieval_builder.RetrievalBuilder,
+        index_cfg: MultiIndexConfig,
+        loader_cfg: DataLoaderConfig,
+        index_step: float,
     ) -> None:
         self.ranker = ranker
         self.trainer = trainer
         self.builder = builder
-        self.config = config
-        self.loader_config = loader_config
+        self.index_cfg = index_cfg
+        self.loader_cfg = loader_cfg
         self.index_step = index_step
 
     @property
@@ -93,14 +93,16 @@ class IndexManager:
         loguru.logger.info(f"Setting up index at `{tmpdir}`")
 
         # init the bm25 index
-        bm25_weight = self.config.bm25.get_weight(self.index_step)
+        bm25_weight = self.index_cfg.bm25.get_weight(self.index_step)
         if bm25_weight >= 0:
             corpus = self.builder.get_corpus()
-            corpus = keep_only_columns(corpus, [self.config.bm25.indexed_key, self.config.bm25.label_key])
+            corpus = keep_only_columns(corpus, [self.index_cfg.bm25.indexed_key, self.index_cfg.bm25.label_key])
             index_name = f"index-{corpus._fingerprint}"
             self._bm25_master = index_tools.Bm25Master(
-                texts=(row[self.config.bm25.indexed_key] for row in corpus),
-                labels=(row[self.config.bm25.label_key] for row in corpus) if self.config.bm25.use_labels else None,
+                texts=(row[self.index_cfg.bm25.indexed_key] for row in corpus),
+                labels=(row[self.index_cfg.bm25.label_key] for row in corpus)
+                if self.index_cfg.bm25.use_labels
+                else None,
                 input_size=len(corpus),
                 index_name=index_name,
                 exist_ok=True,
@@ -111,18 +113,18 @@ class IndexManager:
             bm25_master = None
 
         # init the faiss index
-        faiss_weight = self.config.faiss.get_weight(self.index_step)
+        faiss_weight = self.index_cfg.faiss.get_weight(self.index_step)
         if faiss_weight >= 0:
             # compute the vectors for the questions and sections
             self._vectors = self._compute_vectors(tmpdir)
 
             # build the faiss index and save to disk
-            faiss_index = faiss_tools.build_index(self._vectors.sections, factory_string=self.config.faiss.factory)
+            faiss_index = faiss_tools.build_index(self._vectors.sections, factory_string=self.index_cfg.faiss.factory)
             faiss_path = Path(tmpdir, "index.faiss")
             faiss.write_index(faiss_index, str(faiss_path))
 
             # spin up the faiss server
-            self._faiss_master = index_tools.FaissMaster(faiss_path, self.config.faiss.nprobe)
+            self._faiss_master = index_tools.FaissMaster(faiss_path, self.index_cfg.faiss.nprobe)
             faiss_master = self._faiss_master.__enter__()
 
         else:
@@ -137,7 +139,7 @@ class IndexManager:
                     name="faiss",
                     client=faiss_master.get_client(),
                     weight=faiss_weight,
-                    label_key=self.config.faiss.label_key,
+                    label_key=self.index_cfg.faiss.label_key,
                 )
             )
         if bm25_master is not None:
@@ -146,7 +148,7 @@ class IndexManager:
                     name="bm25",
                     client=bm25_master.get_client(),
                     weight=bm25_weight,
-                    label_key=self.config.bm25.label_key,
+                    label_key=self.index_cfg.bm25.label_key,
                 )
             )
 
@@ -171,7 +173,7 @@ class IndexManager:
             model=self.ranker,
             cache_dir=tmpdir,
             field="question",
-            loader_config=self.loader_config,
+            loader_config=self.loader_cfg,
         )
         sections_vectors = _compute_dataset_vectors(
             dataset=self.builder.get_corpus(),
@@ -180,7 +182,7 @@ class IndexManager:
             model=self.ranker,
             cache_dir=tmpdir,
             field="section",
-            loader_config=self.loader_config,
+            loader_config=self.loader_cfg,
         )
         return Vectors(dataset=dataset_vectors, sections=sections_vectors)
 

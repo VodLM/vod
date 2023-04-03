@@ -6,7 +6,7 @@ from typing import Literal, Optional
 
 import datasets
 
-from raffle_ds_research.core.builders import retrieval_builder
+from raffle_ds_research.core.dataset_builders import retrieval_builder
 from raffle_ds_research.tools import pipes
 from raffle_ds_research.tools.raffle_datasets import frank
 
@@ -22,9 +22,11 @@ class FrankBuilder(retrieval_builder.RetrievalBuilder[FrankBuilderConfig]):
     """Builds a Frank dataset for retrieval."""
 
     def _load_frank_split(self, frank_split: frank.FrankSplitName) -> frank.HfFrankPart:
-        return frank.load_frank(self.config.language, split=frank_split, only_positive_sections=True)
+        return frank.load_frank(
+            self.config.language, split=frank_split, only_positive_sections=self.config.include_only_positive_sections
+        )
 
-    def _build_dset(self, corpus: Optional[datasets.Dataset]) -> datasets.DatasetDict:
+    def _build_dset(self) -> datasets.DatasetDict:
         frank_split = self._load_frank_split(self.config.subset_name)
         return frank_split.qa_splits
 

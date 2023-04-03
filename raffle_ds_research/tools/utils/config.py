@@ -71,6 +71,13 @@ def register_omgeaconf_resolvers() -> None:
         *_, model_name = model_name.split("/")
         return model_name
 
+    def _reverse_frank_split(x: str) -> str:
+        if x == "A":
+            return "B"
+        if x == "B":
+            return "A"
+        return x
+
     # Register resolvers
     OmegaConf.register_new_resolver("whoami", lambda: os.environ.get("USER"))
     OmegaConf.register_new_resolver("hostname", socket.gethostname)
@@ -93,3 +100,4 @@ def register_omgeaconf_resolvers() -> None:
     OmegaConf.register_new_resolver("randint", randint)
     OmegaConf.register_new_resolver("global_seed", lambda *_: SEED)
     OmegaConf.register_new_resolver("fmt_mn", _format_model_name)
+    OmegaConf.register_new_resolver("reverse_frank_split", _reverse_frank_split)

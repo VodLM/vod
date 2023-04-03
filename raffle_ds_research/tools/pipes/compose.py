@@ -4,14 +4,13 @@ from copy import copy
 from functools import partial
 from typing import Any, Optional
 
-from raffle_ds_research.tools import pipes
 from raffle_ds_research.tools.pipes.protocols import Pipe
 
 
-class Sequential(pipes.Pipe):
+class Sequential(Pipe):
     """Defines a list of transformations."""
 
-    def __init__(self, list_of_pipes: list[Pipe | partial], with_updates: bool = False, **kwargs: Any):
+    def __init__(self, list_of_pipes: list[Pipe], with_updates: bool = False, **kwargs: Any):
         if len(list_of_pipes) == 0:
             raise ValueError("The list of pipes must not be empty.")
         if len(kwargs) > 0:

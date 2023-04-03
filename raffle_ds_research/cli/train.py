@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import multiprocessing
+from typing import Iterable
 
+import omegaconf
 import torch
 
 multiprocessing.set_start_method("forkserver")  # type: ignore
@@ -20,8 +22,7 @@ from loguru import logger
 from omegaconf import DictConfig
 
 from raffle_ds_research.cli import utils as cli_utils
-from raffle_ds_research.core import workflows
-from raffle_ds_research.core.builders import FrankBuilder
+from raffle_ds_research.core import dataset_builders, workflows
 from raffle_ds_research.core.ml_models import Ranker
 from raffle_ds_research.tools.utils.config import register_omgeaconf_resolvers
 from raffle_ds_research.tools.utils.pretty import print_config
@@ -41,7 +42,7 @@ def run(config: DictConfig) -> None:
 
     # Instantiate the dataset builder
     logger.info(f"Instantiating builder <{config.builder._target_}>")
-    builder: FrankBuilder = instantiate(config.builder)
+    builder: dataset_builders.RetrievalBuilder = instantiate(config.builder)
 
     # load the model
     logger.info(f"Instantiating model <{config.model._target_}>")
@@ -57,15 +58,27 @@ def run(config: DictConfig) -> None:
     trainer: pl.Trainer = instantiate(config.trainer)
     cli_utils.log_config(trainer=trainer, config=config, exp_dir=exp_dir)
 
-    # train the ranker
+    logger.info(f"Training the ranker with seed={config.seed}")
     seed_everything(config.seed, workers=True)
+    benchmark_builders = list(_fetch_benchmark_builders(ref_builder=builder, config=config.benchmark))
     workflows.train_with_index_updates(
         ranker=ranker,
         trainer=trainer,
         builder=builder,
         config=config,
         monitor=instantiate(config.monitor),
+        benchmark_builders=benchmark_builders,
     )
+
+
+def _fetch_benchmark_builders(
+    ref_builder: dataset_builders.RetrievalBuilder, config: omegaconf.DictConfig
+) -> Iterable[dataset_builders.RetrievalBuilder]:
+    for builder_config in config.builders:
+        overrides = omegaconf.OmegaConf.to_container(builder_config, resolve=True)
+        new_config = ref_builder.config.copy(update=overrides)
+        new_builder = dataset_builders.auto_builder(**new_config.dict())
+        yield new_builder
 
 
 if __name__ == "__main__":

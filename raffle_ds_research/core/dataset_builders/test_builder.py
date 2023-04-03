@@ -5,7 +5,7 @@ from typing import Any, Literal, Optional
 import datasets
 import inflect
 
-from raffle_ds_research.core.builders import retrieval_builder
+from raffle_ds_research.core.dataset_builders import retrieval_builder
 from raffle_ds_research.tools.pipes.utils.misc import pack_examples
 
 inflect_engine = inflect.engine()

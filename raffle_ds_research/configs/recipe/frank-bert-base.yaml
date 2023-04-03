@@ -40,7 +40,7 @@ trainer:
   val_check_interval: ${int_mul:${trainer.accumulate_grad_batches},100}
 
 
-collate_configs:
+collates:
   # Defines the configurations for `dataset_builder.HfBuilder._collate_config`
   train:
     n_sections: 20

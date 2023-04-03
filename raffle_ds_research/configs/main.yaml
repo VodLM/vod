@@ -14,10 +14,21 @@ defaults:
 seed: ${global_seed:}
 compile: false
 model_name: ${model.encoder.pretrained_model_name_or_path}
+exp_suffix: ""
 exp_name: ${builder.name}-${builder.subset_name}-${builder.language}
-run_name: ${fmt_mn:${model_name}}--${rdn_name:}
+run_name: ${fmt_mn:${model_name}}--${rdn_name:}${exp_suffix}
 
-loader_configs:
+
+benchmark:
+  builders:
+    - name: frank
+      subset_name: ${reverse_frank_split:${builder.subset_name}}
+      include_only_positive_sections: false
+      splits:
+        - validation
+
+
+dataloaders:
   # Defines the configurations for `torch.utils.data.Dataloader`
   train:
     batch_size: ${batch_size.per_device}
@@ -35,7 +46,7 @@ loader_configs:
     pin_memory: True
     shuffle: False
 
-collate_configs:
+collates:
   # Defines the configurations for `dataset_builder.HfBuilder._collate_config`
   train:
     # Configuration for the training `Collate`
@@ -53,7 +64,7 @@ collate_configs:
     do_sample: false
     question_max_length: 128
     section_max_length: 200
-  static_eval:
+  static:
     # Configuration for the static eval. `Collate`
     n_sections: 500
     max_pos_sections: 50

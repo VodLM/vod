@@ -11,7 +11,7 @@ import pydantic
 import transformers
 from typing_extensions import Type
 
-from raffle_ds_research.core.builders import retrieval_collate
+from raffle_ds_research.core.dataset_builders import retrieval_collate
 from raffle_ds_research.tools import dataset_builder
 
 QUESTION_TEMPLATE = "Question: {{ question }}"
@@ -20,6 +20,9 @@ DEFAULT_TEMPLATES = {
     "question": QUESTION_TEMPLATE,
     "section": SECTION_TEMPLATE,
 }
+
+
+_DEFAULT_SPLITS = ["train", "validation"]
 
 
 class RetrievalBuilderConfig(pydantic.BaseModel):
@@ -33,6 +36,7 @@ class RetrievalBuilderConfig(pydantic.BaseModel):
 
     name: str
     subset_name: Optional[str] = None
+    splits: list[str] = _DEFAULT_SPLITS
     language: str = "en"
     tokenizer: Optional[Union[transformers.PreTrainedTokenizer, transformers.PreTrainedTokenizerFast]] = None
     index_max_top_k: int = 100
@@ -43,6 +47,16 @@ class RetrievalBuilderConfig(pydantic.BaseModel):
     hf_load_kwargs: dict[str, Any] = dict(num_proc=4)
     prep_map_kwargs: dict[str, Any] = dict()
     subset_size: Optional[Union[int, dict[str, int]]] = None
+    include_only_positive_sections: bool = False
+
+    @pydantic.validator("splits", pre=True)
+    def _validate_splits(cls, splits: Any) -> list[str]:
+        """Converts splits to a list if they are an OmegaConf ListConfig."""
+        if isinstance(splits, omegaconf.ListConfig):
+            splits = omegaconf.OmegaConf.to_container(splits)
+        if splits is None:
+            splits = _DEFAULT_SPLITS
+        return splits
 
     @pydantic.validator("templates", pre=True)
     def _validate_templates(cls, templates: Any) -> dict[str, str]:
@@ -113,6 +127,20 @@ class RetrievalBuilder(dataset_builder.DatasetBuilder[datasets.DatasetDict, Retr
         self.config = config
 
     @property
+    def name(self) -> str:
+        """Returns the name of the dataset builder."""
+        subset_name = self.config.subset_name
+        if subset_name is None:
+            return self.config.name
+
+        return f"{self.config.name}_{subset_name}_{self.config.language}"
+
+    @property
+    def splits(self) -> list[str]:
+        """Returns the split names."""
+        return self.config.splits
+
+    @property
     def tokenizer(self) -> transformers.PreTrainedTokenizer:
         """Returns the tokenizer for the dataset builder."""
         return self.config.tokenizer
@@ -122,11 +150,20 @@ class RetrievalBuilder(dataset_builder.DatasetBuilder[datasets.DatasetDict, Retr
         return {**self.config.prep_map_kwargs, **overrides, **always_on}
 
     def __call__(self) -> datasets.DatasetDict:
-        corpus = self.get_corpus()
-        self._validate_corpus(corpus)
         dset = self._build_dset()
         self._validate_dset(dset)
+
+        # optionally take a subset of the splits
+        found_splits = set(dset.keys())
+        if not found_splits.issuperset(self.splits):
+            raise ValueError(f"Expected splits {self.splits}, found {found_splits}")
+        elif set(self.splits) != found_splits:
+            dset = datasets.DatasetDict({split: dset[split] for split in self.splits})
+
+        # Optionally take a subset of rows
         dset = self._take_subset(dset)
+
+        # add the row index to each row
         dset = self._add_row_indices(dset)
         return dset
 
