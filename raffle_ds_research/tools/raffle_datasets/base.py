@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import pathlib
+from typing import Any, Callable, T, TypeVar
 
 import datasets
 import fsspec
@@ -55,7 +56,7 @@ class SectionModel(pydantic.BaseModel):
     language: str
 
     @pydantic.validator("title", pre=True, always=True)
-    def _validate_title(cls, title):
+    def _validate_title(cls, title: None | str) -> str:
         if title is None:
             return ""
 
@@ -69,14 +70,14 @@ class SilentHuggingface:
         self.disable_progress_bar = disable_progress_bar
         self.disable_logging = disable_logging
 
-    def __enter__(self):
+    def __enter__(self) -> None:
         if self.disable_logging:
             self._old_logging_level = datasets.utils.logging.get_verbosity()
             datasets.utils.logging.set_verbosity(datasets.logging.CRITICAL)
         if self.disable_progress_bar:
             datasets.disable_progress_bar()
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         if self.disable_logging:
             datasets.utils.logging.set_verbosity(self._old_logging_level)
         if self.disable_progress_bar:
@@ -88,8 +89,8 @@ class silent_huggingface:
         self.disable_progress_bar = disable_progress_bar
         self.disable_logging = disable_logging
 
-    def __call__(self, func):
-        def wrapper(*args, **kwargs):
+    def __call__(self, func: Callable[..., T]) -> Callable[..., T]:
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             with SilentHuggingface(self.disable_progress_bar, self.disable_logging):
                 return func(*args, **kwargs)
 

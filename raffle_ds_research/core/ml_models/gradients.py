@@ -1,3 +1,4 @@
+# pylint: disable=no-member
 import abc
 import math
 from typing import Optional
@@ -10,13 +11,19 @@ from torch.distributions import Categorical
 
 
 class Gradients(torch.nn.Module):
+    """Base class for the gradients layer.s"""
+
     @abc.abstractmethod
     def forward(self, intermediate_results: dict) -> dict:
         raise NotImplementedError
 
 
 class SupervisedGradientsInputs(BaseModel):
+    """collection of inputs for the supervised gradients model."""
+
     class Config:
+        """pydantic config."""
+
         arbitrary_types_allowed = True
 
     hq: torch.Tensor
@@ -44,6 +51,8 @@ class SupervisedGradientsInputs(BaseModel):
 
 
 class SelfSupervisedGradients(Gradients):
+    """Compute the gradients for the `self-supervised` method."""
+
     def forward(self, intermediate_results: dict) -> dict:
         data = SupervisedGradientsInputs(**intermediate_results)
 
@@ -181,7 +190,7 @@ class KlDivGradients(Gradients):
 def _compute_kld(
     model_logits: torch.Tensor,
     ref_scores: torch.Tensor,
-):
+) -> torch.Tensor:
     # compute the KL divergence between the model and the data
     is_defined = ref_scores.isfinite()
     ref_logits_ = ref_scores.masked_fill(~is_defined, -math.inf)

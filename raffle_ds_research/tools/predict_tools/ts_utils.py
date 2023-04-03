@@ -1,3 +1,5 @@
+# pylint: disable=no-member
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -9,7 +11,11 @@ from pydantic import BaseModel
 
 
 class TensorStoreKvStoreConfig(BaseModel):
+    """Configuration for a TensorStore key-value store."""
+
     class Config:
+        """pydantic config for TensorStoreKvStoreConfig"""
+
         allow_mutation = False
         extra = pydantic.Extra.forbid
 
@@ -17,8 +23,8 @@ class TensorStoreKvStoreConfig(BaseModel):
     path: str
 
     @pydantic.validator("path", pre=True)
-    def _validate_path(cls, v):
-        return str(Path(v).expanduser().absolute())
+    def _validate_path(cls, value: Any) -> str:
+        return str(Path(value).expanduser().absolute())
 
 
 class TensorStoreFactory(BaseModel):
@@ -26,6 +32,8 @@ class TensorStoreFactory(BaseModel):
     Open a store using the `open` method."""
 
     class Config:
+        """pydantic config for TensorStoreFactory"""
+
         allow_mutation = False
         extra = pydantic.Extra.forbid
 
@@ -33,7 +41,8 @@ class TensorStoreFactory(BaseModel):
     kvstore: TensorStoreKvStoreConfig
     metadata: dict[str, Any]
 
-    def open(self, create: int = False, delete_existing: int = False, **kwargs):
+    def open(self, create: int = False, delete_existing: int = False, **kwargs: Any) -> tensorstore.TensorStore:
+        """Open and return a TensorStore."""
         cfg = self.dict()
         future = tensorstore.open(cfg, create=create, delete_existing=delete_existing, **kwargs)
         return future.result()
@@ -47,6 +56,7 @@ class TensorStoreFactory(BaseModel):
         driver: Literal["n5", "zarr"] = "zarr",
         dtype: Literal["float16", "float32", "float64"] = "float32",
     ) -> "TensorStoreFactory":
+        """Instantiate a `TensorStoreFactory` from a path and shape."""
         shape = tuple(shape)
         driver_meta = {
             "n5": {

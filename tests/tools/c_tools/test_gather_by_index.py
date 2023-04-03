@@ -17,14 +17,15 @@ def _get_expected_labels(queries: np.ndarray, keys: np.ndarray, values: np.ndarr
 @pytest.mark.parametrize("n_points", [10, 100])
 @pytest.mark.parametrize("max_n_unique", [10, 100])
 @pytest.mark.parametrize("seed", [0, 1, 2])
-def test_gather_by_index(n_points: int, max_n_unique: int, seed: int):
-    np.random.set_state(np.random.RandomState(seed).get_state())
+def test_gather_by_index(n_points: int, max_n_unique: int, seed: int) -> None:
+    """Test that the C implementation of gather_by_index gives the same result as the Python implementation."""
+    np.random.set_state(np.random.RandomState(seed).get_state())  # pylint: disable=no-member
     queries = np.random.randint(0, max_n_unique, size=(n_points,), dtype=np.uint64)
     keys = np.random.randint(0, max_n_unique, size=(n_points,), dtype=np.uint64)
     values = np.random.random(size=(n_points,))
 
     c_result = c_tools.gather_by_index(queries, keys, values)
     py_result = _get_expected_labels(queries, keys, values)
-    for i, (c, py) in enumerate(zip(c_result, py_result)):
-        if not np.isclose(c, py) and not (np.isnan(c) and np.isnan(py)):
-            raise ValueError(f"c_result[{i}] = {c} != {py} = py_result[{i}]")
+    for i, (c_result, py_result) in enumerate(zip(c_result, py_result)):
+        if not np.isclose(c_result, py_result) and not (np.isnan(c_result) and np.isnan(py_result)):
+            raise ValueError(f"c_result[{i}] = {c_result} != {py_result} = py_result[{i}]")

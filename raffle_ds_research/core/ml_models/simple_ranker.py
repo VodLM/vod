@@ -8,6 +8,8 @@ from raffle_ds_research.tools import pipes
 
 
 class SimpleRanker(torch.nn.Module):
+    """A simple ranker that takes a question and a section and returns a vector. Useful for testing."""
+
     _fields: list[str] = ["question", "section"]
     _keys: list[str] = ["input_ids", "attention_mask"]
     _output_vector_name: str = "vector"
@@ -20,10 +22,12 @@ class SimpleRanker(torch.nn.Module):
         if vector_name is not None:
             self._output_vector_name = vector_name
 
-    def get_output_shape(self, *args, **kwargs) -> tuple[int, ...]:
+    def get_output_shape(self, *args: Any, **kwargs: Any) -> tuple[int, ...]:
+        """Return the shape of the output vectors."""
         return (self.model.pooler.dense.out_features,)
 
     def forward(self, batch: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
+        """Compute the embeddings for the input questions and sections."""
         output = {}
         for field in self._fields:
             keys = [f"{field}.{key}" for key in self._keys]
@@ -39,5 +43,5 @@ class SimpleRanker(torch.nn.Module):
 
 
 @datasets.fingerprint.hashregister(SimpleRanker)
-def _hash_simple_ranker(hasher: datasets.fingerprint.Hasher, value: SimpleRanker):
+def _hash_simple_ranker(hasher: datasets.fingerprint.Hasher, value: SimpleRanker) -> str:
     return pipes.fingerprint_torch_module(hasher, value)

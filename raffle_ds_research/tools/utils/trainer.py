@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Iterable, Optional, Union
+from typing import Any, Iterable, Optional, Union
 
 import lightning.pytorch as pl
 from fsspec import Callback
@@ -14,10 +14,10 @@ class Trainer(pl.Trainer):
 
     def __init__(
         self,
-        *args,
+        *args: Any,
         logger: Union[Logger, Iterable[Logger], bool] = True,
         callbacks: Optional[Union[dict[str, Callback], list[Callback], Callback]] = None,
-        **kwargs,
+        **kwargs: Any,
     ):
         if isinstance(logger, (dict, DictConfig)):
             logger = list(logger.values())

@@ -33,7 +33,7 @@ def filter_inputs_wrapper(pipe: Pipe, keys: list[str], strict: bool = True) -> P
     return wrapper
 
 
-def key_map_wrapper(pipe, Pipe, key_map: dict[str, str]) -> Pipe:
+def key_map_wrapper(pipe: Pipe, key_map: dict[str, str]) -> Pipe:
     def wrapper(batch: dict[str, Any], idx: Optional[list[int]] = None, **kwargs: Any) -> dict[str, Any]:
         input_batch = {key_map.get(key, key): batch[key] for key in batch}
         return pipe(input_batch, idx, **kwargs)

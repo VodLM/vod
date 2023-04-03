@@ -1,3 +1,5 @@
+# pylint: disable=no-name-in-module
+
 from .concat_search_results import ConcatenatedTopk, concat_search_results
 from .frequencies import Frequencies, get_frequencies
 from .gather_by_index import gather_by_index

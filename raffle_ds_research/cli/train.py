@@ -1,3 +1,5 @@
+# pylint: disable=protected-access,no-member
+
 from __future__ import annotations
 
 import multiprocessing
@@ -30,7 +32,7 @@ register_omgeaconf_resolvers()
 
 
 @hydra.main(config_path="../configs/", config_name="main", version_base="1.3")
-def run(config: DictConfig):
+def run(config: DictConfig) -> None:
     loguru.logger.debug(f"Multiprocessing method set to `{multiprocessing.get_start_method()}`")  # type: ignore
     cli_utils.set_training_context()
     print_config(config)

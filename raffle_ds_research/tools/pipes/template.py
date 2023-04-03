@@ -16,6 +16,7 @@ def template_pipe(
     output_key: str = "formatted_text",
     **kwargs: Any,
 ) -> dict[str, Any]:
+    """Applies a jinja2 template to a batch of examples."""
     template = jinja2.Template(template)
     examples = iter_examples(batch, input_keys)
     output = (template.render(eg) for eg in examples)

@@ -1,3 +1,4 @@
+# pylint: disable=too-many-arguments,arguments-differ,inconsistent-return-statements,too-many-instance-attributes,fixme
 from __future__ import annotations
 
 import functools
@@ -5,7 +6,6 @@ import re
 from typing import Any, Iterable, Optional, Union
 
 import lightning.pytorch as pl
-import rich
 import torch
 import transformers
 from datasets.fingerprint import Hasher, hashregister
@@ -13,7 +13,6 @@ from hydra.utils import instantiate
 from loguru import logger
 from omegaconf import DictConfig
 from optimum.bettertransformer import BetterTransformer
-from torch.optim.lr_scheduler import _LRScheduler  # type: ignore
 from transformers import BertConfig, BertModel, T5EncoderModel
 
 from raffle_ds_research.core.ml_models.gradients import Gradients
@@ -23,11 +22,13 @@ from raffle_ds_research.tools.pipes import fingerprint_torch_module
 TransformerEncoder = Union[T5EncoderModel, BertModel]
 
 
-def only_trainable(parameters: Iterable[torch.nn.Parameter]):
+def only_trainable(parameters: Iterable[torch.nn.Parameter]) -> Iterable[torch.nn.Parameter]:
+    """Filter out parameters that do not require gradients."""
     return (p for p in parameters if p.requires_grad)
 
 
-def maybe_instantiate(conf_or_obj: Union[Any, DictConfig], **kwargs):
+def maybe_instantiate(conf_or_obj: Union[Any, DictConfig], **kwargs: Any) -> Any:
+    """Instantiate a config if needed."""
     if isinstance(conf_or_obj, (DictConfig, dict)):
         return instantiate(conf_or_obj, **kwargs)
 
@@ -36,6 +37,8 @@ PBAR_MATCH_PATTERN = re.compile(r"(loss|ndcg|mrr)$")
 
 
 class Ranker(pl.LightningModule):
+    """Deep ranking model using a Transformer encoder as a backbone."""
+
     _output_size: int
 
     def __init__(
@@ -152,11 +155,13 @@ class Ranker(pl.LightningModule):
         output = {key_to: batch[key_from] for key_from, key_to in keys_map.items()}
         return output
 
-    def forward(self, batch: dict, **kwargs: Any) -> dict:
+    def forward(self, batch: dict, **kwargs: Any) -> dict[str, torch.Tensor]:
+        """Forward pass through the model. Only computes the embeddings for the query and the document."""
         output = self.predict(batch)
         return output
 
     def predict(self, batch: dict, **kwargs: Any) -> dict[str, torch.Tensor]:
+        """computes the embeddings for the query and the document."""
         mapping = {"question": "hq", "section": "hd"}
         output = {}
         for field, key in mapping.items():
@@ -170,7 +175,9 @@ class Ranker(pl.LightningModule):
             )
         return output
 
-    def _step(self, batch: dict, batch_idx: Optional[int] = None, *, split: str, **kwargs) -> dict:
+    def _step(
+        self, batch: dict[str, Any], batch_idx: Optional[int] = None, *, split: str, **kwargs: Any
+    ) -> dict[str, Any]:
         output = self.forward(batch)
         output = self.gradients({**batch, **output})
         output.update(_compute_input_stats(batch, prefix=f"{split}/"))
@@ -190,7 +197,12 @@ class Ranker(pl.LightningModule):
 
     @torch.no_grad()
     def _log_metrics(
-        self, output: dict, split: str, prog_bar: Optional[bool] = None, on_epoch: Optional[bool] = False, **kwargs
+        self,
+        output: dict[str, Any],
+        split: str,
+        prog_bar: Optional[bool] = None,
+        on_epoch: Optional[bool] = False,
+        **kwargs: Any,
     ) -> None:
         for key, value in output.items():
             if isinstance(value, torch.Tensor):
@@ -207,31 +219,31 @@ class Ranker(pl.LightningModule):
             self.log(key, value, prog_bar=prog_bar, on_epoch=on_epoch, **kwargs)
 
     @staticmethod
-    def _filter_output(output: dict) -> dict:
-        def fn(key: str, value: torch.Tensor) -> bool:
+    def _filter_output(output: dict[str, Any]) -> dict[str, Any]:
+        def _filter_fn(key: str, value: torch.Tensor) -> bool:
             return not str(key).startswith("_")
 
-        output = {key: value for key, value in output.items() if fn(key, value)}
+        output = {key: value for key, value in output.items() if _filter_fn(key, value)}
 
         return output
 
-    def training_step(self, *args: Any, **kwargs: Any) -> dict:
+    def training_step(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         return self._step(*args, split="train", **kwargs)
 
-    def validation_step(self, *args: Any, **kwargs: Any) -> dict:
+    def validation_step(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         return self._step(*args, split="val", **kwargs)
 
-    def test_step(self, *args: Any, **kwargs: Any) -> dict:
+    def test_step(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         return self._step(*args, split="test", **kwargs)
 
     # Compute metrics
-    def _on_epoch_end(self, split: str) -> dict:
+    def _on_epoch_end(self, split: str) -> dict[str, Any]:
         if self.monitor is not None and not self.monitor.on_step(split):
             summary = self.monitor.compute(split=split)
             self._log_metrics(summary, split=split, on_epoch=True)
             return summary
-        else:
-            return {}
+
+        return {}
 
     def on_train_epoch_end(self) -> None:
         self._on_epoch_end(split="train")
@@ -243,7 +255,7 @@ class Ranker(pl.LightningModule):
         self._on_epoch_end(split="test")
 
     # Init monitors
-    def _on_epoch_start(self, split: str):
+    def _on_epoch_start(self, split: str) -> None:
         if self.monitor is not None:
             self.monitor.reset(split=split)
 
@@ -277,5 +289,5 @@ def _compute_input_stats(batch: dict, prefix: str = "") -> dict[str, float]:
 
 
 @hashregister(Ranker)
-def _hash_ranker(hasher: Hasher, value: Ranker):
+def _hash_ranker(hasher: Hasher, value: Ranker) -> str:
     return fingerprint_torch_module(hasher, value)

@@ -21,14 +21,18 @@ class DefaultCollateConfig(pydantic.BaseModel):
 
 
 class SearchConfig(pydantic.BaseModel):
+    """Base configuration for search engines (e.g., bm25, faiss)."""
+
     class Config:
+        """Pydantic configuration."""
+
         extra = pydantic.Extra.forbid
 
     schedule: Union[float, ScheduleConfig] = 1.0
     label_key: str = "kb_id"
 
     @pydantic.validator("schedule")
-    def _validate_schedule(cls, v):
+    def _validate_schedule(cls, v: dict | omegaconf.DictConfig | ScheduleConfig | float) -> float | ScheduleConfig:
         if isinstance(v, ScheduleConfig):
             return v
         if isinstance(v, (bool, float, int)):
@@ -41,49 +45,57 @@ class SearchConfig(pydantic.BaseModel):
         raise ValueError(f"Invalid schedule: {v}")
 
     def get_weight(self, step: int) -> float:
+        """Get the weight for the given step."""
         if isinstance(self.schedule, float):
             return self.schedule
-        elif isinstance(self.schedule, ScheduleConfig):
+
+        if isinstance(self.schedule, ScheduleConfig):
             return self.schedule(step)
-        else:
-            raise TypeError(f"Invalid schedule: {self.schedule}")
+
+        raise TypeError(f"Invalid schedule: {self.schedule}")
 
 
 class DefaultFaissConfig(SearchConfig):
+    """Configures a faiss search engine."""
+
     factory: str
     nprobe: int
 
 
 class DefaultBm25Config(SearchConfig):
+    """Configures a bm25 search engine."""
+
     indexed_key: str = "text"
     use_labels: bool = True
 
 
 class MultiIndexConfig(pydantic.BaseModel):
+    """Configures a group of indexes (e.g., bm25, faiss)."""
+
     update_freq: Optional[Union[int, list[int]]]
     faiss: DefaultFaissConfig
     bm25: DefaultBm25Config
 
     @pydantic.validator("update_freq", pre=True)
-    def _validate_update_freq(cls, v):
+    def _validate_update_freq(cls, v: Union[int, list[int], omegaconf.ListConfig]) -> int | list[int]:
         if isinstance(v, omegaconf.ListConfig):
             v = omegaconf.OmegaConf.to_container(v)
         return v
 
     @pydantic.validator("faiss")
-    def _validate_faiss(cls, v):
+    def _validate_faiss(cls, v: dict | omegaconf.DictConfig | DefaultFaissConfig) -> DefaultFaissConfig:
         if isinstance(v, DefaultFaissConfig):
             return v
-        elif isinstance(v, (dict, omegaconf.DictConfig)):
+        if isinstance(v, (dict, omegaconf.DictConfig)):
             return DefaultFaissConfig(**v)
 
         raise ValueError(f"Invalid faiss config: {v}")
 
     @pydantic.validator("bm25")
-    def _validate_bm25(cls, v):
+    def _validate_bm25(cls, v: dict | omegaconf.DictConfig | DefaultBm25Config) -> DefaultBm25Config:
         if isinstance(v, DefaultBm25Config):
             return v
-        elif isinstance(v, (dict, omegaconf.DictConfig)):
+        if isinstance(v, (dict, omegaconf.DictConfig)):
             return DefaultBm25Config(**v)
 
         raise ValueError(f"Invalid bm25 config: {v}")

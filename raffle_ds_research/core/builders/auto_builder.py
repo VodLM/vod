@@ -14,8 +14,8 @@ def auto_builder(**config: Any) -> retrieval_builder.RetrievalBuilder:
     """Builds a dataset from a configuration."""
     try:
         builder_name = config["name"]
-    except KeyError:
-        raise ValueError(f"Builder `name` not specified in config. Found keys: {config.keys()}")
+    except KeyError as exc:
+        raise ValueError(f"Builder `name` not specified in config. Found keys: {config.keys()}") from exc
 
     builder_cls = BUILDERS[builder_name]
     return builder_cls(**config)

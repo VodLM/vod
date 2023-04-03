@@ -1,3 +1,4 @@
+# pylint: disable=no-member
 from __future__ import annotations
 
 import copy
@@ -131,17 +132,30 @@ def _fill_nans_with_min(values: np.ndarray, offset_min_value: Optional[float] = 
 
 
 class RetrievalCollate(pipes.Collate):
+    """Collate function for retrieval tasks. This function is used to convert a list of examples into a batch.
+    Steps:
+        1. Pack the examples into a batch.
+        2. Tokenize the questions
+        3. Search the sections (bm25, faiss, etc.)
+        4. Sample the sections (top_k
+        5. Tokenize the sections"""
+
+    _corpus: datasets.Dataset
+    _section_id_lookup: index_tools.LookupIndex
+    _kb_id_lookup: index_tools.LookupIndex
+    tokenizer: transformers.PreTrainedTokenizer
+    config: RetrievalCollateConfig
+
     def __init__(
         self,
         *,
         corpus: datasets.Dataset,
         tokenizer: transformers.PreTrainedTokenizer,
         config: RetrievalCollateConfig,
-        **kwargs: Any,
     ):
-        self.corpus = corpus
-        self.section_id_lookup = index_tools.LookupIndex(corpus, key=config.section_id_keys.section)
-        self.kb_id_lookup = index_tools.LookupIndex(corpus, key=config.kb_id_keys.section)
+        self._corpus = corpus
+        self._section_id_lookup = index_tools.LookupIndex(corpus, key=config.section_id_keys.section)
+        self._kb_id_lookup = index_tools.LookupIndex(corpus, key=config.kb_id_keys.section)
         self.tokenizer = tokenizer
         self.config = config
 
@@ -151,8 +165,8 @@ class RetrievalCollate(pipes.Collate):
         if not self.config.search_enabled:
             # if not search service is enabled, fetch the sections from the same kb_id
             kb_ids = batch[self.config.kb_id_keys.query]
-            candidate_samples: index_tools.RetrievalBatch = self.kb_id_lookup.search(kb_ids)
-            client_scores = {}
+            candidate_samples: index_tools.RetrievalBatch = self._kb_id_lookup.search(kb_ids)
+            client_scores: dict[str, np.ndarray] = {}
         else:
             # fetch the query vectors
             if self.config.requires_vectors:
@@ -163,7 +177,7 @@ class RetrievalCollate(pipes.Collate):
             else:
                 query_vectors = None
 
-            # search the indexes # todo: asyncio
+            # search the indexes
             samples_: list[ClientResults] = []
             for cfg in self.config.enabled_clients:
                 samples: index_tools.RetrievalBatch = cfg.client.search(
@@ -189,7 +203,7 @@ class RetrievalCollate(pipes.Collate):
 
         # fetch the positive `section_ids`
         query_section_ids = batch[self.config.section_id_keys.query]
-        positive_samples: index_tools.RetrievalBatch = self.section_id_lookup.search(query_section_ids)
+        positive_samples: index_tools.RetrievalBatch = self._section_id_lookup.search(query_section_ids)
 
         # sample the sections given the positive ones and the pool of candidates
         sections: SampledSections = sample_sections(
@@ -203,7 +217,7 @@ class RetrievalCollate(pipes.Collate):
 
         # fetch the content of each section from the huggingface `datasets.Dataset`
         flat_ids = sections.indices.flatten().tolist()
-        flat_sections_content: dict[str, Any] = self.corpus[flat_ids]  # type: ignore
+        flat_sections_content: dict[str, Any] = self._corpus[flat_ids]  # type: ignore
 
         # tokenize the sections and add them to the output
         tokenized_sections = pipes.torch_tokenize_pipe(
@@ -251,6 +265,8 @@ class RetrievalCollate(pipes.Collate):
 
 @dataclasses.dataclass(frozen=True)
 class ClientResults:
+    """A container for the results of a search client."""
+
     samples: index_tools.RetrievalBatch
     cfg: SearchClientConfig
 
@@ -262,7 +278,7 @@ def _merge_candidate_samples(
     if len(candidates) == 1:
         candidate = candidates[0]
         return candidate.samples, {candidate.cfg.name: candidate.samples.scores}
-    elif len(candidates) == 0:
+    if len(candidates) == 0:
         raise ValueError("No candidates to merge")
 
     candidate_samples = index_tools.merge_retrieval_batches([c.samples for c in candidates])
@@ -338,6 +354,8 @@ class SearchClientConfig(pydantic.BaseModel):
     """Defines a configuration for a search client."""
 
     class Config:
+        """Pydantic config."""
+
         arbitrary_types_allowed = True
         extra = "forbid"
 
@@ -347,16 +365,22 @@ class SearchClientConfig(pydantic.BaseModel):
     label_key: str = "kb_id"
 
     @property
-    def enabled(self):
+    def enabled(self) -> bool:
+        """Whether the client is enabled or not."""
         return self.weight >= 0
 
     @property
-    def requires_vectors(self):
+    def requires_vectors(self) -> bool:
+        """Whether the client requires vectors (embeddings) or not."""
         return self.client.requires_vectors
 
 
 class KeyMap(pydantic.BaseModel):
+    """Defines the name of the keys used on the query side and on the section side."""
+
     class Config:
+        """Pydantic config."""
+
         extra = "forbid"
 
     query: str
@@ -369,6 +393,8 @@ class RetrievalCollateConfig(pydantic.BaseModel):
     _query_vectors: index_tools.VectorHandler = pydantic.PrivateAttr(None)
 
     class Config:
+        """Pydantic config."""
+
         arbitrary_types_allowed = True
         extra = "forbid"
 
@@ -390,17 +416,16 @@ class RetrievalCollateConfig(pydantic.BaseModel):
     kb_id_keys: KeyMap = KeyMap(query="kb_id", section="kb_id")
 
     @pydantic.validator("clients", pre=True)
-    def _validate_clients(cls, v):
-        def _parse(w):
-            if isinstance(w, SearchClientConfig):
-                return w
-            elif isinstance(w, (dict, omegaconf.DictConfig)):
-                return SearchClientConfig(**w)
-            else:
-                raise ValueError(f"Invalid client config: {w}")
+    def _validate_clients(cls, values: list[SearchClientConfig | omegaconf.DictConfig]) -> list[SearchClientConfig]:
+        def _parse(one_value: SearchClientConfig | omegaconf.DictConfig) -> SearchClientConfig:
+            if isinstance(one_value, SearchClientConfig):
+                return one_value
+            if isinstance(one_value, (dict, omegaconf.DictConfig)):
+                return SearchClientConfig(**one_value)
+            raise ValueError(f"Invalid client config: {one_value}")
 
-        clients = [_parse(c) for c in v]
-        clients = [c for c in clients if c.enabled]
+        clients = [_parse(one_value) for one_value in values]
+        clients = [one_client for one_client in clients if one_client.enabled]
         return clients
 
     def __init__(self, **data: Any):
@@ -409,34 +434,38 @@ class RetrievalCollateConfig(pydantic.BaseModel):
         if self.question_vectors is not None:
             self._query_vectors = index_tools.vector_handler(self.question_vectors)
 
-    def __getstate__(self):
+    def __getstate__(self) -> dict[str, Any]:
         """Drop the open ts.TensorStore object to make the state serializable."""
         state = super().__getstate__().copy()
         state["__private_attribute_values__"].pop("_query_vectors")
         return state
 
-    def __setstate__(self, state):
+    def __setstate__(self, state: dict[str, Any]) -> None:
         super().__setstate__(state)
         if self.question_vectors is not None:
             self._query_vectors = index_tools.vector_handler(self.question_vectors)
 
-    def __del__(self):
+    def __del__(self) -> None:
         """Close the open ts.TensorStore object."""
         if self._query_vectors is not None:
             del self._query_vectors
 
     @property
     def query_vectors(self) -> index_tools.VectorHandler:
+        """Return the vectors/embeddings of the queries."""
         return self._query_vectors
 
     @property
     def search_enabled(self) -> bool:
+        """Return whether any of the clients is enabled."""
         return any(c.enabled for c in self.clients)
 
     @property
     def requires_vectors(self) -> bool:
+        """Return whether any of the clients requires vectors."""
         return any(c.requires_vectors for c in self.clients)
 
     @property
     def enabled_clients(self) -> list[SearchClientConfig]:
+        """Return the list of enabled clients."""
         return [c for c in self.clients if c.enabled]

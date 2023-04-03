@@ -28,7 +28,7 @@ class CollateFnProtocol(Protocol):
 D = TypeVar("D", bound=DatasetProtocol)
 DD = TypeVar("DD", bound=Union[dict[str, DatasetProtocol], datasets.DatasetDict])
 DorDD = TypeVar("DorDD", bound=Union[DatasetProtocol, dict[str, DatasetProtocol], datasets.DatasetDict])
-CollateCfg = TypeVar("LoadCfg", bound=pydantic.BaseModel)
+CollateCfg = TypeVar("CollateCfg", bound=pydantic.BaseModel)
 
 
 class DatasetBuilder(Generic[DD, CollateCfg], ABC):
@@ -45,9 +45,8 @@ class DatasetBuilder(Generic[DD, CollateCfg], ABC):
         """Return corpus dataset if it exists."""
         return None
 
-    @staticmethod
     @abstractmethod
-    def get_collate_fn(config: Optional[CollateCfg] = None) -> CollateFnProtocol:
+    def get_collate_fn(self, config: Optional[CollateCfg] = None) -> CollateFnProtocol:
         """Return collate function for that dataset."""
         return torch.utils.data.dataloader.default_collate
 

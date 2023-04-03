@@ -4,12 +4,19 @@ from copy import copy
 from functools import partial
 from typing import Any, Optional
 
+from raffle_ds_research.tools import pipes
 from raffle_ds_research.tools.pipes.protocols import Pipe
 
 
-class Sequential(object):
-    def __init__(self, pipes: list[Pipe | partial], with_updates: bool = False):
-        self.pipes = pipes
+class Sequential(pipes.Pipe):
+    """Defines a list of transformations."""
+
+    def __init__(self, list_of_pipes: list[Pipe | partial], with_updates: bool = False, **kwargs: Any):
+        if len(list_of_pipes) == 0:
+            raise ValueError("The list of pipes must not be empty.")
+        if len(kwargs) > 0:
+            raise ValueError(f"The Sequential pipe does not accept any kwargs. Found {kwargs}")
+        self.pipes = list_of_pipes
         self.with_updates = with_updates
 
     def __call__(self, batch: dict[str, Any], idx: Optional[list[int]] = None, **kwargs: Any) -> dict[str, Any]:

@@ -1,13 +1,15 @@
+# mypy: ignore-errors
+
 import math
 
 import numpy as np
 import pytest
-import rich
 
 from raffle_ds_research.tools import c_tools, index_tools
 
 
-def gen_batch(batch_size: int, n_points: int, n_range, seed: int):
+def gen_batch(batch_size: int, n_points: int, n_range, seed: int) -> index_tools.RetrievalBatch:
+    """Generate a batch of retrieval data."""
     rgn = np.random.RandomState(seed)
     examples = []
     for _ in range(batch_size):
@@ -25,12 +27,14 @@ def gen_batch(batch_size: int, n_points: int, n_range, seed: int):
 
 
 @pytest.fixture
-def batch_a(batch_size: int, na: int, n_range: int, seed: int):
+def batch_a(batch_size: int, na: int, n_range: int, seed: int) -> index_tools.RetrievalBatch:
+    """Generate a batch of retrieval data."""
     return gen_batch(batch_size, na, n_range, seed)
 
 
 @pytest.fixture
-def batch_b(batch_size: int, nb: int, n_range: int, seed: int):
+def batch_b(batch_size: int, nb: int, n_range: int, seed: int) -> index_tools.RetrievalBatch:
+    """Generate a batch of retrieval data."""
     return gen_batch(batch_size, nb, n_range, seed + 1)
 
 
@@ -39,7 +43,7 @@ def batch_b(batch_size: int, nb: int, n_range: int, seed: int):
 @pytest.mark.parametrize("n_range", [3, 10, 100])
 @pytest.mark.parametrize("batch_size", [1, 3, 100])
 @pytest.mark.parametrize("seed", [0, 1, 2])
-def test_gather_by_index(batch_a, batch_b):
+def test_gather_by_index(batch_a: index_tools.RetrievalBatch, batch_b: index_tools.RetrievalBatch) -> None:
     merged_indices, merged_scores = c_tools.merge_search_results(
         a_indices=batch_a.indices,
         a_scores=batch_a.scores,

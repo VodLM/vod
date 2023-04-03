@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 
-def int_div(a, *b):
+def int_div(a: int, *b: int) -> int:
+    """Divide a by b. Return an integer."""
     try:
         y = a
         for x in b:
@@ -11,14 +12,16 @@ def int_div(a, *b):
     return int(y)
 
 
-def int_mul(a, *b):
+def int_mul(a: int, *b: int) -> int:
+    """Multiply a by b. Return an integer."""
     y = a
     for x in b:
         y *= x
     return int(y)
 
 
-def int_max(a, *b):
+def int_max(a: int, *b: int) -> int:
+    """Return the maximum of a and b. Return an integer."""
     y = a
     for x in b:
         y = max(x, y)

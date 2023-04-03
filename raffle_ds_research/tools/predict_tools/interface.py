@@ -1,3 +1,4 @@
+# pylint: disable=protected-access
 from __future__ import annotations
 
 import math
@@ -29,11 +30,9 @@ from .wrappers import CollateWithIndices, DatasetWithIndices, _warp_as_lightning
 
 class DataLoaderForPredictKwargs(loader_config.DataLoaderConfig):
     @pydantic.validator("shuffle", pre=True)
-    def _force_shuffle(cls, v):
-        if v:
-            logger.debug(
-                "Shuffle is set to True. " "This is unnecessary for predictions. " "Forcing `shuffle` to False."
-            )
+    def _force_shuffle(cls, value: bool) -> bool:
+        if value:
+            logger.debug("Shuffle is set to True. This is unnecessary for predictions. Forcing `shuffle` to False.")
         return False
 
 
@@ -84,10 +83,31 @@ def predict(
 
 def _predict_dict(
     dataset: dict[str, DatasetProtocol],
-    **kwargs,
+    *,
+    trainer: pl.Trainer,
+    cache_dir: str | Path,
+    model: torch.nn.Module | pl.LightningModule,
+    collate_fn: pipes.Collate,
+    model_output_key: Optional[str] = None,
+    loader_kwargs: Optional[dict[str, Any] | DictConfig | loader_config.DataLoaderConfig] = None,
+    ts_kwargs: Optional[dict[str, Any]] = None,
+    validate_store: bool | int = True,
 ) -> dict[str, TensorStoreFactory]:
     """Compute predictions for a dataset and store them in a tensorstore"""
-    return {split: _predict_single(dset, **kwargs) for split, dset in dataset.items()}
+    return {
+        split: _predict_single(
+            dset,
+            trainer=trainer,
+            cache_dir=cache_dir,
+            model=model,
+            collate_fn=collate_fn,
+            model_output_key=model_output_key,
+            loader_kwargs=loader_kwargs,
+            ts_kwargs=ts_kwargs,
+            validate_store=validate_store,
+        )
+        for split, dset in dataset.items()
+    }
 
 
 def _predict_single(
@@ -157,7 +177,7 @@ def _predict_single(
         n_samples = math.inf if isinstance(validate_store, bool) else validate_store
         logger.debug(f"Validating the store using `{n_samples}` samples (all rows must be non-zero)")
         zero_ids = list(_get_zero_vec_indices(store, n_samples=n_samples))
-        if len(zero_ids):
+        if len(zero_ids) > 0:
             zero_ids_ = zero_ids if len(zero_ids) < 5 else [str(x) for x in zero_ids[:5]] + ["..."]
             raise ValueError(
                 f"Vector at indices {zero_ids_} are all zeros. "
@@ -178,7 +198,7 @@ def _infer_vector_shape(
     dataset: DatasetProtocol,
     collate_fn: pipes.Collate,
 ) -> tuple[int, ...]:
-    # todo: handle variable length inputs
+    # todo: handle variable length inputs # pylint: disable=fixme
     try:
         vector_shape = model.get_output_shape(model_output_key)
     except AttributeError as exc:
@@ -255,26 +275,28 @@ def _compute_and_store_predictions(
     return store
 
 
+_N_MAX_FGN_SAMPLES = 1000
+
+
 def _get_dset_fingerprint(dataset: DatasetProtocol) -> str:
-    N_MAX_SAMPLES = 1000
     if isinstance(dataset, datasets.Dataset):
         return dataset._fingerprint
+
+    hasher = fingerprint.Hasher()
+    hasher.update({"length": len(dataset)})
+
+    # select random row ids
+    if len(dataset) > _N_MAX_FGN_SAMPLES:
+        rgn = np.random.RandomState(0)
+        ids = rgn.choice(len(dataset), size=_N_MAX_FGN_SAMPLES, replace=False)
     else:
-        hasher = fingerprint.Hasher()
-        hasher.update({"length": len(dataset)})
+        ids = range(len(dataset))
 
-        # select random row ids
-        if len(dataset) > N_MAX_SAMPLES:
-            rgn = np.random.RandomState(0)
-            ids = rgn.choice(len(dataset), size=N_MAX_SAMPLES, replace=False)
-        else:
-            ids = range(len(dataset))
+    # hash the rows
+    for i in ids:
+        hasher.update(dataset[i])
 
-        # hash the rows
-        for i in ids:
-            hasher.update(dataset[i])
-
-        return hasher.hexdigest()
+    return hasher.hexdigest()
 
 
 def _make_fingerprint(
@@ -283,7 +305,7 @@ def _make_fingerprint(
     collate_fn: pipes.Collate,
     model: torch.nn.Module | pl.LightningModule,
     model_output_key: Optional[str] = None,
-):
+) -> str:
     dset_fingerprint = _get_dset_fingerprint(dataset)
     model_fingerprint = _get_model_fingerprint(model)
     collate_fn_fingerprint = _get_collate_fn_fingerprint(collate_fn)
@@ -293,7 +315,7 @@ def _make_fingerprint(
     return op_fingerprint
 
 
-def _get_model_fingerprint(model: torch.nn.Module):
+def _get_model_fingerprint(model: torch.nn.Module) -> str:
     state = model.state_dict()
     hasher = fingerprint.Hasher()
     hasher.update(type(model).__name__)

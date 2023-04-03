@@ -60,8 +60,7 @@ class LookupIndex(object):
 
 
 @datasets.fingerprint.hashregister(LookupIndex)
-def _hash_index(hasher, value: LookupIndex):
+def _hash_index(hasher: datasets.fingerprint.Hasher, value: LookupIndex) -> str:
     data = {s: getattr(value, s, None) for s in value.__slots__}
     data.pop("_lookup_table")
-    h = hasher.hash_bytes(data)
-    return h
+    return hasher.hash(data)

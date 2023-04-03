@@ -8,6 +8,8 @@ from raffle_ds_research.tools.index_tools.retrieval_data_type import RetrievalDa
 
 
 class FaissInitConfig(pydantic.BaseModel):
+    """Configuration used to init/build a faiss index."""
+
     class Config:
         allow_mutation = False
         extra = "forbid"
@@ -17,6 +19,8 @@ class FaissInitConfig(pydantic.BaseModel):
 
 
 class InitResponse(pydantic.BaseModel):
+    """Response to the initialization request."""
+
     class Config:
         allow_mutation = False
         extra = "forbid"
@@ -26,7 +30,11 @@ class InitResponse(pydantic.BaseModel):
 
 
 class SearchFaissQuery(pydantic.BaseModel):
+    """Query to search a faiss index."""
+
     class Config:
+        """pydantic config."""
+
         allow_mutation = False
         extra = "forbid"
 
@@ -37,10 +45,11 @@ class SearchFaissQuery(pydantic.BaseModel):
 class FastSearchFaissQuery(pydantic.BaseModel):
     """
     This is the same as SearchFaissQuery, but with the vectors serialized.
-    todo: use protobuf
     """
 
     class Config:
+        """pydantic config."""
+
         allow_mutation = False
         extra = "forbid"
 
@@ -52,7 +61,11 @@ class FastSearchFaissQuery(pydantic.BaseModel):
 
 
 class FaissSearchResponse(pydantic.BaseModel):
+    """Response to the search request."""
+
     class Config:
+        """pydantic config."""
+
         allow_mutation = False
         extra = "forbid"
 
@@ -63,10 +76,11 @@ class FaissSearchResponse(pydantic.BaseModel):
 class FastFaissSearchResponse(pydantic.BaseModel):
     """
     This is the same as FaissSearchResponse, but with the vectors serialized.
-    todo: use protobuf
     """
 
     class Config:
+        """pydantic config."""
+
         allow_mutation = False
         extra = "forbid"
 

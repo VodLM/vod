@@ -6,6 +6,7 @@ import faiss
 
 # faiss.contrib.torch_utils: required to handle torch.Tensor inputs.
 try:
+    # pylint: disable=unused-import
     from faiss.contrib import torch_utils  # type: ignore
 except ImportError:
     pass
@@ -28,7 +29,7 @@ def build_index(
     index = faiss.index_factory(vector_size, factory_string, faiss_metric)
     if add_batch_size is None:
         add_batch_size = vectors.shape[0]
-    for i, (ids, batch) in enumerate(vectors.iter_batches(add_batch_size)):
+    for i, (_, batch) in enumerate(vectors.iter_batches(add_batch_size)):
         if i == 0:
             index.train(batch)
         index.add(batch)

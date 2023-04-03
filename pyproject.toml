@@ -64,7 +64,7 @@ gcsfs = "^2023.3.0"
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.1"
 pylint = "^2.16.2"
-black = "^23.1.0"
+black = {extras = ["d"], version = "^23.3.0"}
 isort = "^5.12.0"
 pre-commit = "^3.0.4"
 commitizen = "^2.42.0"
@@ -150,6 +150,10 @@ good-names = [
     "r", "s", # relevance, score
     "m", "d", # faiss parameters
     "p", "q", "a", # prediction, question, answer
+    "k", "v", # key, value
+    "n", "m", # number of samples, number of features
+    "c", "d", # number of classes, number of dimensions
+    "fs", # file system
 ]
 
 [tool.pylint.design]
@@ -171,6 +175,8 @@ disable = [
     "missing-module-docstring",
     "too-few-public-methods",
     "use-dict-literal",
+    "no-self-argument",
+    "unused-argument",
 ]
 
 extension-pkg-whitelist = "pydantic"

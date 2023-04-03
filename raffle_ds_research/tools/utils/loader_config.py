@@ -4,7 +4,11 @@ import pydantic
 
 
 class DataLoaderConfig(pydantic.BaseModel):
+    """Base configuration for a pytorch DataLoader."""
+
     class Config:
+        """pydantic config."""
+
         extra = pydantic.Extra.forbid
 
     batch_size: int

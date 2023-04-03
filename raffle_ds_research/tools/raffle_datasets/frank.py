@@ -105,6 +105,8 @@ def _download_and_parse_frank(
                 full_frank_split = frank_part
             else:
                 full_frank_split += frank_part
+        if full_frank_split is None:
+            raise ValueError(f"Frank {split} is empty.")
         return full_frank_split
 
 
@@ -159,7 +161,7 @@ def _make_local_sync_path(
     split: FrankSplitName,
     version: int,
     only_positive_sections: bool = False,
-):
+) -> tuple[Path, Path]:
     base_path = Path(
         cache_dir, "raffle_datasets", "frank", language, "only-positives" if only_positive_sections else "full"
     )

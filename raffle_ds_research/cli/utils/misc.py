@@ -1,3 +1,4 @@
+# pylint: disable=unspecified-encoding
 from __future__ import annotations
 
 import numbers
@@ -14,9 +15,8 @@ import transformers
 from raffle_ds_research.utils.config import config_to_flat_dict
 
 
-def _do_nothing(*args, **kwargs):
+def _do_nothing(*args: Any, **kwargs: Any) -> None:
     """Do nothing."""
-    pass
 
 
 def _return_same(value: Any) -> Any:
@@ -34,7 +34,7 @@ def _cast_hps(value: Any) -> str:
     return formatter(value)
 
 
-def set_training_context():
+def set_training_context() -> None:
     """Set the general context for torch, datasets, etc."""
     datasets.utils.logging.set_verbosity_error()
     transformers.utils.logging.set_verbosity_error()
@@ -43,7 +43,7 @@ def set_training_context():
     # torch.multiprocessing.set_sharing_strategy("file_system")
 
 
-def log_config(trainer: pl.Trainer, config: omegaconf.DictConfig, exp_dir: Path):
+def log_config(trainer: pl.Trainer, config: omegaconf.DictConfig, exp_dir: Path) -> None:
     """Log the config as hyperparameters and save it locally."""
     config_path = Path(exp_dir, "config.yaml")
     with open(config_path, "w") as f:
@@ -51,6 +51,7 @@ def log_config(trainer: pl.Trainer, config: omegaconf.DictConfig, exp_dir: Path)
 
     # log he config to wandb
     try:
+        # pylint: disable=import-outside-toplevel
         import wandb
 
         try:

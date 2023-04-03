@@ -21,10 +21,10 @@ class StorePredictions(object):
         self.trainer = trainer
         self.callback = TensorStoreCallback(store, model_output_key)
 
-    def __enter__(self):
+    def __enter__(self) -> None:
         self.trainer.callbacks.append(self.callback)  # type: ignore
 
-    def __exit__(self, exception_type, exception_value, traceback):
+    def __exit__(self, exception_type: Any, exception_value: Any, traceback: Any) -> None:
         self.trainer.callbacks.remove(self.callback)  # type: ignore
 
 
@@ -51,11 +51,11 @@ class TensorStoreCallback(pl.Callback):
         """store the outputs of the prediction step to the cache"""
         try:
             indices = batch[PREDICT_IDX_COL_NAME]
-        except KeyError:
-            raise ValueError(
+        except KeyError as exc:
+            raise KeyError(
                 f"Column {PREDICT_IDX_COL_NAME} not found in batch. "
                 f"Make sure to wrap your dataset with `DatasetWithIndices`."
-            )
+            ) from exc
         vectors = _select_vector_from_output(outputs, self.output_key)
         _write_vectors_to_store(
             self.store,
@@ -81,8 +81,9 @@ def _write_vectors_to_store(
     if asynchronous:
         write_future = store[idx].write(vectors)
         return write_future
-    else:
-        store[idx] = vectors
+
+    store[idx] = vectors
+    return None
 
 
 def _select_vector_from_output(batch: torch.Tensor | dict, key: Optional[str] = None) -> torch.Tensor:

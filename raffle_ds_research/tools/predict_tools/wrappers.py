@@ -28,7 +28,7 @@ class DatasetWithIndices(DatasetProtocol):
     def __init__(self, dataset: DatasetProtocol):
         self.dataset = dataset
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.dataset)
 
     def __getitem__(self, item: int) -> dict:
@@ -61,6 +61,8 @@ def _collate_with_indices(examples: Iterable[dict[str, Any]], *, collate_fn: pip
 
 
 class CollateWithIndices(pipes.Collate):
+    """Wraps a `Collate` to add the column `IDX_COL` to the batch"""
+
     def __init__(self, collate_fn: pipes.Collate):  # type: ignore
         self.collate_fn = collate_fn
 
@@ -74,7 +76,7 @@ def _warp_as_lightning_model(
     """Wrap the model to return IDX_COL along the batch values"""
     if isinstance(model, pl.LightningModule):
         return model
-    elif isinstance(model, torch.nn.Module):
+    if isinstance(model, torch.nn.Module):
         return ModuleWrapper(model)
-    else:
-        raise ValueError(f"Unknown model type: {type(model)}")
+
+    raise ValueError(f"Unknown model type: {type(model)}")

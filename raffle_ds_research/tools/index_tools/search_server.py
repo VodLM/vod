@@ -52,7 +52,7 @@ class SearchMaster(Generic[Sc], abc.ABC):
         self._on_init()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         self._on_exit()
         if self._server_proc is not None:
             self._server_proc.terminate()
@@ -113,7 +113,7 @@ class SearchMaster(Generic[Sc], abc.ABC):
             f"To use in multiprocessing, using a client instead (`server.get_client()`)."
         )
 
-    def __setstate__(self, state) -> None:
+    def __setstate__(self, state: dict[str, Any]) -> None:
         raise DoNotPickleError(
             f"{type(self).__name__} is not pickleable. "
             f"To use in multiprocessing, using a client instead (`server.get_client()`)."

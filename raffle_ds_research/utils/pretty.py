@@ -1,34 +1,44 @@
 from __future__ import annotations
 
+import dataclasses
 from typing import Any
 
 import rich
 
 
+@dataclasses.dataclass
+class TableRow:
+    """A row in the table."""
+
+    key: str
+    group: str
+    value: float
+
+
 def print_metric_groups(metrics: dict[str, Any]) -> None:
+    """Nicely print a dictionary of metrics using `rich.table.Table`."""
     console = rich.console.Console()
     table = rich.table.Table(title="Static Validation")
     table.add_column("Metric", justify="left", style="cyan")
     table.add_column("group", justify="left", style="green")
     table.add_column("Value", justify="right", style="magenta")
 
-    def split_key(key: str) -> tuple[str, str]:
+    def _make_row(key: str, value: Any) -> TableRow:
         *group, metric = key.split("/")
         group = "/".join(group)
-        return metric, group
+        return TableRow(key=metric, group=group, value=float(value))
 
-    metrics = [(*split_key(k), v) for k, v in metrics.items()]
-    metrics = sorted(metrics, key=lambda x: (x[0], x[1]))
+    metrics = [_make_row(k, v) for k, v in metrics.items()]
+    metrics = sorted(metrics, key=lambda x: (x.key, x.group))
     prev_key = None
-    for key, group, value in metrics:
+    for row in metrics:
         if prev_key is None:
-            display_key = key
-        elif key != prev_key:
+            display_key = row.key
+        elif row.key != prev_key:
             table.add_section()
-            display_key = key
+            display_key = row.key
         else:
             display_key = ""
-        value = float(value)
-        table.add_row(display_key, group, f"{value:.2%}")
-        prev_key = key
+        table.add_row(display_key, row.group, f"{row.value:.2%}")
+        prev_key = row.key
     console.print(table)

@@ -42,16 +42,16 @@ class Bm25Client(search_server.SearchClient):
         except es.exceptions.ConnectionError:
             return False
 
-    def __getstate__(self):
+    def __getstate__(self) -> dict[str, Any]:
         state = self.__dict__.copy()
         state.pop("_client", None)
         return state
 
-    def __setstate__(self, state):
+    def __setstate__(self, state: dict[str, Any]) -> None:
         self.__dict__.update(state)
         self._client = es.Elasticsearch(self.url)
 
-    def __del__(self):
+    def __del__(self) -> None:
         try:
             self._client.close()
         except AttributeError:
@@ -92,11 +92,11 @@ class Bm25Client(search_server.SearchClient):
             scores=np.stack(scores),
         )
 
-    def _make_queries(self, texts: list[str], *, top_k: int, labels: Optional[list[str | int]] = None):
+    def _make_queries(self, texts: list[str], *, top_k: int, labels: Optional[list[str | int]] = None) -> list:
         if labels is None:
             labels = []
 
-        def _make_search_body(text: str, label: Optional[str | int] = None):
+        def _make_search_body(text: str, label: Optional[str | int] = None) -> dict[str, Any]:
             body = {"should": {"match": {BODY_KEY: text}}}
             if label is not None:
                 body["filter"] = {"term": {LABEL_KEY: label}}
@@ -119,6 +119,8 @@ class Bm25Client(search_server.SearchClient):
 
 
 class Bm25Master(search_server.SearchMaster[Bm25Client]):
+    """Handles a BM25 search server."""
+
     _allow_existing_server: bool = True
 
     def __init__(
@@ -134,9 +136,9 @@ class Bm25Master(search_server.SearchMaster[Bm25Client]):
         exist_ok: bool = False,
         **proc_kwargs: Any,
     ):
-        self.host = host
-        self.port = port
-        self.proc_kwargs = proc_kwargs
+        self._host = host
+        self._port = port
+        self._proc_kwargs = proc_kwargs
         self._input_texts = texts
         self._input_labels = labels
         self.supports_label = labels is not None
@@ -149,11 +151,9 @@ class Bm25Master(search_server.SearchMaster[Bm25Client]):
         if input_size is None:
             if isinstance(texts, (list, datasets.Dataset)):
                 input_size = len(texts)
-            elif isinstance(texts, datasets.IterableDataset):
-                input_size = texts.num_rows
         self._input_data_size = input_size
 
-    def _on_init(self):
+    def _on_init(self) -> None:
         if not self.supports_label:
             stream = ({IDX_KEY: i, BODY_KEY: text} for i, text in enumerate(self._input_texts))
         else:
@@ -166,7 +166,7 @@ class Bm25Master(search_server.SearchMaster[Bm25Client]):
         )
         ingest_data(stream, url=self.url, index_name=self._index_name, exist_ok=self._exist_ok)
 
-    def _on_exit(self):
+    def _on_exit(self) -> None:
         if not self._persistent:
             client = es.Elasticsearch(self.url)
             client.indices.delete(index=self._index_name)
@@ -175,10 +175,10 @@ class Bm25Master(search_server.SearchMaster[Bm25Client]):
         return ["elasticsearch"]
 
     @property
-    def url(self):
-        return f"{self.host}:{self.port}"
+    def url(self) -> str:
+        return f"{self._host}:{self._port}"
 
-    def get_client(self):
+    def get_client(self) -> Bm25Client:
         return Bm25Client(self.url, index_name=self._index_name, supports_label=self.supports_label)
 
 
@@ -189,7 +189,7 @@ def ingest_data(
     index_name: str,
     chunk_size: int = 1000,
     exist_ok: bool = False,
-):
+) -> None:
     asyncio.run(_async_ingest_data(stream, url=url, index_name=index_name, chunk_size=chunk_size, exist_ok=exist_ok))
 
 
@@ -200,7 +200,7 @@ async def _async_ingest_data(
     index_name: str,
     chunk_size: int = 1000,
     exist_ok: bool = False,
-):
+) -> None:
     async with es.AsyncElasticsearch(url) as client:
         if await client.indices.exists(index=index_name):
             if exist_ok:

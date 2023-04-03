@@ -1,3 +1,5 @@
+# pylint: disable=too-many-instance-attributes,fixme
+
 from __future__ import annotations
 
 import copy
@@ -6,7 +8,7 @@ import functools
 import pathlib
 import tempfile
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import datasets
 import faiss
@@ -27,11 +29,13 @@ from raffle_ds_research.tools.utils.loader_config import DataLoaderConfig
 
 @dataclasses.dataclass
 class Vectors:
+    """Stores the vectors for the questions/dataset and the sections."""
+
     dataset: dict[str, predict_tools.TensorStoreFactory]
     sections: Optional[predict_tools.TensorStoreFactory] = None
 
 
-class IndexManager(object):
+class IndexManager:
     """Takes care of building the dataset, computing the vectors and spinning up the indexes."""
 
     _dataset: Optional[datasets.DatasetDict] = None
@@ -60,23 +64,26 @@ class IndexManager(object):
 
     @property
     def clients(self) -> list[SearchClientConfig]:
+        """Returns the list of search clients."""
         if self._clients is None:
             raise ValueError("IndexManager has not been initialized.")
         return copy.copy(self._clients)
 
     @property
     def vectors(self) -> Vectors:
+        """Return a copy of the vectors (questions+sections)."""
         if self._vectors is None:
             raise ValueError("IndexManager has not been initialized.")
         return copy.copy(self._vectors)
 
     @property
     def dataset(self) -> datasets.DatasetDict:
+        """Return a copy of the dataset (questions)."""
         if self._dataset is None:
             raise ValueError("IndexManager has not been initialized.")
         return copy.copy(self._dataset)
 
-    def __enter__(self):
+    def __enter__(self) -> "IndexManager":
         """Build the dataset and spin up the indexes."""
         self._dataset = self.builder()
 
@@ -145,12 +152,11 @@ class IndexManager(object):
 
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Clean up everything."""
         self._clients = None
         self._vectors = None
         self._dataset = None
-        self._collate_fns = None
         if self._faiss_master is not None:
             self._faiss_master.__exit__(exc_type, exc_val, exc_tb)
             self._faiss_master = None

@@ -1,3 +1,5 @@
+# pylint: disable=unused-import
+
 from __future__ import annotations
 
 import argparse
@@ -8,17 +10,8 @@ from pathlib import Path
 import faiss
 import stackprinter
 
-from raffle_ds_research.tools.index_tools.faiss_tools import SearchFaissQuery
-from raffle_ds_research.tools.index_tools.faiss_tools.models import (
-    FaissSearchResponse,
-    FastFaissSearchResponse,
-    FastSearchFaissQuery,
-)
-from raffle_ds_research.tools.index_tools.retrieval_data_type import RetrievalDataType
-from raffle_ds_research.tools.utils.exceptions import dump_exceptions_to_file
-
 try:
-    from faiss.contrib import torch_utils  # type: ignore
+    from faiss.contrib import torch_utils
 except ImportError:
     pass
 
@@ -28,9 +21,18 @@ from fastapi import FastAPI, HTTPException
 from loguru import logger
 
 from raffle_ds_research.tools.index_tools import io
+from raffle_ds_research.tools.index_tools.faiss_tools import SearchFaissQuery
+from raffle_ds_research.tools.index_tools.faiss_tools.models import (
+    FaissSearchResponse,
+    FastFaissSearchResponse,
+    FastSearchFaissQuery,
+)
+from raffle_ds_research.tools.index_tools.retrieval_data_type import RetrievalDataType
+from raffle_ds_research.tools.utils.exceptions import dump_exceptions_to_file
 
 
 def parse_args() -> argparse.Namespace:
+    """Parse command line arguments"""
     parser = argparse.ArgumentParser()
     parser.add_argument("--index-path", type=str, required=True)
     parser.add_argument("--nprobe", type=int, default=32)
@@ -41,12 +43,12 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def init_index(args: argparse.Namespace) -> faiss.Index:
+def init_index(arguments: argparse.Namespace) -> faiss.Index:
     """Initialize the index"""
     logger.info("Initializing index")
-    faiss_index = faiss.read_index(args.index_path)
-    faiss_index.nprobe = args.nprobe
-    return faiss_index
+    index = faiss.read_index(arguments.index_path)
+    index.nprobe = arguments.nprobe
+    return index
 
 
 args = parse_args()
@@ -96,12 +98,11 @@ async def fast_search(query: FastSearchFaissQuery) -> FastFaissSearchResponse:
             indices=io.serialize_np_array(indices),
         )
     except Exception as exc:
-        # todo: find a better way to redirect errors to the client
         trace = stackprinter.format()
-        raise HTTPException(status_code=500, detail=str(trace))
+        raise HTTPException(status_code=500, detail=str(trace)) from exc
 
 
-def run_faiss_server(host: str = args.host, port: int = args.port):
+def run_faiss_server(host: str = args.host, port: int = args.port) -> None:
     """Start the API"""
     pattern = re.compile(r"^(http|https)://")
     host = re.sub(pattern, "", host)

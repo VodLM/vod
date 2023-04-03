@@ -19,17 +19,17 @@ _TOKENIZERS_CLASSES = [
 ]
 
 
-def _register_special_hashers():
+def _register_special_hashers() -> None:
     """Register special hashers for some classes."""
     rules = [
         (_hash_tokenizer, _TOKENIZERS_CLASSES),
         (_hash_partial, [functools.partial]),
     ]
     for rule in rules:
-        fingerprint.hashregister(*rule[1])(rule[0])
+        fingerprint.hashregister(rule[1])(rule[0])
 
 
-def _hash_tokenizer(hasher: fingerprint.Hasher, value: transformers.PreTrainedTokenizer):
+def _hash_tokenizer(hasher: fingerprint.Hasher, value: transformers.PreTrainedTokenizer) -> str:
     """The default hash of `transformers.PreTrainedTokenizer` is non-deterministic: it changes after a first iteration.
     Implement a custom hash function that is deterministic.
     """
@@ -47,7 +47,7 @@ def _hash_tokenizer(hasher: fingerprint.Hasher, value: transformers.PreTrainedTo
     return tokenizer_hash
 
 
-def _hash_partial(hasher: fingerprint.Hasher, value: functools.partial):
+def _hash_partial(hasher: fingerprint.Hasher, value: functools.partial) -> str:
     """The default hash of `functools.partial`."""
     data = {
         "cls": value.__class__,
@@ -61,7 +61,7 @@ def _hash_partial(hasher: fingerprint.Hasher, value: functools.partial):
     return hasher.hash(hashed)
 
 
-def fingerprint_torch_module(hasher: fingerprint.Hasher, value: torch.nn.Module):
+def fingerprint_torch_module(hasher: fingerprint.Hasher, value: torch.nn.Module) -> str:
     hasher = fingerprint.Hasher()
     for k, v in value.state_dict().items():
         hasher.update(k)

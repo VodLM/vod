@@ -40,7 +40,7 @@ def _py_sort_filter(
 @pytest.mark.parametrize("total", [10, 20, 30])
 @pytest.mark.parametrize("max_a_size", [10, 20, 30])
 @pytest.mark.parametrize("batched", [False])
-def test_concat_topk(a_size: int, b_size: int, total: int, max_a_size: int, seed: int, batched: bool):
+def test_concat_topk(a_size: int, b_size: int, total: int, max_a_size: int, seed: int, batched: bool) -> None:
     # generate data
     rgn = np.random.RandomState(seed)
     a_indices = rgn.randint(0, a_size, size=(a_size,))
@@ -128,7 +128,7 @@ def _compute_expected(
     )
 
 
-def _check_arrays(found: list | np.ndarray, expected: list | np.ndarray, *, label: str, dtype: type):
+def _check_arrays(found: list | np.ndarray, expected: list | np.ndarray, *, label: str, dtype: type) -> None:
     if isinstance(found, np.ndarray):
         found = found.tolist()
     found = [dtype(x) for x in found]
@@ -145,5 +145,5 @@ def _check_arrays(found: list | np.ndarray, expected: list | np.ndarray, *, labe
 
     mismatches = [i for i, (x, y) in enumerate(zip(found, expected)) if not np.isclose(x, y)]
     if len(mismatches) > 0:
-        mismatches = [f"{i}: {found[i]} != {expected[i]}" for i in mismatches]
-        raise AssertionError(f"Attribute `{label}`: value mismatch on {mismatches}")
+        mismatches_str = [f"{i}: {found[i]} != {expected[i]}" for i in mismatches]
+        raise AssertionError(f"Attribute `{label}`: value mismatch on {mismatches_str}")

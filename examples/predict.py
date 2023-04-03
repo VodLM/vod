@@ -19,16 +19,19 @@ dotenv.load_dotenv(Path(__file__).parent / ".predict.env")
 
 
 class Encoder(torch.nn.Module):
+    """Transformer Encoder"""
+
     def __init__(self, bert: BertModel):
         super().__init__()
         self.bert = bert
 
     def forward(self, batch: dict) -> dict[str, torch.Tensor]:
+        """Forward pass of the model, returns the embeddings of the [CLS] token."""
         output = self.bert(batch["input_ids"], batch["attention_mask"])
         return {"pooler_output": output.pooler_output}
 
 
-def run():
+def run() -> None:
     model_name = "google/bert_uncased_L-4_H-256_A-4"
     bert = transformers.AutoModel.from_pretrained(model_name)
     model = Encoder(bert)

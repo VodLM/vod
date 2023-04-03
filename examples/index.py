@@ -1,7 +1,10 @@
+# pylint: disable=no-member
+
 import functools
 import math
+import pathlib
 from pathlib import Path
-from typing import Optional
+from typing import Any
 
 import datasets.fingerprint
 import dill
@@ -11,19 +14,12 @@ import lightning.pytorch as pl
 import pydantic
 import rich
 import torch
-import torchmetrics
 import transformers
 from loguru import logger
 from tqdm import tqdm
 
 from raffle_ds_research.core import builders
-from raffle_ds_research.core.ml_models.monitor import (
-    HitRate,
-    MeanReciprocalRank,
-    Monitor,
-    NormalizedDCG,
-    RetrievalMetricCollection,
-)
+from raffle_ds_research.core.ml_models.monitor import Monitor, RetrievalMetricCollection
 from raffle_ds_research.core.ml_models.simple_ranker import SimpleRanker
 from raffle_ds_research.tools import arguantic, index_tools, pipes, predict
 from raffle_ds_research.tools.index_tools import faiss_tools
@@ -54,11 +50,11 @@ class Args(arguantic.Arguantic):
     bm25_weight: float = 1.0
 
     @pydantic.validator("cache_dir")
-    def _validate_cache_dir(cls, v):
-        return Path(v).expanduser().resolve()
+    def _validate_cache_dir(cls, v: Any) -> pathlib.Path:
+        return pathlib.Path(v).expanduser().resolve()
 
 
-def run():
+def run() -> None:
     """Load retrieval dataset, load a model, index, and iterate over the train set.
     While iterating through the train set, check a few properties.
     """
@@ -180,7 +176,7 @@ def run():
                 splits=["score", "bm25", "faiss"],
             )
 
-            hits = {"score": [], "bm25": [], "faiss": []}
+            hits: dict[str, Any] = {"score": [], "bm25": [], "faiss": []}
             for idx, batch in enumerate(tqdm(loader, desc="Iterating over batches")):
                 if idx > 10:
                     break
@@ -189,12 +185,12 @@ def run():
                 for key, hit in hits.items():
                     logits = batch[f"section.{key}"]
                     targets = batch["section.label"]
-                    for ls, ts in zip(logits, targets):
-                        ls = ls.masked_fill(ts.isnan(), -math.inf)
-                        ts = ts.masked_fill(ls.isinf(), 0)
-                        ids = torch.argsort(ls, descending=True)
-                        ts = ts[ids]
-                        r = {f"hitrate@{k}": (ts[:k] > 0).any().item() for k in [1, 3, 10, 30]}
+                    for logits_i, target_i in zip(logits, targets):
+                        logits_i = logits_i.masked_fill(target_i.isnan(), -math.inf)
+                        target_i = target_i.masked_fill(logits_i.isinf(), 0)
+                        ids = torch.argsort(logits_i, descending=True)
+                        target_i = target_i[ids]
+                        r = {f"hitrate@{k}": (target_i[:k] > 0).any().item() for k in [1, 3, 10, 30]}
                         hit.append(r)
 
                 retrieved_section_ids = batch["section.id"]

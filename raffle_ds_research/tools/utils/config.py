@@ -1,7 +1,7 @@
 import os
 import socket
 from random import randint
-from typing import Optional
+from typing import Any, Optional
 
 import randomname
 import torch
@@ -13,7 +13,7 @@ from raffle_ds_research.tools.utils.misc import int_div, int_max, int_mul
 
 
 def init_hydra_config(
-    config_path="rank_t5.configs",
+    config_path: str = "rank_t5.configs",
     overrides: Optional[list[str]] = None,
     config_name: str = "main",
     return_hydra_config: bool = False,
@@ -36,20 +36,20 @@ def init_hydra_config(
     return config
 
 
-def register_omgeaconf_resolvers():
+def register_omgeaconf_resolvers() -> None:
     N_GPUS = torch.cuda.device_count()
     GIT_HASH = git_revision_hash()
     GIT_HASH_SHORT = git_revision_short_hash()
     GIT_BRANCH_NAME = git_branch_name()
     SEED = randint(0, 100_000)
 
-    def _default_trainer_accelerator(*args, **kwargs):
+    def _default_trainer_accelerator(*args: Any, **kwargs: Any) -> str:
         if N_GPUS == 0:
             return "cpu"
         else:
             return "gpu"
 
-    def _default_trainer_single_device(*args, **kwargs):
+    def _default_trainer_single_device(*args: Any, **kwargs: Any) -> str:
         if N_GPUS == 0:
             return "cpu"
         elif N_GPUS == 1:
@@ -57,7 +57,7 @@ def register_omgeaconf_resolvers():
         else:
             raise ValueError("N_GPUS > 1. Please specify the device.")
 
-    def _infer_model_type(model_name: str):
+    def _infer_model_type(model_name: str) -> str:
         known_model_types = ["bert", "t5"]
         for model_type in known_model_types:
             if model_name.startswith(model_type):
@@ -67,7 +67,7 @@ def register_omgeaconf_resolvers():
             f"Unknown mode name: {model_name}. " f"The model name should start with one of {known_model_types}."
         )
 
-    def _format_model_name(model_name: str):
+    def _format_model_name(model_name: str) -> str:
         *_, model_name = model_name.split("/")
         return model_name
 

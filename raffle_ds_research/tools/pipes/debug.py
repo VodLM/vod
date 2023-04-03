@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+import numbers
 from numbers import Number
 from typing import Any, Iterable, Optional
 
@@ -9,7 +10,9 @@ import numpy as np
 import pydantic
 import rich
 import rich.console
+import rich.syntax
 import rich.table
+import rich.tree
 import torch
 import transformers
 import yaml
@@ -20,15 +23,17 @@ _PPRINT_DISPLAY_PREC = 2
 def _smart_str(x: Number) -> str:
     if isinstance(x, float):
         return f"{x:.{_PPRINT_DISPLAY_PREC}e}"
-    elif isinstance(x, int):
+    if isinstance(x, int):
         return f"{x}"
-    elif isinstance(x, complex):
+    if isinstance(x, complex):
         return f"{x.real:.{_PPRINT_DISPLAY_PREC}e} + {x.imag:.{_PPRINT_DISPLAY_PREC}e}j"
-    else:
-        return str(x)
+
+    return str(x)
 
 
 class Properties(pydantic.BaseModel):
+    """Defines a set of displayable properties for a given object."""
+
     py_type: str
     dtype: Optional[str] = None
     shape: Optional[str] = None
@@ -39,29 +44,31 @@ class Properties(pydantic.BaseModel):
     n_nans: Optional[int] = None
 
     @pydantic.validator("py_type", pre=True)
-    def _cast_py_type(cls, v: Any) -> str:
-        if v is None:
+    def _cast_py_type(self, value: Any) -> str:
+        if value is None:
             return "None"
-        elif isinstance(v, type):
-            return v.__name__
-        else:
-            return type(v).__name__
+        if isinstance(value, type):
+            return value.__name__
+
+        return type(value).__name__
 
 
 @functools.singledispatch
 def infer_properties(x: Any) -> Properties:
+    """Base function for inferring properties of an object."""
     return Properties(py_type=type(x))
 
 
 @infer_properties.register(torch.Tensor)
 def _(x: torch.Tensor) -> Properties:
-    xf = x.detach().float()
+    """Infer properties of a torch tensor."""
+    x_float = x.detach().float()
     return Properties(
         py_type=type(x),
         shape=str(list(x.shape)),
         dtype=str(x.dtype),
         device=str(x.device),
-        mean=f"{_smart_str(xf.mean().item())}",
+        mean=f"{_smart_str(x_float.mean().item())}",
         min=f"{_smart_str(x.min().item())}",
         max=f"{_smart_str(x.max().item())}",
     )
@@ -69,13 +76,14 @@ def _(x: torch.Tensor) -> Properties:
 
 @infer_properties.register(np.ndarray)
 def _(x: np.ndarray) -> Properties:
-    xf: np.ndarray = x.astype(np.float32)
+    """Infer properties of a numpy array."""
+    x_float: np.ndarray = x.astype(np.float32)
     return Properties(
         py_type=type(x),
         shape=str(x.shape),
         dtype=f"np.{x.dtype}",
         device="-",
-        mean=f"{_smart_str(xf.mean())}",
+        mean=f"{_smart_str(x_float.mean())}",
         min=f"{_smart_str(np.min(x))}",
         max=f"{_smart_str(np.max(x))}",
     )
@@ -83,6 +91,7 @@ def _(x: np.ndarray) -> Properties:
 
 @infer_properties.register(Number)
 def _(x: Number) -> Properties:
+    """Infer properties of a number."""
     return Properties(
         py_type=type(x),
         dtype="-",
@@ -94,16 +103,17 @@ def _(x: Number) -> Properties:
 @infer_properties.register(set)
 @infer_properties.register(tuple)
 def _(x: list | set | tuple) -> Properties:
+    """Infer properties of a list, set or tuple."""
     try:
         arr = np.array(x)
         shape = str(arr.shape)
-    except Exception:
+    except ValueError:
         shape = f"[{len(x)}, ?]"
 
     n_nans = sum(1 for y in _iter_leaves(x) if y is None)
     leaves_types = list({type(y) for y in _iter_leaves(x)})
     if all(issubclass(t, Number) for t in leaves_types):
-        leaves_mean = np.mean([y for y in _iter_leaves(x)])
+        leaves_mean = np.mean(y for y in _iter_leaves(x))
         leaves_min = min(_iter_leaves(x))
         leaves_max = max(_iter_leaves(x))
     else:
@@ -114,16 +124,16 @@ def _(x: list | set | tuple) -> Properties:
     def _format_type(x: type) -> str:
         if x == type(None):
             return "None"
-        else:
-            return x.__name__
 
-    leaves_types = [_format_type(t) for t in leaves_types]
-    if len(leaves_types) == 1:
-        leaves_types = leaves_types[0]
+        return str(x.__name__)
+
+    leaves_types_ = [_format_type(t) for t in leaves_types]
+    if len(leaves_types_) == 1:
+        leaves_types_ = leaves_types_[0]
 
     return Properties(
         py_type=type(x),
-        dtype=f"py.{leaves_types}",
+        dtype=f"py.{leaves_types_}",
         shape=shape,
         min=leaves_min,
         max=leaves_max,
@@ -146,6 +156,7 @@ BASE_DEVICE_STYLES = {
 
 
 def _format_dtype(x: str) -> str:
+    """Format a dtype as a string."""
     type_, dtype_str = x.split(".")
     style = BASE_STYLES.get(type_, "")
     dtype_str = f"[{style}]{dtype_str}[/]"
@@ -153,6 +164,7 @@ def _format_dtype(x: str) -> str:
 
 
 def _format_py_type(x: str) -> str:
+    """Format a python type as a string."""
     style = {
         "list": BASE_STYLES["py"],
         "tuple": BASE_STYLES["py"],
@@ -165,6 +177,7 @@ def _format_py_type(x: str) -> str:
 
 
 def _format_device(device: str) -> str:
+    """Format a device sas a string."""
     if device.strip() == "-":
         return _default_formatter(device)
     if ":" in device:
@@ -175,16 +188,17 @@ def _format_device(device: str) -> str:
     style = BASE_DEVICE_STYLES.get(device, None)
     if style is None:
         return f"{device}{idx}"
-    else:
-        return f"[{style}]{device}[/{style}]{idx}"
+
+    return f"[{style}]{device}[/{style}]{idx}"
 
 
 def _default_formatter(x: Any) -> str:
+    """Default formatter"""
     x = str(x)
     if x.strip() == "-":
         return f"[white]{x}[/]"
-    else:
-        return x
+
+    return x
 
 
 _FORMATTERS = {
@@ -195,6 +209,7 @@ _FORMATTERS = {
 
 
 def _format_field(field_name: str, field_value: Any) -> str:
+    """Apply a formatter to a field value based on its name."""
     formatter = _FORMATTERS.get(field_name, _default_formatter)
     return formatter(field_value)
 
@@ -206,20 +221,21 @@ def pprint_batch(
     header: Optional[str] = None,
     **kwargs: Any,
 ) -> dict:
+    """Pretty print a batch of data."""
     table = rich.table.Table(title=header, show_header=True, header_style="bold magenta")
     fields = list(Properties.__fields__.keys())
     table.add_column("key", justify="left", style="bold cyan")
     for key in fields:
         table.add_column(key, justify="center")
 
-    for k, v in batch.items():
+    for key, value in batch.items():
         try:
-            props = infer_properties(v)
+            props = infer_properties(value)
             attrs = {f: getattr(props, f) for f in fields}
-            table.add_row(k, *[_format_field(k, v) for k, v in attrs.items()])
+            table.add_row(key, *[_format_field(k, v) for k, v in attrs.items()])
         except Exception as e:
-            loguru.logger.warning(f"Error while inferring properties for `{k}={v}` : {e}")
-            table.add_row(k, *[f"[red]ERROR[/red]"])
+            loguru.logger.warning(f"Error while inferring properties for `{key}={value}` : {e}")
+            table.add_row(key, *["[red]ERROR[/red]"])
             raise e
 
     if console is None:
@@ -239,28 +255,27 @@ def _iter_leaves(x: Iterable) -> Iterable:
 
 def _safe_yaml(section: str) -> str:
     """Escape special characters in a YAML section."""
-    section = section.replace(": ", "\:")
+    section = section.replace(": ", r"\:")
     section = section.encode("unicode_escape").decode("utf-8")
     return section
 
 
+# pylint: disable=too-many-locals
 def pprint_supervised_retrieval_batch(
     batch: dict[str, Any],
     idx: Optional[list[int]] = None,
     *,
     tokenizer: transformers.PreTrainedTokenizer,
-    header="Supervised retrieval batch",
+    header: str = "Supervised retrieval batch",
     max_sections: Optional[int] = None,
     console: Optional[rich.console.Console] = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> dict:
-    import rich.syntax
-    import rich.tree
-
+    """Pretty print a batch of data for supervised retrieval."""
     if console is None:
         console = rich.console.Console()
 
-    def _format(x: Any):
+    def _format(x: Any) -> numbers.Number | list[numbers.Number]:
         if isinstance(x, torch.Tensor) and x.numel() == 1:
             x = x.item()
         elif isinstance(x, torch.Tensor) and x.numel() > 1:
@@ -280,10 +295,10 @@ def pprint_supervised_retrieval_batch(
     question_input_ids = batch["question.input_ids"]
     section_input_ids = batch["section.input_ids"]
 
-    for i in range(len(question_input_ids)):
-        question = tokenizer.decode(question_input_ids[i], **kwargs)
+    for i, q_ids in enumerate(question_input_ids):
+        question = tokenizer.decode(q_ids, **kwargs)
         question_data = {
-            **{key: _format(batch[key][i]) for key in question_keys if key in batch},
+            **{key: str(_format(batch[key][i])) for key in question_keys if key in batch},
             "question.content": _safe_yaml(question),
         }
         question_data_str = yaml.dump(question_data, sort_keys=False)
@@ -292,7 +307,7 @@ def pprint_supervised_retrieval_batch(
         for j in range(len(section_input_ids[i])):
             section = tokenizer.decode(section_input_ids[i][j], **kwargs)
             section_data = {
-                **{key: _format(batch[key][i][j]) for key in section_keys if key in batch},
+                **{key: str(_format(batch[key][i][j])) for key in section_keys if key in batch},
                 "section.content": _safe_yaml(section),
             }
             section_data_str = yaml.dump(section_data, sort_keys=False)

@@ -4,17 +4,20 @@ import os
 from datetime import datetime
 from functools import wraps
 from pathlib import Path
+from typing import Any, Callable, TypeVar
 
 import stackprinter
 from loguru import logger
 
+T = TypeVar("T")
 
-def dump_exceptions_to_file(func):
+
+def dump_exceptions_to_file(func: Callable[..., T]) -> Callable[..., T]:
     """Decorator to catch exceptions and dump them to a file.
     Useful for debugging with multiprocessing."""
 
     @wraps(func)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: Any, **kwargs: Any) -> T:
         try:
             output = func(*args, **kwargs)
         except Exception as e:

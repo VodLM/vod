@@ -17,9 +17,11 @@ class TestBuilderConfig(retrieval_builder.RetrievalBuilderConfig):
 
 
 class TestBuilder(retrieval_builder.RetrievalBuilder[TestBuilderConfig]):
+    """Generates a dataset with random data for testing purposes."""
+
     n_points: int = 1000
 
-    def _build_dset(self, corpus: Optional[datasets.Dataset]) -> datasets.DatasetDict:
+    def _build_dset(self) -> datasets.DatasetDict:
         rows = self._gen_data("questions")
         return datasets.DatasetDict(
             {

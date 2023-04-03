@@ -1,3 +1,5 @@
+# pylint: disable=no-member,arguments-differ
+
 from __future__ import annotations
 
 import copy
@@ -67,13 +69,13 @@ class Monitor(nn.Module):
             raise TypeError(f"Unknown split type: {type(split)}. Expected one of {self._log_on_step.keys()}.")
         return self._log_on_step[split]
 
-    def forward(self, data: dict, split: str) -> dict:
+    def forward(self, data: dict, split: str) -> dict[str, Any]:
         """Compute the metrics"""
         metric = self.metrics[_safe_split(split)]
         args = self._make_args(data)
         return metric.forward(*args)
 
-    def reset(self, split: Optional[str | list[str]] = None):
+    def reset(self, split: Optional[str | list[str]] = None) -> "Monitor":
         """Reset the metrics"""
         splits = self._get_splits_arg(split)
         for split in splits:
@@ -81,7 +83,7 @@ class Monitor(nn.Module):
 
         return self
 
-    def _get_splits_arg(self, split):
+    def _get_splits_arg(self, split: str) -> list[str]:
         if split is None:
             splits = self._splits
         elif isinstance(split, str):
@@ -96,7 +98,7 @@ class Monitor(nn.Module):
 
         return splits
 
-    def update_from_retrieval_batch(self, batch: dict[str, Any], field: str = "section"):
+    def update_from_retrieval_batch(self, batch: dict[str, Any], field: str = "section") -> None:
         """Update the metrics given a raw `retrieval` batch"""
         for key in self._splits:
             targets: torch.Tensor = batch[f"{field}.label"]
@@ -110,7 +112,7 @@ class Monitor(nn.Module):
             self.metrics[_safe_split(key)].update(*args)
 
     @torch.no_grad()
-    def update(self, data: dict, split: str):
+    def update(self, data: dict, split: str) -> None:
         """Update the metrics"""
         args = self._make_args(data)
         self.metrics[_safe_split(split)].update(*args)
@@ -121,8 +123,8 @@ class Monitor(nn.Module):
         metrics to compute."""
         if split is None:
             metrics = {}
-            for split in self._splits:
-                metrics.update(self.compute(split=split, prefix=prefix))
+            for split_ in self._splits:
+                metrics.update(self.compute(split=split_, prefix=prefix))
             return metrics
 
         if isinstance(self.metrics[_safe_split(split)], MetricCollection):
@@ -160,17 +162,20 @@ def _mask_inputs(preds: torch.Tensor, target: torch.Tensor) -> Tuple[torch.Tenso
 
 
 class HitRate(torchmetrics.Metric):
+    """Hit rate metric: same as `Accuracy`."""
+
     is_differentiable: bool = False
     higher_is_better: bool = True
     full_state_update: bool = False
 
-    def __init__(self, top_k: int, **kwargs):
+    def __init__(self, top_k: int, **kwargs: Any):
         super().__init__(**kwargs)
         self.top_k = top_k
         self.add_state("hits", default=torch.tensor(0), dist_reduce_fx="sum")
         self.add_state("total", default=torch.tensor(0), dist_reduce_fx="sum")
 
-    def update(self, preds: torch.Tensor, target: torch.Tensor) -> None:
+    def update(self, preds: torch.Tensor, target: torch.Tensor, indices: Optional[torch.Tensor] = None) -> None:
+        """Update the metric with the given predictions and targets"""
         preds, target = _mask_inputs(preds, target)
         ranked_labels = _rank_labels(labels=target, scores=preds)
         ranked_labels = ranked_labels[..., : self.top_k]
@@ -183,7 +188,9 @@ class HitRate(torchmetrics.Metric):
 
 
 class AveragedMetric(torchmetrics.Metric, ABC):
-    def __init__(self, **kwargs):
+    """Base class for metrics that are computed at the sample level and averaged over the entire dataset."""
+
+    def __init__(self, **kwargs: Any):
         super().__init__(**kwargs)
         self.add_state("value", default=torch.tensor(0.0), dist_reduce_fx="sum")
         self.add_state("weight", default=torch.tensor(0.0), dist_reduce_fx="sum")
@@ -197,11 +204,14 @@ class AveragedMetric(torchmetrics.Metric, ABC):
 
 
 class MeanReciprocalRank(AveragedMetric):
+    """Mean Reciprocal Rank (MRR) metric."""
+
     is_differentiable: bool = False
     higher_is_better: bool = True
     full_state_update: bool = False
 
-    def update(self, preds: torch.Tensor, target: torch.Tensor) -> None:
+    def update(self, preds: torch.Tensor, target: torch.Tensor, indices: Optional[torch.Tensor] = None) -> None:
+        """Update the metric given the predictions and the targets."""
         preds, target = _mask_inputs(preds, target)
         ranked_labels = _rank_labels(labels=target, scores=preds)
         idx_first_non_zero = _arg_first_non_zero(ranked_labels)
@@ -219,15 +229,18 @@ def _arg_first_non_zero(values: torch.Tensor) -> torch.Tensor:
 
 
 class NormalizedDCG(AveragedMetric):
+    """Normalized Discounted Cumulative Gain (NDCG)."""
+
     is_differentiable: bool = False
     higher_is_better: bool = True
     full_state_update: bool = False
 
-    def __init__(self, top_k: Optional[int] = None, **kwargs):
+    def __init__(self, top_k: Optional[int] = None, **kwargs: Any):
         super().__init__(**kwargs)
         self.top_k = top_k
 
-    def update(self, preds: torch.Tensor, target: torch.Tensor) -> None:
+    def update(self, preds: torch.Tensor, target: torch.Tensor, indices: Optional[torch.Tensor] = None) -> None:
+        """Update the metric."""
         preds, target = _mask_inputs(preds, target)
         batch_size = preds[..., 0].numel()
         ndcg = torchmetrics.functional.retrieval_normalized_dcg(preds=preds, target=target, k=self.top_k)
@@ -237,7 +250,7 @@ class NormalizedDCG(AveragedMetric):
         self._update(ndcg)
 
 
-def retrieval_metric_factory(name: str, **kwargs) -> Metric:
+def retrieval_metric_factory(name: str, **kwargs: Any) -> Metric:
     """Instantiate a torchmetrics retrieval metric from a string name."""
     if "@" in name:
         name, k = name.split("@")
@@ -257,7 +270,9 @@ def retrieval_metric_factory(name: str, **kwargs) -> Metric:
 
 
 class RetrievalMetricCollection(MetricCollection):
-    def __init__(self, metrics: list[str], **kwargs):
+    """A collection of `torchmetrics.Metric` for information retrieval."""
+
+    def __init__(self, metrics: list[str], **kwargs: Any):
         def clean_name(x: str) -> str:
             x = x.replace("@", "_")
             return x

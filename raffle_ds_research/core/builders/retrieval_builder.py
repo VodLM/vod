@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import abc
 import copy
 from typing import Any, Optional, TypeVar, Union
 
@@ -25,6 +26,8 @@ class RetrievalBuilderConfig(pydantic.BaseModel):
     """Defines a configuration for a retrieval dataset builder."""
 
     class Config:
+        """Pydantic config for the `RetrievalBuilderConfig` class."""
+
         extra = pydantic.Extra.forbid
         arbitrary_types_allowed = True
 
@@ -43,12 +46,14 @@ class RetrievalBuilderConfig(pydantic.BaseModel):
 
     @pydantic.validator("templates", pre=True)
     def _validate_templates(cls, templates: Any) -> dict[str, str]:
+        """Converts templates to a dict if they are an OmegaConf DictConfig."""
         if isinstance(templates, omegaconf.DictConfig):
             templates = omegaconf.OmegaConf.to_container(templates)
         return templates
 
     @pydantic.validator("prep_map_kwargs", pre=True)
     def _validate_prep_map_kwargs(cls, prep_map_kwargs: Any) -> dict[str, Any]:
+        """Converts prep_map_kwargs to a dict if they are an OmegaConf DictConfig."""
         if isinstance(prep_map_kwargs, omegaconf.DictConfig):
             prep_map_kwargs = omegaconf.OmegaConf.to_container(prep_map_kwargs)
 
@@ -56,6 +61,7 @@ class RetrievalBuilderConfig(pydantic.BaseModel):
 
     @pydantic.validator("hf_load_kwargs", pre=True)
     def _validate_hf_load_kwargs(cls, hf_load_kwargs: Any) -> dict[str, Any]:
+        """Converts hf_load_kwargs to a dict if they are an OmegaConf DictConfig."""
         if isinstance(hf_load_kwargs, omegaconf.DictConfig):
             hf_load_kwargs = omegaconf.OmegaConf.to_container(hf_load_kwargs)
         return hf_load_kwargs
@@ -71,6 +77,8 @@ RetrievalCfg = TypeVar("RetrievalCfg", bound=RetrievalBuilderConfig)
 
 
 class QuestionModel(pydantic.BaseModel):
+    """Model a question for retrieval datasets."""
+
     id: int
     text: str
     section_ids: list[int]
@@ -78,6 +86,8 @@ class QuestionModel(pydantic.BaseModel):
 
 
 class SectionModel(pydantic.BaseModel):
+    """Model a section for retrieval datasets."""
+
     content: str
     title: str
     id: int
@@ -90,7 +100,7 @@ class RetrievalBuilder(dataset_builder.DatasetBuilder[datasets.DatasetDict, Retr
     _builder_config: Type[RetrievalCfg] = RetrievalBuilderConfig
     _collate_config = retrieval_collate.RetrievalCollateConfig
 
-    def __init__(self, config: RetrievalCfg = None, **kwargs):
+    def __init__(self, config: RetrievalCfg = None, **kwargs: Any):
         if config is None:
             config = self._builder_config(**kwargs)
         if not isinstance(config, self._builder_config):
@@ -104,28 +114,33 @@ class RetrievalBuilder(dataset_builder.DatasetBuilder[datasets.DatasetDict, Retr
 
     @property
     def tokenizer(self) -> transformers.PreTrainedTokenizer:
+        """Returns the tokenizer for the dataset builder."""
         return self.config.tokenizer
 
-    def prep_map_kwargs(self, **overrides) -> dict[str, Any]:
+    def _prep_map_kwargs(self, **overrides: Any) -> dict[str, Any]:
         always_on = dict(batched=True, with_indices=True)
         return {**self.config.prep_map_kwargs, **overrides, **always_on}
 
-    def __call__(self):
+    def __call__(self) -> datasets.DatasetDict:
         corpus = self.get_corpus()
         self._validate_corpus(corpus)
-        dset = self._build_dset(corpus)
+        dset = self._build_dset()
         self._validate_dset(dset)
         dset = self._take_subset(dset)
         dset = self._add_row_indices(dset)
         return dset
 
-    def _build_dset(self, corpus: Optional[datasets.Dataset]) -> datasets.DatasetDict:
+    def _build_dset(self) -> datasets.DatasetDict:
         dset = datasets.load_dataset(
             path=self.config.name,
             name=self.config.subset_name,
             **self.config.hf_load_kwargs,
         )
         return dset
+
+    @abc.abstractmethod
+    def get_corpus(self) -> datasets.Dataset:
+        raise NotImplementedError()
 
     def get_collate_fn(
         self, config: Optional[retrieval_collate.RetrievalCollateConfig] = None
@@ -148,6 +163,7 @@ class RetrievalBuilder(dataset_builder.DatasetBuilder[datasets.DatasetDict, Retr
         if self.config.subset_size is None:
             return dset
 
+        # pylint: disable=no-member
         rgn = np.random.RandomState(0)
 
         # define the subset size for each split
@@ -169,25 +185,25 @@ class RetrievalBuilder(dataset_builder.DatasetBuilder[datasets.DatasetDict, Retr
 
     def _add_row_indices(self, dset: dataset_builder.DorDD) -> dataset_builder.DorDD:
         """Add row index to each row."""
-        prep_map_kwargs = self.prep_map_kwargs(batched=False, desc="Adding row indices")
+        prep_map_kwargs = self._prep_map_kwargs(batched=False, desc="Adding row indices")
         dset = dset.map(_add_row_idx, **prep_map_kwargs)
         return dset
 
-    def _validate_dset(self, dset: datasets.DatasetDict):
-        for split, d in dset.items():
+    def _validate_dset(self, dset: datasets.DatasetDict) -> None:
+        for d in dset.values():
             for i in range(10):
                 row = d[i]
                 QuestionModel(**row)
 
-    def _validate_corpus(self, corpus: datasets.Dataset):
+    def _validate_corpus(self, corpus: datasets.Dataset) -> None:
         for i in range(10):
             row = corpus[i]
             SectionModel(**row)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{self.__class__.__name__}(config={self.config.__repr__()})"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.__class__.__name__}(config={self.config.__str__()})"
 
 

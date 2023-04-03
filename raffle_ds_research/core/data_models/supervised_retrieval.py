@@ -1,3 +1,7 @@
+# pylint: disable=no-member
+
+from typing import Any
+
 import pydantic
 import rich
 import torch
@@ -10,6 +14,8 @@ class SupervisedRetrievalBatch(pydantic.BaseModel):
     """ "Defines the input batch for the supervised retrieval model."""
 
     class Config:
+        """pydantic config."""
+
         arbitrary_types_allowed = True
         allow_population_by_field_name = True
 
@@ -62,18 +68,18 @@ class SupervisedRetrievalBatch(pydantic.BaseModel):
     )
 
     @pydantic.root_validator
-    def _validate_shapes(cls, values: dict):
+    def _validate_shapes(cls, values: dict[str, Any]) -> dict[str, Any]:
         values = validate_shapes_consistency(cls, values)
         return values
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         attrs = [
             f"{k}={repr_tensor(v)}" if isinstance(v, torch.Tensor) else f"{k}={v}" for k, v in self.__dict__.items()
         ]
         attrs = ", ".join(attrs)
         return f"{type(self).__name__}({attrs})"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.__repr__()
 
 

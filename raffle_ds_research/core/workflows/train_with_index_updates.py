@@ -214,7 +214,7 @@ def _pretty_steps(steps: list[int]) -> str:
         return str(steps)
 
 
-def _log_metrics(metrics: dict[str, Any], trainer: pl.Trainer, console: bool = False):
+def _log_metrics(metrics: dict[str, Any], trainer: pl.Trainer, console: bool = False) -> None:
     for logger in trainer.loggers:
         logger.log_metrics(metrics, step=trainer.global_step)
 
@@ -228,7 +228,7 @@ def _log_retrieval_batch(
     period_idx: int,
     gloabl_step: int,
     max_sections: int = 10,
-):
+) -> None:
     try:
         console = rich.console.Console(record=True)
         pipes.pprint_supervised_retrieval_batch(

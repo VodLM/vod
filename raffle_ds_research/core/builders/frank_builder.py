@@ -12,11 +12,15 @@ from raffle_ds_research.tools.raffle_datasets import frank
 
 
 class FrankBuilderConfig(retrieval_builder.RetrievalBuilderConfig):
+    """Configures a dataset builder for Frank."""
+
     name: Literal["frank"] = "frank"
     subset_name: frank.FrankSplitName = "A"
 
 
 class FrankBuilder(retrieval_builder.RetrievalBuilder[FrankBuilderConfig]):
+    """Builds a Frank dataset for retrieval."""
+
     def _load_frank_split(self, frank_split: frank.FrankSplitName) -> frank.HfFrankPart:
         return frank.load_frank(self.config.language, split=frank_split, only_positive_sections=True)
 
@@ -28,7 +32,7 @@ class FrankBuilder(retrieval_builder.RetrievalBuilder[FrankBuilderConfig]):
         frank_split = self._load_frank_split(self.config.subset_name)
         sections = frank_split.sections.map(
             self._get_sections_preprocessing(),
-            **self.prep_map_kwargs(desc=f"Preprocessing Frank ({self.config.subset_name}) sections"),
+            **self._prep_map_kwargs(desc=f"Preprocessing Frank ({self.config.subset_name}) sections"),
         )
         return sections
 

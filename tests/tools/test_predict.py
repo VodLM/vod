@@ -17,7 +17,7 @@ class VectorDataset:
     x: np.ndarray
     y: np.ndarray
 
-    def __getitem__(self, item):
+    def __getitem__(self, item: int | slice | Iterable[int]) -> dict[str, Any]:
         return {"x": self.x[item], "y": self.y[item]}
 
     def __len__(self) -> int:
@@ -57,7 +57,7 @@ def _collate(examples: Iterable[dict[str, Any]], **kwargs: Any) -> dict[str, Any
 
 
 @pytest.mark.parametrize("model_output_key", [None, "y", "y.vector"])
-def test_predict(tmpdir: str | Path, data: VectorDataset, model_output_key: Optional[str]):
+def test_predict(tmpdir: str | Path, data: VectorDataset, model_output_key: Optional[str]) -> None:
     model = Array(y=data.y, output_key=model_output_key)
 
     stores = predict(

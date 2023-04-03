@@ -28,21 +28,29 @@ MS_MARCO_KB_IDs = {"en": 100_000}
 
 
 class MsmarcoRetrievalDataset(RetrievalDataset):
+    """MS MARCO dataset for retrieval."""
+
     ...
 
 
 class MsmarcoQqueryModel(QueryModel):
+    """Raw MSMARCO query model."""
+
     data_source: str = "msmarco"
     answer_id: Optional[int] = None
 
 
 class MsmarcoSectionModel(SectionModel):
+    """Raw MSMARCO section model."""
+
     id: int = pydantic.Field(..., alias="_id")
     content: str = pydantic.Field(..., alias="text")
 
 
 @dataclasses.dataclass(frozen=True)
 class LocalPaths:
+    """Collection of local paths for MSMARCO"""
+
     qa_splits: pathlib.Path
     sections: pathlib.Path
 
@@ -107,12 +115,12 @@ def _download_and_parse_questions(language: str = "en", local_path: Optional[str
                     continue
                 qid, pid, score = (int(x) for x in line.split())
                 if score < 1:
-                    # todo: check if this is correct
+                    # todo: check if this is correct #pylint: ignore
                     continue
 
                 qrels[qid].append(pid)
 
-        def gen_queries():
+        def gen_queries() -> Iterable[dict]:
             kb_id = MS_MARCO_KB_IDs[language]
             meta = dict(language=language, kb_id=kb_id)
             for qid, pids in qrels.items():
@@ -168,7 +176,7 @@ def load_msmarco(
     invalidate_cache: bool = False,
     local_source_path: Optional[pydantic.typing.PathLike] = None,
 ) -> RetrievalDataset:
-    """Load the Frank dataset"""
+    """Load the MSMARCO dataset"""
     if cache_dir is None:
         cache_dir = DATASETS_CACHE_PATH
     if only_positive_sections:

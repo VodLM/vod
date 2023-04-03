@@ -30,14 +30,14 @@ class ConstrainedTensor:
     @classmethod
     def __get_validators__(
         cls,
-    ) -> Iterable[Callable[["ConstrainedTensor", Any], torch.Tensor]]:
+    ) -> Iterable[Callable[[Any], torch.Tensor]]:
         # one or more validators may be yielded which will be called in the
         # order to validate the input, each validator will receive as an input
         # the value returned from the previous validator
-        yield cls.validate_py_type
-        yield cls.validate_dtype
-        yield cls.validate_device
-        yield cls.validate_shape
+        yield cls._validate_py_type
+        yield cls._validate_dtype
+        yield cls._validate_device
+        yield cls._validate_shape
 
     @classmethod
     def __modify_schema__(cls, field_schema: Dict[str, Any]) -> None:
@@ -46,7 +46,7 @@ class ConstrainedTensor:
         ...
 
     @classmethod
-    def validate_py_type(cls, v: Any) -> torch.Tensor:
+    def _validate_py_type(cls, v: Any) -> torch.Tensor:
         if not isinstance(v, torch.Tensor):
             if cls.allow_casting:
                 if isinstance(v, np.ndarray):
@@ -58,7 +58,7 @@ class ConstrainedTensor:
         return v
 
     @classmethod
-    def validate_dtype(cls, v):
+    def _validate_dtype(cls, v: Any) -> torch.Tensor:
         if cls.dtype is None:
             return v
 
@@ -70,7 +70,7 @@ class ConstrainedTensor:
         return v
 
     @classmethod
-    def validate_device(cls, v: Any) -> torch.Tensor | None:
+    def _validate_device(cls, v: Any) -> torch.Tensor:
         if cls.device is None:
             return v
 
@@ -82,7 +82,7 @@ class ConstrainedTensor:
         return v
 
     @classmethod
-    def validate_shape(cls, v: Any) -> tuple | None:
+    def _validate_shape(cls, v: Any) -> torch.Tensor:
         if cls.shape is None:
             return v
 
@@ -104,7 +104,7 @@ class ConstrainedTensor:
 
         return v
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         attrs = [
             f"{k}={repr_tensor(v)}" if isinstance(v, torch.Tensor) else f"{k}={v}" for k, v in self.__dict__.items()
         ]

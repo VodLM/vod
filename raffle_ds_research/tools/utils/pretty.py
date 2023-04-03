@@ -1,16 +1,18 @@
 from __future__ import annotations
 
+import numbers
 from copy import copy
 from numbers import Number
 from typing import List, Optional
 
 import rich
+import torch
 from omegaconf import DictConfig, OmegaConf, open_dict
 from rich.syntax import Syntax
 from rich.tree import Tree
 
 
-def human_format(num, precision=2):
+def human_format(num: int | float, precision: int = 2) -> str:
     magnitude = 0
     while abs(num) >= 1000:
         magnitude += 1
@@ -70,5 +72,5 @@ def print_config(
     rich.print(tree)
 
 
-def repr_tensor(x):
+def repr_tensor(x: torch.Tensor) -> str:
     return f"Tensor(shape={x.shape}, dtype={x.dtype}, device={x.device})"

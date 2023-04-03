@@ -1,10 +1,11 @@
+# pylint: disable=no-member,invalid-name
 from __future__ import annotations
 
 import abc
 from abc import ABC
 from enum import Enum
 from numbers import Number
-from typing import Generic, Iterable, Type, TypeVar, Union
+from typing import Any, Generic, Iterable, Type, TypeVar, Union
 
 import numpy as np
 import torch
@@ -13,6 +14,8 @@ from raffle_ds_research.tools import c_tools
 
 
 class RetrievalDataType(Enum):
+    """Type of retrieval data."""
+
     NUMPY = "NUMPY"
     TORCH = "TORCH"
 
@@ -46,23 +49,25 @@ def _convert_array(scores: Union[np.ndarray, torch.Tensor], target_type: Type[Ts
 
 def _stack_arrays(arrays: Iterable[Ts]) -> Ts:
     first, *rest = arrays
-    op = {
+    operator = {
         torch.Tensor: torch.stack,
         np.ndarray: np.stack,
     }[type(first)]
-    return op([first, *rest])
+    return operator([first, *rest])
 
 
 def _concat_arrays(arrays: Iterable[Ts]) -> Ts:
     first, *rest = arrays
-    op = {
+    operator = {
         torch.Tensor: torch.cat,
         np.ndarray: np.concatenate,
     }[type(first)]
-    return op([first, *rest])
+    return operator([first, *rest])
 
 
 class RetrievalData(ABC, Generic[Ts]):
+    """ "Model search results."""
+
     __slots__ = ("scores", "indices")
     _expected_dim: int
     _str_sep: str = ""
@@ -89,13 +94,15 @@ class RetrievalData(ABC, Generic[Ts]):
         self.indices = indices
 
     def to(self, target_type: Type[Ts_o]) -> RetrievalData[Ts_o]:
-        return type(self)(
+        """cast a `RetrievalData` object to a different type."""
+        output: RetrievalData[Ts_o] = type(self)(
             scores=_convert_array(self.scores, target_type),
             indices=_convert_array(self.indices, target_type),
         )
+        return output
 
     @abc.abstractmethod
-    def __getitem__(self, item) -> "RetrievalData":
+    def __getitem__(self, item: Any) -> "RetrievalData":
         ...
 
     @abc.abstractmethod
@@ -107,6 +114,7 @@ class RetrievalData(ABC, Generic[Ts]):
 
     @property
     def shape(self) -> tuple[int, ...]:
+        """Shape of the data"""
         return self.scores.shape
 
     def _get_repr_parts(self) -> list[str]:
@@ -114,7 +122,6 @@ class RetrievalData(ABC, Generic[Ts]):
             f"{type(self).__name__}[{_type_repr(self.scores)}](",
             f"scores={repr(self.scores)}, ",
             f"indices={repr(self.indices)}",
-            f")",
         ]
 
         return parts
@@ -127,7 +134,9 @@ class RetrievalData(ABC, Generic[Ts]):
         parts = self._get_repr_parts()
         return self._str_sep.join(parts[:-1]) + parts[-1]
 
-    def __eq__(self, other: "RetrievalData") -> bool:
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, type(self)):
+            raise NotImplementedError(f"Cannot compare {type(self)} with {type(other)}")
         op = {
             torch.Tensor: torch.all,
             np.ndarray: np.all,
@@ -135,7 +144,7 @@ class RetrievalData(ABC, Generic[Ts]):
         return op(self.scores == other.scores) and op(self.indices == other.indices)
 
     def to_dict(self) -> dict[str, list[Number]]:
-        numpy_self = self.to(np.ndarray)
+        """Convert to a dictionary"""
         return {
             "scores": self.scores.tolist(),
             "indices": self.indices.tolist(),
@@ -143,19 +152,20 @@ class RetrievalData(ABC, Generic[Ts]):
 
 
 class RetrievalTuple(RetrievalData[Ts]):
+    """A single search result"""
+
     _expected_dim = 0
 
-    def __getitem__(self, item: str) -> RetrievalTuple[Ts]:
-        return {
-            "indices": self.indices,
-            "scores": self.scores,
-        }[item]
+    def __getitem__(self, item: Any) -> Any:
+        raise NotImplementedError("RetrievalTuple is not iterable")
 
-    def __iter__(self):
+    def __iter__(self) -> Any:
         raise NotImplementedError("RetrievalTuple is not iterable")
 
 
 class RetrievalSample(RetrievalData[Ts]):
+    """A single value of a search result"""
+
     _expected_dim = 1
     _str_sep: str = ""
 
@@ -177,6 +187,8 @@ class RetrievalSample(RetrievalData[Ts]):
 
 
 class RetrievalBatch(RetrievalData[Ts]):
+    """A batch of search results"""
+
     _expected_dim = 2
     _str_sep: str = "\n"
 
@@ -197,12 +209,13 @@ class RetrievalBatch(RetrievalData[Ts]):
         )
 
     def to(self, target_type: Type[Ts_o]) -> RetrievalBatch[Ts_o]:
-        return type(self)(
+        return RetrievalBatch(
             scores=_convert_array(self.scores, target_type),
             indices=_convert_array(self.indices, target_type),
         )
 
     def sorted(self) -> RetrievalBatch[Ts]:
+        """Sort the batch by score in descending order."""
         if isinstance(self.indices, np.ndarray):
             sort_ids = np.argsort(self.scores, axis=-1)
             sort_ids = np.flip(sort_ids, axis=-1)
@@ -210,23 +223,24 @@ class RetrievalBatch(RetrievalData[Ts]):
                 scores=np.take_along_axis(self.scores, sort_ids, axis=-1),
                 indices=np.take_along_axis(self.indices, sort_ids, axis=-1),
             )
-        elif isinstance(self.indices, torch.Tensor):
+        if isinstance(self.indices, torch.Tensor):
             sort_ids = torch.argsort(self.scores, dim=-1, descending=True)
             return RetrievalBatch(
                 scores=torch.gather(self.scores, -1, sort_ids),
                 indices=torch.gather(self.indices, -1, sort_ids),
             )
-        else:
-            raise NotImplementedError(f"Sorting is not implemented for {type(self.scores)}")
+
+        raise NotImplementedError(f"Sorting is not implemented for {type(self.scores)}")
 
 
 def merge_retrieval_batches(batches: Iterable[RetrievalBatch]) -> RetrievalBatch:
+    """Merge a list of `RetrievalBatch` objects into a single `RetrievalBatch` object."""
     batches = list(batches)
     if len(batches) == 0:
         raise ValueError("No batches provided")
-    elif len(batches) == 1:
+    if len(batches) == 1:
         return batches[0]
-    elif len(batches) > 2:
+    if len(batches) > 2:
         raise NotImplementedError("Merging more than 2 batches is not implemented")
 
     first_batch, second_batches = batches

@@ -10,7 +10,7 @@ from raffle_ds_research.tools import c_tools
 @pytest.mark.parametrize("max_n_unique", [1, 10, 100])
 @pytest.mark.parametrize("n_labels", [1, 3, 10])
 @pytest.mark.parametrize("seed", [0, 1, 2])
-def test_get_frequencies(n_points: int, max_n_unique: int, n_labels: int, seed: int):
+def test_get_frequencies(n_points: int, max_n_unique: int, n_labels: int, seed: int) -> None:
     np.random.set_state(np.random.RandomState(seed).get_state())
     pids = np.random.randint(0, max_n_unique, size=(n_points,), dtype=np.uint64)
     labels = np.random.randint(0, n_labels, size=(n_points,), dtype=np.uint64)
@@ -23,7 +23,7 @@ def test_get_frequencies(n_points: int, max_n_unique: int, n_labels: int, seed: 
 @pytest.mark.parametrize("max_n_unique", [1, 10, 100])
 @pytest.mark.parametrize("n_labels", [1, 3, 10])
 @pytest.mark.parametrize("seed", [0, 1, 2])
-def test_get_frequencies_batched(batch_size: int, n_points: int, max_n_unique: int, n_labels: int, seed: int):
+def test_get_frequencies_batched(batch_size: int, n_points: int, max_n_unique: int, n_labels: int, seed: int) -> None:
     np.random.set_state(np.random.RandomState(seed).get_state())
     pids = np.random.randint(
         0,
@@ -48,7 +48,7 @@ def test_get_frequencies_batched(batch_size: int, n_points: int, max_n_unique: i
         _test_single(pids[i], labels[i], freqs[i], n_labels)
 
 
-def _test_single(pids: np.ndarray, labels: np.ndarray, freqs: c_tools.Frequencies, n_labels: int):
+def _test_single(pids: np.ndarray, labels: np.ndarray, freqs: c_tools.Frequencies, n_labels: int) -> None:
     upids = freqs.values
     ulabels = freqs.counts
     # remote the padding (set with -1)

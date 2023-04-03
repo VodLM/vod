@@ -10,13 +10,13 @@ from raffle_ds_research.tools.pipes.utils.misc import pack_examples
 _TOKENIZED_KEYS = ["input_ids", "attention_mask"]
 
 
-def _get_token_keys(prefix_key):
+def _get_token_keys(prefix_key: str) -> list[str]:
     tokenized_keys = [f"{prefix_key}{k}" for k in _TOKENIZED_KEYS]
     return tokenized_keys
 
 
 def _torch_pad_tokenized_field(
-    batch,
+    batch: dict[str, Any],
     idx: Optional[list[int]] = None,
     *,
     prefix_key: Optional[str] = None,

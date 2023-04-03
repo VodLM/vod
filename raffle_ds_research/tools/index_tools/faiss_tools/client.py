@@ -31,7 +31,7 @@ class FaissClient(search_server.SearchClient):
         self.port = port
 
     @property
-    def url(self):
+    def url(self) -> str:
         return f"{self.host}:{self.port}"
 
     def ping(self) -> bool:
@@ -143,8 +143,8 @@ class FaissMaster(search_server.SearchMaster[FaissClient]):
     def _make_cmd(self) -> list[str]:
         executable_path = sys.executable
         cmd = [
-            executable_path,
-            server_run_path,
+            str(executable_path),
+            str(server_run_path),
             "--index-path",
             str(self.index_path.absolute()),
             "--nprobe",
