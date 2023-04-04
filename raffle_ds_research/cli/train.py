@@ -68,6 +68,7 @@ def run(config: DictConfig) -> None:
         config=config,
         monitor=instantiate(config.monitor),
         benchmark_builders=benchmark_builders,
+        benchmark_on_init=config.benchmark.on_init,
     )
 
 
@@ -77,7 +78,7 @@ def _fetch_benchmark_builders(
     for builder_config in config.builders:
         overrides = omegaconf.OmegaConf.to_container(builder_config, resolve=True)
         new_config = ref_builder.config.copy(update=overrides)
-        new_builder = dataset_builders.auto_builder(**new_config.dict())
+        new_builder = dataset_builders.RetrievalBuilder.from_name(**new_config.dict())
         yield new_builder
 
 

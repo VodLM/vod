@@ -175,7 +175,7 @@ def load_msmarco(
     only_positive_sections: bool = False,
     invalidate_cache: bool = False,
     local_source_path: Optional[pydantic.typing.PathLike] = None,
-) -> RetrievalDataset:
+) -> MsmarcoRetrievalDataset:
     """Load the MSMARCO dataset"""
     if cache_dir is None:
         cache_dir = DATASETS_CACHE_PATH

@@ -16,7 +16,7 @@ class TestBuilderConfig(retrieval_builder.RetrievalBuilderConfig):
     subset_name: Any = None
 
 
-class TestBuilder(retrieval_builder.RetrievalBuilder[TestBuilderConfig]):
+class TestBuilder(retrieval_builder.RetrievalBuilder):
     """Generates a dataset with random data for testing purposes."""
 
     n_points: int = 1000

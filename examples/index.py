@@ -31,10 +31,8 @@ dotenv.load_dotenv(Path(__file__).parent / ".predict.env")
 class Args(arguantic.Arguantic):
     """Arguments for the script."""
 
-    dset_name: str = "frank"
+    dset_name: str = "frank.A.en.pos"
     model_name: str = "google/bert_uncased_L-4_H-256_A-4"
-    language: str = "en"
-    subset_name: str = "A"
     seed: int = 1
     accelerator: str = "cpu"
     batch_size: int = 10
@@ -63,10 +61,8 @@ def run() -> None:
     logger.info(f"Using cache dir: {args.cache_dir.absolute()}")
     tokenizer = transformers.AutoTokenizer.from_pretrained(args.model_name)
     logger.info(f"{type(tokenizer).__name__}: hash={datasets.fingerprint.Hasher.hash(tokenizer)}")
-    builder = dataset_builders.auto_builder(
+    builder = dataset_builders.RetrievalBuilder.from_name(
         name=args.dset_name,
-        language=args.language,
-        subset_name=args.subset_name,
         prep_map_kwargs=dict(num_proc=4, batch_size=1000),
         tokenizer=tokenizer,
     )
@@ -94,12 +90,16 @@ def run() -> None:
         pipes.torch_tokenize_collate,
         tokenizer=builder.tokenizer,
         prefix_key="question.",
+        max_length=512,
+        truncation=True,
     )
     logger.info(f"question_collate: hash={datasets.fingerprint.Hasher.hash(question_collate)}")
     section_collate = functools.partial(
         pipes.torch_tokenize_collate,
         tokenizer=builder.tokenizer,
         prefix_key="section.",
+        max_length=512,
+        truncation=True,
     )
     logger.info(f"section_collate: hash={datasets.fingerprint.Hasher.hash(section_collate)}")
 

@@ -1,25 +1,19 @@
 from __future__ import annotations
 
-import functools
 from typing import Any, Optional
 
 import loguru
 import numpy as np
 from lightning import pytorch as pl
 from omegaconf import DictConfig
-from rich.progress import track
 
 from raffle_ds_research.core.dataset_builders import retrieval_builder
 from raffle_ds_research.core.ml_models import Ranker
 from raffle_ds_research.core.ml_models.monitor import Monitor
-from raffle_ds_research.core.workflows import benchmark, index_manager
+from raffle_ds_research.core.workflows import index_manager
 from raffle_ds_research.core.workflows.config import TrainWithIndexConfigs
-from raffle_ds_research.core.workflows.utils import (
-    _log_eval_metrics,
-    _log_retrieval_batch,
-    _run_static_evaluation,
-    instantiate_retrieval_dataloader,
-)
+from raffle_ds_research.core.workflows.retrieval_benchmark import benchmark
+from raffle_ds_research.core.workflows.utils import _log_eval_metrics, instantiate_retrieval_dataloader
 
 
 def train_with_index_updates(
@@ -29,11 +23,26 @@ def train_with_index_updates(
     builder: retrieval_builder.RetrievalBuilder,
     config: TrainWithIndexConfigs | DictConfig,
     benchmark_builders: Optional[list[retrieval_builder.RetrievalBuilder]] = None,
+    benchmark_on_init: bool = False,
 ) -> Ranker:
     """Train a ranker while periodically updating the faiss index."""
     if isinstance(config, DictConfig):
         config = TrainWithIndexConfigs.parse(config)
 
+    # run the benchmarks
+    if benchmark_builders is not None and benchmark_on_init:
+        loguru.logger.info("Running initial benchmarks...")
+        benchmark(
+            ranker=ranker,
+            trainer=trainer,
+            builders=benchmark_builders,
+            loader_cfg=config.dataloaders,
+            collate_cfg=config.collates,
+            index_cfg=config.indexes,
+            monitor=monitor,
+        )
+
+    # Define the index update steps and the `PeriodicStoppingCallback` callback.
     total_number_of_steps = trainer.max_steps
     update_steps = _infer_update_steps(total_number_of_steps, config.indexes.update_freq)
     loguru.logger.info(f"Index will be updated at steps: {_pretty_steps(update_steps)}")
@@ -43,6 +52,7 @@ def train_with_index_updates(
     stop_callback = PeriodicStoppingCallback(stop_at=-1)
     trainer.callbacks.append(stop_callback)  # type: ignore
 
+    # Train the model for each period
     for period_idx, (start_step, end_step) in enumerate(zip(update_steps[:-1], update_steps[1:])):
         _log_eval_metrics(
             {
@@ -63,29 +73,7 @@ def train_with_index_updates(
             builder=builder,
             index_cfg=config.indexes,
             loader_cfg=config.dataloaders.predict,
-            index_step=period_idx,
         ) as manager:
-            # run the static validation & log results
-            static_val_loader = instantiate_retrieval_dataloader(
-                builder=builder,
-                manager=manager,
-                loader_cfg=config.dataloaders.eval,
-                collate_config=config.collates.static,
-                dset_split="validation",
-            )
-            static_eval_metrics = _run_static_evaluation(
-                loader=track(static_val_loader, description="Static validation"),
-                monitor=monitor,
-                on_first_batch=functools.partial(
-                    _log_retrieval_batch,
-                    tokenizer=builder.tokenizer,
-                    period_idx=period_idx,
-                    gloabl_step=trainer.global_step,
-                    max_sections=5,
-                ),
-            )
-            _log_eval_metrics(static_eval_metrics, trainer=trainer, console=True)
-
             # train the model for the given period
             train_loader = instantiate_retrieval_dataloader(
                 builder=builder,
@@ -113,7 +101,7 @@ def train_with_index_updates(
         # run the benchmarks
         if benchmark_builders is not None:
             loguru.logger.info("Training period done. Running benchmarks...")
-            benchmark.benchmark(
+            benchmark(
                 ranker=ranker,
                 trainer=trainer,
                 builders=benchmark_builders,
@@ -121,7 +109,6 @@ def train_with_index_updates(
                 collate_cfg=config.collates,
                 index_cfg=config.indexes,
                 monitor=monitor,
-                index_step=period_idx,
             )
 
     return ranker

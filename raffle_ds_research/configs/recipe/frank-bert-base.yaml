@@ -1,13 +1,16 @@
 # @package _global_
 
 defaults:
-  - override /builder: frank
+  - override /builder: retrieval
   - override /model/encoder: bert-base
   - override /model/gradients: kl_div
   - override /trainer/strategy: deepspeed
   - override /model/optimizer: adam-cpu
   - _self_
 
+
+builder:
+  name: frank.A.en.pos+squad.en
 
 model:
   embedding_size: 1_024
@@ -35,8 +38,8 @@ trainer:
   accelerator: gpu
   precision: 16-mixed
   detect_anomaly: false
-  max_steps: 100_000
-  limit_val_batches: 20
+  max_steps: 20_000
+  limit_val_batches: 30
   val_check_interval: ${int_mul:${trainer.accumulate_grad_batches},100}
 
 

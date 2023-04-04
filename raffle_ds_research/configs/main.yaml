@@ -1,5 +1,5 @@
 defaults:
-  - builder: auto
+  - builder: retrieval
   - model: default
   - resources: default
   - batch_size: default
@@ -14,18 +14,22 @@ defaults:
 seed: ${global_seed:}
 compile: false
 model_name: ${model.encoder.pretrained_model_name_or_path}
+exp_version: "v1.2"
 exp_suffix: ""
-exp_name: ${builder.name}-${builder.subset_name}-${builder.language}
-run_name: ${fmt_mn:${model_name}}--${rdn_name:}${exp_suffix}
+exp_name: retrieval
+run_name: ${fmt_mn:${model_name}}--${rdn_name:}-${exp_version}${exp_suffix}
 
 
 benchmark:
+  # defines the benchmarks to be run after each training period
+  on_init: true
   builders:
-    - name: frank
-      subset_name: ${reverse_frank_split:${builder.subset_name}}
-      include_only_positive_sections: false
-      splits:
-        - validation
+    - name: frank.A.en
+      splits: [ validation ]
+    - name: frank.B.en
+      splits: [ validation ]
+    - name: squad.en
+      splits: [ validation ]
 
 
 dataloaders:

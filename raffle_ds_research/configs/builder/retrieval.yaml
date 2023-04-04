@@ -3,10 +3,8 @@ defaults:
   - templates: ${infer_model_type:${model/encoder}}
   - _self_
 
-_target_: raffle_ds_research.core.dataset_builders.auto_builder
-name: frank
-subset_name: A
-language: en
+_target_: raffle_ds_research.core.dataset_builders.RetrievalBuilder.from_name
+name: frank.A.en.pos
 subset_size: null
 include_only_positive_sections: true
 prep_map_kwargs:

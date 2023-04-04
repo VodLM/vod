@@ -17,7 +17,7 @@ import torch
 import transformers
 from lightning import pytorch as pl
 
-from raffle_ds_research.core.dataset_builders import FrankBuilder, retrieval_builder
+from raffle_ds_research.core.dataset_builders import retrieval_builder
 from raffle_ds_research.core.dataset_builders.retrieval_collate import SearchClientConfig
 from raffle_ds_research.core.ml_models import Ranker
 from raffle_ds_research.core.workflows.config import MultiIndexConfig
@@ -53,14 +53,12 @@ class IndexManager:
         builder: retrieval_builder.RetrievalBuilder,
         index_cfg: MultiIndexConfig,
         loader_cfg: DataLoaderConfig,
-        index_step: float,
     ) -> None:
         self.ranker = ranker
         self.trainer = trainer
         self.builder = builder
         self.index_cfg = index_cfg
         self.loader_cfg = loader_cfg
-        self.index_step = index_step
 
     @property
     def clients(self) -> list[SearchClientConfig]:
@@ -93,7 +91,7 @@ class IndexManager:
         loguru.logger.info(f"Setting up index at `{tmpdir}`")
 
         # init the bm25 index
-        bm25_weight = self.index_cfg.bm25.get_weight(self.index_step)
+        bm25_weight = self.index_cfg.bm25.get_weight(self.trainer.global_step)
         if bm25_weight >= 0:
             corpus = self.builder.get_corpus()
             corpus = keep_only_columns(corpus, [self.index_cfg.bm25.indexed_key, self.index_cfg.bm25.label_key])
@@ -113,7 +111,7 @@ class IndexManager:
             bm25_master = None
 
         # init the faiss index
-        faiss_weight = self.index_cfg.faiss.get_weight(self.index_step)
+        faiss_weight = self.index_cfg.faiss.get_weight(self.trainer.global_step)
         if faiss_weight >= 0:
             # compute the vectors for the questions and sections
             self._vectors = self._compute_vectors(tmpdir)

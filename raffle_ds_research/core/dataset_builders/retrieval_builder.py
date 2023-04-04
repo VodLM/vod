@@ -1,18 +1,17 @@
 from __future__ import annotations
 
-import abc
 import copy
-from typing import Any, Optional, TypeVar, Union
+import dataclasses
+from typing import Any, Callable, Optional, Union
 
 import datasets
 import numpy as np
 import omegaconf
 import pydantic
 import transformers
-from typing_extensions import Type
 
 from raffle_ds_research.core.dataset_builders import retrieval_collate
-from raffle_ds_research.tools import dataset_builder
+from raffle_ds_research.tools import dataset_builder, pipes, raffle_datasets
 
 QUESTION_TEMPLATE = "Question: {{ question }}"
 SECTION_TEMPLATE = "{% if title %}Title: {{ title }}. Document: {% endif %}{{ content }}"
@@ -21,8 +20,48 @@ DEFAULT_TEMPLATES = {
     "section": SECTION_TEMPLATE,
 }
 
-
 _DEFAULT_SPLITS = ["train", "validation"]
+
+
+@dataclasses.dataclass
+class DatasetArgs:
+    """Parse dataset names like `frank.A.en.pos` into a structured object."""
+
+    name: str
+    subset_name: Optional[str]
+    language: str
+    only_positive_sections: bool = False
+
+    @classmethod
+    def parse(cls, x: str) -> "DatasetArgs":
+        if x.endswith(".pos"):
+            only_positive_sections = True
+            x = x.replace(".pos", "")
+        else:
+            only_positive_sections = False
+
+        parts = x.split(".")
+        if len(parts) == 2:
+            name, language = parts
+            subset_name = None
+        elif len(parts) == 3:
+            name, subset_name, language = parts
+        else:
+            raise ValueError(f"Invalid dataset name: {x}")
+        return cls(
+            name=name,
+            subset_name=subset_name,
+            language=language,
+            only_positive_sections=only_positive_sections,
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return dict(
+            name=self.name,
+            subset_name=self.subset_name,
+            language=self.language,
+            only_positive_sections=self.only_positive_sections,
+        )
 
 
 class RetrievalBuilderConfig(pydantic.BaseModel):
@@ -34,10 +73,7 @@ class RetrievalBuilderConfig(pydantic.BaseModel):
         extra = pydantic.Extra.forbid
         arbitrary_types_allowed = True
 
-    name: str
-    subset_name: Optional[str] = None
     splits: list[str] = _DEFAULT_SPLITS
-    language: str = "en"
     tokenizer: Optional[Union[transformers.PreTrainedTokenizer, transformers.PreTrainedTokenizerFast]] = None
     index_max_top_k: int = 100
     n_sections: int = 32
@@ -87,9 +123,6 @@ class RetrievalBuilderConfig(pydantic.BaseModel):
         return subset_size
 
 
-RetrievalCfg = TypeVar("RetrievalCfg", bound=RetrievalBuilderConfig)
-
-
 class QuestionModel(pydantic.BaseModel):
     """Model a question for retrieval datasets."""
 
@@ -108,32 +141,56 @@ class SectionModel(pydantic.BaseModel):
     kb_id: int
 
 
-class RetrievalBuilder(dataset_builder.DatasetBuilder[datasets.DatasetDict, RetrievalCfg]):
+class RetrievalBuilder(dataset_builder.DatasetBuilder[datasets.DatasetDict, RetrievalBuilderConfig]):
     """Base class for retrieval dataset builders."""
 
-    _builder_config: Type[RetrievalCfg] = RetrievalBuilderConfig
+    _builder_config = RetrievalBuilderConfig
     _collate_config = retrieval_collate.RetrievalCollateConfig
+    _load_fn: Callable[[], raffle_datasets.RetrievalDataset]
+    name: str
 
-    def __init__(self, config: RetrievalCfg = None, **kwargs: Any):
+    def __init__(
+        self,
+        loader: Callable[[], raffle_datasets.RetrievalDataset],
+        name: str,
+        config: dict | RetrievalBuilderConfig = None,
+        **kwargs: Any,
+    ):
         if config is None:
             config = self._builder_config(**kwargs)
+        elif len(kwargs) > 0:
+            raise ValueError(f"Received both config and kwargs: {kwargs}")
+
         if not isinstance(config, self._builder_config):
             if isinstance(config, pydantic.BaseModel):
                 config = config.dict()
-                config = self._builder_config(**config)
             else:
                 raise TypeError(f"Expected config of type {self._builder_config}, got {type(config)}")
 
+        self._load_fn = loader
         self.config = config
+        self.name = name
 
-    @property
-    def name(self) -> str:
-        """Returns the name of the dataset builder."""
-        subset_name = self.config.subset_name
-        if subset_name is None:
-            return self.config.name
+    @classmethod
+    def from_name(cls, name: str, **config: Any) -> "RetrievalBuilder":
+        """Returns a dataset builder from a dataset name."""
+        names = name.split("+") if "+" in name else [name]
+        parts = []
+        for part_name in sorted(names):
+            args = DatasetArgs.parse(part_name)
+            loader = raffle_datasets.DatasetLoader(
+                name=args.name,
+                subset_name=args.subset_name,
+                language=args.language,
+                only_positive_sections=args.only_positive_sections,
+            )
+            parts.append(loader)
 
-        return f"{self.config.name}_{subset_name}_{self.config.language}"
+        if len(parts) > 1:
+            loader = raffle_datasets.ConcatenatedDatasetLoader(parts)
+        else:
+            loader = parts[0]
+        return cls(loader=loader, name=name, **config)
 
     @property
     def splits(self) -> list[str]:
@@ -149,9 +206,23 @@ class RetrievalBuilder(dataset_builder.DatasetBuilder[datasets.DatasetDict, Retr
         always_on = dict(batched=True, with_indices=True)
         return {**self.config.prep_map_kwargs, **overrides, **always_on}
 
+    def get_corpus(self) -> datasets.Dataset:
+        dset = self._load_fn()
+        section_prep = pipes.Partial(
+            pipes.template_pipe,
+            template=self.config.templates["section"],
+            input_keys=["title", "content"],
+            output_key="text",
+        )
+        sections = dset.sections.map(
+            section_prep,
+            **self._prep_map_kwargs(desc=f"Preprocessing {self.name} sections"),
+        )
+        return sections
+
     def __call__(self) -> datasets.DatasetDict:
-        dset = self._build_dset()
-        self._validate_dset(dset)
+        dset = self._load_fn().qa_splits
+        self._validate_questions(dset)
 
         # optionally take a subset of the splits
         found_splits = set(dset.keys())
@@ -166,18 +237,6 @@ class RetrievalBuilder(dataset_builder.DatasetBuilder[datasets.DatasetDict, Retr
         # add the row index to each row
         dset = self._add_row_indices(dset)
         return dset
-
-    def _build_dset(self) -> datasets.DatasetDict:
-        dset = datasets.load_dataset(
-            path=self.config.name,
-            name=self.config.subset_name,
-            **self.config.hf_load_kwargs,
-        )
-        return dset
-
-    @abc.abstractmethod
-    def get_corpus(self) -> datasets.Dataset:
-        raise NotImplementedError()
 
     def get_collate_fn(
         self, config: Optional[retrieval_collate.RetrievalCollateConfig] = None
@@ -226,7 +285,7 @@ class RetrievalBuilder(dataset_builder.DatasetBuilder[datasets.DatasetDict, Retr
         dset = dset.map(_add_row_idx, **prep_map_kwargs)
         return dset
 
-    def _validate_dset(self, dset: datasets.DatasetDict) -> None:
+    def _validate_questions(self, dset: datasets.DatasetDict) -> None:
         for d in dset.values():
             for i in range(10):
                 row = d[i]

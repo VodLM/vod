@@ -34,7 +34,6 @@ def benchmark(
     loader_cfg: dict | omegaconf.DictConfig | DataLoaderConfigs,
     collate_cfg: dict | omegaconf.DictConfig | CollateConfigs,
     monitor: Monitor,
-    index_step: float = math.inf,
 ) -> dict[str, Any]:
     """Benchmark a ranker on a set of builders."""
 
@@ -49,15 +48,14 @@ def benchmark(
 
     benchmark_data: dict[str, Any] = collections.defaultdict(dict)
     for builder in builders:
+        loguru.logger.info(f"Running benchmark for `{builder.name}` ({builder.splits})")
         with index_manager.IndexManager(
             ranker=ranker,
             trainer=trainer,
             builder=builder,
             index_cfg=index_cfg,
             loader_cfg=loader_cfg.predict,
-            index_step=index_step,
         ) as manager:
-            loguru.logger.debug(f"Running benchmark on {builder.name} ({builder.splits})")
             for split in builder.splits:
                 # run the static validation & log results
                 dataloader = instantiate_retrieval_dataloader(
@@ -73,7 +71,6 @@ def benchmark(
                     on_first_batch=functools.partial(
                         _log_retrieval_batch,
                         tokenizer=builder.tokenizer,
-                        period_idx=index_step,
                         gloabl_step=trainer.global_step,
                         max_sections=5,
                         locator=f"{builder.name}/{split}",

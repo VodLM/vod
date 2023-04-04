@@ -3,8 +3,9 @@ from __future__ import annotations
 
 import copy
 import dataclasses
+import functools
 import warnings
-from typing import Any, Iterable, Optional, Tuple
+from typing import Any, Iterable, Optional, T, Tuple
 
 import datasets
 import numpy as np
@@ -20,6 +21,10 @@ from raffle_ds_research.tools.pipes.utils.misc import pack_examples
 
 ROW_IDX_COL_NAME: str = "__row_idx__"
 TEST_MODE = False
+
+
+def _identity(x: T) -> T:
+    return x
 
 
 def sample_sections(
@@ -141,7 +146,7 @@ class RetrievalCollate(pipes.Collate):
         5. Tokenize the sections"""
 
     _corpus: datasets.Dataset
-    _section_id_lookup: index_tools.LookupIndex
+    _section_id_lookup: index_tools.LookupIndexKnowledgeBase
     _kb_id_lookup: index_tools.LookupIndex
     tokenizer: transformers.PreTrainedTokenizer
     config: RetrievalCollateConfig
@@ -154,18 +159,27 @@ class RetrievalCollate(pipes.Collate):
         config: RetrievalCollateConfig,
     ):
         self._corpus = corpus
-        self._section_id_lookup = index_tools.LookupIndex(corpus, key=config.section_id_keys.section)
-        self._kb_id_lookup = index_tools.LookupIndex(corpus, key=config.kb_id_keys.section)
+        self._section_id_lookup = index_tools.LookupIndexKnowledgeBase(
+            corpus,
+            key=config.section_id_keys.section,
+            kb_key=config.kb_id_keys.section,
+        )
+        self._kb_id_lookup = index_tools.LookupIndex(
+            corpus,
+            key=config.kb_id_keys.section,
+        )
         self.tokenizer = tokenizer
         self.config = config
 
     def __call__(self, examples: list[dict[str, Any]], **kwargs: Any) -> dict[str, Any]:
         batch = pack_examples(examples)
 
+        # lookup the kb section ids
+        kb_ids = batch[self.config.kb_id_keys.query]
+        kb_samples: index_tools.RetrievalBatch = self._kb_id_lookup.search(kb_ids)
         if not self.config.search_enabled:
-            # if not search service is enabled, fetch the sections from the same kb_id
-            kb_ids = batch[self.config.kb_id_keys.query]
-            candidate_samples: index_tools.RetrievalBatch = self._kb_id_lookup.search(kb_ids)
+            # if not search service is enabled, use the sections from the same kb_id
+            candidate_samples = kb_samples
             client_scores: dict[str, np.ndarray] = {}
         else:
             # fetch the query vectors
@@ -191,6 +205,22 @@ class RetrievalCollate(pipes.Collate):
             # concatenate the results
             candidate_samples, client_scores = _merge_candidate_samples(samples_)
 
+        if self.config.mask_out_of_kb:
+            # mask the sections that are not in the same kb_id.
+            # this is a hack: `gather_by_index` returns `-inf` for missing values,
+            #                  we set `1` for the sections that are found
+            is_found = (
+                c_tools.gather_by_index(
+                    candidate_samples.indices,
+                    kb_samples.indices,
+                    np.ones_like(kb_samples.scores),
+                )
+                > 0
+            )
+            candidate_samples.scores = np.where(is_found, candidate_samples.scores, -np.inf)
+            for k, v in client_scores.items():
+                client_scores[k] = np.where(is_found, v, -np.inf)
+
         # tokenize the questions
         tokenized_question = pipes.torch_tokenize_pipe(
             batch,
@@ -203,7 +233,7 @@ class RetrievalCollate(pipes.Collate):
 
         # fetch the positive `section_ids`
         query_section_ids = batch[self.config.section_id_keys.query]
-        positive_samples: index_tools.RetrievalBatch = self._section_id_lookup.search(query_section_ids)
+        positive_samples: index_tools.RetrievalBatch = self._section_id_lookup.search(query_section_ids, kb_ids)
 
         # sample the sections given the positive ones and the pool of candidates
         sections: SampledSections = sample_sections(
@@ -245,20 +275,30 @@ class RetrievalCollate(pipes.Collate):
         flat_sections_content: dict[str, Any],
         sections_shape: tuple[int, ...],
     ) -> dict[str, Any]:
-        questions_extras_keys = ["id", "answer_id", "kb_id"]
-        question_extras = {
-            f"question.{k}": _to_tensor(batch[k], dtype=torch.long, replace={None: -1}) for k in questions_extras_keys
-        }
+        __to_tensor = functools.partial(_to_tensor, dtype=torch.long, replace={None: -1})
+        extras_keys = {"id": __to_tensor, "answer_id": __to_tensor, "kb_id": __to_tensor}
+
+        # handle question attributes
+        question_extras = {}
+        for k, fn in extras_keys.items():
+            if k not in batch:
+                continue
+            question_extras[f"question.{k}"] = fn(batch[k])
+
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=UserWarning)
             query_section_ids = torch.nested.nested_tensor(batch[self.config.section_id_keys.query])
             question_extras["question.section_ids"] = torch.nested.to_padded_tensor(query_section_ids, padding=-1)
 
-        section_extras_keys = ["id", "answer_id", "kb_id"]
-        sections_extras = {
-            f"section.{k}": _to_tensor(flat_sections_content[k], dtype=torch.long) for k in section_extras_keys
-        }
-        sections_extras = {k: v.view(sections_shape) for k, v in sections_extras.items()}
+        # handle section attributes
+        sections_extras = {}
+        for k, fn in extras_keys.items():
+            if k not in flat_sections_content:
+                continue
+            v = fn(flat_sections_content[k])
+            if isinstance(v, torch.Tensor):
+                v = v.view(sections_shape)
+            sections_extras[f"section.{k}"] = v
 
         return {**question_extras, **sections_extras}
 
@@ -406,6 +446,7 @@ class RetrievalCollateConfig(pydantic.BaseModel):
     do_sample: bool = False
     question_max_length: int = 512
     section_max_length: int = 512
+    mask_out_of_kb: bool = True
 
     # data required for indexing
     question_vectors: Optional[index_tools.VectorType] = None

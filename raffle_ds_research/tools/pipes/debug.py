@@ -113,7 +113,7 @@ def _(x: list | set | tuple) -> Properties:
     n_nans = sum(1 for y in _iter_leaves(x) if y is None)
     leaves_types = list({type(y) for y in _iter_leaves(x)})
     if all(issubclass(t, Number) for t in leaves_types):
-        leaves_mean = np.mean(y for y in _iter_leaves(x))
+        leaves_mean = np.mean([y for y in _iter_leaves(x)])
         leaves_min = min(_iter_leaves(x))
         leaves_max = max(_iter_leaves(x))
     else:

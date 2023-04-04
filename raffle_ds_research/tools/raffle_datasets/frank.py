@@ -174,7 +174,7 @@ def _make_local_sync_path(
 @pydantic.validate_arguments(config=dict(arbitrary_types_allowed=True))
 def load_frank(
     language: str = "en",
-    split: Union[str, FrankSplitName] = "A",
+    subset_name: Union[str, FrankSplitName] = "A",
     version: int = 0,
     cache_dir: Optional[PathLike] = None,
     keep_in_memory: Optional[bool] = None,
@@ -184,14 +184,14 @@ def load_frank(
     """Load the Frank dataset"""
     if cache_dir is None:
         cache_dir = DATASETS_CACHE_PATH
-    if isinstance(split, str):
-        split = FrankSplitName(split)
+    if isinstance(subset_name, str):
+        subset_name = FrankSplitName(subset_name)
 
     # define the local paths
     qa_splits_path, sections_paths = _make_local_sync_path(
         cache_dir,
         language=language,
-        split=split,
+        split=subset_name,
         version=version,
         only_positive_sections=only_positive_sections,
     )
@@ -204,13 +204,13 @@ def load_frank(
 
     # if not downloaded, download, process and save to disk
     if not qa_splits_path.exists() or not sections_paths.exists():
-        frank_split = _download_and_parse_frank(language, split, version, only_positive_sections)
+        frank_split = _download_and_parse_frank(language, subset_name, version, only_positive_sections)
         frank_split.qa_splits.save_to_disk(str(qa_splits_path))
         frank_split.sections.save_to_disk(str(sections_paths))
 
     loguru.logger.info(f"Loading Frank dataset from {qa_splits_path} and {sections_paths}")
     return HfFrankPart(
-        split=split,
+        split=subset_name,
         qa_splits=datasets.DatasetDict.load_from_disk(str(qa_splits_path), keep_in_memory=keep_in_memory),
         sections=datasets.Dataset.load_from_disk(str(sections_paths), keep_in_memory=keep_in_memory),
     )

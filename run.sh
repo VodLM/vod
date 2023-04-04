@@ -1,6 +1,6 @@
-poetry run train +recipe=frank-bert-base trainer.max_steps=40_000 exp_suffix="-v1.0"
-poetry run train +recipe=frank-t5-base trainer.max_steps=40_000 exp_suffix="-v1.0"
-poetry run train +recipe=frank-t5-large trainer.max_steps=40_000 exp_suffix="-v1.0"
-poetry run train +recipe=frank-bert-base trainer.max_steps=40_000 builder.include_only_positive_sections=false exp_suffix="-v1.0"
-poetry run train +recipe=frank-t5-base trainer.max_steps=40_000 builder.include_only_positive_sections=false exp_suffix="-v1.0"
-poetry run train +recipe=frank-t5-large trainer.max_steps=40_000 builder.include_only_positive_sections=false exp_suffix="-v1.0"
+poetry run train +recipe=frank-bert-base
+poetry run train +recipe=frank-t5-base
+poetry run train +recipe=frank-t5-large
+poetry run train +recipe=frank-bert-base builder.include_only_positive_sections=false exp_suffix="-full"
+poetry run train +recipe=frank-t5-base builder.include_only_positive_sections=false exp_suffix="-full"
+poetry run train +recipe=frank-t5-large builder.include_only_positive_sections=false exp_suffix="-full"

@@ -72,10 +72,10 @@ def register_omgeaconf_resolvers() -> None:
         return model_name
 
     def _reverse_frank_split(x: str) -> str:
-        if x == "A":
-            return "B"
-        if x == "B":
-            return "A"
+        if x.startswith("frank.A"):
+            return x.replace("frank.A", "frank.B.")
+        elif x.startswith("frank.B"):
+            return x.replace("frank.B", "frank.A.")
         return x
 
     # Register resolvers

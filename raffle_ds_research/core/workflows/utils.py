@@ -30,7 +30,6 @@ def _log_eval_metrics(metrics: dict[str, Any], trainer: pl.Trainer, console: boo
 def _log_retrieval_batch(
     batch: dict[str, Any],
     tokenizer: transformers.PreTrainedTokenizer,
-    period_idx: int,
     gloabl_step: int,
     max_sections: int = 10,
     locator: str = "eval",
@@ -45,7 +44,7 @@ def _log_retrieval_batch(
             skip_special_tokens=True,
             max_sections=max_sections,
         )
-        html_path = str(pathlib.Path(f"batch-period{period_idx + 1}.html"))
+        html_path = str(pathlib.Path(f"batch-{gloabl_step}.html"))
         console.save_html(html_path, theme=terminal_theme.MONOKAI)
 
         import wandb
