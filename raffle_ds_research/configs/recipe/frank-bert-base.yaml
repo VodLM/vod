@@ -10,7 +10,7 @@ defaults:
 
 
 builder:
-  name: frank.A.en.pos+squad.en
+  name: frank.A.en.pos #+squad.en
 
 model:
   embedding_size: 1_024

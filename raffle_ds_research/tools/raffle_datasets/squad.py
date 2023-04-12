@@ -46,6 +46,8 @@ def _register_append_qa_extras(hasher: datasets.fingerprint.Hasher, value: Appen
 @pydantic.validate_arguments(config=dict(arbitrary_types_allowed=True))
 def load_squad(
     language: str = "en",
+    subset_name: Optional[str] = None,
+    invalidate_cache: Optional[bool] = None,
     cache_dir: Optional[pydantic.typing.PathLike] = None,
     keep_in_memory: Optional[bool] = None,
     only_positive_sections: Optional[bool] = None,
@@ -54,6 +56,12 @@ def load_squad(
     """Load the Squad dataset"""
     if language != "en":
         raise ValueError(f"Language `{language}` not supported")
+
+    if invalidate_cache is not None:
+        warnings.warn("Invalidate cache not supported for SQuAD and will be ignored.")
+
+    if subset_name is not None:
+        warnings.warn("Subset name not supported for SQuAD and will be ignored.")
 
     if only_positive_sections is not None:
         warnings.warn("Only positive sections not supported for SQuAD and will be ignored.")

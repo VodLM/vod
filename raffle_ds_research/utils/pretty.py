@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Any
+from typing import Any, Optional
 
 import rich
 
@@ -15,10 +15,10 @@ class TableRow:
     value: float
 
 
-def print_metric_groups(metrics: dict[str, Any]) -> None:
+def print_metric_groups(metrics: dict[str, Any], header: Optional[str] = None) -> None:
     """Nicely print a dictionary of metrics using `rich.table.Table`."""
     console = rich.console.Console()
-    table = rich.table.Table(title="Static Validation")
+    table = rich.table.Table(title=header or "Static Validation")
     table.add_column("Metric", justify="left", style="cyan")
     table.add_column("group", justify="left", style="green")
     table.add_column("Value", justify="right", style="magenta")

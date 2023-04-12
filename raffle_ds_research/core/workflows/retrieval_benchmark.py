@@ -80,6 +80,7 @@ def benchmark(
                     {f"{builder.name}/{k}": v for k, v in static_eval_metrics.items()},
                     trainer=trainer,
                     console=True,
+                    header=builder.name,
                 )
                 benchmark_data[builder.name] = static_eval_metrics
 

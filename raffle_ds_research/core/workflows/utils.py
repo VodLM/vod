@@ -19,12 +19,14 @@ from raffle_ds_research.tools.utils import loader_config
 from raffle_ds_research.utils.pretty import print_metric_groups
 
 
-def _log_eval_metrics(metrics: dict[str, Any], trainer: pl.Trainer, console: bool = False) -> None:
+def _log_eval_metrics(
+    metrics: dict[str, Any], trainer: pl.Trainer, console: bool = False, header: Optional[str] = None
+) -> None:
     for logger in trainer.loggers:
         logger.log_metrics(metrics, step=trainer.global_step)
 
     if console:
-        print_metric_groups(metrics)
+        print_metric_groups(metrics, header=header)
 
 
 def _log_retrieval_batch(

@@ -14,7 +14,7 @@ defaults:
 seed: ${global_seed:}
 compile: false
 model_name: ${model.encoder.pretrained_model_name_or_path}
-exp_version: "v1.2"
+exp_version: "v1.4"
 exp_suffix: ""
 exp_name: retrieval
 run_name: ${fmt_mn:${model_name}}--${rdn_name:}-${exp_version}${exp_suffix}
@@ -24,12 +24,12 @@ benchmark:
   # defines the benchmarks to be run after each training period
   on_init: true
   builders:
-    - name: frank.A.en
-      splits: [ validation ]
     - name: frank.B.en
       splits: [ validation ]
-    - name: squad.en
+    - name: frank.A.en
       splits: [ validation ]
+#    - name: squad.en
+#      splits: [ validation ]
 
 
 dataloaders:

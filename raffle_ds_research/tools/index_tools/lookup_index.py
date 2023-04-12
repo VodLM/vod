@@ -59,9 +59,13 @@ class LookupIndex:
         return RetrievalBatch(indices=indices, scores=scores)
 
 
+def __set_defaultdict():
+    return collections.defaultdict(set)
+
+
 def _build_lookup_table_kb(labels: Iterable[str], kb_labels: Iterable[str]) -> dict[int, dict[int, set[int]]]:
     """Build the lookup table"""
-    lookup_table = collections.defaultdict(lambda: collections.defaultdict(set))
+    lookup_table = collections.defaultdict(__set_defaultdict)
     for i, (lbl, kb_lbl) in enumerate(zip(labels, kb_labels)):
         lookup_table[kb_lbl][lbl].add(i)
 
