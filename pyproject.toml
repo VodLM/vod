@@ -63,13 +63,13 @@ gcsfs = "^2023.3.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.1"
-pylint = "^2.16.2"
 black = {extras = ["d"], version = "^23.3.0"}
 isort = "^5.12.0"
 pre-commit = "^3.0.4"
 commitizen = "^2.42.0"
 seaborn = "^0.12.2"
 inflect = "^6.0.2"
+ruff = "^0.0.261"
 
 
 [tool.poetry.group.cuda]
@@ -108,10 +108,60 @@ ignore_missing_imports = true
 follow_imports = "skip"
 disallow_untyped_defs = true
 
-[tool.isort]
-line_length = 120
-include_trailing_comma = true
-profile = "black"
+[tool.ruff]
+# Enable pycodestyle (`E`) and Pyflakes (`F`) codes by default.
+select = ["E", "F"]
+ignore = []
+
+# Allow autofix for all enabled rules (when `--fix`) is provided.
+fixable = ["A", "B", "C", "D", "E", "F", "G", "I", "N", "Q", "S", "T", "W", "ANN", "ARG", "BLE", "COM", "DJ", "DTZ", "EM", "ERA", "EXE", "FBT", "ICN", "INP", "ISC", "NPY", "PD", "PGH", "PIE", "PL", "PT", "PTH", "PYI", "RET", "RSE", "RUF", "SIM", "SLF", "TCH", "TID", "TRY", "UP", "YTT"]
+unfixable = []
+
+# Exclude a variety of commonly ignored directories.
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+]
+
+# Same as Black.
+line-length = 120
+
+# Allow unused variables when underscore-prefixed.
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+# Assume Python 3.11.
+target-version = "py311"
+
+[tool.ruff.per-file-ignores]
+"*/__init__.py" = ["F401"]
+
+[tool.ruff.mccabe]
+# Unlike Flake8, default to a complexity level of 10.
+max-complexity = 10
+
+[tool.ruff.isort]
+required-imports = ["from __future__ import annotations"]
+
+[tool.ruff.pydocstyle]
+convention = "google"
 
 [tool.black]
 line-length = 120
@@ -134,49 +184,3 @@ reportOptionalMemberAccess = false
 [tool.z.main]
 ignore = ["tests"]
 py-version = "3.11"
-
-[tool.pylint.basic]
-bad-names = ["foo", "bar", "baz", "toto", "tutu", "tata", "l"]
-
-good-names = [
-    "i", "j", "k", # iterators
-    "f", # file in context managers
-    "ex", "e", # exceptions
-    "run", "Run", # factory code
-    "_", # unused variables
-    "ds", "df", # dataset, dataframe
-    "x", "y", "z", # polynomials, unknowns
-    "cv", # cross validation
-    "r", "s", # relevance, score
-    "m", "d", # faiss parameters
-    "p", "q", "a", # prediction, question, answer
-    "k", "v", # key, value
-    "n", "m", # number of samples, number of features
-    "c", "d", # number of classes, number of dimensions
-    "fs", # file system
-]
-
-[tool.pylint.design]
-max-args = 8
-
-[tool.pylint.format]
-max-line-length = 120
-
-[tool.pylint."messages control"]
-disable = [
-    "raw-checker-failed",
-    "bad-inline-option",
-    "locally-disabled",
-    "file-ignored",
-    "suppressed-message",
-    "useless-suppression",
-    "deprecated-pragma",
-    "use-symbolic-message-instead",
-    "missing-module-docstring",
-    "too-few-public-methods",
-    "use-dict-literal",
-    "no-self-argument",
-    "unused-argument",
-]
-
-extension-pkg-whitelist = "pydantic"

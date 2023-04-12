@@ -1,5 +1,4 @@
 import abc
-import warnings
 from dataclasses import dataclass
 from typing import Any, Optional
 
@@ -23,7 +22,7 @@ class Samples(pydantic.BaseModel):
     def _set_empty_weights(self, values: dict[str, Any]) -> dict[str, torch.Tensor]:
         indices = values["indices"]
         if not isinstance(indices, torch.Tensor):
-            raise TypeError(f"`indices` must be a Tensor.")
+            raise TypeError("`indices` must be a Tensor.")
         log_weights = values.get("log_weights", None)
         if log_weights is None:
             log_weights = torch.zeros_like(indices, dtype=torch.float32, device=indices.device)

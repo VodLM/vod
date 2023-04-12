@@ -81,7 +81,7 @@ def run() -> None:
     logger.info(f"model hash: {datasets.fingerprint.Hasher.hash(model)}")
 
     # Init the trainer
-    logger.info(f"Instantiating the Trainer")
+    logger.info("Instantiating the Trainer")
     trainer = pl.Trainer(accelerator=args.accelerator)
 
     # define the collates and dataloader args

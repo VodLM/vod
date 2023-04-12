@@ -166,7 +166,7 @@ def _predict_single(
                 model_output_key=model_output_key,
             )
         except KeyboardInterrupt:
-            logger.warning(f"Prediction step was keyboard-interrupted. Deleting store.")
+            logger.warning("Prediction step was keyboard-interrupted. Deleting store.")
             shutil.rmtree(index_path)
         except Exception as e:
             del store

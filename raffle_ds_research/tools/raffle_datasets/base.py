@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import abc
 import os
 import pathlib
-import typing
 from typing import Any, Callable, T
 
 import datasets
@@ -27,11 +25,11 @@ def init_gcloud_filesystem() -> fsspec.AbstractFileSystem:
     try:
         token = os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
     except KeyError as exc:
-        raise RuntimeError(f"Missing `GOOGLE_APPLICATION_CREDENTIALS` environment variables. ") from exc
+        raise RuntimeError("Missing `GOOGLE_APPLICATION_CREDENTIALS` environment variables. ") from exc
     try:
         project = os.environ["GCLOUD_PROJECT_ID"]
     except KeyError as exc:
-        raise RuntimeError(f"Missing `GCLOUD_PROJECT_ID` environment variables. ") from exc
+        raise RuntimeError("Missing `GCLOUD_PROJECT_ID` environment variables. ") from exc
     return gcsfs.GCSFileSystem(token=token, project=project)
 
 
@@ -86,7 +84,7 @@ class SilentHuggingface:
             datasets.enable_progress_bar()
 
 
-class silent_huggingface:
+class SilentHuggingfaceDecorator:
     def __init__(self, disable_progress_bar: bool = True, disable_logging: bool = True):
         self.disable_progress_bar = disable_progress_bar
         self.disable_logging = disable_logging

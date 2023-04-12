@@ -68,7 +68,7 @@ class Bm25Client(search_server.SearchClient):
         """Search elasticsearch for the batch of text queries using `msearch`.
         `vector` is not used here."""
         if self.supports_label and label is None:
-            warnings.warn(f"This index supports labels, but no label is provided.")
+            warnings.warn("This index supports labels, but no label is provided.")
 
         queries = self._make_queries(text, top_k=top_k, labels=label)
         responses = self._client.msearch(searches=queries)

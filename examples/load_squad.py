@@ -1,5 +1,3 @@
-from typing import Optional
-
 import rich
 
 from raffle_ds_research.tools import arguantic, raffle_datasets

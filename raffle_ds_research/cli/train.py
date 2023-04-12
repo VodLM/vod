@@ -1,14 +1,7 @@
-# pylint: disable=protected-access,no-member
-
 from __future__ import annotations
-
-import multiprocessing
 from typing import Iterable
-
 import omegaconf
-import torch
-
-multiprocessing.set_start_method("forkserver")  # type: ignore
+import multiprocessing
 
 from pathlib import Path
 
@@ -26,6 +19,11 @@ from raffle_ds_research.core import dataset_builders, workflows
 from raffle_ds_research.core.ml_models import Ranker
 from raffle_ds_research.tools.utils.config import register_omgeaconf_resolvers
 from raffle_ds_research.tools.utils.pretty import print_config
+
+multiprocessing.set_start_method("forkserver")
+
+import torch  # noqa: E402
+
 
 dotenv.load_dotenv(Path(__file__).parent / ".train.env")
 

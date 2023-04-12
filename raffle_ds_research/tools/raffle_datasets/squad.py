@@ -28,7 +28,7 @@ class AppendQaExtras:
         self.lookup = lookup
         self.language = language
 
-    def __call__(self, row: dict[str, Any]):
+    def __call__(self, row: dict[str, Any]) -> dict[str, Any]:
         """Append the extras to the QA row"""
         row["kb_id"] = SQUAD_KB_ID[self.language]
         row["language"] = self.language

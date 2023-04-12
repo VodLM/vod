@@ -7,7 +7,7 @@ import faiss
 # faiss.contrib.torch_utils: required to handle torch.Tensor inputs.
 try:
     # pylint: disable=unused-import
-    from faiss.contrib import torch_utils  # type: ignore
+    pass  # type: ignore
 except ImportError:
     pass
 

@@ -34,7 +34,7 @@ def profile_faiss_server(arguments: ProfileArgs) -> dict[str, float]:
         benchmark[name] = perf
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        index_path = Path(tmpdir, f"index.faiss")
+        index_path = Path(tmpdir, "index.faiss")
         index_path.parent.mkdir(parents=True, exist_ok=True)
 
         # generate some random data and fit and index, write it to disk.
@@ -52,7 +52,7 @@ def profile_faiss_server(arguments: ProfileArgs) -> dict[str, float]:
         # time the base faiss
         index.nprobe = arguments.nprobe
         logger.info("Timing in-thread `faiss.Index.search`")
-        timer = timeit.Timer(lambda: index.search(query_vec, arguments.top_k))
+        timer = timeit.Timer(lambda: index.search(query_vec, arguments.top_k))  # noqa: F821 -> ruff bug
         run_time = timer.timeit(number=arguments.n_calls)
         _log_perf(run_time, arguments.n_calls, "main_thread")
         del index

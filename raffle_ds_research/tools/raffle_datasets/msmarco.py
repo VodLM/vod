@@ -12,7 +12,6 @@ import datasets
 import fsspec
 import loguru
 import pydantic
-from pydantic.typing import PathLike
 from rich.progress import track
 
 from raffle_ds_research.tools.raffle_datasets.base import (
@@ -21,7 +20,7 @@ from raffle_ds_research.tools.raffle_datasets.base import (
     RetrievalDataset,
     SectionModel,
     init_gcloud_filesystem,
-    silent_huggingface,
+    SilentHuggingfaceDecorator,
 )
 
 MS_MARCO_KB_IDs = {"en": 100_000}
@@ -58,8 +57,8 @@ class LocalPaths:
 def _make_local_sync_path(cache_dir: os.PathLike, language: str = "en") -> LocalPaths:
     base_path = pathlib.Path(cache_dir, "raffle_datasets", "ms-marco", language)
     return LocalPaths(
-        qa_splits=pathlib.Path(base_path, f"msmarco_qa_splits.hf"),
-        sections=pathlib.Path(base_path, f"msmarco_sections.hf"),
+        qa_splits=pathlib.Path(base_path, "msmarco_qa_splits.hf"),
+        sections=pathlib.Path(base_path, "msmarco_sections.hf"),
     )
 
 
@@ -69,7 +68,7 @@ def _safe_decode(x: str | bytes) -> str:
     return str(x)
 
 
-@silent_huggingface()
+@SilentHuggingfaceDecorator()
 def _download_and_parse_questions(language: str = "en", local_path: Optional[str] = None) -> datasets.DatasetDict:
     if language != "en":
         raise NotImplementedError("Only English MSMARCO is supported")
@@ -137,7 +136,7 @@ def _download_and_parse_questions(language: str = "en", local_path: Optional[str
     return datasets.DatasetDict(qa_splits)
 
 
-@silent_huggingface()
+@SilentHuggingfaceDecorator()
 def _download_and_parse_sections(language: str = "en", local_path: Optional[str] = None) -> datasets.Dataset:
     if language != "en":
         raise NotImplementedError("Only English MSMARCO is supported")

@@ -307,7 +307,7 @@ def pprint_supervised_retrieval_batch(
         for j in range(len(section_input_ids[i])):
             section = tokenizer.decode(section_input_ids[i][j], **kwargs)
             section_data = {
-                **{key: _format(batch[key][i][j]) for key in section_keys if key in batch},
+                **{str(key): _format(batch[key][i][j]) for key in section_keys if key in batch},  # type: ignore
                 "section.content": _safe_yaml(section),
             }
             section_data_str = yaml.dump(section_data, sort_keys=False)

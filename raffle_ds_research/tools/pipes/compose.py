@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from copy import copy
-from functools import partial
 from typing import Any, Optional
 
 from raffle_ds_research.tools.pipes.protocols import Pipe

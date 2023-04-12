@@ -11,7 +11,7 @@ import faiss
 import stackprinter
 
 try:
-    from faiss.contrib import torch_utils
+    pass
 except ImportError:
     pass
 

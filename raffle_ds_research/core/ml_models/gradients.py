@@ -3,7 +3,6 @@ import abc
 import math
 from typing import Optional
 
-import rich
 import torch.nn
 from pydantic.fields import Field
 from pydantic.main import BaseModel

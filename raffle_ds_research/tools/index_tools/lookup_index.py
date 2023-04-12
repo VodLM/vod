@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import collections
-from typing import Iterable
+from typing import Iterable, Any
 
 import datasets
 import numpy as np
@@ -59,13 +59,13 @@ class LookupIndex:
         return RetrievalBatch(indices=indices, scores=scores)
 
 
-def __set_defaultdict():
+def __set_defaultdict() -> dict[Any, set[Any]]:
     return collections.defaultdict(set)
 
 
 def _build_lookup_table_kb(labels: Iterable[str], kb_labels: Iterable[str]) -> dict[int, dict[int, set[int]]]:
     """Build the lookup table"""
-    lookup_table = collections.defaultdict(__set_defaultdict)
+    lookup_table: dict[int, dict[int, set[int]]] = collections.defaultdict(__set_defaultdict)
     for i, (lbl, kb_lbl) in enumerate(zip(labels, kb_labels)):
         lookup_table[kb_lbl][lbl].add(i)
 
@@ -116,7 +116,7 @@ class LookupIndexKnowledgeBase:
 
 
 @datasets.fingerprint.hashregister(LookupIndexKnowledgeBase)
-def _hash_index(hasher: datasets.fingerprint.Hasher, value: LookupIndexKnowledgeBase) -> str:
+def _hash_kb_index(hasher: datasets.fingerprint.Hasher, value: LookupIndexKnowledgeBase) -> str:
     data = {s: getattr(value, s, None) for s in value.__slots__}
     data.pop("_lookup_table")
     return hasher.hash(data)

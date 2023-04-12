@@ -54,7 +54,7 @@ if __name__ == "__main__":
         ax.set_title(f"vector_size={vector_size}, batch_size={base_args['batch_size']}, top_k={base_args['top_k']}")
         ax.set_xlabel("dataset_size")
         if i == 0:
-            ax.set_ylabel(f"time (ms/batch)")
+            ax.set_ylabel("time (ms/batch)")
         for j, method in enumerate(methods):
             x = []
             y = []

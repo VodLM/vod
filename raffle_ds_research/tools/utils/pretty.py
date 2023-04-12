@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import numbers
 from copy import copy
 from numbers import Number
 from typing import List, Optional

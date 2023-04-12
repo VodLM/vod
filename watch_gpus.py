@@ -37,7 +37,7 @@ if __name__ == "__main__":
             last_active = time.time()
 
         if time.time() - last_active > args.base * args.inactivity:
-            loguru.logger.info(f"Shutting down...")
+            loguru.logger.info("Shutting down...")
             loguru.logger.info(f"Running command: {args.cmd}")
             subprocess.run(args.cmd.split())
             break

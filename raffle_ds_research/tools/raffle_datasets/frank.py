@@ -21,7 +21,7 @@ from raffle_ds_research.tools.raffle_datasets.base import (
     RetrievalDataset,
     SectionModel,
     init_gcloud_filesystem,
-    silent_huggingface,
+    SilentHuggingfaceDecorator,
 )
 
 
@@ -76,7 +76,7 @@ def _iter_examples_from_json(
         yield example
 
 
-@silent_huggingface()
+@SilentHuggingfaceDecorator()
 def _download_and_parse_frank(
     language: str,
     split: FrankSplitName,

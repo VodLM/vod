@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import collections
 import functools
-import math
 from typing import Any, Iterable
 
 import lightning.pytorch as pl
