@@ -13,6 +13,7 @@ from typing import Any, Optional
 import datasets
 import faiss
 import loguru
+import rich
 import torch
 import transformers
 from lightning import pytorch as pl
@@ -44,6 +45,7 @@ class IndexManager:
     _bm25_master: Optional[index_tools.Bm25Master] = None
     _clients: Optional[list[SearchClientConfig]] = None
     _vectors: Optional[Vectors] = None
+    _cache_dir: Optional[Path] = None
 
     def __init__(
         self,
@@ -53,12 +55,14 @@ class IndexManager:
         builder: retrieval_builder.RetrievalBuilder,
         index_cfg: MultiIndexConfig,
         loader_cfg: DataLoaderConfig,
+        cache_dir: Optional[Path] = None,
     ) -> None:
         self.ranker = ranker
         self.trainer = trainer
         self.builder = builder
         self.index_cfg = index_cfg
         self.loader_cfg = loader_cfg
+        self._cache_dir = cache_dir
 
     @property
     def clients(self) -> list[SearchClientConfig]:
@@ -84,11 +88,16 @@ class IndexManager:
     def __enter__(self) -> "IndexManager":
         """Build the dataset and spin up the indexes."""
         self._dataset = self.builder()
+        rich.print(self._dataset)
 
-        # create a temporary working directory
-        self._tmpdir = tempfile.TemporaryDirectory(prefix="tmp-training-")
-        tmpdir = self._tmpdir.__enter__()
-        loguru.logger.info(f"Setting up index at `{tmpdir}`")
+        # create a temporary working directory if not provided
+        if self._cache_dir is None:
+            self._tmpdir = tempfile.TemporaryDirectory(prefix="tmp-training-")
+            cache_dir = self._tmpdir.__enter__()
+        else:
+            cache_dir = self._cache_dir
+
+        loguru.logger.info(f"Setting up index at `{cache_dir}`")
 
         # init the bm25 index
         bm25_weight = self.index_cfg.bm25.get_weight(self.trainer.global_step)
@@ -114,11 +123,11 @@ class IndexManager:
         faiss_weight = self.index_cfg.faiss.get_weight(self.trainer.global_step)
         if faiss_weight >= 0:
             # compute the vectors for the questions and sections
-            self._vectors = self._compute_vectors(tmpdir)
+            self._vectors = self._compute_vectors(cache_dir)
 
             # build the faiss index and save to disk
             faiss_index = faiss_tools.build_index(self._vectors.sections, factory_string=self.index_cfg.faiss.factory)
-            faiss_path = Path(tmpdir, "index.faiss")
+            faiss_path = Path(cache_dir, "index.faiss")
             faiss.write_index(faiss_index, str(faiss_path))
 
             # spin up the faiss server
@@ -160,8 +169,10 @@ class IndexManager:
         if self._faiss_master is not None:
             self._faiss_master.__exit__(exc_type, exc_val, exc_tb)
             self._faiss_master = None
-        self._tmpdir.__exit__(exc_type, exc_val, exc_tb)
-        self._tmpdir = None
+
+        if self._cache_dir is None:
+            self._tmpdir.__exit__(exc_type, exc_val, exc_tb)
+            self._tmpdir = None
 
     def _compute_vectors(self, tmpdir: pathlib.Path) -> Vectors:
         dataset_vectors = _compute_dataset_vectors(
@@ -203,6 +214,7 @@ def _compute_dataset_vectors(
         prefix_key=f"{field}.",
         max_length=max_length,
         truncation=True,
+        padding="max_length",
     )
     return predict_tools.predict(
         dataset,
@@ -212,4 +224,5 @@ def _compute_dataset_vectors(
         model_output_key=output_key,
         collate_fn=collate_fn,
         loader_kwargs=loader_config,
+        validate_store=10_000,
     )

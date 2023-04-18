@@ -1,6 +1,7 @@
 defaults:
   - tokenizer: default
   - templates: ${infer_model_type:${model/encoder}}
+  - dl_sampler: frank
   - _self_
 
 _target_: raffle_ds_research.core.dataset_builders.RetrievalBuilder.from_name

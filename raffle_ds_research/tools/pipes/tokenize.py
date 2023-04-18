@@ -66,7 +66,7 @@ def torch_tokenize_pipe(
     prefix_key: Optional[str] = None,
     tokenizer: transformers.PreTrainedTokenizer,
     lazy: bool = True,
-    padding: bool = True,
+    padding: bool | str = True,
     return_token_type_ids: bool = False,
     **kwargs: Any,
 ) -> dict[str, torch.Tensor]:

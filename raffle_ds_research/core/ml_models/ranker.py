@@ -6,13 +6,13 @@ import re
 from typing import Any, Iterable, Optional, Union
 
 import lightning.pytorch as pl
+import loguru
 import torch
 import transformers
 from datasets.fingerprint import Hasher, hashregister
 from hydra.utils import instantiate
 from loguru import logger
 from omegaconf import DictConfig
-from optimum.bettertransformer import BetterTransformer
 from transformers import BertConfig, BertModel, T5EncoderModel
 
 from raffle_ds_research.core.ml_models.gradients import Gradients
@@ -50,7 +50,7 @@ class Ranker(pl.LightningModule):
         monitor: Optional[Monitor] = None,
         embedding_size: Optional[int] = 512,
         use_pooler_layer: bool = False,
-        better_transformers: bool = False,
+        compile: bool = False,
     ):
         super().__init__()
         if isinstance(optimizer, (dict, DictConfig)):
@@ -77,8 +77,11 @@ class Ranker(pl.LightningModule):
             self._output_size = embedding_size
 
         # setup the encoder
-        if better_transformers:
-            self.encoder = BetterTransformer.transform(self.encoder)
+        if compile:
+            loguru.logger.info("Compiling the encoder...")
+            self.encoder = torch.compile(self.encoder)
+            # loguru.logger.info("Compiling the gradients...")
+            # self.gradients = torch.compile(self.gradients)
 
     def get_output_shape(self, model_output_key: Optional[str] = None) -> tuple[int, ...]:
         """Dimension of the model output."""

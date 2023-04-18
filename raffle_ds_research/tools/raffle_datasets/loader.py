@@ -1,4 +1,7 @@
-from typing import Optional
+from __future__ import annotations
+
+import functools
+from typing import Optional, TypeVar, Any
 
 import datasets
 import pydantic
@@ -38,12 +41,47 @@ class DatasetLoader(pydantic.BaseModel):
         )
 
 
+def _get_unique_values(dset: datasets.Dataset, column: str, chunk: int = 1_000) -> set[Any]:
+    values = set()
+    for i in range(0, len(dset), chunk):
+        rows = dset[i : i + chunk]
+        values.update(set(rows[column]))
+
+    return values
+
+
+DorDD = TypeVar("DorDD", datasets.Dataset, datasets.DatasetDict)
+
+
+def _add_dset_idx(_: dict, dset_idx: int, key: str = "dset_idx") -> dict:
+    return {key: dset_idx}
+
+
+def _get_fingerprints(dset: datasets.Dataset | datasets.DatasetDict) -> str | dict[str, str]:
+    if isinstance(dset, datasets.DatasetDict):
+        return {k: v._fingerprint for k, v in dset.items()}
+    else:
+        return dset._fingerprint
+
+
 class ConcatenatedDatasetLoader:
     def __init__(self, loaders: list[DatasetLoader]):
         self.loaders = loaders
 
     def __call__(self) -> RetrievalDataset:
         dsets = [loader() for loader in self.loaders]
+
+        # check there is no overlap in the kb_ids between the datasets
+        kb_ids = [_get_unique_values(dset.sections, "kb_id") for dset in dsets]
+        if len(set.union(*kb_ids)) != sum(len(ids) for ids in kb_ids):
+            raise ValueError("There is overlap in the `kb_ids`")
+
+        # add the dataset idx to the questions
+        # todo: don't add this manually, instead add a `dataset_name` column in the loader.
+        for idx, dset in enumerate(dsets):
+            fn = functools.partial(_add_dset_idx, dset_idx=idx, key="dset_idx")
+            dset.sections = dset.sections.map(fn, desc="Adding `dset_idx` to sections", num_proc=4)
+            dset.qa_splits = dset.qa_splits.map(fn, desc="Adding `dset_idx` to questions", num_proc=4)
 
         # concatenate all sections
         all_sections = datasets.concatenate_datasets([dset.sections for dset in dsets])

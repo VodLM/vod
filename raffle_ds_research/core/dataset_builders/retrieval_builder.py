@@ -9,8 +9,10 @@ import numpy as np
 import omegaconf
 import pydantic
 import transformers
+from torch.utils import data as torch_data
 
 from raffle_ds_research.core.dataset_builders import retrieval_collate
+from raffle_ds_research.core.dataset_builders.dataloader_sampler import DataloaderSampler
 from raffle_ds_research.tools import dataset_builder, pipes, raffle_datasets
 
 QUESTION_TEMPLATE = "Question: {{ question }}"
@@ -84,6 +86,7 @@ class RetrievalBuilderConfig(pydantic.BaseModel):
     prep_map_kwargs: dict[str, Any] = dict()
     subset_size: Optional[Union[int, dict[str, int]]] = None
     include_only_positive_sections: bool = False
+    dl_sampler: Optional[DataloaderSampler] = None
 
     @pydantic.validator("splits", pre=True)
     def _validate_splits(cls, splits: Any) -> list[str]:
@@ -253,6 +256,15 @@ class RetrievalBuilder(dataset_builder.DatasetBuilder[datasets.DatasetDict, Retr
             config=config,
         )
         return collate_fn
+
+    def get_sampler(self, split: str = "train") -> Optional[torch_data.Sampler]:
+        """Returns a sampler for the given split. The sampler add inverse-frequency weights to each label value."""
+
+        if self.config.dl_sampler is None:
+            return None
+
+        dset = self()[split]
+        return self.config.dl_sampler(dset)
 
     def _take_subset(self, dset: datasets.DatasetDict) -> datasets.DatasetDict:
         """Take a subset of the dataset."""

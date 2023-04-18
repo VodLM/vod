@@ -76,6 +76,7 @@ class MultiIndexConfig(pydantic.BaseModel):
     """Configures a group of indexes (e.g., bm25, faiss)."""
 
     update_freq: Optional[Union[int, list[int]]]
+    reset_model: bool = False
     faiss: DefaultFaissConfig
     bm25: DefaultBm25Config
 

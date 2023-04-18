@@ -208,7 +208,6 @@ def load_frank(
         frank_split.qa_splits.save_to_disk(str(qa_splits_path))
         frank_split.sections.save_to_disk(str(sections_paths))
 
-    loguru.logger.info(f"Loading Frank dataset from {qa_splits_path} and {sections_paths}")
     return HfFrankPart(
         split=subset_name,
         qa_splits=datasets.DatasetDict.load_from_disk(str(qa_splits_path), keep_in_memory=keep_in_memory),

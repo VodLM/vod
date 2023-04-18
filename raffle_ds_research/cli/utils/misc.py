@@ -1,4 +1,3 @@
-# pylint: disable=unspecified-encoding
 from __future__ import annotations
 
 import numbers
@@ -6,12 +5,13 @@ from pathlib import Path
 from typing import Any
 
 import datasets
-import lightning.pytorch as pl
 import loguru
 import omegaconf
 import torch
 import transformers
+import yaml
 
+from raffle_ds_research.core.ml_models import Ranker
 from raffle_ds_research.utils.config import config_to_flat_dict
 
 
@@ -43,11 +43,23 @@ def set_training_context() -> None:
     # torch.multiprocessing.set_sharing_strategy("file_system")
 
 
-def log_config(trainer: pl.Trainer, config: omegaconf.DictConfig, exp_dir: Path) -> None:
+def _make_meta_data(ranker: Ranker) -> dict[str, Any]:
+    return dict(
+        n_trainable_params=sum(p.numel() for p in ranker.parameters() if p.requires_grad),
+        n_total_params=sum(p.numel() for p in ranker.parameters()),
+        flash_sdp_enabled=torch.backends.cuda.flash_sdp_enabled(),
+        mem_efficient_sdp_enabled=torch.backends.cuda.mem_efficient_sdp_enabled(),
+        math_sdp_enabled=torch.backends.cuda.math_sdp_enabled(),
+    )
+
+
+def log_config(ranker: Ranker, config: omegaconf.DictConfig, exp_dir: Path) -> None:
     """Log the config as hyperparameters and save it locally."""
     config_path = Path(exp_dir, "config.yaml")
+    all_data = omegaconf.OmegaConf.to_container(config, resolve=True)
+    all_data["meta"] = _make_meta_data(ranker)
     with open(config_path, "w") as f:
-        f.write(omegaconf.OmegaConf.to_yaml(config, resolve=True))
+        yaml.dump(all_data, f)
 
     # log he config to wandb
     try:
@@ -55,7 +67,7 @@ def log_config(trainer: pl.Trainer, config: omegaconf.DictConfig, exp_dir: Path)
         import wandb
 
         try:
-            flat_config = config_to_flat_dict(config, sep="/")
+            flat_config = config_to_flat_dict(all_data, sep="/")
             flat_config = {k: _cast_hps(v) for k, v in flat_config.items()}
             wandb.config.update(flat_config)
         except wandb.errors.Error:

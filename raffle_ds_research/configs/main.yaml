@@ -14,23 +14,19 @@ defaults:
 seed: ${global_seed:}
 compile: false
 model_name: ${model.encoder.pretrained_model_name_or_path}
-exp_version: "v1.4"
+exp_version: "v1.7"
 exp_suffix: ""
 exp_name: retrieval
 run_name: ${fmt_mn:${model_name}}--${rdn_name:}-${exp_version}${exp_suffix}
 
-
 benchmark:
   # defines the benchmarks to be run after each training period
-  on_init: true
+  on_init: false
   builders:
     - name: frank.B.en
       splits: [ validation ]
     - name: frank.A.en
       splits: [ validation ]
-#    - name: squad.en
-#      splits: [ validation ]
-
 
 dataloaders:
   # Defines the configurations for `torch.utils.data.Dataloader`
@@ -80,7 +76,8 @@ collates:
 
 indexes:
   # Defines the configuration for the multi-index
-  update_freq: 1000
+  update_freq: 5_000
+  reset_model: false
   faiss:
     factory: IVF16,Flat
     nprobe: 16
@@ -89,8 +86,13 @@ indexes:
       type: linear
       start: 0
       end: 1
-      period: 10
+      period: 5
   bm25:
     indexed_key: text
     use_labels: true
-    schedule: 1
+    schedule:
+      # progressively increase the model score weight
+      type: linear
+      start: 1
+      end: 0.1
+      period: 5

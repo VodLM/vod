@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import collections
 import functools
-from typing import Any, Iterable
+from pathlib import Path
+from typing import Any, Iterable, Optional
 
 import lightning.pytorch as pl
 import loguru
@@ -33,6 +34,7 @@ def benchmark(
     loader_cfg: dict | omegaconf.DictConfig | DataLoaderConfigs,
     collate_cfg: dict | omegaconf.DictConfig | CollateConfigs,
     monitor: Monitor,
+    cache_dir: Optional[Path] = None,
 ) -> dict[str, Any]:
     """Benchmark a ranker on a set of builders."""
 
@@ -54,6 +56,7 @@ def benchmark(
             builder=builder,
             index_cfg=index_cfg,
             loader_cfg=loader_cfg.predict,
+            cache_dir=cache_dir,
         ) as manager:
             for split in builder.splits:
                 # run the static validation & log results

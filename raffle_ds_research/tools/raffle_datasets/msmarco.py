@@ -6,6 +6,7 @@ import json
 import os
 import pathlib
 import shutil
+import warnings
 from typing import Iterable, Optional
 
 import datasets
@@ -169,6 +170,7 @@ def _download_and_parse_sections(language: str = "en", local_path: Optional[str]
 @pydantic.validate_arguments(config=dict(arbitrary_types_allowed=True))
 def load_msmarco(
     language: str = "en",
+    subset_name: Optional[str] = None,
     cache_dir: Optional[pydantic.typing.PathLike] = None,
     keep_in_memory: Optional[bool] = None,
     only_positive_sections: bool = False,
@@ -178,6 +180,8 @@ def load_msmarco(
     """Load the MSMARCO dataset"""
     if cache_dir is None:
         cache_dir = DATASETS_CACHE_PATH
+    if subset_name is not None:
+        warnings.warn("subset_name is not supported for MSMARCO and will be ignored.")
     if only_positive_sections:
         raise NotImplementedError("Only positive sections is not implemented for MSMARCO")
 
@@ -198,7 +202,6 @@ def load_msmarco(
         sections = _download_and_parse_sections(language=language, local_path=local_source_path)
         sections.save_to_disk(str(local_paths.sections))
 
-    loguru.logger.info(f"Loading Frank dataset from {local_paths.qa_splits} and {local_paths.sections}")
     return MsmarcoRetrievalDataset(
         qa_splits=datasets.DatasetDict.load_from_disk(str(local_paths.qa_splits), keep_in_memory=keep_in_memory),
         sections=datasets.Dataset.load_from_disk(str(local_paths.sections), keep_in_memory=keep_in_memory),

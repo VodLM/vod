@@ -59,6 +59,7 @@ gcsfs = "^2023.3.0"
 #markupsafe = "=2.0.1"
 #scikit-learn = "^1"
 ## <--------------------
+richuru = "^0.1.1"
 
 
 [tool.poetry.group.dev.dependencies]

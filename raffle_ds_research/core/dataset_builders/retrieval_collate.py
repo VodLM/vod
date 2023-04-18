@@ -1,4 +1,3 @@
-# pylint: disable=no-member
 from __future__ import annotations
 
 import copy
@@ -229,6 +228,7 @@ class RetrievalCollate(pipes.Collate):
             prefix_key="question.",
             max_length=self.config.question_max_length,
             truncation=True,
+            padding="max_length",
         )
 
         # fetch the positive `section_ids`
@@ -257,6 +257,7 @@ class RetrievalCollate(pipes.Collate):
             prefix_key="section.",
             max_length=self.config.section_max_length,
             truncation=True,
+            padding="max_length",
         )
         tokenized_sections = {k: v.view(*sections.indices.shape, -1) for k, v in tokenized_sections.items()}
 

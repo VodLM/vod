@@ -16,17 +16,18 @@ if __name__ == "__main__":
 
     frank = raffle_datasets.load_frank(
         language=args.language,
-        split=args.split,
+        subset_name=args.split,
         version=args.version,
         only_positive_sections=True,
         invalidate_cache=bool(args.invalidate_cache),
     )
     rich.print(dict(frank_only_positives=frank))
+    rich.print(frank.qa_splits["train"][0])
     n_sections_small = len(frank.sections)
 
     frank = raffle_datasets.load_frank(
         language=args.language,
-        split=args.split,
+        subset_name=args.split,
         version=args.version,
         only_positive_sections=False,
         invalidate_cache=bool(args.invalidate_cache),

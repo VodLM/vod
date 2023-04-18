@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import math
 import shutil
-from numbers import Number
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
@@ -219,10 +218,10 @@ def _infer_vector_shape(
     return vector_shape
 
 
-def _get_zero_vec_indices(store: tensorstore.TensorStore, n_samples: Number) -> Iterable[int]:
+def _get_zero_vec_indices(store: tensorstore.TensorStore, n_samples: int) -> Iterable[int]:
     store_size = store.shape[0]
     if n_samples < store_size:
-        ids = np.random.choice(store_size, int(n_samples), replace=False)
+        ids = np.linspace(0, store_size - 1, n_samples, dtype=np.int64)
     else:
         ids = range(store_size)
     prefetched, i = None, 0

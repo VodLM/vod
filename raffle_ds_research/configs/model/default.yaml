@@ -8,3 +8,4 @@ defaults:
 
 _target_: raffle_ds_research.core.ml_models.Ranker
 embedding_size: 512
+compile: false

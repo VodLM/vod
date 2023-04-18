@@ -78,6 +78,7 @@ def instantiate_retrieval_dataloader(
     collate_config: DefaultCollateConfig,
     loader_cfg: loader_config.DataLoaderConfig,
     dset_split: str,
+    use_sampler: bool = False,
 ) -> torch.utils.data.DataLoader:
     full_collate_config = builder.collate_config(
         question_vectors=manager.vectors.dataset.get(dset_split, None),
@@ -86,8 +87,11 @@ def instantiate_retrieval_dataloader(
     )
     collate_fn = builder.get_collate_fn(config=full_collate_config)
 
-    return torch.utils.data.DataLoader(
-        manager.dataset[dset_split],
-        collate_fn=collate_fn,
-        **loader_cfg.dict(),
-    )
+    loader_config = loader_cfg.dict()
+    if use_sampler:
+        sampler = builder.get_sampler(dset_split)
+        if sampler is not None:
+            loader_config.update({"sampler": sampler, "shuffle": None})
+
+    loguru.logger.debug(f"Init. dataloader for split `{dset_split}` with config: {loader_config}")
+    return torch.utils.data.DataLoader(manager.dataset[dset_split], collate_fn=collate_fn, **loader_config)

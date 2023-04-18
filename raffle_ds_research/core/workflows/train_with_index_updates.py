@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+import os
+import pathlib
+import shutil
+import tempfile
+from pathlib import Path
+from typing import Any, Optional, Callable
 
 import loguru
 import numpy as np
@@ -17,7 +22,7 @@ from raffle_ds_research.core.workflows.utils import _log_eval_metrics, instantia
 
 
 def train_with_index_updates(
-    ranker: Ranker,
+    ranker_generator: Callable[..., Ranker],
     monitor: Monitor,
     trainer: pl.Trainer,
     builder: retrieval_builder.RetrievalBuilder,
@@ -29,18 +34,8 @@ def train_with_index_updates(
     if isinstance(config, DictConfig):
         config = TrainWithIndexConfigs.parse(config)
 
-    # run the benchmarks
-    if benchmark_builders is not None and benchmark_on_init:
-        loguru.logger.info("Running initial benchmarks...")
-        benchmark(
-            ranker=ranker,
-            trainer=trainer,
-            builders=benchmark_builders,
-            loader_cfg=config.dataloaders,
-            collate_cfg=config.collates,
-            index_cfg=config.indexes,
-            monitor=monitor,
-        )
+    loguru.logger.info("Instantiating the Ranker (init)")
+    ranker: Ranker = ranker_generator()
 
     # Define the index update steps and the `PeriodicStoppingCallback` callback.
     total_number_of_steps = trainer.max_steps
@@ -66,50 +61,87 @@ def train_with_index_updates(
             f"Training period {period_idx + 1}/{len(update_steps) - 1} (step {start_step} -> {end_step})"
         )
 
-        # compute question and section vectors, spin up the faiss index.
-        with index_manager.IndexManager(
-            ranker=ranker,
-            trainer=trainer,
-            builder=builder,
-            index_cfg=config.indexes,
-            loader_cfg=config.dataloaders.predict,
-        ) as manager:
-            # train the model for the given period
-            train_loader = instantiate_retrieval_dataloader(
-                builder=builder,
-                manager=manager,
-                loader_cfg=config.dataloaders.train,
-                collate_config=config.collates.train,
-                dset_split="train",
-            )
-            val_loader = instantiate_retrieval_dataloader(
-                builder=builder,
-                manager=manager,
-                loader_cfg=config.dataloaders.eval,
-                collate_config=config.collates.eval,
-                dset_split="validation",
-            )
+        # wrap everything in a temporary directory to avoid filling up the disk.
+        # The temporary directory will be deleted at the end of each period.
+        with tempfile.TemporaryDirectory(prefix="tmp-training-") as tmp_dir:
+            # run the benchmarks on init
+            if benchmark_builders is not None and (period_idx > 0 or benchmark_on_init):
+                loguru.logger.info(f"Starting training epoch {1+period_idx}. Running benchmarks...")
+                benchmark(
+                    ranker=ranker,
+                    trainer=trainer,
+                    builders=benchmark_builders,
+                    loader_cfg=config.dataloaders,
+                    collate_cfg=config.collates,
+                    index_cfg=config.indexes,
+                    monitor=monitor,
+                )
 
-            trainer.should_stop = False
-            stop_callback.stop_at = end_step
-            manager.trainer.fit(
-                manager.ranker,
-                train_dataloaders=train_loader,
-                val_dataloaders=val_loader,
-            )
-
-        # run the benchmarks
-        if benchmark_builders is not None:
-            loguru.logger.info("Training period done. Running benchmarks...")
-            benchmark(
+            # compute question and section vectors, spin up the faiss index.
+            with index_manager.IndexManager(
                 ranker=ranker,
                 trainer=trainer,
-                builders=benchmark_builders,
-                loader_cfg=config.dataloaders,
-                collate_cfg=config.collates,
+                builder=builder,
                 index_cfg=config.indexes,
-                monitor=monitor,
-            )
+                loader_cfg=config.dataloaders.predict,
+                cache_dir=Path(tmp_dir),
+            ) as manager:
+                # train the model for the given period
+                train_loader = instantiate_retrieval_dataloader(
+                    builder=builder,
+                    manager=manager,
+                    loader_cfg=config.dataloaders.train,
+                    collate_config=config.collates.train,
+                    dset_split="train",
+                    use_sampler=True,
+                )
+                val_loader = instantiate_retrieval_dataloader(
+                    builder=builder,
+                    manager=manager,
+                    loader_cfg=config.dataloaders.eval,
+                    collate_config=config.collates.eval,
+                    dset_split="validation",
+                    use_sampler=True,
+                )
+
+                # instantiate the ranker for this period (except for the first one)
+                if period_idx > 0 and config.indexes.reset_model:
+                    loguru.logger.info(f"Instantiating the Ranker (period={1 + period_idx})")
+                    trainable_ranker: Ranker = ranker_generator()
+                else:
+                    trainable_ranker = ranker
+
+                trainer.should_stop = False
+                stop_callback.stop_at = end_step
+                manager.trainer.fit(
+                    trainable_ranker,
+                    train_dataloaders=train_loader,
+                    val_dataloaders=val_loader,
+                )
+
+                ranker = trainable_ranker
+
+            loguru.logger.info(f"Training period {1 + period_idx} completed.")
+            loguru.logger.info(f"Cleaning up cache directory {tmp_dir}...")
+            for f in Path(tmp_dir).glob("*"):
+                loguru.logger.info(f"Deleting {f} ({os.stat(f).st_size / 1e6:.2f} MB)..")
+                if pathlib.Path(f).is_dir():
+                    shutil.rmtree(f)
+                else:
+                    os.remove(f)
+
+    # run the final benchmarks
+    if benchmark_builders is not None:
+        loguru.logger.info("Training completed. Running final benchmarks...")
+        benchmark(
+            ranker=ranker,
+            trainer=trainer,
+            builders=benchmark_builders,
+            loader_cfg=config.dataloaders,
+            collate_cfg=config.collates,
+            index_cfg=config.indexes,
+            monitor=monitor,
+        )
 
     return ranker
 
