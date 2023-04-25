@@ -14,6 +14,8 @@ DEBUG = False
 
 @dataclasses.dataclass
 class Expected:
+    """Expected results from the C++ function."""
+
     indices: list[int]
     scores: list[float]
     labels: list[int]
@@ -41,7 +43,7 @@ def _py_sort_filter(
 @pytest.mark.parametrize("max_a_size", [10, 20, 30])
 @pytest.mark.parametrize("batched", [False])
 def test_concat_topk(a_size: int, b_size: int, total: int, max_a_size: int, seed: int, batched: bool) -> None:
-    # generate data
+    """Test the `concat_topk` function."""
     rgn = np.random.RandomState(seed)
     a_indices = rgn.randint(0, a_size, size=(a_size,))
     a_scores = rgn.randn(a_size)

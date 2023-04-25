@@ -6,19 +6,25 @@ from typing import Any, Generic, List, Optional, Protocol, Type, TypeVar, Union
 import datasets
 import pydantic
 import torch
-from pydantic import ValidationError
 
 
 class DatasetProtocol(Protocol):
+    """Defines a dataset."""
+
     def __getitem__(self, index: int) -> dict:
+        """Fetch a row."""
         ...
 
     def __len__(self) -> int:
+        """Return the number of rows."""
         ...
 
 
 class CollateFnProtocol(Protocol):
+    """Defines a collate function."""
+
     def __call__(self, batch: List[dict[str, Any]], **kwargs: Any) -> dict[str, Any]:
+        """Convert a list of examples into a batch."""
         ...
 
 
@@ -49,12 +55,5 @@ class DatasetBuilder(Generic[DD, CollateCfg], ABC):
 
     @property
     def collate_config(cls) -> Type[CollateCfg]:
+        """Return the config class for the collate function."""
         return cls._collate_config
-
-
-class ExampleValidationError(ValidationError):
-    ...
-
-
-class CollateRuntimeError(RuntimeError):
-    ...

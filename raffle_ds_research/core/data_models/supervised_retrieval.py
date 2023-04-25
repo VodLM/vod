@@ -11,7 +11,7 @@ from raffle_ds_research.tools.utils.pretty import repr_tensor
 
 
 class SupervisedRetrievalBatch(pydantic.BaseModel):
-    """ "Defines the input batch for the supervised retrieval model."""
+    """Defines the input batch for the supervised retrieval model."""
 
     class Config:
         """pydantic config."""
@@ -73,6 +73,7 @@ class SupervisedRetrievalBatch(pydantic.BaseModel):
         return values
 
     def __repr__(self) -> str:
+        """String representation of the batch."""
         attrs = [
             f"{k}={repr_tensor(v)}" if isinstance(v, torch.Tensor) else f"{k}={v}" for k, v in self.__dict__.items()
         ]
@@ -80,6 +81,7 @@ class SupervisedRetrievalBatch(pydantic.BaseModel):
         return f"{type(self).__name__}({attrs})"
 
     def __str__(self) -> str:
+        """String representation of the batch."""
         return self.__repr__()
 
 

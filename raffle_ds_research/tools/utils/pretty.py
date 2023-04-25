@@ -11,7 +11,8 @@ from rich.syntax import Syntax
 from rich.tree import Tree
 
 
-def human_format(num: int | float, precision: int = 2) -> str:
+def human_format_nb(num: int | float, precision: int = 2) -> str:
+    """Converts a number to a human-readable format."""
     magnitude = 0
     while abs(num) >= 1000:
         magnitude += 1
@@ -28,12 +29,13 @@ def print_config(
     exclude: Optional[List[str]] = None,
 ) -> None:
     """Prints content of DictConfig using Rich library and its tree structure.
+
     Args:
         config (DictConfig): Configuration composed by Hydra.
         fields (Sequence[str], optional): Determines which main fields from config will
         be printed and in what order.
         resolve (bool, optional): Whether to resolve reference fields of DictConfig.
-        exclude (List[str], optional): fields to exclude
+        exclude (List[str], optional): fields to exclude.
     """
     config = copy(config)
 
@@ -72,4 +74,5 @@ def print_config(
 
 
 def repr_tensor(x: torch.Tensor) -> str:
+    """Return a string representation of a tensor."""
     return f"Tensor(shape={x.shape}, dtype={x.dtype}, device={x.device})"

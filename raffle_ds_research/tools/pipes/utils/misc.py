@@ -10,6 +10,7 @@ T = TypeVar("T")
 
 
 def iter_examples(batch: dict[str, list], keys: Iterable[str] = None) -> Iterable[dict]:
+    """Iterate over the examples contained in a batch."""
     if keys is None:
         keys = list(batch.keys())
     else:
@@ -22,6 +23,7 @@ def iter_examples(batch: dict[str, list], keys: Iterable[str] = None) -> Iterabl
 
 
 def pack_examples(examples: Iterable[dict[T, Any]], keys: Optional[list[T]] = None) -> dict[T, list[Any]]:
+    """Pack a list of examples into a batch."""
     output = defaultdict(list)
     for example in examples:
         if keys is None:

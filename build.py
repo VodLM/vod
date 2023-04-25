@@ -14,7 +14,8 @@ include_dirs = [numpy.get_include()]
 libraries = ["m"]
 
 
-def build():
+def build() -> None:
+    """Build the Cython extensions."""
     extensions = [
         Extension(
             "*",

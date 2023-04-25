@@ -16,7 +16,10 @@ from loguru import logger
 from omegaconf import DictConfig
 import richuru
 
-multiprocessing.set_start_method("forkserver")
+try:
+    multiprocessing.set_start_method("forkserver", force=True)
+except RuntimeError:
+    loguru.logger.debug("Could not set multiprocessing start method to `forkserver`")
 
 import lightning.pytorch as pl  # noqa: E402
 
@@ -26,7 +29,7 @@ from raffle_ds_research.core.ml_models import Ranker  # noqa: E402
 from raffle_ds_research.tools.utils.config import register_omgeaconf_resolvers  # noqa: E402
 from raffle_ds_research.tools.utils.pretty import print_config  # noqa: E402
 
-richuru.install()  # <- setup rich logging with loguru
+richuru.install(rich_traceback=False)  # <- setup rich logging with loguru
 
 dotenv.load_dotenv(Path(__file__).parent / ".train.env")
 
@@ -42,6 +45,7 @@ class ModelGenerator:
         self.compile = compile
 
     def __call__(self) -> Ranker:
+        """Instantiate the model."""
         if self.seed is not None:
             seed_everything(self.seed)
         ranker: Ranker = instantiate(self.model_config)
@@ -52,9 +56,10 @@ class ModelGenerator:
 
 @hydra.main(config_path="../configs/", config_name="main", version_base="1.3")
 def run(config: DictConfig) -> None:
+    """Train a ranker for a retrieval task."""
     loguru.logger.debug(f"Multiprocessing method set to `{multiprocessing.get_start_method()}`")  # type: ignore
     cli_utils.set_training_context()
-    print_config(config)
+    pl.utilities.rank_zero_only(print_config)(config)
     exp_dir = Path()
     logger.info(f"Experiment directory: {exp_dir.absolute()}")
 
@@ -70,7 +75,7 @@ def run(config: DictConfig) -> None:
     # Init the trainer, log the hyperparameters
     logger.info(f"Instantiating model <{config.trainer._target_}>")
     trainer: pl.Trainer = instantiate(config.trainer)
-    cli_utils.log_config(ranker=ranker_generator(), config=config, exp_dir=exp_dir)
+    pl.utilities.rank_zero_only(cli_utils.log_config)(ranker=ranker_generator(), config=config, exp_dir=exp_dir)
 
     logger.info(f"Training the ranker with seed={config.seed}")
     seed_everything(config.seed, workers=True)

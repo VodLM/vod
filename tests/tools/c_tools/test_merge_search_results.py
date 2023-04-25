@@ -8,7 +8,7 @@ import pytest
 from raffle_ds_research.tools import c_tools, index_tools
 
 
-def gen_batch(batch_size: int, n_points: int, n_range, seed: int) -> index_tools.RetrievalBatch:
+def gen_batch(batch_size: int, n_points: int, n_range: int, seed: int) -> index_tools.RetrievalBatch:
     """Generate a batch of retrieval data."""
     rgn = np.random.RandomState(seed)
     examples = []
@@ -44,6 +44,7 @@ def batch_b(batch_size: int, nb: int, n_range: int, seed: int) -> index_tools.Re
 @pytest.mark.parametrize("batch_size", [1, 3, 100])
 @pytest.mark.parametrize("seed", [0, 1, 2])
 def test_gather_by_index(batch_a: index_tools.RetrievalBatch, batch_b: index_tools.RetrievalBatch) -> None:
+    """Test the gather_by_index function."""
     merged_indices, merged_scores = c_tools.merge_search_results(
         a_indices=batch_a.indices,
         a_scores=batch_a.scores,

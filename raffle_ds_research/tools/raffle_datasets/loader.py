@@ -13,7 +13,11 @@ from raffle_ds_research.tools.raffle_datasets.squad import load_squad
 
 
 class DatasetLoader(pydantic.BaseModel):
+    """A Factory for loading datasets."""
+
     class Config:
+        """Pydantic configuration."""
+
         extra = pydantic.Extra.forbid
 
     name: str
@@ -25,6 +29,7 @@ class DatasetLoader(pydantic.BaseModel):
     only_positive_sections: bool = False
 
     def __call__(self) -> RetrievalDataset:
+        """Load the dataset."""
         loader = {
             "frank": load_frank,
             "msmarco": load_msmarco,
@@ -65,10 +70,13 @@ def _get_fingerprints(dset: datasets.Dataset | datasets.DatasetDict) -> str | di
 
 
 class ConcatenatedDatasetLoader:
+    """A class to concatenate multiple datasets together."""
+
     def __init__(self, loaders: list[DatasetLoader]):
         self.loaders = loaders
 
     def __call__(self) -> RetrievalDataset:
+        """Load the datasets and concatenate them together."""
         dsets = [loader() for loader in self.loaders]
 
         # check there is no overlap in the kb_ids between the datasets

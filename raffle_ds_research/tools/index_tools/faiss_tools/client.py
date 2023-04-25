@@ -32,9 +32,11 @@ class FaissClient(search_server.SearchClient):
 
     @property
     def url(self) -> str:
+        """Return the URL of the server."""
         return f"{self.host}:{self.port}"
 
     def ping(self) -> bool:
+        """Ping the server."""
         try:
             response = requests.get(f"{self.url}/")
         except requests.exceptions.ConnectionError:
@@ -44,6 +46,7 @@ class FaissClient(search_server.SearchClient):
         return "OK" in response.text
 
     def search_py(self, query_vec: rtypes.Ts, top_k: int = 3) -> rtypes.RetrievalBatch[rtypes.Ts]:
+        """Search the server given a batch of vectors (slow implementation)."""
         input_type = type(query_vec)
         response = requests.post(
             f"{self.url}/search",
@@ -72,6 +75,7 @@ class FaissClient(search_server.SearchClient):
         label: Optional[list[str | int]] = None,
         top_k: int = 3,
     ) -> rtypes.RetrievalBatch[rtypes.Ts]:
+        """Search the server given a batch of vectors."""
         input_type = type(vector)
         input_type_enum, serialized_fn = {
             torch.Tensor: (rtypes.RetrievalDataType.TORCH, io.serialize_torch_tensor),
@@ -126,7 +130,9 @@ class FaissMaster(search_server.SearchMaster[FaissClient]):
         logging_level: str = "CRITICAL",
         host: str = "http://localhost",
         port: int = 7678,
+        skip_setup: bool = False,
     ):
+        super().__init__(skip_setup=skip_setup)
         self.index_path = Path(index_path)
         self.nprobe = nprobe
         self.logging_level = logging_level
@@ -159,12 +165,14 @@ class FaissMaster(search_server.SearchMaster[FaissClient]):
         return cmd
 
     def get_client(self) -> FaissClient:
+        """Get the client for interacting with the Faiss server."""
         return FaissClient(host=self.host, port=self.port)
 
 
 def decode_faiss_results(
     *, indices: str, scores: str, target_type: Type[rtypes.Ts]
 ) -> rtypes.RetrievalBatch[rtypes.Ts]:
+    """Decoded serialized faiss search results."""
     indices = io.deserialize_np_array(indices)
     scores = io.deserialize_np_array(scores)
     if target_type == torch.Tensor:

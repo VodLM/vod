@@ -9,6 +9,8 @@ defaults:
   - _self_
 
 
+seed: 1
+
 builder:
 #  name: frank.A.en.pos #+squad.en
   name: frank.A.en.pos+squad.en

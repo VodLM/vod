@@ -14,7 +14,7 @@ defaults:
 seed: ${global_seed:}
 compile: false
 model_name: ${model.encoder.pretrained_model_name_or_path}
-exp_version: "v1.7"
+exp_version: "v1.8"
 exp_suffix: ""
 exp_name: retrieval
 run_name: ${fmt_mn:${model_name}}--${rdn_name:}-${exp_version}${exp_suffix}

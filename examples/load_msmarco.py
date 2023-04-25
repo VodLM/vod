@@ -6,6 +6,8 @@ from raffle_ds_research.tools import arguantic, raffle_datasets
 
 
 class Args(arguantic.Arguantic):
+    """Arguments for the script."""
+
     language: str = "en"
     local_source_path: Optional[str] = None  # "/Users/vlievin/data/remote_data/msmarco"
     invalidate_cache: int = 0

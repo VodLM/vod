@@ -10,10 +10,11 @@ from torch.distributions import Categorical
 
 
 class Gradients(torch.nn.Module):
-    """Base class for the gradients layer.s"""
+    """Base class for the gradients layer.s."""
 
     @abc.abstractmethod
     def forward(self, intermediate_results: dict) -> dict:
+        """Compute the gradients/loss."""
         raise NotImplementedError
 
 
@@ -53,6 +54,7 @@ class SelfSupervisedGradients(Gradients):
     """Compute the gradients for the `self-supervised` method."""
 
     def forward(self, intermediate_results: dict) -> dict:
+        """Parse the inputs and compute the loss."""
         data = SupervisedGradientsInputs(**intermediate_results)
 
         # compute the scores for each pair of (question, section)
@@ -94,6 +96,7 @@ class KlDivGradients(Gradients):
         self.self_supervision_weight = self_supervision_weight
 
     def forward(self, intermediate_results: dict) -> dict:
+        """Parse the inputs and compute the loss."""
         data = SupervisedGradientsInputs(**intermediate_results)
 
         # 1. Compute the KL divergence between the model and the data

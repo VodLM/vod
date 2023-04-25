@@ -3,8 +3,9 @@ from __future__ import annotations
 import copy
 import dataclasses
 import functools
+import math
 import warnings
-from typing import Any, Iterable, Optional, T, Tuple
+from typing import Any, Iterable, Optional, Tuple
 
 import datasets
 import numpy as np
@@ -16,14 +17,10 @@ import transformers
 
 from raffle_ds_research.core.dataset_builders.utils import numpy_gumbel_like, numpy_log_softmax
 from raffle_ds_research.tools import c_tools, index_tools, pipes
-from raffle_ds_research.tools.pipes.utils.misc import pack_examples
+from raffle_ds_research.tools.pipes.utils.misc import keep_only_columns, pack_examples
 
 ROW_IDX_COL_NAME: str = "__row_idx__"
 TEST_MODE = False
-
-
-def _identity(x: T) -> T:
-    return x
 
 
 def sample_sections(
@@ -37,10 +34,10 @@ def sample_sections(
     lookup_positive_scores: bool = True,
 ) -> SampledSections:
     """Sample the positive and negative sections.
-    This function uses the Gumbel-Max trick to sample from the corresponding distributions.
-    Gumbel-Max: https://timvieira.github.io/blog/post/2014/07/31/gumbel-max-trick/
-    """
 
+    This function uses the Gumbel-Max trick to sample from the corresponding distributions.
+    Gumbel-Max: https://timvieira.github.io/blog/post/2014/07/31/gumbel-max-trick/.
+    """
     if max_pos_sections is None:
         max_pos_sections = n_sections
 
@@ -137,16 +134,18 @@ def _fill_nans_with_min(values: np.ndarray, offset_min_value: Optional[float] = 
 
 class RetrievalCollate(pipes.Collate):
     """Collate function for retrieval tasks. This function is used to convert a list of examples into a batch.
+
     Steps:
         1. Pack the examples into a batch.
         2. Tokenize the questions
         3. Search the sections (bm25, faiss, etc.)
         4. Sample the sections (top_k
-        5. Tokenize the sections"""
+        5. Tokenize the sections.
+    """
 
     _corpus: datasets.Dataset
+    _features: Optional[datasets.Dataset]
     _section_id_lookup: index_tools.LookupIndexKnowledgeBase
-    _kb_id_lookup: index_tools.LookupIndex
     tokenizer: transformers.PreTrainedTokenizer
     config: RetrievalCollateConfig
 
@@ -158,28 +157,27 @@ class RetrievalCollate(pipes.Collate):
         config: RetrievalCollateConfig,
     ):
         self._corpus = corpus
+        if len(config.ensure_match) > 0:
+            self._features = keep_only_columns(corpus, config.ensure_match)
+        else:
+            self._features = None
         self._section_id_lookup = index_tools.LookupIndexKnowledgeBase(
             corpus,
             key=config.section_id_keys.section,
             kb_key=config.kb_id_keys.section,
         )
-        self._kb_id_lookup = index_tools.LookupIndex(
-            corpus,
-            key=config.kb_id_keys.section,
-        )
         self.tokenizer = tokenizer
         self.config = config
 
     def __call__(self, examples: list[dict[str, Any]], **kwargs: Any) -> dict[str, Any]:
+        """Collate function for retrieval tasks. This function is used to convert a list of examples into a batch."""
         batch = pack_examples(examples)
 
-        # lookup the kb section ids
+        # lookup the section ids with the same `kb_id`
         kb_ids = batch[self.config.kb_id_keys.query]
-        kb_samples: index_tools.RetrievalBatch = self._kb_id_lookup.search(kb_ids)
+
         if not self.config.search_enabled:
-            # if not search service is enabled, use the sections from the same kb_id
-            candidate_samples = kb_samples
-            client_scores: dict[str, np.ndarray] = {}
+            raise ValueError("Search is not enabled. Make sure to enable `faiss` or `bm25`.")
         else:
             # fetch the query vectors
             if self.config.requires_vectors:
@@ -204,21 +202,9 @@ class RetrievalCollate(pipes.Collate):
             # concatenate the results
             candidate_samples, client_scores = _merge_candidate_samples(samples_)
 
-        if self.config.mask_out_of_kb:
-            # mask the sections that are not in the same kb_id.
-            # this is a hack: `gather_by_index` returns `-inf` for missing values,
-            #                  we set `1` for the sections that are found
-            is_found = (
-                c_tools.gather_by_index(
-                    candidate_samples.indices,
-                    kb_samples.indices,
-                    np.ones_like(kb_samples.scores),
-                )
-                > 0
-            )
-            candidate_samples.scores = np.where(is_found, candidate_samples.scores, -np.inf)
-            for k, v in client_scores.items():
-                client_scores[k] = np.where(is_found, v, -np.inf)
+        # filter the candidates base on the `config.ensure_match` keys
+        if self._features is not None:
+            candidate_samples = _ensure_match(batch=batch, candidate_samples=candidate_samples, features=self._features)
 
         # tokenize the questions
         tokenized_question = pipes.torch_tokenize_pipe(
@@ -312,9 +298,35 @@ class ClientResults:
     cfg: SearchClientConfig
 
 
+def _ensure_match(
+    *,
+    batch: dict[str, Any],
+    candidate_samples: index_tools.RetrievalBatch,
+    features: datasets.Dataset,
+) -> index_tools.RetrievalBatch:
+    """Filter the candidates sections based on the `config.ensure_match` keys."""
+    batch_features = {key: np.asarray(batch[key]) for key in features.column_names}
+    section_indices = candidate_samples.indices.flatten().tolist()
+    section_features = features[section_indices]
+
+    keep_mask = None
+    for key, batch_features_key in batch_features.items():
+        section_features_key = section_features[key]
+        section_features_key = np.asarray(section_features_key).reshape(batch_features_key.shape[0], -1)
+        keep_mask_key = batch_features_key[:, None] == section_features_key
+        if keep_mask is None:
+            keep_mask = keep_mask_key
+        else:
+            keep_mask = keep_mask & keep_mask_key
+
+    candidate_samples.scores = np.where(keep_mask, candidate_samples.scores, -math.inf)
+    return candidate_samples
+
+
 def _merge_candidate_samples(
     candidates: Iterable[ClientResults],
 ) -> Tuple[index_tools.RetrievalBatch, dict[str, np.ndarray]]:
+    """Merge the candidate samples from multiple clients."""
     candidates = list(candidates)
     if len(candidates) == 1:
         candidate = candidates[0]
@@ -352,12 +364,15 @@ def _merge_candidate_samples(
 
 @dataclasses.dataclass(frozen=True)
 class SampledSections:
+    """Holds the sampled sections (ids, scores and labels) for a batch of data."""
+
     indices: np.ndarray
     scores: np.ndarray
     labels: np.ndarray
     other_scores: Optional[dict[str, np.ndarray]] = None
 
     def to_dict(self, prefix: str = "", as_torch: bool = False) -> dict[str, np.ndarray | torch.Tensor]:
+        """Convert the sampled sections to a dictionary."""
         output = {
             f"{prefix}idx": self.indices,
             f"{prefix}score": self.scores,
@@ -374,7 +389,7 @@ class SampledSections:
         return output
 
 
-def _to_tensor(x: Any, dtype: torch.dtype, replace: Optional[dict] = None) -> torch.Tensor:
+def _to_tensor(x: list | np.ndarray | torch.Tensor, dtype: torch.dtype, replace: Optional[dict] = None) -> torch.Tensor:
     if replace is not None:
         if isinstance(x, list):
             x = [replace.get(i, i) for i in x]
@@ -447,7 +462,7 @@ class RetrievalCollateConfig(pydantic.BaseModel):
     do_sample: bool = False
     question_max_length: int = 512
     section_max_length: int = 512
-    mask_out_of_kb: bool = True
+    ensure_match: list[str] = ["kb_id"]
 
     # data required for indexing
     question_vectors: Optional[index_tools.VectorType] = None
@@ -477,18 +492,19 @@ class RetrievalCollateConfig(pydantic.BaseModel):
             self._query_vectors = index_tools.vector_handler(self.question_vectors)
 
     def __getstate__(self) -> dict[str, Any]:
-        """Drop the open ts.TensorStore object to make the state serializable."""
+        """Drop the open `ts.TensorStore` object to make the state serializable."""
         state = super().__getstate__().copy()
         state["__private_attribute_values__"].pop("_query_vectors")
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
+        """Recreate the object from the state, including re-opening the `ts.TensorStore` object."""
         super().__setstate__(state)
         if self.question_vectors is not None:
             self._query_vectors = index_tools.vector_handler(self.question_vectors)
 
     def __del__(self) -> None:
-        """Close the open ts.TensorStore object."""
+        """Close the open `ts.TensorStore` object, if any."""
         if self._query_vectors is not None:
             del self._query_vectors
 

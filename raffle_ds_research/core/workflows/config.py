@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import dataclasses
+import pathlib
 from typing import Optional, Union
 
 import omegaconf
@@ -9,10 +10,15 @@ from omegaconf import DictConfig
 
 from raffle_ds_research.core.workflows.schedule import ScheduleConfig
 from raffle_ds_research.tools.utils import loader_config
+from typing_extensions import Type, Self
 
 
 class DefaultCollateConfig(pydantic.BaseModel):
+    """Default configuration for collate functions."""
+
     class Config:
+        """Pydantic configuration."""
+
         extra = pydantic.Extra.forbid
 
     n_sections: int
@@ -107,12 +113,15 @@ class MultiIndexConfig(pydantic.BaseModel):
 
 @dataclasses.dataclass
 class DataLoaderConfigs:
+    """Configures the `torch.utils.data.Dataloader` for the train, eval, and predict stages."""
+
     train: Optional[loader_config.DataLoaderConfig]
     eval: Optional[loader_config.DataLoaderConfig]
     predict: Optional[loader_config.DataLoaderConfig]
 
     @classmethod
-    def parse(cls, config: DictConfig) -> "DataLoaderConfigs":
+    def parse(cls: Type[Self], config: DictConfig) -> Self:
+        """Parse an omegaconf config into a DataLoaderConfigs instance."""
         return cls(
             train=loader_config.DataLoaderConfig(**config.train) if config.train is not None else None,
             eval=loader_config.DataLoaderConfig(**config.eval) if config.eval is not None else None,
@@ -122,12 +131,15 @@ class DataLoaderConfigs:
 
 @dataclasses.dataclass
 class CollateConfigs:
+    """Configures the collate functions for the train, eval, and static data loaders."""
+
     train: Optional[DefaultCollateConfig]
     eval: Optional[DefaultCollateConfig]
     static: Optional[DefaultCollateConfig]
 
     @classmethod
-    def parse(cls, config: DictConfig) -> "CollateConfigs":
+    def parse(cls: Type[Self], config: DictConfig) -> Self:
+        """Parse an omegaconf config into a CollateConfigs instance."""
         return cls(
             train=DefaultCollateConfig(**config.train) if config.train is not None else None,
             eval=DefaultCollateConfig(**config.eval) if config.eval is not None else None,
@@ -136,15 +148,38 @@ class CollateConfigs:
 
 
 @dataclasses.dataclass
+class SysConfig:
+    """Configures the system directories."""
+
+    raffle_path: pathlib.Path
+    work_dir: pathlib.Path
+    cache_dir: pathlib.Path
+
+    @classmethod
+    def parse(cls: Type[Self], config: DictConfig) -> Self:
+        """Parse an omegaconf config into a CollateConfigs instance."""
+        return cls(
+            raffle_path=pathlib.Path(config.raffle_path),
+            work_dir=pathlib.Path(config.work_dir),
+            cache_dir=pathlib.Path(config.cache_dir),
+        )
+
+
+@dataclasses.dataclass
 class TrainWithIndexConfigs:
+    """Models the configuration for a workflow that trains a model and periodically indexes the data."""
+
     dataloaders: DataLoaderConfigs
     collates: CollateConfigs
     indexes: MultiIndexConfig
+    sys: SysConfig
 
     @classmethod
-    def parse(cls, config: DictConfig) -> "TrainWithIndexConfigs":
+    def parse(cls: Type[Self], config: DictConfig) -> Self:
+        """Parse an omegaconf config into a TrainWithIndexConfigs instance."""
         dataloaders = DataLoaderConfigs.parse(config.dataloaders)
         collates = CollateConfigs.parse(config.collates)
         indexes_config = MultiIndexConfig(**config.indexes)
+        sys_config = SysConfig.parse(config.sys)
 
-        return cls(dataloaders=dataloaders, collates=collates, indexes=indexes_config)
+        return cls(dataloaders=dataloaders, collates=collates, indexes=indexes_config, sys=sys_config)

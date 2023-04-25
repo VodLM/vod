@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numbers
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 import datasets
 import loguru
@@ -15,20 +15,23 @@ from raffle_ds_research.core.ml_models import Ranker
 from raffle_ds_research.utils.config import config_to_flat_dict
 
 
+T = TypeVar("T")
+
+
 def _do_nothing(*args: Any, **kwargs: Any) -> None:
     """Do nothing."""
 
 
-def _return_same(value: Any) -> Any:
+def _identity(value: T) -> T:
     """Return the same value."""
     return value
 
 
-def _cast_hps(value: Any) -> str:
+def _cast_hps(value: object) -> str:
     """Cast a value to a string."""
     formatter = {
-        numbers.Number: _return_same,
-        str: _return_same,
+        numbers.Number: _identity,
+        str: _identity,
         Path: lambda x: str(x.absolute()),
     }.get(type(value), str)
     return formatter(value)

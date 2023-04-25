@@ -32,7 +32,7 @@ from raffle_ds_research.tools.utils.exceptions import dump_exceptions_to_file
 
 
 def parse_args() -> argparse.Namespace:
-    """Parse command line arguments"""
+    """Parse command line arguments."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--index-path", type=str, required=True)
     parser.add_argument("--nprobe", type=int, default=32)
@@ -44,7 +44,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def init_index(arguments: argparse.Namespace) -> faiss.Index:
-    """Initialize the index"""
+    """Initialize the index."""
     logger.info("Initializing index")
     index = faiss.read_index(arguments.index_path)
     index.nprobe = arguments.nprobe
@@ -61,7 +61,7 @@ faiss_index = init_index(args)
 
 @app.get("/")
 def health_check() -> str:
-    """Check if the index is ready"""
+    """Check if the index is ready."""
     if faiss_index.ntotal == 0:
         return "ERROR: Index is empty"
     if not faiss_index.is_trained:
@@ -72,7 +72,7 @@ def health_check() -> str:
 
 @app.post("/search")
 async def search(query: SearchFaissQuery) -> FaissSearchResponse:
-    """Search the index"""
+    """Search the index."""
     query_vec = np.array(query.vectors, dtype=np.float32)
     scores, indices = faiss_index.search(query_vec, k=query.top_k)
     return FaissSearchResponse(scores=scores.tolist(), indices=indices.tolist())
@@ -81,9 +81,7 @@ async def search(query: SearchFaissQuery) -> FaissSearchResponse:
 @dump_exceptions_to_file
 @app.post("/fast-search")
 async def fast_search(query: FastSearchFaissQuery) -> FastFaissSearchResponse:
-    """Search the index.
-    TODO: use gRPC to speed up communication.
-    """
+    """Search the index."""
     try:
         deserializer = {
             RetrievalDataType.NUMPY: io.deserialize_np_array,
@@ -103,7 +101,7 @@ async def fast_search(query: FastSearchFaissQuery) -> FastFaissSearchResponse:
 
 
 def run_faiss_server(host: str = args.host, port: int = args.port) -> None:
-    """Start the API"""
+    """Start the API."""
     pattern = re.compile(r"^(http|https)://")
     host = re.sub(pattern, "", host)
     uvicorn.run(app, host=host, port=port, workers=1, log_level=args.logging_level.lower())

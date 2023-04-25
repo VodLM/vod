@@ -10,7 +10,7 @@ def numpy_gumbel_like(x: np.ndarray, eps: float = 1e-20) -> np.ndarray:
 
 
 def numpy_log_softmax(x: np.ndarray, axis: int = -1) -> np.ndarray:
-    """https://github.com/scipy/scipy/blob/c1ed5ece8ffbf05356a22a8106affcd11bd3aee0/scipy/special/_logsumexp.py#L228"""
+    """https://github.com/scipy/scipy/blob/c1ed5ece8ffbf05356a22a8106affcd11bd3aee0/scipy/special/_logsumexp.py#L228."""
     x_max = np.amax(x, axis=axis, keepdims=True)
 
     if x_max.ndim > 0:

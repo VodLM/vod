@@ -4,6 +4,8 @@ from raffle_ds_research.tools import arguantic, raffle_datasets
 
 
 class Args(arguantic.Arguantic):
+    """Arguments for the script."""
+
     language: str = "en"
     split: str = "A"
     version: int = 0

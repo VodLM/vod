@@ -21,7 +21,7 @@ def build_index(
     add_batch_size: Optional[int] = None,
     faiss_metric: int = faiss.METRIC_INNER_PRODUCT,
 ) -> faiss.Index:
-    """Build an index from a factory string"""
+    """Build an index from a factory string."""
     vectors = vector_handler(vectors)
     if len(vectors.shape) != 2:
         raise ValueError(f"Only 2D tensors can be handled. Found shape `{vectors.shape}`")

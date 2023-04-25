@@ -14,6 +14,8 @@ from raffle_ds_research.tools.index_tools import faiss_tools
 
 
 class ProfileArgs(arguantic.Arguantic):
+    """Arguments for the script."""
+
     n_calls: int = 1_000
     nprobe: int = 10
     batch_size: int = 10

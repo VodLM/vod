@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import dataclasses
 from typing import Any, Callable, Optional, Union
+from typing_extensions import Type, Self
 
 import datasets
 import numpy as np
@@ -35,7 +36,8 @@ class DatasetArgs:
     only_positive_sections: bool = False
 
     @classmethod
-    def parse(cls, x: str) -> "DatasetArgs":
+    def parse(cls: Type[Self], x: str) -> Self:
+        """Parses a dataset name into a structured object."""
         if x.endswith(".pos"):
             only_positive_sections = True
             x = x.replace(".pos", "")
@@ -58,6 +60,7 @@ class DatasetArgs:
         )
 
     def to_dict(self) -> dict[str, Any]:
+        """Returns a dictionary representation of this object."""
         return dict(
             name=self.name,
             subset_name=self.subset_name,
@@ -89,7 +92,7 @@ class RetrievalBuilderConfig(pydantic.BaseModel):
     dl_sampler: Optional[DataloaderSampler] = None
 
     @pydantic.validator("splits", pre=True)
-    def _validate_splits(cls, splits: Any) -> list[str]:
+    def _validate_splits(cls, splits: list[str | omegaconf.ListConfig]) -> list[str]:
         """Converts splits to a list if they are an OmegaConf ListConfig."""
         if isinstance(splits, omegaconf.ListConfig):
             splits = omegaconf.OmegaConf.to_container(splits)
@@ -98,14 +101,14 @@ class RetrievalBuilderConfig(pydantic.BaseModel):
         return splits
 
     @pydantic.validator("templates", pre=True)
-    def _validate_templates(cls, templates: Any) -> dict[str, str]:
+    def _validate_templates(cls, templates: None | dict[str, str] | omegaconf.DictConfig) -> dict[str, str]:
         """Converts templates to a dict if they are an OmegaConf DictConfig."""
         if isinstance(templates, omegaconf.DictConfig):
             templates = omegaconf.OmegaConf.to_container(templates)
         return templates
 
     @pydantic.validator("prep_map_kwargs", pre=True)
-    def _validate_prep_map_kwargs(cls, prep_map_kwargs: Any) -> dict[str, Any]:
+    def _validate_prep_map_kwargs(cls, prep_map_kwargs: dict[str, Any] | omegaconf.DictConfig) -> dict[str, Any]:
         """Converts prep_map_kwargs to a dict if they are an OmegaConf DictConfig."""
         if isinstance(prep_map_kwargs, omegaconf.DictConfig):
             prep_map_kwargs = omegaconf.OmegaConf.to_container(prep_map_kwargs)
@@ -113,14 +116,16 @@ class RetrievalBuilderConfig(pydantic.BaseModel):
         return prep_map_kwargs
 
     @pydantic.validator("hf_load_kwargs", pre=True)
-    def _validate_hf_load_kwargs(cls, hf_load_kwargs: Any) -> dict[str, Any]:
+    def _validate_hf_load_kwargs(cls, hf_load_kwargs: dict[str, Any] | omegaconf.DictConfig) -> dict[str, Any]:
         """Converts hf_load_kwargs to a dict if they are an OmegaConf DictConfig."""
         if isinstance(hf_load_kwargs, omegaconf.DictConfig):
             hf_load_kwargs = omegaconf.OmegaConf.to_container(hf_load_kwargs)
         return hf_load_kwargs
 
     @pydantic.validator("subset_size", pre=True)
-    def _validate_subset_size(cls, subset_size: Any) -> Union[int, dict[str, int]]:
+    def _validate_subset_size(
+        cls, subset_size: int | dict[str, int] | omegaconf.DictConfig
+    ) -> Union[int, dict[str, int]]:
         if isinstance(subset_size, omegaconf.DictConfig):
             subset_size = omegaconf.OmegaConf.to_container(subset_size)
         return subset_size
@@ -175,7 +180,7 @@ class RetrievalBuilder(dataset_builder.DatasetBuilder[datasets.DatasetDict, Retr
         self.name = name
 
     @classmethod
-    def from_name(cls, name: str, **config: Any) -> "RetrievalBuilder":
+    def from_name(cls: Type[Self], name: str, **config: Any) -> Self:
         """Returns a dataset builder from a dataset name."""
         names = name.split("+") if "+" in name else [name]
         parts = []
@@ -210,6 +215,7 @@ class RetrievalBuilder(dataset_builder.DatasetBuilder[datasets.DatasetDict, Retr
         return {**self.config.prep_map_kwargs, **overrides, **always_on}
 
     def get_corpus(self) -> datasets.Dataset:
+        """Returns the document sections for the dataset."""
         dset = self._load_fn()
         section_prep = pipes.Partial(
             pipes.template_pipe,
@@ -224,6 +230,7 @@ class RetrievalBuilder(dataset_builder.DatasetBuilder[datasets.DatasetDict, Retr
         return sections
 
     def __call__(self) -> datasets.DatasetDict:
+        """Build and return the dataset."""
         dset = self._load_fn().qa_splits
         self._validate_questions(dset)
 
@@ -244,6 +251,10 @@ class RetrievalBuilder(dataset_builder.DatasetBuilder[datasets.DatasetDict, Retr
     def get_collate_fn(
         self, config: Optional[retrieval_collate.RetrievalCollateConfig] = None
     ) -> retrieval_collate.RetrievalCollate:
+        """Returns a collate function for the dataset.
+
+        A collate function is a function that takes a list of examples and returns a batch.
+        """
         if config is None:
             config = retrieval_collate.RetrievalCollateConfig()
         if isinstance(config, (dict, omegaconf.DictConfig)):
@@ -259,7 +270,6 @@ class RetrievalBuilder(dataset_builder.DatasetBuilder[datasets.DatasetDict, Retr
 
     def get_sampler(self, split: str = "train") -> Optional[torch_data.Sampler]:
         """Returns a sampler for the given split. The sampler add inverse-frequency weights to each label value."""
-
         if self.config.dl_sampler is None:
             return None
 
@@ -309,9 +319,11 @@ class RetrievalBuilder(dataset_builder.DatasetBuilder[datasets.DatasetDict, Retr
             SectionModel(**row)
 
     def __repr__(self) -> str:
+        """Returns a string representation of the dataset builder."""
         return f"{self.__class__.__name__}(config={self.config.__repr__()})"
 
     def __str__(self) -> str:
+        """Returns a string representation of the dataset builder."""
         return f"{self.__class__.__name__}(config={self.config.__str__()})"
 
 

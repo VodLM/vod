@@ -18,6 +18,7 @@ class Sequential(Pipe):
         self.with_updates = with_updates
 
     def __call__(self, batch: dict[str, Any], idx: Optional[list[int]] = None, **kwargs: Any) -> dict[str, Any]:
+        """Call a sequence of Pipes."""
         for pipe in self.pipes:
             batch = copy(batch)
             batch_ = pipe(batch, idx, **kwargs)

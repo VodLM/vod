@@ -23,7 +23,7 @@ def print_metric_groups(metrics: dict[str, Any], header: Optional[str] = None) -
     table.add_column("group", justify="left", style="green")
     table.add_column("Value", justify="right", style="magenta")
 
-    def _make_row(key: str, value: Any) -> TableRow:
+    def _make_row(key: str, value: Any) -> TableRow:  # noqa: ANN401
         *group, metric = key.split("/")
         group = "/".join(group)
         return TableRow(key=metric, group=group, value=float(value))

@@ -19,7 +19,7 @@ dotenv.load_dotenv(Path(__file__).parent / ".predict.env")
 
 
 class Encoder(torch.nn.Module):
-    """Transformer Encoder"""
+    """Transformer Encoder."""
 
     def __init__(self, bert: BertModel):
         super().__init__()
@@ -32,6 +32,7 @@ class Encoder(torch.nn.Module):
 
 
 def run() -> None:
+    """Showcase the predict module."""
     model_name = "google/bert_uncased_L-4_H-256_A-4"
     bert = transformers.AutoModel.from_pretrained(model_name)
     model = Encoder(bert)

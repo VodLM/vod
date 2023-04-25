@@ -15,16 +15,21 @@ from raffle_ds_research.tools.index_tools import retrieval_data_type as rtypes
 
 
 class DoNotPickleError(Exception):
+    """An exception to raise when an object cannot be pickled."""
+
     def __init__(self, msg: Optional[str] = None):
         msg = msg or "This object cannot be pickled."
         super().__init__(msg)
 
 
 class SearchClient(abc.ABC):
+    """A client to interact with a search server."""
+
     requires_vectors: bool = True
 
     @abc.abstractmethod
     def ping(self) -> bool:
+        """Ping the server."""
         raise NotImplementedError()
 
     @abc.abstractmethod
@@ -36,6 +41,7 @@ class SearchClient(abc.ABC):
         label: Optional[list[str | int]] = None,
         top_k: int = 3,
     ) -> rtypes.RetrievalBatch[rtypes.Ts]:
+        """Search the server given a batch of text and/or vectors."""
         raise NotImplementedError()
 
 
@@ -43,16 +49,28 @@ Sc = TypeVar("Sc", bound=SearchClient)
 
 
 class SearchMaster(Generic[Sc], abc.ABC):
+    """A class that manages a search server."""
+
     _timeout: float = 180
     _server_proc: Optional[subprocess.Popen] = None
     _allow_existing_server: bool = False
+    skip_setup: bool
+
+    def __init__(self, skip_setup: bool = False) -> None:
+        self.skip_setup = skip_setup
 
     def __enter__(self) -> "Self":
-        self._server_proc = self._start_server()
-        self._on_init()
+        """Start the server."""
+        if not self.skip_setup:
+            self._setup()
         return self
 
-    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+    def _setup(self) -> None:
+        self._server_proc = self._start_server()
+        self._on_init()
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:  # noqa: ANN401
+        """Kill the server."""
         self._on_exit()
         if self._server_proc is not None:
             self._server_proc.terminate()
@@ -65,6 +83,7 @@ class SearchMaster(Generic[Sc], abc.ABC):
 
     @abc.abstractmethod
     def get_client(self) -> Sc:
+        """Return a client to the server."""
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -105,15 +124,18 @@ class SearchMaster(Generic[Sc], abc.ABC):
 
     @property
     def service_name(self) -> str:
+        """Return the name of the service."""
         return self.__class__.__name__.lower()
 
     def __getstate__(self) -> dict[str, Any]:
+        """Prevent pickling."""
         raise DoNotPickleError(
             f"{type(self).__name__} is not pickleable. "
             f"To use in multiprocessing, using a client instead (`server.get_client()`)."
         )
 
     def __setstate__(self, state: dict[str, Any]) -> None:
+        """Prevent unpickling."""
         raise DoNotPickleError(
             f"{type(self).__name__} is not pickleable. "
             f"To use in multiprocessing, using a client instead (`server.get_client()`)."

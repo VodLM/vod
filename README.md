@@ -2,11 +2,10 @@
 
 User-friendly and scalable experimentation framework for modern NLP
 
-
 ## Install
 
 ```shell
-poetry env use 3.10 # <- requires python 3.10 to be installed
+poetry env use 3.9 # <- requires python 3.9 to be installed
 poetry install
 
 # in case of `InitError` (on GCP): run the following
@@ -19,10 +18,16 @@ poetry install
 # --> see `https://github.com/facebookresearch/faiss/issues/2317`
 conda install -c pytorch faiss-cpu
 
-# Install `elasticsearch`
+# Install and start `elasticsearch`
 # https://www.elastic.co/guide/en/elasticsearch/reference/current/deb.html
-# start elasticsearch
-sudo systemctl enable elasticsearch.service --now
+wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | sudo gpg --dearmor -o /usr/share/keyrings/elasticsearch-keyring.gpg
+sudo apt-get update
+sudo apt-get install apt-transport-https
+echo "deb [signed-by=/usr/share/keyrings/elasticsearch-keyring.gpg] https://artifacts.elastic.co/packages/8.x/apt stable main" | sudo tee /etc/apt/sources.list.d/elastic-8.x.list
+sudo apt-get update && sudo apt-get install elasticsearch
+sudo /bin/systemctl daemon-reload
+sudo /bin/systemctl enable elasticsearch.service
+sudo systemctl start elasticsearch.service
 ```
 
 ## Usage
@@ -30,12 +35,14 @@ sudo systemctl enable elasticsearch.service --now
 ### Train models
 
 To train a model, use:
+
 ```shell
 poetry run train
 ```
 
 The `train` endpoint uses `hydra` to parse arguments and configure the run.
 See `configs/main.yaml` for the default configuration. You can override any of the default values by passing them as arguments to the `train` endpoint. For example, to train a model with a different encoder, use:
+
 ```shell
 poetry run train model/encoder=t5-base batch_size.per_device=4
 ```
@@ -43,8 +50,9 @@ poetry run train model/encoder=t5-base batch_size.per_device=4
 Recipes define a pre-configured set of arguments.
 Recipes are defined in `configs/recipe`.
 To use a recipe, for example `t5-base`, use:
+
 ```shell
-poetry run train +recipe=t5-base
+poetry run train +recipe=frank-t5-base
 ```
 
 ### Serve a model for testing

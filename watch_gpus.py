@@ -18,7 +18,7 @@ class Arguments(arguantic.Arguantic):
 
 
 def get_user_processes(exclude_users: Optional[list[str]] = None) -> list[dict]:
-    """Return the list of user CUDA processes"""
+    """Return the list of user CUDA processes."""
     stats = gpustat.new_query().jsonify()
     processes = [p for gpu in stats["gpus"] for p in gpu["processes"]]
     if exclude_users is not None:

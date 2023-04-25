@@ -28,6 +28,8 @@ from .wrappers import CollateWithIndices, DatasetWithIndices, _warp_as_lightning
 
 
 class DataLoaderForPredictKwargs(loader_config.DataLoaderConfig):
+    """Confiuguration for `torch.utils.data.Dataloader` for predictions."""
+
     @pydantic.validator("shuffle", pre=True)
     def _force_shuffle(cls, value: bool) -> bool:
         if value:
@@ -46,9 +48,9 @@ def predict(
     loader_kwargs: Optional[dict[str, Any] | DictConfig | loader_config.DataLoaderConfig] = None,
     ts_kwargs: Optional[dict[str, Any]] = None,
     validate_store: bool | int = True,
+    read_only: bool = False,
 ) -> TensorStoreFactory | dict[str, TensorStoreFactory]:
-    """
-    Compute predictions for a dataset and store them in a tensorstore
+    """Compute predictions for a dataset and store them in a tensorstore.
 
     Note: the fingerprint of the collate_fn changes after a call of `_predict_single`. Can't figure out why.
     """
@@ -65,6 +67,7 @@ def predict(
             loader_kwargs=loader_kwargs,
             ts_kwargs=ts_kwargs,
             validate_store=validate_store,
+            read_only=read_only,
         )
     else:
         return _predict_single(
@@ -77,6 +80,7 @@ def predict(
             loader_kwargs=loader_kwargs,
             ts_kwargs=ts_kwargs,
             validate_store=validate_store,
+            read_only=read_only,
         )
 
 
@@ -91,8 +95,9 @@ def _predict_dict(
     loader_kwargs: Optional[dict[str, Any] | DictConfig | loader_config.DataLoaderConfig] = None,
     ts_kwargs: Optional[dict[str, Any]] = None,
     validate_store: bool | int = True,
+    read_only: bool = False,
 ) -> dict[str, TensorStoreFactory]:
-    """Compute predictions for a dataset and store them in a tensorstore"""
+    """Compute predictions for a dataset and store them in a tensorstore."""
     return {
         split: _predict_single(
             dset,
@@ -104,8 +109,9 @@ def _predict_dict(
             loader_kwargs=loader_kwargs,
             ts_kwargs=ts_kwargs,
             validate_store=validate_store,
+            read_only=read_only,
         )
-        for split, dset in dataset.items()
+        for split, dset in sorted(dataset.items(), key=lambda x: x[0])
     }
 
 
@@ -120,9 +126,9 @@ def _predict_single(
     loader_kwargs: Optional[dict[str, Any] | DictConfig | loader_config.DataLoaderConfig] = None,
     ts_kwargs: Optional[dict[str, Any]] = None,
     validate_store: bool | int = True,
+    read_only: bool = False,
 ) -> TensorStoreFactory:
-    """Compute predictions for a dataset and store them in a tensorstore"""
-
+    """Compute predictions for a dataset and store them in a tensorstore."""
     # set the fingerprint and define the store path
     op_fingerprint = _make_fingerprint(
         dataset=dataset,
@@ -131,7 +137,6 @@ def _predict_single(
         model_output_key=model_output_key,
     )
     logger.debug(f"Computing vectors with fingerprint `{op_fingerprint}`")
-
     index_path = Path(cache_dir, "predictions", f"{op_fingerprint}.ts")
     index_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -146,12 +151,15 @@ def _predict_single(
         shape=dset_shape,
         **ts_kwargs,
     )
-    if index_path.exists():
+
+    if read_only:
+        if not index_path.exists():
+            raise FileNotFoundError(f"Could not find TensorStore at path `{index_path}`.")
         logger.info(f"Loading TensorStore from path `{index_path}`. Shape={dset_shape}")
         store = ts_config.open(create=False)
     else:
         logger.debug(f"creating TensorStore at path `{index_path}`. Shape={dset_shape}")
-        store = ts_config.open(create=True, delete_existing=False)
+        store = ts_config.open(create=not index_path.exists(), delete_existing=False)
 
         # compute the predictions
         try:
@@ -171,15 +179,19 @@ def _predict_single(
             del store
             raise e
 
+    # wait for all workers to finish
+    trainer.strategy.barrier(f"predict(fingerprint={op_fingerprint})")
+
     # validate that all store values have been initialized
     if validate_store:
         n_samples = math.inf if isinstance(validate_store, bool) else validate_store
         logger.debug(f"Validating the store using `{n_samples}` samples (all rows must be non-zero)")
         zero_ids = list(_get_zero_vec_indices(store, n_samples=n_samples))
         if len(zero_ids) > 0:
+            frac = len(zero_ids) / len(dataset)
             zero_ids_ = zero_ids if len(zero_ids) < 5 else [str(x) for x in zero_ids[:5]] + ["..."]
             raise ValueError(
-                f"Vector at indices {zero_ids_} are all zeros. "
+                f"Vector at indices {zero_ids_} are all zeros ({frac:.1%}). "
                 f"This happens if the store has been initialized but not updated with predictions. "
                 f"Please delete the store at `{index_path}` and try again. "
                 f"NB: this could happen if the model outputs zero vectors."
@@ -221,7 +233,7 @@ def _infer_vector_shape(
 def _get_zero_vec_indices(store: tensorstore.TensorStore, n_samples: int) -> Iterable[int]:
     store_size = store.shape[0]
     if n_samples < store_size:
-        ids = np.linspace(0, store_size - 1, n_samples, dtype=np.int64)
+        ids = np.random.choice(store_size, n_samples, replace=False)
     else:
         ids = range(store_size)
     prefetched, i = None, 0
@@ -248,7 +260,7 @@ def _compute_and_store_predictions(
     loader_kwargs: Optional[dict[str, Any] | DictConfig | loader_config.DataLoaderConfig] = None,
     model_output_key: Optional[str] = None,
 ) -> tensorstore.TensorStore:
-    """Compute predictions for a dataset and store them in a tensorstore"""
+    """Compute predictions for a dataset and store them in a tensorstore."""
     dset_with_ids: DatasetProtocol = DatasetWithIndices(dataset)
     collate_fn_with_ids: pipes.Collate = CollateWithIndices(collate_fn)
     pl_model: pl.LightningModule = _warp_as_lightning_model(model)
@@ -269,7 +281,7 @@ def _compute_and_store_predictions(
 
     # process the dataset and store the predictions in the tensorstore
     with StorePredictions(trainer, store, model_output_key=model_output_key):
-        trainer.predict(pl_model, dataloaders=loader)
+        trainer.predict(pl_model, dataloaders=loader, return_predictions=False)
 
     return store
 

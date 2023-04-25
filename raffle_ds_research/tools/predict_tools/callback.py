@@ -11,7 +11,9 @@ import torch
 from .wrappers import PREDICT_IDX_COL_NAME
 
 
-class StorePredictions(object):
+class StorePredictions:
+    """Context manager to store the predictions of a model to a `ts.TensorStore`."""
+
     def __init__(
         self,
         trainer: pl.Trainer,
@@ -22,14 +24,16 @@ class StorePredictions(object):
         self.callback = TensorStoreCallback(store, model_output_key)
 
     def __enter__(self) -> None:
+        """Add the callback to the trainer."""
         self.trainer.callbacks.append(self.callback)  # type: ignore
 
-    def __exit__(self, exception_type: Any, exception_value: Any, traceback: Any) -> None:
+    def __exit__(self, exception_type: Any, exception_value: Any, traceback: Any) -> None:  # noqa: ANN401
+        """Remove the callback from the trainer."""
         self.trainer.callbacks.remove(self.callback)  # type: ignore
 
 
 class TensorStoreCallback(pl.Callback):
-    """Allows storing the output of each `prediction_step` into a `ts.TensorStore`"""
+    """Allows storing the output of each `prediction_step` into a `ts.TensorStore`."""
 
     def __init__(
         self,
@@ -41,14 +45,14 @@ class TensorStoreCallback(pl.Callback):
 
     def on_predict_batch_end(
         self,
-        trainer: "pl.Trainer",
-        pl_module: "pl.LightningModule",
-        outputs: Any,
-        batch: Any,
+        trainer: pl.Trainer,
+        pl_module: pl.LightningModule,
+        outputs: dict[str, Any],
+        batch: dict[str, Any],
         batch_idx: int,
         dataloader_idx: int = 0,
     ) -> None:
-        """store the outputs of the prediction step to the cache"""
+        """Store the outputs of the prediction step to the cache."""
         try:
             indices = batch[PREDICT_IDX_COL_NAME]
         except KeyError as exc:
@@ -71,7 +75,7 @@ def _write_vectors_to_store(
     idx: List[int],
     asynchronous: bool = False,
 ) -> Optional[Future]:
-    """write vectors to a `TensorStore`."""
+    """Write vectors to a `TensorStore`."""
     if idx is None:
         raise ValueError("idx must be provided")
     vectors = vectors.detach().cpu().numpy()

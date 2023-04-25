@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Iterable, Literal, Union
+from typing_extensions import Type, Self
 
 import pydantic
 import tensorstore
@@ -14,7 +15,7 @@ class TensorStoreKvStoreConfig(BaseModel):
     """Configuration for a TensorStore key-value store."""
 
     class Config:
-        """pydantic config for TensorStoreKvStoreConfig"""
+        """pydantic config for TensorStoreKvStoreConfig."""
 
         allow_mutation = False
         extra = pydantic.Extra.forbid
@@ -23,16 +24,15 @@ class TensorStoreKvStoreConfig(BaseModel):
     path: str
 
     @pydantic.validator("path", pre=True)
-    def _validate_path(cls, value: Any) -> str:
+    def _validate_path(cls, value: str | Path) -> str:
         return str(Path(value).expanduser().absolute())
 
 
 class TensorStoreFactory(BaseModel):
-    """This class represents a TensorStore configuration.
-    Open a store using the `open` method."""
+    """This class represents a TensorStore configuration. Open a store using the `open` method."""
 
     class Config:
-        """pydantic config for TensorStoreFactory"""
+        """pydantic config for TensorStoreFactory."""
 
         allow_mutation = False
         extra = pydantic.Extra.forbid
@@ -49,13 +49,13 @@ class TensorStoreFactory(BaseModel):
 
     @classmethod
     def from_factory(
-        cls,
+        cls: Type[Self],
         path: Union[str, Path],
         shape: Iterable[int],
         chunk_size: int = 100,
         driver: Literal["n5", "zarr"] = "zarr",
         dtype: Literal["float16", "float32", "float64"] = "float32",
-    ) -> "TensorStoreFactory":
+    ) -> Self:
         """Instantiate a `TensorStoreFactory` from a path and shape."""
         shape = tuple(shape)
         driver_meta = {

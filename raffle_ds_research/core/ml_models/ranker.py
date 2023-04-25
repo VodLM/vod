@@ -27,7 +27,7 @@ def only_trainable(parameters: Iterable[torch.nn.Parameter]) -> Iterable[torch.n
     return (p for p in parameters if p.requires_grad)
 
 
-def maybe_instantiate(conf_or_obj: Union[Any, DictConfig], **kwargs: Any) -> Any:
+def maybe_instantiate(conf_or_obj: Union[Any, DictConfig], **kwargs: Any) -> object:
     """Instantiate a config if needed."""
     if isinstance(conf_or_obj, (DictConfig, dict)):
         return instantiate(conf_or_obj, **kwargs)
@@ -98,8 +98,7 @@ class Ranker(pl.LightningModule):
         return h_model
 
     def configure_optimizers(self) -> dict:
-        # optimizer and scheduler
-
+        """Configure the optimizer and the learning rate scheduler."""
         # define the optimizer using the above groups
         # todo: do not apply weight decay to bias and LayerNorm parameters
         #       do this with a special constructor for the optimizer
@@ -164,7 +163,7 @@ class Ranker(pl.LightningModule):
         return output
 
     def predict(self, batch: dict, **kwargs: Any) -> dict[str, torch.Tensor]:
-        """computes the embeddings for the query and the document."""
+        """Computes the embeddings for the query and the document."""
         mapping = {"question": "hq", "section": "hd"}
         output = {}
         for field, key in mapping.items():
@@ -231,12 +230,15 @@ class Ranker(pl.LightningModule):
         return output
 
     def training_step(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        """Implements the lightning training step."""
         return self._step(*args, split="train", **kwargs)
 
     def validation_step(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        """Implements the lightning validation step."""
         return self._step(*args, split="val", **kwargs)
 
     def test_step(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        """Implements the lightning test step."""
         return self._step(*args, split="test", **kwargs)
 
     # Compute metrics
@@ -249,12 +251,15 @@ class Ranker(pl.LightningModule):
         return {}
 
     def on_train_epoch_end(self) -> None:
+        """Called at the end of the train epoch."""
         self._on_epoch_end(split="train")
 
     def on_validation_epoch_end(self) -> None:
+        """Called at the end of the validation epoch."""
         self._on_epoch_end(split="val")
 
     def on_test_epoch_end(self) -> None:
+        """Called at the end of the test epoch."""
         self._on_epoch_end(split="test")
 
     # Init monitors
@@ -263,12 +268,15 @@ class Ranker(pl.LightningModule):
             self.monitor.reset(split=split)
 
     def on_train_epoch_start(self) -> None:
+        """Called at the beginning of the train epoch."""
         self._on_epoch_start(split="train")
 
     def on_validation_epoch_start(self) -> None:
+        """Called at the beginning of the validation epoch."""
         self._on_epoch_start(split="val")
 
     def on_test_epoch_start(self) -> None:
+        """Called at the beginning of the test epoch."""
         self._on_epoch_start(split="test")
 
 

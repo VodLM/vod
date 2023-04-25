@@ -20,6 +20,7 @@ class VectorHandler(Generic[Ts], abc.ABC):
 
     @abc.abstractmethod
     def __getitem__(self, item: int | slice | Iterable[int]) -> Ts:
+        """Slice the vector and return the result."""
         raise NotImplementedError
 
     @property
@@ -32,6 +33,7 @@ class VectorHandler(Generic[Ts], abc.ABC):
         raise NotImplementedError
 
     def __len__(self) -> int:
+        """Return the length of the vector."""
         return self.shape[0]
 
     def iter_batches(self, batch_size: int) -> Iterable[tuple[Ts, Ts]]:
@@ -49,6 +51,7 @@ class VectorHandler(Generic[Ts], abc.ABC):
             yield ids, vec
 
     def __repr__(self) -> str:
+        """String representation of the vector handler."""
         return f"{type(self).__name__}(shape={self.shape})"
 
 
@@ -59,6 +62,7 @@ class TorchVectorHandler(VectorHandler[torch.Tensor]):
         self.vectors = vectors.detach().data.cpu()
 
     def __getitem__(self, item: int | slice | Iterable[int]) -> torch.Tensor:
+        """Slice the tensor and return the result."""
         return self.vectors[item]
 
     def _get_shape(self) -> tuple[int, ...]:
@@ -66,6 +70,7 @@ class TorchVectorHandler(VectorHandler[torch.Tensor]):
 
     @property
     def shape(self) -> tuple[int, ...]:
+        """Return the shape of the vector."""
         return self.vectors.shape
 
 
@@ -76,6 +81,7 @@ class NumpyVectorHandler(VectorHandler[np.ndarray]):
         self.vectors = vectors
 
     def __getitem__(self, item: int | slice | Iterable[int]) -> np.ndarray:
+        """Slice the array and return the result."""
         return self.vectors[item]
 
     def _get_shape(self) -> tuple[int, ...]:
@@ -89,6 +95,7 @@ class TensorStoreVectorHandler(VectorHandler[np.ndarray]):
         self.vectors = vectors
 
     def __getitem__(self, item: int | slice | Iterable[int]) -> np.ndarray:
+        """Slice the stored vector and return the result."""
         return self.vectors[item].read().result()
 
     def _get_shape(self) -> tuple[int, ...]:

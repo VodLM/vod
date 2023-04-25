@@ -9,6 +9,7 @@ class Pipe(Protocol):
         ...
 
     def __call__(self, batch: dict[str, Any], idx: Optional[list[int]] = None, **kwargs: Any) -> dict[str, Any]:
+        """Apply a transformation to a batch of data."""
         ...
 
 
@@ -20,4 +21,5 @@ class Collate(Protocol):
         ...
 
     def __call__(self, examples: Iterable[dict[str, Any]], **kwargs: Any) -> dict[str, Any]:
+        """Apply the collate function to a list of examples, transforming it into a batch."""
         ...

@@ -80,6 +80,7 @@ def instantiate_retrieval_dataloader(
     dset_split: str,
     use_sampler: bool = False,
 ) -> torch.utils.data.DataLoader:
+    """Instantiate a dataloader for a given split of the dataset."""
     full_collate_config = builder.collate_config(
         question_vectors=manager.vectors.dataset.get(dset_split, None),
         clients=manager.clients,

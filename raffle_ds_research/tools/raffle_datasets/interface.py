@@ -12,12 +12,15 @@ LANGUAGE_CODES = ["en", "es", "de", "fr", "it", "nl", "pt", "ru", "tr", "zh", "d
 
 
 class DatasetLoaderFn(Protocol):
+    """A Factory method to load a Raffle dataset."""
+
     def __call__(
         self,
         name: str,
         cache_dir: Optional[str],
         keep_in_memory: Optional[bool],
     ) -> Union[HfDataset, HfDatasetDict]:
+        """Load the dataset."""
         ...
 
 

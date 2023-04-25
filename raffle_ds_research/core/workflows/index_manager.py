@@ -98,6 +98,7 @@ class IndexManager:
             cache_dir = self._cache_dir
 
         loguru.logger.info(f"Setting up index at `{cache_dir}`")
+        is_rank_zero = self.trainer.global_rank == 0
 
         # init the bm25 index
         bm25_weight = self.index_cfg.bm25.get_weight(self.trainer.global_step)
@@ -114,6 +115,7 @@ class IndexManager:
                 index_name=index_name,
                 exist_ok=True,
                 persistent=True,
+                skip_setup=not is_rank_zero,
             )
             bm25_master = self._bm25_master.__enter__()
         else:
@@ -126,12 +128,22 @@ class IndexManager:
             self._vectors = self._compute_vectors(cache_dir)
 
             # build the faiss index and save to disk
-            faiss_index = faiss_tools.build_index(self._vectors.sections, factory_string=self.index_cfg.faiss.factory)
             faiss_path = Path(cache_dir, "index.faiss")
-            faiss.write_index(faiss_index, str(faiss_path))
+            if is_rank_zero:
+                # build the faiss index, but only on the main process
+                faiss_index = faiss_tools.build_index(
+                    self._vectors.sections,
+                    factory_string=self.index_cfg.faiss.factory,
+                )
+                faiss.write_index(faiss_index, str(faiss_path))
 
             # spin up the faiss server
-            self._faiss_master = index_tools.FaissMaster(faiss_path, self.index_cfg.faiss.nprobe)
+            self.trainer.strategy.barrier("faiss_index_setup")
+            self._faiss_master = index_tools.FaissMaster(
+                faiss_path,
+                self.index_cfg.faiss.nprobe,
+                skip_setup=not is_rank_zero,
+            )
             faiss_master = self._faiss_master.__enter__()
 
         else:
@@ -161,7 +173,7 @@ class IndexManager:
 
         return self
 
-    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:  # noqa: ANN401
         """Clean up everything."""
         self._clients = None
         self._vectors = None

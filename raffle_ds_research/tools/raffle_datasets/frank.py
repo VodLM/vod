@@ -26,16 +26,22 @@ from raffle_ds_research.tools.raffle_datasets.base import (
 
 
 class FrankSplitName(enum.Enum):
+    """The Frank dataset splits."""
+
     A = "A"
     B = "B"
 
 
 class FrankSectionModel(SectionModel):
+    """A Frank section."""
+
     kb_id: int = pydantic.Field(..., alias="knowledge_base_id")
     answer_id: int
 
 
 class FrankQueryModel(QueryModel):
+    """A Frank query."""
+
     text: str = pydantic.Field(..., alias="question")
     category: Optional[str] = None
     label_method_type: Optional[str] = None
@@ -44,9 +50,12 @@ class FrankQueryModel(QueryModel):
 
 
 class HfFrankPart(RetrievalDataset):
+    """A part of the Frank dataset (A or B)."""
+
     split: FrankSplitName
 
     def __add__(self, other: "HfFrankPart") -> "HfFrankPart":
+        """Merge two parts of the Frank dataset."""
         if not isinstance(other, HfFrankPart):
             raise TypeError(f"Expected HfFrankPart, got {type(other)}")
         if not self.split == other.split:
@@ -181,7 +190,7 @@ def load_frank(
     only_positive_sections: bool = False,
     invalidate_cache: bool = False,
 ) -> HfFrankPart:
-    """Load the Frank dataset"""
+    """Load the Frank dataset."""
     if cache_dir is None:
         cache_dir = DATASETS_CACHE_PATH
     if isinstance(subset_name, str):

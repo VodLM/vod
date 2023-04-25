@@ -1,4 +1,4 @@
-# pylint: disable=no-member
+from __future__ import annotations
 
 import functools
 import math
@@ -48,14 +48,12 @@ class Args(arguantic.Arguantic):
     bm25_weight: float = 1.0
 
     @pydantic.validator("cache_dir")
-    def _validate_cache_dir(cls, v: Any) -> pathlib.Path:
+    def _validate_cache_dir(cls, v: str | Path) -> pathlib.Path:
         return pathlib.Path(v).expanduser().resolve()
 
 
 def run() -> None:
-    """Load retrieval dataset, load a model, index, and iterate over the train set.
-    While iterating through the train set, check a few properties.
-    """
+    """Load retrieval dataset, load a model, index, and iterate over the train set."""
     args = Args.parse()
     args.cache_dir.mkdir(parents=True, exist_ok=True)
     logger.info(f"Using cache dir: {args.cache_dir.absolute()}")

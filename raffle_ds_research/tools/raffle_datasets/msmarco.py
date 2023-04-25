@@ -49,7 +49,7 @@ class MsmarcoSectionModel(SectionModel):
 
 @dataclasses.dataclass(frozen=True)
 class LocalPaths:
-    """Collection of local paths for MSMARCO"""
+    """Collection of local paths for MSMARCO."""
 
     qa_splits: pathlib.Path
     sections: pathlib.Path
@@ -177,7 +177,7 @@ def load_msmarco(
     invalidate_cache: bool = False,
     local_source_path: Optional[pydantic.typing.PathLike] = None,
 ) -> MsmarcoRetrievalDataset:
-    """Load the MSMARCO dataset"""
+    """Load the MSMARCO dataset."""
     if cache_dir is None:
         cache_dir = DATASETS_CACHE_PATH
     if subset_name is not None:

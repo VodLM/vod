@@ -11,6 +11,7 @@ from raffle_ds_research.tools import c_tools
 @pytest.mark.parametrize("n_labels", [1, 3, 10])
 @pytest.mark.parametrize("seed", [0, 1, 2])
 def test_get_frequencies(n_points: int, max_n_unique: int, n_labels: int, seed: int) -> None:
+    """Test the `get_frequencies` function."""
     np.random.set_state(np.random.RandomState(seed).get_state())
     pids = np.random.randint(0, max_n_unique, size=(n_points,), dtype=np.uint64)
     labels = np.random.randint(0, n_labels, size=(n_points,), dtype=np.uint64)
@@ -24,6 +25,7 @@ def test_get_frequencies(n_points: int, max_n_unique: int, n_labels: int, seed: 
 @pytest.mark.parametrize("n_labels", [1, 3, 10])
 @pytest.mark.parametrize("seed", [0, 1, 2])
 def test_get_frequencies_batched(batch_size: int, n_points: int, max_n_unique: int, n_labels: int, seed: int) -> None:
+    """Test the batched version of `get_frequencies`."""
     np.random.set_state(np.random.RandomState(seed).get_state())
     pids = np.random.randint(
         0,

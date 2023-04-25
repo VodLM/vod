@@ -12,7 +12,9 @@ inflect_engine = inflect.engine()
 
 
 class TestBuilderConfig(retrieval_builder.RetrievalBuilderConfig):
-    name: Literal["frank"] = "test"
+    """Configuration for the test builder."""
+
+    name: Literal["test"] = "test"
     subset_name: Any = None
 
 
@@ -31,6 +33,7 @@ class TestBuilder(retrieval_builder.RetrievalBuilder):
         )
 
     def get_corpus(self) -> datasets.Dataset:
+        """Returns the document sections for this dataset."""
         rows = self._gen_data("sections")
         return datasets.Dataset.from_dict(pack_examples(rows))
 

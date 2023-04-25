@@ -37,7 +37,6 @@ def benchmark(
     cache_dir: Optional[Path] = None,
 ) -> dict[str, Any]:
     """Benchmark a ranker on a set of builders."""
-
     if isinstance(collate_cfg, (dict, omegaconf.DictConfig)):
         collate_cfg = CollateConfigs.parse(collate_cfg)
 
@@ -50,6 +49,7 @@ def benchmark(
     benchmark_data: dict[str, Any] = collections.defaultdict(dict)
     for builder in builders:
         loguru.logger.info(f"Running benchmark for `{builder.name}` ({builder.splits})")
+        trainer.strategy.barrier(f"benchmark_{builder.name}_{'+'.join(builder.splits)}")
         with index_manager.IndexManager(
             ranker=ranker,
             trainer=trainer,

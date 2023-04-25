@@ -14,24 +14,16 @@ repos:
         exclude: ".+/utils.py"
       - id: requirements-txt-fixer
 
-  - repo: https://github.com/psf/black
-    rev: 23.1.0
-    hooks:
-      - id: black
-
   - repo: local
     hooks:
+      - id: black
+        name: black
+        entry: black
+        language: system
+        types: [ python ]
       - id: ruff
         name: ruff
         entry: ruff
         language: system
         types: [ python ]
         args: [ --fix, --exit-non-zero-on-fix ]
-
-      - id: mypy
-        name: mypy
-        entry: mypy
-        language: system
-        types: [ python ]
-        args: ["--install-types", "--non-interactive", "--ignore-missing-imports"]
-

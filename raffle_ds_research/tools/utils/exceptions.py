@@ -13,8 +13,7 @@ T = TypeVar("T")
 
 
 def dump_exceptions_to_file(func: Callable[..., T]) -> Callable[..., T]:
-    """Decorator to catch exceptions and dump them to a file.
-    Useful for debugging with multiprocessing."""
+    """Decorator to catch exceptions and dump them to a file. Useful for debugging with multiprocessing."""
 
     @wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> T:

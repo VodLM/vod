@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-import os
 import pathlib
-import shutil
-import tempfile
 from pathlib import Path
 from typing import Any, Optional, Callable
 
@@ -19,6 +16,11 @@ from raffle_ds_research.core.workflows import index_manager
 from raffle_ds_research.core.workflows.config import TrainWithIndexConfigs
 from raffle_ds_research.core.workflows.retrieval_benchmark import benchmark
 from raffle_ds_research.core.workflows.utils import _log_eval_metrics, instantiate_retrieval_dataloader
+from raffle_ds_research.tools import cleandir
+
+
+def _do_nothing(*args, **kwargs):  # noqa: ANN
+    pass
 
 
 def train_with_index_updates(
@@ -47,6 +49,12 @@ def train_with_index_updates(
     stop_callback = PeriodicStoppingCallback(stop_at=-1)
     trainer.callbacks.append(stop_callback)  # type: ignore
 
+    # setup the distributed environment, if any.
+    # This is done automatically by the trainer when lauching a task (hacky, but working).
+    # Might be unnecessary in future versions of lightning.
+    if trainer.strategy.launcher is not None:
+        trainer.strategy.launcher.launch(_do_nothing)
+
     # Train the model for each period
     for period_idx, (start_step, end_step) in enumerate(zip(update_steps[:-1], update_steps[1:])):
         _log_eval_metrics(
@@ -63,7 +71,11 @@ def train_with_index_updates(
 
         # wrap everything in a temporary directory to avoid filling up the disk.
         # The temporary directory will be deleted at the end of each period.
-        with tempfile.TemporaryDirectory(prefix="tmp-training-") as tmp_dir:
+        with cleandir.CleanableDirectory(
+            pathlib.Path(config.sys.cache_dir, f"cached-preds-{period_idx}"),
+            delete_existing=True,
+        ) as tmp_dir:
+            builder()
             # run the benchmarks on init
             if benchmark_builders is not None and (period_idx > 0 or benchmark_on_init):
                 loguru.logger.info(f"Starting training epoch {1+period_idx}. Running benchmarks...")
@@ -86,6 +98,7 @@ def train_with_index_updates(
                 loader_cfg=config.dataloaders.predict,
                 cache_dir=Path(tmp_dir),
             ) as manager:
+                trainer.strategy.barrier(f"index_manager_{period_idx}")
                 # train the model for the given period
                 train_loader = instantiate_retrieval_dataloader(
                     builder=builder,
@@ -122,13 +135,6 @@ def train_with_index_updates(
                 ranker = trainable_ranker
 
             loguru.logger.info(f"Training period {1 + period_idx} completed.")
-            loguru.logger.info(f"Cleaning up cache directory {tmp_dir}...")
-            for f in Path(tmp_dir).glob("*"):
-                loguru.logger.info(f"Deleting {f} ({os.stat(f).st_size / 1e6:.2f} MB)..")
-                if pathlib.Path(f).is_dir():
-                    shutil.rmtree(f)
-                else:
-                    os.remove(f)
 
     # run the final benchmarks
     if benchmark_builders is not None:
@@ -170,12 +176,20 @@ def _pretty_steps(steps: list[int]) -> str:
 
 
 class PeriodicStoppingCallback(pl.callbacks.Callback):
+    """Stops the training after a given number of steps."""
+
     def __init__(self, stop_at: int):
         super().__init__()
         self.stop_at = stop_at
 
     def on_train_batch_end(
-        self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", outputs: Any, batch: Any, batch_idx: int
+        self,
+        trainer: pl.Trainer,
+        pl_module: pl.LightningModule,
+        outputs: Any,  # noqa: ANN401
+        batch: Any,  # noqa: ANN401
+        batch_idx: int,
     ) -> None:
+        """Called when the training batch ends."""
         if trainer.global_step >= self.stop_at:
             trainer.should_stop = True

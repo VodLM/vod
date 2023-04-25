@@ -37,6 +37,7 @@ def init_hydra_config(
 
 
 def register_omgeaconf_resolvers() -> None:
+    """Register OmegaConf resolvers. Resolvers a dynamically computed values that can be used in the config."""
     N_GPUS = torch.cuda.device_count()
     GIT_HASH = git_revision_hash()
     GIT_HASH_SHORT = git_revision_short_hash()

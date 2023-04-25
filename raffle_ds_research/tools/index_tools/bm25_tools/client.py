@@ -25,6 +25,8 @@ LABEL_KEY: str = "label"
 
 
 class Bm25Client(search_server.SearchClient):
+    """BM25 client for interacting for spawning a BM25 server and querying it."""
+
     requires_vectors: bool = False
     _client: es.Elasticsearch
     _index_name: str
@@ -36,6 +38,7 @@ class Bm25Client(search_server.SearchClient):
         self.supports_label = supports_label
 
     def ping(self) -> bool:
+        """Ping the server."""
         try:
             client = es.Elasticsearch(self.url)
             return client.ping()
@@ -43,15 +46,18 @@ class Bm25Client(search_server.SearchClient):
             return False
 
     def __getstate__(self) -> dict[str, Any]:
+        """Serialize the client state."""
         state = self.__dict__.copy()
         state.pop("_client", None)
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
+        """Recreate the client from the state."""
         self.__dict__.update(state)
         self._client = es.Elasticsearch(self.url)
 
     def __del__(self) -> None:
+        """Close the client."""
         try:
             self._client.close()
         except AttributeError:
@@ -65,8 +71,7 @@ class Bm25Client(search_server.SearchClient):
         label: Optional[list[str | int]] = None,
         top_k: int = 3,
     ) -> rtypes.RetrievalBatch[rtypes.Ts]:
-        """Search elasticsearch for the batch of text queries using `msearch`.
-        `vector` is not used here."""
+        """Search elasticsearch for the batch of text queries using `msearch`. NB: `vector` is not used here."""
         if self.supports_label and label is None:
             warnings.warn("This index supports labels, but no label is provided.")
 
@@ -134,8 +139,10 @@ class Bm25Master(search_server.SearchMaster[Bm25Client]):
         input_size: Optional[int] = None,
         persistent: bool = False,
         exist_ok: bool = False,
+        skip_setup: bool = False,
         **proc_kwargs: Any,
     ):
+        super().__init__(skip_setup=skip_setup)
         self._host = host
         self._port = port
         self._proc_kwargs = proc_kwargs
@@ -176,9 +183,11 @@ class Bm25Master(search_server.SearchMaster[Bm25Client]):
 
     @property
     def url(self) -> str:
+        """Get the url of the search server."""
         return f"{self._host}:{self._port}"
 
     def get_client(self) -> Bm25Client:
+        """Get a client to the search server."""
         return Bm25Client(self.url, index_name=self._index_name, supports_label=self.supports_label)
 
 
@@ -190,6 +199,7 @@ def ingest_data(
     chunk_size: int = 1000,
     exist_ok: bool = False,
 ) -> None:
+    """Ingest data into Elasticsearch."""
     asyncio.run(_async_ingest_data(stream, url=url, index_name=index_name, chunk_size=chunk_size, exist_ok=exist_ok))
 
 

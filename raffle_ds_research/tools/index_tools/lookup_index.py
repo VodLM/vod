@@ -10,7 +10,7 @@ from raffle_ds_research.tools.index_tools.retrieval_data_type import RetrievalBa
 
 
 def _build_lookup_table(labels: Iterable[int]) -> dict[int, set[int]]:
-    """Build the lookup table"""
+    """Build the lookup table."""
     lookup_table = collections.defaultdict(set)
     for i, lbl in enumerate(labels):
         lookup_table[lbl].add(i)
@@ -41,8 +41,7 @@ class LookupIndex:
         self._lookup_table = _build_lookup_table(labels)
 
     def search(self, queries: list[int] | list[list[int]]) -> RetrievalBatch[np.ndarray]:
-        """Search for the given key in the lookup table"""
-
+        """Search for the given key in the lookup table."""
         indices, scores = [], []
         max_n = 0
         for query in queries:
@@ -64,7 +63,7 @@ def __set_defaultdict() -> dict[Any, set[Any]]:
 
 
 def _build_lookup_table_kb(labels: Iterable[str], kb_labels: Iterable[str]) -> dict[int, dict[int, set[int]]]:
-    """Build the lookup table"""
+    """Build the lookup table."""
     lookup_table: dict[int, dict[int, set[int]]] = collections.defaultdict(__set_defaultdict)
     for i, (lbl, kb_lbl) in enumerate(zip(labels, kb_labels)):
         lookup_table[kb_lbl][lbl].add(i)
@@ -96,8 +95,7 @@ class LookupIndexKnowledgeBase:
         self._lookup_table = _build_lookup_table_kb(*zip(*[(eg[self._key], eg[self._kb_key]) for eg in corpus]))
 
     def search(self, labels: list[list[int]] | list[int], kb_labels: list[int]) -> RetrievalBatch[np.ndarray]:
-        """Search for the given key in the lookup table"""
-
+        """Search for the given key in the lookup table."""
         indices, scores = [], []
         max_n = 0
         for query, kb in zip(labels, kb_labels):

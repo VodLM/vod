@@ -9,8 +9,7 @@ from omegaconf import DictConfig
 
 
 class Trainer(pl.Trainer):
-    """A Small wrapper around the Trainer class to allow
-    for more flexible `logger` and `callbacks` arguments."""
+    """A Small wrapper around the Trainer class to allow for more flexible `logger` and `callbacks` arguments."""
 
     def __init__(
         self,

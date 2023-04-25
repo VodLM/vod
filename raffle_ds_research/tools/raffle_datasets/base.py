@@ -14,7 +14,11 @@ DATASETS_CACHE_PATH = str(pathlib.Path(RAFFLE_PATH, "datasets"))
 
 
 class RetrievalDataset(pydantic.BaseModel):
+    """A base retrieval dataset."""
+
     class Config:
+        """Pydantic configuration."""
+
         arbitrary_types_allowed = True
 
     qa_splits: datasets.DatasetDict
@@ -22,6 +26,7 @@ class RetrievalDataset(pydantic.BaseModel):
 
 
 def init_gcloud_filesystem() -> fsspec.AbstractFileSystem:
+    """Initialize a GCS filesystem."""
     try:
         token = os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
     except KeyError as exc:
@@ -34,6 +39,8 @@ def init_gcloud_filesystem() -> fsspec.AbstractFileSystem:
 
 
 class QueryModel(pydantic.BaseModel):
+    """A base query data model."""
+
     id: int
     text: str
     data_source: str
@@ -49,6 +56,8 @@ class QueryModel(pydantic.BaseModel):
 
 
 class SectionModel(pydantic.BaseModel):
+    """A base section data model."""
+
     content: str
     title: str
     id: int
@@ -71,13 +80,15 @@ class SilentHuggingface:
         self.disable_logging = disable_logging
 
     def __enter__(self) -> None:
+        """Disable logging and progress bar."""
         if self.disable_logging:
             self._old_logging_level = datasets.utils.logging.get_verbosity()
             datasets.utils.logging.set_verbosity(datasets.logging.CRITICAL)
         if self.disable_progress_bar:
             datasets.disable_progress_bar()
 
-    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:  # noqa: ANN401
+        """Re-enable logging and progress bar."""
         if self.disable_logging:
             datasets.utils.logging.set_verbosity(self._old_logging_level)
         if self.disable_progress_bar:
@@ -85,13 +96,20 @@ class SilentHuggingface:
 
 
 class SilentHuggingfaceDecorator:
+    """Decorator to silence `transformers` and `datasets` logging and progress bar."""
+
     def __init__(self, disable_progress_bar: bool = True, disable_logging: bool = True):
         self.disable_progress_bar = disable_progress_bar
         self.disable_logging = disable_logging
 
     def __call__(self, func: Callable[..., T]) -> Callable[..., T]:
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
+        """Decorate a function so HF is silents."""
+
+        def wrapper(*args: Any, **kwargs: Any) -> T:
             with SilentHuggingface(self.disable_progress_bar, self.disable_logging):
                 return func(*args, **kwargs)
 
         return wrapper
+
+
+"""Raffle datasets for information retrieval."""

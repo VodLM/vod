@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, Iterable, Optional, Type, Union
+from typing import Any, Callable, Dict, Iterable, Optional, Self, Type, Union
 
 import numpy as np
 import torch
@@ -10,8 +10,8 @@ from raffle_ds_research.tools.utils.pretty import repr_tensor
 
 
 class ConstrainedTensor:
-    """
-    Define a `torch.Tensor` with constraints on its dtype, device, and shape.
+    """Define a `torch.Tensor` with constraints on its dtype, device, and shape.
+
     Shapes can be specified as a tuple of integers or strings. Strings represent
     a dimension variable, which can be used to check that two tensors have the
     same shape along a given dimension. For example, if you want to ensure that
@@ -29,24 +29,21 @@ class ConstrainedTensor:
 
     @classmethod
     def __get_validators__(
-        cls,
+        cls: Type[Self],
     ) -> Iterable[Callable[[Any], torch.Tensor]]:
-        # one or more validators may be yielded which will be called in the
-        # order to validate the input, each validator will receive as an input
-        # the value returned from the previous validator
+        """Return a list of validators for the constrained tensor."""
         yield cls._validate_py_type
         yield cls._validate_dtype
         yield cls._validate_device
         yield cls._validate_shape
 
     @classmethod
-    def __modify_schema__(cls, field_schema: Dict[str, Any]) -> None:
-        # __modify_schema__ should mutate the dict it receives in place,
-        # the returned value will be ignored
+    def __modify_schema__(cls: Type[Self], field_schema: Dict[str, Any]) -> None:
+        """Modify the schema for the constrained tensor."""
         ...
 
     @classmethod
-    def _validate_py_type(cls, v: Any) -> torch.Tensor:
+    def _validate_py_type(cls: Type[Self], v: torch.Tensor | np.ndarray) -> torch.Tensor:
         if not isinstance(v, torch.Tensor):
             if cls.allow_casting:
                 if isinstance(v, np.ndarray):
@@ -54,11 +51,11 @@ class ConstrainedTensor:
                 else:
                     v = torch.tensor(v)
             else:
-                raise TypeError(f"Expected torch.Tensor, got {v.dtype}")
+                raise TypeError(f"Expected `torch.Tensor` or `np.ndarray`, got {v.dtype}")
         return v
 
     @classmethod
-    def _validate_dtype(cls, v: Any) -> torch.Tensor:
+    def _validate_dtype(cls: Type[Self], v: torch.Tensor) -> torch.Tensor:
         if cls.dtype is None:
             return v
 
@@ -70,7 +67,7 @@ class ConstrainedTensor:
         return v
 
     @classmethod
-    def _validate_device(cls, v: Any) -> torch.Tensor:
+    def _validate_device(cls: Type[Self], v: torch.Tensor) -> torch.Tensor:
         if cls.device is None:
             return v
 
@@ -82,7 +79,7 @@ class ConstrainedTensor:
         return v
 
     @classmethod
-    def _validate_shape(cls, v: Any) -> torch.Tensor:
+    def _validate_shape(cls: Type[Self], v: torch.Tensor) -> torch.Tensor:
         if cls.shape is None:
             return v
 
@@ -105,6 +102,7 @@ class ConstrainedTensor:
         return v
 
     def __repr__(self) -> str:
+        """Return a string representation of the constrained tensor."""
         attrs = [
             f"{k}={repr_tensor(v)}" if isinstance(v, torch.Tensor) else f"{k}={v}" for k, v in self.__dict__.items()
         ]

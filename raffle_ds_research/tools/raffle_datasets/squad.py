@@ -16,20 +16,20 @@ def _add_row_idx(_: dict, idx: int) -> dict[str, int]:
 
 
 class SquadRetrievalDataset(RetrievalDataset):
-    """The Squad dataset for retrieval"""
+    """The Squad dataset for retrieval."""
 
     ...
 
 
 class AppendQaExtras:
-    """Append the `kb_id`, `language` and `section_ids` to the QA row"""
+    """Append the `kb_id`, `language` and `section_ids` to the QA row."""
 
     def __init__(self, lookup: dict[str, int], language: str):
         self.lookup = lookup
         self.language = language
 
     def __call__(self, row: dict[str, Any]) -> dict[str, Any]:
-        """Append the extras to the QA row"""
+        """Append the extras to the QA row."""
         row["kb_id"] = SQUAD_KB_ID[self.language]
         row["language"] = self.language
         row_id = row["context"]
@@ -53,7 +53,7 @@ def load_squad(
     only_positive_sections: Optional[bool] = None,
     prep_num_proc: int = 4,
 ) -> SquadRetrievalDataset:
-    """Load the Squad dataset"""
+    """Load the Squad dataset."""
     if language != "en":
         raise ValueError(f"Language `{language}` not supported")
 

@@ -44,7 +44,7 @@ class Properties(pydantic.BaseModel):
     n_nans: Optional[int] = None
 
     @pydantic.validator("py_type", pre=True)
-    def _cast_py_type(cls, value: Any) -> str:
+    def _cast_py_type(cls, value: Any) -> str:  # noqa: ANN401
         if value is None:
             return "None"
         if isinstance(value, type):
@@ -54,7 +54,7 @@ class Properties(pydantic.BaseModel):
 
 
 @functools.singledispatch
-def infer_properties(x: Any) -> Properties:
+def infer_properties(x: Any) -> Properties:  # noqa: ANN401
     """Base function for inferring properties of an object."""
     return Properties(py_type=type(x))
 
@@ -192,8 +192,8 @@ def _format_device(device: str) -> str:
     return f"[{style}]{device}[/{style}]{idx}"
 
 
-def _default_formatter(x: Any) -> str:
-    """Default formatter"""
+def _default_formatter(x: Any) -> str:  # noqa: ANN401
+    """Default formatter."""
     x = str(x)
     if x.strip() == "-":
         return f"[white]{x}[/]"
@@ -208,7 +208,7 @@ _FORMATTERS = {
 }
 
 
-def _format_field(field_name: str, field_value: Any) -> str:
+def _format_field(field_name: str, field_value: Any) -> str:  # noqa: ANN401
     """Apply a formatter to a field value based on its name."""
     formatter = _FORMATTERS.get(field_name, _default_formatter)
     return formatter(field_value)
@@ -275,7 +275,7 @@ def pprint_supervised_retrieval_batch(
     if console is None:
         console = rich.console.Console()
 
-    def _format(x: Any) -> numbers.Number | list[numbers.Number]:
+    def _format(x: Any | np.ndarray | torch.Tensor) -> numbers.Number | list[numbers.Number]:
         if isinstance(x, torch.Tensor) and x.numel() == 1:
             x = x.item()
         elif isinstance(x, torch.Tensor) and x.numel() > 1:

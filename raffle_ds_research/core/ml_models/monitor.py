@@ -19,13 +19,12 @@ MetricsBySplits = dict[str, dict[str, Metric]]
 
 
 def _safe_split(split: str) -> str:
-    """Return a safe split name for a torch.nn.ModuleDict to avoid conflicts with the parameter name `train`"""
+    """Return a safe split name for a torch.nn.ModuleDict to avoid conflicts with the parameter name `train`."""
     return f"_{split}"
 
 
 class Monitor(nn.Module):
-    """A Monitor is an object that monitors the training process by
-    computing and collecting metrics"""
+    """A Monitor is an object that monitors the training process by computing and collecting metrics."""
 
     _splits = list[str]
     metrics: torch.nn.ModuleDict[str, MetricCollection]
@@ -64,19 +63,19 @@ class Monitor(nn.Module):
         self.metrics = torch.nn.ModuleDict({_safe_split(split): metric for split, metric in metrics.items()})
 
     def on_step(self, split: str) -> bool:
-        """Return True if the metrics should be computed and logged on step"""
+        """Return True if the metrics should be computed and logged on step."""
         if split not in self._log_on_step.keys():
             raise TypeError(f"Unknown split type: {type(split)}. Expected one of {self._log_on_step.keys()}.")
         return self._log_on_step[split]
 
     def forward(self, data: dict, split: str) -> dict[str, Any]:
-        """Compute the metrics"""
+        """Compute the metrics."""
         metric = self.metrics[_safe_split(split)]
         args = self._make_args(data)
         return metric.forward(*args)
 
     def reset(self, split: Optional[str | list[str]] = None) -> "Monitor":
-        """Reset the metrics"""
+        """Reset the metrics."""
         splits = self._get_splits_arg(split)
         for split in splits:
             self.metrics[_safe_split(split)].reset()
@@ -99,7 +98,7 @@ class Monitor(nn.Module):
         return splits
 
     def update_from_retrieval_batch(self, batch: dict[str, Any], field: str = "section") -> None:
-        """Update the metrics given a raw `retrieval` batch"""
+        """Update the metrics given a raw `retrieval` batch."""
         for key in self._splits:
             targets: torch.Tensor = batch[f"{field}.label"]
             try:
@@ -113,14 +112,13 @@ class Monitor(nn.Module):
 
     @torch.no_grad()
     def update(self, data: dict, split: str) -> None:
-        """Update the metrics"""
+        """Update the metrics."""
         args = self._make_args(data)
         self.metrics[_safe_split(split)].update(*args)
 
     @torch.no_grad()
     def compute(self, split: Optional[str] = None, prefix: str = "") -> dict[str, torch.Tensor]:
-        """Compute the metrics. Wrap with try/except to avoid raising exception when there are no
-        metrics to compute."""
+        """Compute the metrics. Wrap with try/except to avoid raising exception when there are no metrics to compute."""
         if split is None:
             metrics = {}
             for split_ in self._splits:
@@ -175,7 +173,7 @@ class HitRate(torchmetrics.Metric):
         self.add_state("total", default=torch.tensor(0), dist_reduce_fx="sum")
 
     def update(self, preds: torch.Tensor, target: torch.Tensor, indices: Optional[torch.Tensor] = None) -> None:
-        """Update the metric with the given predictions and targets"""
+        """Update the metric with the given predictions and targets."""
         preds, target = _mask_inputs(preds, target)
         ranked_labels = _rank_labels(labels=target, scores=preds)
         ranked_labels = ranked_labels[..., : self.top_k]
@@ -184,6 +182,7 @@ class HitRate(torchmetrics.Metric):
         self.total += hits.numel()
 
     def compute(self) -> torch.Tensor:
+        """Compute the metric value."""
         return self.hits.float() / self.total
 
 
@@ -200,6 +199,7 @@ class AveragedMetric(torchmetrics.Metric, ABC):
         self.weight += values.numel()
 
     def compute(self) -> torch.Tensor:
+        """Compute the metric value."""
         return self.value / self.weight
 
 

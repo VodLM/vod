@@ -34,6 +34,8 @@ def filter_inputs_wrapper(pipe: Pipe, keys: list[str], strict: bool = True) -> P
 
 
 def key_map_wrapper(pipe: Pipe, key_map: dict[str, str]) -> Pipe:
+    """Map the keys of a batch to a new set of keys."""
+
     def wrapper(batch: dict[str, Any], idx: Optional[list[int]] = None, **kwargs: Any) -> dict[str, Any]:
         input_batch = {key_map.get(key, key): batch[key] for key in batch}
         return pipe(input_batch, idx, **kwargs)
@@ -42,9 +44,12 @@ def key_map_wrapper(pipe: Pipe, key_map: dict[str, str]) -> Pipe:
 
 
 class Partial(Pipe):
+    """This class is used to partially apply arguments to a pipe."""
+
     def __init__(self, pipe: Pipe, **kwargs: Any):
         self.pipe = pipe
         self.kwargs = kwargs
 
     def __call__(self, batch: dict[str, Any], idx: Optional[list[int]] = None, **kwargs: Any) -> dict[str, Any]:
-        return self.pipe(batch, idx, **self.kwargs, **kwargs)
+        """Call the attribute `pipe` with the arguments `kwargs` and `self.kwargs`."""
+        return self.pipe(batch, idx=idx, **self.kwargs, **kwargs)

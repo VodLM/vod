@@ -11,6 +11,8 @@ class FaissInitConfig(pydantic.BaseModel):
     """Configuration used to init/build a faiss index."""
 
     class Config:
+        """pydantic config."""
+
         allow_mutation = False
         extra = "forbid"
 
@@ -22,6 +24,8 @@ class InitResponse(pydantic.BaseModel):
     """Response to the initialization request."""
 
     class Config:
+        """pydantic config."""
+
         allow_mutation = False
         extra = "forbid"
 
@@ -43,9 +47,7 @@ class SearchFaissQuery(pydantic.BaseModel):
 
 
 class FastSearchFaissQuery(pydantic.BaseModel):
-    """
-    This is the same as SearchFaissQuery, but with the vectors serialized.
-    """
+    """This is the same as SearchFaissQuery, but with the vectors serialized."""
 
     class Config:
         """pydantic config."""
@@ -74,9 +76,7 @@ class FaissSearchResponse(pydantic.BaseModel):
 
 
 class FastFaissSearchResponse(pydantic.BaseModel):
-    """
-    This is the same as FaissSearchResponse, but with the vectors serialized.
-    """
+    """This is the same as FaissSearchResponse, but with the vectors serialized."""
 
     class Config:
         """pydantic config."""

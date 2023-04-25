@@ -8,9 +8,11 @@ import torch
 
 @dataclass
 class Samples(pydantic.BaseModel):
-    """A class to store the samples"""
+    """A class to store the samples."""
 
     class Config:
+        """Pydantic config."""
+
         arbitrary_types_allowed = True
         extra = "forbid"
         allow_mutation = False
@@ -44,11 +46,13 @@ class Sampler(abc.ABC):
         label: Optional[torch.Tensor] = None,
         n: int = 3,
     ) -> Samples:
-        """Sample from the distribution defined `p(z) = Softmax(scores)`"""
+        """Sample from the distribution defined `p(z) = Softmax(scores)`."""
         raise NotImplementedError
 
 
 class Categorical(Sampler):
+    """A Categorical distribution."""
+
     def __init__(self, replace: bool = True):
         self.replace = replace
         if not replace:
@@ -61,6 +65,7 @@ class Categorical(Sampler):
         label: Optional[torch.Tensor] = None,
         n: int = 3,
     ) -> Samples:
+        """Sample from a categorical distribution."""
         shape = scores.shape
         scores = scores.view(-1, shape[-1])
         z = scores.multinomial(n, replacement=self.replace)

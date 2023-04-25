@@ -31,7 +31,9 @@ def _register_special_hashers() -> None:
 
 
 def _hash_tokenizer(hasher: fingerprint.Hasher, value: transformers.PreTrainedTokenizer) -> str:
-    """The default hash of `transformers.PreTrainedTokenizer` is non-deterministic: it changes after a first iteration.
+    """Implement a hash function for a pretrained tokenizer.
+
+    The default hash of `transformers.PreTrainedTokenizer` is non-deterministic: it changes after a first iteration.
     Implement a custom hash function that is deterministic.
     """
     data = {
@@ -63,6 +65,7 @@ def _hash_partial(hasher: fingerprint.Hasher, value: functools.partial) -> str:
 
 
 def fingerprint_torch_module(hasher: fingerprint.Hasher, value: torch.nn.Module) -> str:
+    """Fingerprint a `torch.nn.Module`."""
     hasher = fingerprint.Hasher()
     for k, v in value.state_dict().items():
         hasher.update(k)
