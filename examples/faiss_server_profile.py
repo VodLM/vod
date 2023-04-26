@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import itertools
 from pathlib import Path
 
@@ -27,17 +29,17 @@ if __name__ == "__main__":
     arg_keys = list(args.keys())
     arg_permutations = list(itertools.product(*(args[k] for k in arg_keys)))
     for exp_arg in arg_permutations:
-        exp_arg = dict(zip(arg_keys, exp_arg))
-        rich.print(f"> [magenta bold]Running experiment with args:[/] {exp_arg}")
+        exp_arg_ = dict(zip(arg_keys, exp_arg))
+        rich.print(f"> [magenta bold]Running experiment with args:[/] {exp_arg_}")
         exp_arg.update(base_args)
-        benchmark = profile_faiss_server(ProfileArgs(**exp_arg))
+        benchmark = profile_faiss_server(ProfileArgs(**exp_arg_))
         benchmark = {k: benchmark[k] for k in sorted(benchmark)}
         benchmark_str = {k: f"{v:.2f}" for k, v in benchmark.items()}
         benchmark_str = f"Benchmark({', '.join(f'{k}={v}' for k, v in benchmark_str.items())})"
         rich.print(f"  └── {benchmark_str}")
         benchmarks.append(
             {
-                "args": exp_arg,
+                "args": exp_arg_,
                 "benchmark": benchmark,
             }
         )
@@ -45,8 +47,8 @@ if __name__ == "__main__":
     # make a grid plot with one column per `vector_size` value and a single row.
     # each plot will be a line plot with one line per `dataset_size` value as x-axis and time as y-axis.
     # each method will be a different color.
-    vector_sizes = set(b["args"]["vector_size"] for b in benchmarks)
-    methods = list(sorted(set(c for b in benchmarks for c in b["benchmark"].keys())))
+    vector_sizes = {b["args"]["vector_size"] for b in benchmarks}
+    methods = sorted({c for b in benchmarks for c in b["benchmark"]})
     fig, axes = plt.subplots(1, len(vector_sizes), figsize=(len(vector_sizes) * 4, 4), sharey=True)  # type: ignore
     for i, vector_size in enumerate(vector_sizes):
         ax = axes[i]

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 
 import uvicorn
@@ -25,7 +27,7 @@ async def root_handler() -> str:
 
 def main() -> None:
     """Main function to run raffle-ds-research API."""
-    uvicorn.run(app, host="0.0.0.0", port=PORT)
+    uvicorn.run(app, host="localhost", port=PORT)
 
 
 if __name__ == "__main__":

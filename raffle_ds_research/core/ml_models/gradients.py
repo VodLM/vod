@@ -1,4 +1,6 @@
 # pylint: disable=no-member
+from __future__ import annotations
+
 import abc
 import math
 from typing import Optional
@@ -164,10 +166,7 @@ class KlDivGradients(Gradients):
         kl_bm25 = kls.get("bm25", None)
         if self.bm25_guidance_weight > 0 and kl_bm25 is None:
             raise ValueError(f"bm25_guidance_weight={self.bm25_guidance_weight} but no bm25 scores are provided.")
-        if kl_bm25 is not None:
-            kl_bm25 = kl_bm25.mean()
-        else:
-            kl_bm25 = 0.0
+        kl_bm25 = kl_bm25.mean() if kl_bm25 is not None else 0.0
 
         # 5. compute the final loss
         loss = kl_div_loss
@@ -176,7 +175,7 @@ class KlDivGradients(Gradients):
         if self.self_supervision_weight > 0:
             loss += self.self_supervision_weight * self_supervised_loss
 
-        output = {
+        return {
             "loss": loss,
             "kl_div_loss": kl_div_loss,
             "self_supervised_loss": self_supervised_loss,
@@ -186,7 +185,6 @@ class KlDivGradients(Gradients):
             ),
             **{f"kl_{k}": kl.mean().detach() for k, kl in kls.items()},
         }
-        return output
 
 
 def _compute_kld(
@@ -200,8 +198,7 @@ def _compute_kld(
 
     kl_div_terms = -ref_logits_.exp() * (model_logits - ref_logits_)
     kl_div_terms.masked_fill_(~is_defined, 0)
-    kl_div = kl_div_terms.sum(dim=-1)
-    return kl_div
+    return kl_div_terms.sum(dim=-1)
 
 
 @torch.no_grad()

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import collections
 import dataclasses
+import functools
 import json
 import os
 import pathlib
@@ -20,8 +21,8 @@ from raffle_ds_research.tools.raffle_datasets.base import (
     QueryModel,
     RetrievalDataset,
     SectionModel,
-    init_gcloud_filesystem,
     SilentHuggingfaceDecorator,
+    init_gcloud_filesystem,
 )
 
 MS_MARCO_KB_IDs = {"en": 100_000}
@@ -69,6 +70,18 @@ def _safe_decode(x: str | bytes) -> str:
     return str(x)
 
 
+def _gen_queries(*, qrels: dict[int, Iterable[int]], language: str, queries_table: dict[int, str]) -> Iterable[dict]:
+    kb_id = MS_MARCO_KB_IDs[language]
+    meta = {"language": language, "kb_id": kb_id}
+    for qid, pids in qrels.items():
+        yield MsmarcoQqueryModel(
+            id=qid,
+            section_ids=sorted(pids),
+            text=queries_table[int(qid)],
+            **meta,
+        ).dict()
+
+
 @SilentHuggingfaceDecorator()
 def _download_and_parse_questions(language: str = "en", local_path: Optional[str] = None) -> datasets.DatasetDict:
     if language != "en":
@@ -107,7 +120,7 @@ def _download_and_parse_questions(language: str = "en", local_path: Optional[str
         with fs.open(str(qrel_path), mode="r") as f:
             header = None
             loader = track(f.readlines(), description=f"Processing `qrels/{qrel_path.name}`")
-            for i, line in enumerate(loader):
+            for _i, line in enumerate(loader):
                 if header is None:
                     header = line.split()
                     if [_safe_decode(x) for x in header] != ["query-id", "corpus-id", "score"]:
@@ -120,19 +133,14 @@ def _download_and_parse_questions(language: str = "en", local_path: Optional[str
 
                 qrels[qid].append(pid)
 
-        def gen_queries() -> Iterable[dict]:
-            kb_id = MS_MARCO_KB_IDs[language]
-            meta = dict(language=language, kb_id=kb_id)
-            for qid, pids in qrels.items():
-                pids = [i for i in sorted(pids)]
-                yield MsmarcoQqueryModel(
-                    id=qid,
-                    section_ids=pids,
-                    text=queries_table[int(qid)],
-                    **meta,
-                ).dict()
-
-        qa_splits[split] = datasets.Dataset.from_generator(gen_queries)
+        qa_splits[split] = datasets.Dataset.from_generator(
+            functools.partial(
+                _gen_queries,
+                qrels=qrels,
+                language=language,
+                queries_table=queries_table,
+            )
+        )
 
     return datasets.DatasetDict(qa_splits)
 
@@ -158,7 +166,7 @@ def _download_and_parse_sections(language: str = "en", local_path: Optional[str]
 
     def iter_sections() -> Iterable[dict]:
         kb_id = MS_MARCO_KB_IDs[language]
-        meta = dict(language=language, kb_id=kb_id)
+        meta = {"language": language, "kb_id": kb_id}
         with fs.open(str(base_path)) as f:
             for line in track(f.readlines(), description=f"Processing `{base_path.name}`"):
                 data = json.loads(line)
@@ -167,7 +175,7 @@ def _download_and_parse_sections(language: str = "en", local_path: Optional[str]
     return datasets.Dataset.from_generator(iter_sections)
 
 
-@pydantic.validate_arguments(config=dict(arbitrary_types_allowed=True))
+@pydantic.validate_arguments(config={"arbitrary_types_allowed": True})
 def load_msmarco(
     language: str = "en",
     subset_name: Optional[str] = None,
@@ -181,7 +189,7 @@ def load_msmarco(
     if cache_dir is None:
         cache_dir = DATASETS_CACHE_PATH
     if subset_name is not None:
-        warnings.warn("subset_name is not supported for MSMARCO and will be ignored.")
+        warnings.warn("subset_name is not supported for MSMARCO and will be ignored.", stacklevel=2)
     if only_positive_sections:
         raise NotImplementedError("Only positive sections is not implemented for MSMARCO")
 

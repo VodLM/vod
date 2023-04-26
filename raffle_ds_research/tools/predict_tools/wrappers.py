@@ -49,11 +49,11 @@ class DatasetWithIndices(DatasetProtocol):
 def _safely_fetch_key(row: dict) -> int:
     try:
         return row.pop(PREDICT_IDX_COL_NAME)
-    except KeyError:
+    except KeyError as exc:
         raise ValueError(
             f"Column {PREDICT_IDX_COL_NAME} not found in batch. "
             f"Make sure to wrap your dataset with `DatasetWithIndices`."
-        )
+        ) from exc
 
 
 def _collate_with_indices(examples: Iterable[dict[str, Any]], *, collate_fn: pipes.Collate, **kwargs: Any) -> dict:

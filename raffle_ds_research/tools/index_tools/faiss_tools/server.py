@@ -8,14 +8,8 @@ import re
 from pathlib import Path
 
 import faiss
-import stackprinter
-
-try:
-    pass
-except ImportError:
-    pass
-
 import numpy as np
+import stackprinter
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from loguru import logger
@@ -88,7 +82,7 @@ async def fast_search(query: FastSearchFaissQuery) -> FastFaissSearchResponse:
             RetrievalDataType.TORCH: io.deserialize_torch_tensor,
         }[query.array_type]
         query_vec = deserializer(query.vectors)
-        if len(query_vec.shape) != 2:
+        if len(query_vec.shape) != 2:  # noqa: PLR2004
             raise ValueError(f"Expected 2D array, got {len(query_vec.shape)}D array")
         scores, indices = faiss_index.search(query_vec, k=query.top_k)
         return FastFaissSearchResponse(

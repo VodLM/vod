@@ -3,7 +3,6 @@ from __future__ import annotations
 import copy
 import dataclasses
 from typing import Any, Callable, Optional, Union
-from typing_extensions import Type, Self
 
 import datasets
 import numpy as np
@@ -11,6 +10,7 @@ import omegaconf
 import pydantic
 import transformers
 from torch.utils import data as torch_data
+from typing_extensions import Self, Type
 
 from raffle_ds_research.core.dataset_builders import retrieval_collate
 from raffle_ds_research.core.dataset_builders.dataloader_sampler import DataloaderSampler
@@ -45,10 +45,10 @@ class DatasetArgs:
             only_positive_sections = False
 
         parts = x.split(".")
-        if len(parts) == 2:
+        if len(parts) == 2:  # noqa: PLR2004
             name, language = parts
             subset_name = None
-        elif len(parts) == 3:
+        elif len(parts) == 3:  # noqa: PLR2004
             name, subset_name, language = parts
         else:
             raise ValueError(f"Invalid dataset name: {x}")
@@ -61,12 +61,12 @@ class DatasetArgs:
 
     def to_dict(self) -> dict[str, Any]:
         """Returns a dictionary representation of this object."""
-        return dict(
-            name=self.name,
-            subset_name=self.subset_name,
-            language=self.language,
-            only_positive_sections=self.only_positive_sections,
-        )
+        return {
+            "name": self.name,
+            "subset_name": self.subset_name,
+            "language": self.language,
+            "only_positive_sections": self.only_positive_sections,
+        }
 
 
 class RetrievalBuilderConfig(pydantic.BaseModel):
@@ -85,8 +85,8 @@ class RetrievalBuilderConfig(pydantic.BaseModel):
     question_max_length: Optional[int] = 512
     section_max_length: Optional[int] = 512
     templates: Optional[dict[str, str]] = DEFAULT_TEMPLATES
-    hf_load_kwargs: dict[str, Any] = dict(num_proc=4)
-    prep_map_kwargs: dict[str, Any] = dict()
+    hf_load_kwargs: dict[str, Any] = {"num_proc": 4}
+    prep_map_kwargs: dict[str, Any] = {}
     subset_size: Optional[Union[int, dict[str, int]]] = None
     include_only_positive_sections: bool = False
     dl_sampler: Optional[DataloaderSampler] = None
@@ -104,14 +104,14 @@ class RetrievalBuilderConfig(pydantic.BaseModel):
     def _validate_templates(cls, templates: None | dict[str, str] | omegaconf.DictConfig) -> dict[str, str]:
         """Converts templates to a dict if they are an OmegaConf DictConfig."""
         if isinstance(templates, omegaconf.DictConfig):
-            templates = omegaconf.OmegaConf.to_container(templates)
+            return omegaconf.OmegaConf.to_container(templates)
         return templates
 
     @pydantic.validator("prep_map_kwargs", pre=True)
     def _validate_prep_map_kwargs(cls, prep_map_kwargs: dict[str, Any] | omegaconf.DictConfig) -> dict[str, Any]:
         """Converts prep_map_kwargs to a dict if they are an OmegaConf DictConfig."""
         if isinstance(prep_map_kwargs, omegaconf.DictConfig):
-            prep_map_kwargs = omegaconf.OmegaConf.to_container(prep_map_kwargs)
+            return omegaconf.OmegaConf.to_container(prep_map_kwargs)
 
         return prep_map_kwargs
 
@@ -119,7 +119,7 @@ class RetrievalBuilderConfig(pydantic.BaseModel):
     def _validate_hf_load_kwargs(cls, hf_load_kwargs: dict[str, Any] | omegaconf.DictConfig) -> dict[str, Any]:
         """Converts hf_load_kwargs to a dict if they are an OmegaConf DictConfig."""
         if isinstance(hf_load_kwargs, omegaconf.DictConfig):
-            hf_load_kwargs = omegaconf.OmegaConf.to_container(hf_load_kwargs)
+            return omegaconf.OmegaConf.to_container(hf_load_kwargs)
         return hf_load_kwargs
 
     @pydantic.validator("subset_size", pre=True)
@@ -127,7 +127,7 @@ class RetrievalBuilderConfig(pydantic.BaseModel):
         cls, subset_size: int | dict[str, int] | omegaconf.DictConfig
     ) -> Union[int, dict[str, int]]:
         if isinstance(subset_size, omegaconf.DictConfig):
-            subset_size = omegaconf.OmegaConf.to_container(subset_size)
+            return omegaconf.OmegaConf.to_container(subset_size)
         return subset_size
 
 
@@ -194,10 +194,7 @@ class RetrievalBuilder(dataset_builder.DatasetBuilder[datasets.DatasetDict, Retr
             )
             parts.append(loader)
 
-        if len(parts) > 1:
-            loader = raffle_datasets.ConcatenatedDatasetLoader(parts)
-        else:
-            loader = parts[0]
+        loader = raffle_datasets.ConcatenatedDatasetLoader(parts) if len(parts) > 1 else parts[0]
         return cls(loader=loader, name=name, **config)
 
     @property
@@ -211,7 +208,7 @@ class RetrievalBuilder(dataset_builder.DatasetBuilder[datasets.DatasetDict, Retr
         return self.config.tokenizer
 
     def _prep_map_kwargs(self, **overrides: Any) -> dict[str, Any]:
-        always_on = dict(batched=True, with_indices=True)
+        always_on = {"batched": True, "with_indices": True}
         return {**self.config.prep_map_kwargs, **overrides, **always_on}
 
     def get_corpus(self) -> datasets.Dataset:
@@ -223,11 +220,10 @@ class RetrievalBuilder(dataset_builder.DatasetBuilder[datasets.DatasetDict, Retr
             input_keys=["title", "content"],
             output_key="text",
         )
-        sections = dset.sections.map(
+        return dset.sections.map(
             section_prep,
             **self._prep_map_kwargs(desc=f"Preprocessing {self.name} sections"),
         )
-        return sections
 
     def __call__(self) -> datasets.DatasetDict:
         """Build and return the dataset."""
@@ -238,7 +234,7 @@ class RetrievalBuilder(dataset_builder.DatasetBuilder[datasets.DatasetDict, Retr
         found_splits = set(dset.keys())
         if not found_splits.issuperset(self.splits):
             raise ValueError(f"Expected splits {self.splits}, found {found_splits}")
-        elif set(self.splits) != found_splits:
+        if set(self.splits) != found_splits:
             dset = datasets.DatasetDict({split: dset[split] for split in self.splits})
 
         # Optionally take a subset of rows
@@ -261,12 +257,11 @@ class RetrievalBuilder(dataset_builder.DatasetBuilder[datasets.DatasetDict, Retr
             config = retrieval_collate.RetrievalCollateConfig(**config)
 
         sections = self.get_corpus()
-        collate_fn = retrieval_collate.RetrievalCollate(
+        return retrieval_collate.RetrievalCollate(
             corpus=sections,
             tokenizer=self.config.tokenizer,
             config=config,
         )
-        return collate_fn
 
     def get_sampler(self, split: str = "train") -> Optional[torch_data.Sampler]:
         """Returns a sampler for the given split. The sampler add inverse-frequency weights to each label value."""
@@ -281,15 +276,15 @@ class RetrievalBuilder(dataset_builder.DatasetBuilder[datasets.DatasetDict, Retr
         if self.config.subset_size is None:
             return dset
 
-        # pylint: disable=no-member
         rgn = np.random.RandomState(0)
 
         # define the subset size for each split
         subset_size = copy.copy(self.config.subset_size)
         if isinstance(subset_size, int):
-            subset_size = {split: subset_size for split in dset.keys()}
+            subset_size = {split: subset_size for split in dset}
         elif isinstance(subset_size, dict):
-            assert set(subset_size.keys()) == set(dset.keys())
+            if set(subset_size.keys()) != set(dset.keys()):
+                raise ValueError(f"Expected keys {dset.keys()}, got {subset_size.keys()}")
         else:
             raise TypeError(f"subset_size must be an int or a dict, not {type(self.config.subset_size)}")
 
@@ -304,8 +299,7 @@ class RetrievalBuilder(dataset_builder.DatasetBuilder[datasets.DatasetDict, Retr
     def _add_row_indices(self, dset: dataset_builder.DorDD) -> dataset_builder.DorDD:
         """Add row index to each row."""
         prep_map_kwargs = self._prep_map_kwargs(batched=False, desc="Adding row indices")
-        dset = dset.map(_add_row_idx, **prep_map_kwargs)
-        return dset
+        return dset.map(_add_row_idx, **prep_map_kwargs)
 
     def _validate_questions(self, dset: datasets.DatasetDict) -> None:
         for d in dset.values():

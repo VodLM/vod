@@ -11,7 +11,6 @@ import torch
 
 from raffle_ds_research.tools import predict
 
-
 T = TypeVar("T")
 
 
@@ -59,8 +58,8 @@ class Array(torch.nn.Module):
         y = self.y[ids]
         if self.output_key is None:
             return y
-        else:
-            return {self.output_key: y}
+
+        return {self.output_key: y}
 
 
 def _collate(examples: Iterable[dict[str, Any]], **kwargs: Any) -> dict[str, Any]:  # noqa: ANN401
@@ -87,4 +86,4 @@ def test_predict(tmpdir: str | Path, data: VectorDataset, model_output_key: Opti
     # test that the store is correct
     y_retrieved = store[:].read().result()
     for i in range(len(data)):
-        assert np.allclose(y_retrieved[i], data.y[i])
+        assert np.allclose(y_retrieved[i], data.y[i])  # noqa: S101

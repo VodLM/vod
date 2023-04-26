@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Optional, Protocol, Union
 
 import datasets
@@ -44,10 +46,11 @@ def load_raffle_dataset(
 
     if split is not None:
         if not isinstance(dset, HfDatasetDict):
-            raise ValueError(f"Cannot select a split from a dataset of type {type(dset)}")
+            raise ValueError(f"Dataset of type {type(dset)} doesn't support splits.")
         dset = dset[split]
 
-    assert isinstance(dset, (HfDatasetDict, HfDataset))
+    if not isinstance(dset, (HfDatasetDict, HfDataset)):
+        raise TypeError(f"Dataset of type {type(dset)} is not supported.")
     return dset
 
 

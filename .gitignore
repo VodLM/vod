@@ -1,3 +1,4 @@
+faiss-index-benchmark/
 setup_vm.sh
 cache/
 runs/

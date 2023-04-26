@@ -14,7 +14,6 @@ import yaml
 from raffle_ds_research.core.ml_models import Ranker
 from raffle_ds_research.utils.config import config_to_flat_dict
 
-
 T = TypeVar("T")
 
 
@@ -47,13 +46,13 @@ def set_training_context() -> None:
 
 
 def _make_meta_data(ranker: Ranker) -> dict[str, Any]:
-    return dict(
-        n_trainable_params=sum(p.numel() for p in ranker.parameters() if p.requires_grad),
-        n_total_params=sum(p.numel() for p in ranker.parameters()),
-        flash_sdp_enabled=torch.backends.cuda.flash_sdp_enabled(),
-        mem_efficient_sdp_enabled=torch.backends.cuda.mem_efficient_sdp_enabled(),
-        math_sdp_enabled=torch.backends.cuda.math_sdp_enabled(),
-    )
+    return {
+        "n_trainable_params": sum(p.numel() for p in ranker.parameters() if p.requires_grad),
+        "n_total_params": sum(p.numel() for p in ranker.parameters()),
+        "flash_sdp_enabled": torch.backends.cuda.flash_sdp_enabled(),
+        "mem_efficient_sdp_enabled": torch.backends.cuda.mem_efficient_sdp_enabled(),
+        "math_sdp_enabled": torch.backends.cuda.math_sdp_enabled(),
+    }
 
 
 def log_config(ranker: Ranker, config: omegaconf.DictConfig, exp_dir: Path) -> None:
@@ -61,7 +60,7 @@ def log_config(ranker: Ranker, config: omegaconf.DictConfig, exp_dir: Path) -> N
     config_path = Path(exp_dir, "config.yaml")
     all_data = omegaconf.OmegaConf.to_container(config, resolve=True)
     all_data["meta"] = _make_meta_data(ranker)
-    with open(config_path, "w") as f:
+    with config_path.open("w") as f:
         yaml.dump(all_data, f)
 
     # log he config to wandb

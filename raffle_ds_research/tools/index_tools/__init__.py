@@ -1,4 +1,5 @@
 """Tools for indexing and searching knowledge bases."""
+from __future__ import annotations
 
 from raffle_ds_research.tools.index_tools.bm25_tools import Bm25Client, Bm25Master  # noqa: F401
 from raffle_ds_research.tools.index_tools.faiss_tools.client import FaissClient, FaissMaster  # noqa: F401

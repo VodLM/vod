@@ -31,6 +31,7 @@ def maybe_instantiate(conf_or_obj: Union[Any, DictConfig], **kwargs: Any) -> obj
     """Instantiate a config if needed."""
     if isinstance(conf_or_obj, (DictConfig, dict)):
         return instantiate(conf_or_obj, **kwargs)
+    return None
 
 
 PBAR_MATCH_PATTERN = re.compile(r"(loss|ndcg|mrr)$")
@@ -41,7 +42,7 @@ class Ranker(pl.LightningModule):
 
     _output_size: int
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         encoder: TransformerEncoder,
         gradients: Gradients,
@@ -55,10 +56,12 @@ class Ranker(pl.LightningModule):
         super().__init__()
         if isinstance(optimizer, (dict, DictConfig)):
             optimizer = maybe_instantiate(optimizer)
-            assert isinstance(optimizer, functools.partial)
+            if not isinstance(optimizer, functools.partial):
+                raise TypeError(f"Expected a partial function, got {type(optimizer)}")
         if isinstance(scheduler, (dict, DictConfig)):
             scheduler = maybe_instantiate(scheduler)
-            assert isinstance(scheduler, functools.partial)
+            if not isinstance(scheduler, functools.partial):
+                raise TypeError(f"Expected a partial function, got {type(scheduler)}")
 
         self.optimizer_cls: functools.partial = optimizer
         self.scheduler_cls: functools.partial = scheduler
@@ -83,7 +86,7 @@ class Ranker(pl.LightningModule):
             # loguru.logger.info("Compiling the gradients...")
             # self.gradients = torch.compile(self.gradients)
 
-    def get_output_shape(self, model_output_key: Optional[str] = None) -> tuple[int, ...]:
+    def get_output_shape(self, model_output_key: Optional[str] = None) -> tuple[int, ...]:  # noqa: ARG002
         """Dimension of the model output."""
         return (self._output_size,)
 
@@ -107,7 +110,7 @@ class Ranker(pl.LightningModule):
         # defile the learning rate scheduler
         lr_scheduler = self.scheduler_cls(optimizer)
 
-        output = {
+        return {
             "optimizer": optimizer,
             "lr_scheduler": {
                 "scheduler": lr_scheduler,
@@ -131,7 +134,6 @@ class Ranker(pl.LightningModule):
                 "name": None,
             },
         }
-        return output
 
     def _forward_field(self, batch: dict) -> torch.Tensor:
         input_ids = batch["input_ids"]
@@ -140,10 +142,7 @@ class Ranker(pl.LightningModule):
         input_ids = input_ids.view(-1, original_shape[-1])
         attention_mask = attention_mask.view(-1, original_shape[-1])
         outputs = self.encoder(input_ids, attention_mask=attention_mask)
-        if self.use_pooler_layer:
-            embedding = outputs.pooler_output
-        else:
-            embedding = outputs.last_hidden_state[..., 0, :]
+        embedding = outputs.pooler_output if self.use_pooler_layer else outputs.last_hidden_state[..., 0, :]
         embedding = self.proj(embedding)
         embedding = embedding.view(*original_shape[:-1], -1)
         return embedding
@@ -154,13 +153,11 @@ class Ranker(pl.LightningModule):
         keys_map = {f"{field}.{key}": key for key in keys}
         if not all(key in batch for key in keys_map):
             return None
-        output = {key_to: batch[key_from] for key_from, key_to in keys_map.items()}
-        return output
+        return {key_to: batch[key_from] for key_from, key_to in keys_map.items()}
 
     def forward(self, batch: dict, **kwargs: Any) -> dict[str, torch.Tensor]:
         """Forward pass through the model. Only computes the embeddings for the query and the document."""
-        output = self.predict(batch)
-        return output
+        return self.predict(batch)
 
     def predict(self, batch: dict, **kwargs: Any) -> dict[str, torch.Tensor]:
         """Computes the embeddings for the query and the document."""
@@ -177,9 +174,7 @@ class Ranker(pl.LightningModule):
             )
         return output
 
-    def _step(
-        self, batch: dict[str, Any], batch_idx: Optional[int] = None, *, split: str, **kwargs: Any
-    ) -> dict[str, Any]:
+    def _step(self, batch: dict[str, Any], *, split: str, **kwargs: Any) -> dict[str, Any]:
         output = self.forward(batch)
         output = self.gradients({**batch, **output})
         output.update(_compute_input_stats(batch, prefix=f"{split}/"))
@@ -207,12 +202,11 @@ class Ranker(pl.LightningModule):
         **kwargs: Any,
     ) -> None:
         for key, value in output.items():
-            if isinstance(value, torch.Tensor):
-                if value.numel() > 1:
-                    value = value.mean()
+            if isinstance(value, torch.Tensor) and value.numel() > 1:
+                value = value.mean()  # noqa: PLW2901
 
             if "/" not in key:
-                key = f"{split}/{key}"
+                key = f"{split}/{key}"  # noqa: PLW2901
 
             if prog_bar is None:
                 prog_bar = PBAR_MATCH_PATTERN.search(key) is not None
@@ -222,12 +216,10 @@ class Ranker(pl.LightningModule):
 
     @staticmethod
     def _filter_output(output: dict[str, Any]) -> dict[str, Any]:
-        def _filter_fn(key: str, value: torch.Tensor) -> bool:
+        def _filter_fn(key: str, _: torch.Tensor) -> bool:
             return not str(key).startswith("_")
 
-        output = {key: value for key, value in output.items() if _filter_fn(key, value)}
-
-        return output
+        return {key: value for key, value in output.items() if _filter_fn(key, value)}
 
     def training_step(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         """Implements the lightning training step."""
@@ -292,7 +284,7 @@ def _compute_input_stats(batch: dict, prefix: str = "") -> dict[str, float]:
             if isinstance(value, torch.Tensor):
                 shp = value.shape
                 output[f"{prefix}{log_key}_length"] = float(shp[-1])
-                if len(shp) > 2:
+                if len(shp) > 2:  # noqa: PLR2004
                     output[f"{prefix}{log_key}_n"] = float(shp[-2])
         except KeyError:
             logger.warning(f"Key {key} not found in batch")

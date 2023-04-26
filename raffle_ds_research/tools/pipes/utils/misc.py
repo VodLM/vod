@@ -11,10 +11,7 @@ T = TypeVar("T")
 
 def iter_examples(batch: dict[str, list], keys: Iterable[str] = None) -> Iterable[dict]:
     """Iterate over the examples contained in a batch."""
-    if keys is None:
-        keys = list(batch.keys())
-    else:
-        keys = list(keys)
+    keys = list(batch.keys()) if keys is None else list(keys)
     subset = {key: batch[key] for key in keys}
     master_key, *other_keys = subset
     for i in range(len(batch[master_key])):
@@ -28,9 +25,8 @@ def pack_examples(examples: Iterable[dict[T, Any]], keys: Optional[list[T]] = No
     for example in examples:
         if keys is None:
             keys = set(example.keys())
-        else:
-            if not set(keys).issubset(example.keys()):
-                raise ValueError(f"Expected keys {set(keys)}, got {set(example.keys())}")
+        elif not set(keys).issubset(example.keys()):
+            raise ValueError(f"Expected keys {set(keys)}, got {set(example.keys())}")
         for key in keys:
             output[key].append(example[key])
     return dict(output)
@@ -72,6 +68,5 @@ def keep_only_columns(dataset: datasets.Dataset, columns: Iterable[str], strict:
             f"Columns {columns - set(dataset.column_names)} not in dataset and are required with argument `strict=True`"
         )
     cols_to_remove = set(dataset.column_names) - columns
-    cols_to_remove = list(sorted(cols_to_remove))
-    dataset = dataset.remove_columns(cols_to_remove)
-    return dataset
+    cols_to_remove = sorted(cols_to_remove)
+    return dataset.remove_columns(cols_to_remove)

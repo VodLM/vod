@@ -1,11 +1,12 @@
 # mypy: ignore-errors
+from __future__ import annotations
 
 import os
 import shutil
 from distutils.command.build_ext import build_ext
 from distutils.core import Distribution, Extension
 
-import numpy
+import numpy  # noqa: ICN001
 from Cython.Build import cythonize
 
 compile_args = ["-march=native", "-O3", "-msse", "-msse2", "-mfma", "-mfpmath=sse"]
@@ -43,9 +44,9 @@ def build() -> None:
     for output in cmd.get_outputs():
         relative_extension = os.path.relpath(output, cmd.build_lib)
         shutil.copyfile(output, relative_extension)
-        mode = os.stat(relative_extension).st_mode
+        mode = os.stat(relative_extension).st_mode  # noqa: PTH116
         mode |= (mode & 0o444) >> 2
-        os.chmod(relative_extension, mode)
+        os.chmod(relative_extension, mode)  # noqa: PTH101
 
 
 if __name__ == "__main__":

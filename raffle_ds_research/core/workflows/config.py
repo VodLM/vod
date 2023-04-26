@@ -7,10 +7,10 @@ from typing import Optional, Union
 import omegaconf
 import pydantic
 from omegaconf import DictConfig
+from typing_extensions import Self, Type
 
 from raffle_ds_research.core.workflows.schedule import ScheduleConfig
 from raffle_ds_research.tools.utils import loader_config
-from typing_extensions import Type, Self
 
 
 class DefaultCollateConfig(pydantic.BaseModel):
@@ -46,9 +46,7 @@ class SearchConfig(pydantic.BaseModel):
             return v
         if isinstance(v, (bool, float, int)):
             return float(v)
-        elif isinstance(v, dict):
-            return ScheduleConfig(**v)
-        elif isinstance(v, omegaconf.DictConfig):
+        if isinstance(v, (dict, omegaconf.DictConfig)):
             return ScheduleConfig(**v)
 
         raise ValueError(f"Invalid schedule: {v}")
@@ -89,7 +87,7 @@ class MultiIndexConfig(pydantic.BaseModel):
     @pydantic.validator("update_freq", pre=True)
     def _validate_update_freq(cls, v: Union[int, list[int], omegaconf.ListConfig]) -> int | list[int]:
         if isinstance(v, omegaconf.ListConfig):
-            v = omegaconf.OmegaConf.to_container(v)
+            return omegaconf.OmegaConf.to_container(v)
         return v
 
     @pydantic.validator("faiss")

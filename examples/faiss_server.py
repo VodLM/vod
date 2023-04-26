@@ -1,4 +1,6 @@
 # pylint: disable=missing-function-docstring
+from __future__ import annotations
+
 import tempfile
 import timeit
 from pathlib import Path

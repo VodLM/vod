@@ -11,13 +11,12 @@ _TOKENIZED_KEYS = ["input_ids", "attention_mask"]
 
 
 def _get_token_keys(prefix_key: str) -> list[str]:
-    tokenized_keys = [f"{prefix_key}{k}" for k in _TOKENIZED_KEYS]
-    return tokenized_keys
+    return [f"{prefix_key}{k}" for k in _TOKENIZED_KEYS]
 
 
 def _torch_pad_tokenized_field(
     batch: dict[str, Any],
-    idx: Optional[list[int]] = None,
+    idx: Optional[list[int]] = None,  # noqa: ARG
     *,
     prefix_key: Optional[str] = None,
     tokenizer: transformers.PreTrainedTokenizer,
@@ -44,7 +43,7 @@ def _torch_pad_tokenized_field(
 
 def tokenize_pipe(
     batch: dict[str, Any],
-    idx: Optional[list[int]] = None,
+    idx: Optional[list[int]] = None,  # noqa: ARG001
     *,
     text_key: str = "text",
     prefix_key: Optional[str] = None,
@@ -107,10 +106,7 @@ def torch_tokenize_collate(
     prefix_key = prefix_key or ""
     tokenized_keys = _get_token_keys(prefix_key)
     first_eg, *other_egs = examples
-    if set(tokenized_keys).issubset(first_eg):
-        need_keys = tokenized_keys
-    else:
-        need_keys = [text_key]
+    need_keys = tokenized_keys if set(tokenized_keys).issubset(first_eg) else [text_key]
 
     if not all(k in first_eg for k in need_keys):
         raise KeyError(f"Missing keys in batch: {need_keys}. Found: {list(first_eg.keys())}")

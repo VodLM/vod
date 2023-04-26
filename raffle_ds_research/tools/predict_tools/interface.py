@@ -69,19 +69,19 @@ def predict(
             validate_store=validate_store,
             read_only=read_only,
         )
-    else:
-        return _predict_single(
-            dataset,
-            trainer=trainer,
-            cache_dir=cache_dir,
-            model=model,
-            collate_fn=collate_fn,
-            model_output_key=model_output_key,
-            loader_kwargs=loader_kwargs,
-            ts_kwargs=ts_kwargs,
-            validate_store=validate_store,
-            read_only=read_only,
-        )
+
+    return _predict_single(
+        dataset,
+        trainer=trainer,
+        cache_dir=cache_dir,
+        model=model,
+        collate_fn=collate_fn,
+        model_output_key=model_output_key,
+        loader_kwargs=loader_kwargs,
+        ts_kwargs=ts_kwargs,
+        validate_store=validate_store,
+        read_only=read_only,
+    )
 
 
 def _predict_dict(
@@ -188,8 +188,9 @@ def _predict_single(
         logger.debug(f"Validating the store using `{n_samples}` samples (all rows must be non-zero)")
         zero_ids = list(_get_zero_vec_indices(store, n_samples=n_samples))
         if len(zero_ids) > 0:
+            max_display = 5
             frac = len(zero_ids) / len(dataset)
-            zero_ids_ = zero_ids if len(zero_ids) < 5 else [str(x) for x in zero_ids[:5]] + ["..."]
+            zero_ids_ = zero_ids if len(zero_ids) < max_display else [str(x) for x in zero_ids[:max_display]] + ["..."]
             raise ValueError(
                 f"Vector at indices {zero_ids_} are all zeros ({frac:.1%}). "
                 f"This happens if the store has been initialized but not updated with predictions. "
@@ -219,10 +220,7 @@ def _infer_vector_shape(
             f"Implement `model.get_output_shape(output_key: str) -> tuple[int,...]` to skip this step."
         )
         batch = collate_fn([dataset[0]])
-        if hasattr(model, "predict"):
-            one_vec = model.predict(batch)
-        else:
-            one_vec = model(batch)
+        one_vec = model.predict(batch) if hasattr(model, "predict") else model(batch)
         if model_output_key is not None:
             one_vec = one_vec[model_output_key]
         vector_shape = one_vec.shape[1:]
@@ -232,10 +230,7 @@ def _infer_vector_shape(
 
 def _get_zero_vec_indices(store: tensorstore.TensorStore, n_samples: int) -> Iterable[int]:
     store_size = store.shape[0]
-    if n_samples < store_size:
-        ids = np.random.choice(store_size, n_samples, replace=False)
-    else:
-        ids = range(store_size)
+    ids = np.random.choice(store_size, n_samples, replace=False) if n_samples < store_size else range(store_size)
     prefetched, i = None, 0
     for i in track(ids, description="Validating store"):
         if prefetched is not None:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pathlib
 from pathlib import Path
-from typing import Any, Optional, Callable
+from typing import Any, Callable, Optional
 
 import loguru
 import numpy as np
@@ -167,12 +167,12 @@ def _infer_update_steps(total_number_of_steps: int, update_freq: int | list[int]
     return steps + [total_number_of_steps]
 
 
-def _pretty_steps(steps: list[int]) -> str:
+def _pretty_steps(steps: list[int], max_steps: int = 6) -> str:
     steps = steps[:-1]
-    if len(steps) > 6:
+    if len(steps) > max_steps:
         return f"[{steps[0]}, {steps[1]}, {steps[2]}, {steps[3]}, {steps[4]} ... {steps[-1]}]"
-    else:
-        return str(steps)
+
+    return str(steps)
 
 
 class PeriodicStoppingCallback(pl.callbacks.Callback):
@@ -185,10 +185,10 @@ class PeriodicStoppingCallback(pl.callbacks.Callback):
     def on_train_batch_end(
         self,
         trainer: pl.Trainer,
-        pl_module: pl.LightningModule,
-        outputs: Any,  # noqa: ANN401
-        batch: Any,  # noqa: ANN401
-        batch_idx: int,
+        pl_module: pl.LightningModule,  # noqa: ARG002
+        outputs: Any,  # noqa: ARG,ANN
+        batch: Any,  # noqa: ARG,ANN
+        batch_idx: int,  # noqa: ARG002
     ) -> None:
         """Called when the training batch ends."""
         if trainer.global_step >= self.stop_at:

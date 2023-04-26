@@ -1,9 +1,10 @@
+from __future__ import annotations
+
 import abc
+import collections
 from typing import Iterable
 
 import datasets
-import collections
-
 import omegaconf
 from torch.utils import data as torch_data
 

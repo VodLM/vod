@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from copy import copy
 from numbers import Number
 from typing import List, Optional
@@ -14,9 +15,10 @@ from rich.tree import Tree
 def human_format_nb(num: int | float, precision: int = 2) -> str:
     """Converts a number to a human-readable format."""
     magnitude = 0
-    while abs(num) >= 1000:
+    base = 1000.0
+    while abs(num) >= base:
         magnitude += 1
-        num /= 1000.0
+        num /= base
     # add more suffixes if you need them
     q = ["", "K", "M", "G", "T", "P"][magnitude]
     return f"{num:.{precision}f}{q}"
@@ -61,10 +63,8 @@ def print_config(
 
         config_section = config.get(field)
         if isinstance(config_section, DictConfig):
-            try:
+            with contextlib.suppress(Exception):
                 branch_content = OmegaConf.to_yaml(config_section, resolve=resolve)
-            except Exception:
-                pass
         else:
             branch_content = str(config_section)
 

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import numpy as np
 import pytest
 
@@ -26,6 +28,6 @@ def test_gather_by_index(n_points: int, max_n_unique: int, seed: int) -> None:
 
     c_result = c_tools.gather_by_index(queries, keys, values)
     py_result = _get_expected_labels(queries, keys, values)
-    for i, (c_result, py_result) in enumerate(zip(c_result, py_result)):
-        if not np.isclose(c_result, py_result) and not (np.isnan(c_result) and np.isnan(py_result)):
+    for i, (c_result_i, py_result_i) in enumerate(zip(c_result, py_result)):
+        if not np.isclose(c_result_i, py_result_i) and not (np.isnan(c_result_i) and np.isnan(py_result)):
             raise ValueError(f"c_result[{i}] = {c_result} != {py_result} = py_result[{i}]")

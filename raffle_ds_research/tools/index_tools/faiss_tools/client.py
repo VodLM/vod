@@ -11,9 +11,8 @@ import requests
 import rich
 import torch
 
-from raffle_ds_research.tools.index_tools import io
+from raffle_ds_research.tools.index_tools import io, search_server
 from raffle_ds_research.tools.index_tools import retrieval_data_type as rtypes
-from raffle_ds_research.tools.index_tools import search_server
 
 # get the path to the server script
 server_run_path = Path(__file__).parent / "server.py"
@@ -35,17 +34,17 @@ class FaissClient(search_server.SearchClient):
         """Return the URL of the server."""
         return f"{self.host}:{self.port}"
 
-    def ping(self) -> bool:
+    def ping(self, timeout: float = 120) -> bool:
         """Ping the server."""
         try:
-            response = requests.get(f"{self.url}/")
+            response = requests.get(f"{self.url}/", timeout=timeout)
         except requests.exceptions.ConnectionError:
             return False
 
         response.raise_for_status()
         return "OK" in response.text
 
-    def search_py(self, query_vec: rtypes.Ts, top_k: int = 3) -> rtypes.RetrievalBatch[rtypes.Ts]:
+    def search_py(self, query_vec: rtypes.Ts, top_k: int = 3, timeout: float = 120) -> rtypes.RetrievalBatch[rtypes.Ts]:
         """Search the server given a batch of vectors (slow implementation)."""
         input_type = type(query_vec)
         response = requests.post(
@@ -54,6 +53,7 @@ class FaissClient(search_server.SearchClient):
                 "vectors": query_vec.tolist(),
                 "top_k": top_k,
             },
+            timeout=timeout,
         )
         response.raise_for_status()
         data = response.json()
@@ -71,9 +71,10 @@ class FaissClient(search_server.SearchClient):
         self,
         *,
         vector: rtypes.Ts,
-        text: Optional[list[str]] = None,
-        label: Optional[list[str | int]] = None,
+        text: Optional[list[str]] = None,  # noqa: ARG
+        label: Optional[list[str | int]] = None,  # noqa: ARG
         top_k: int = 3,
+        timeout: float = 120,
     ) -> rtypes.RetrievalBatch[rtypes.Ts]:
         """Search the server given a batch of vectors."""
         input_type = type(vector)
@@ -87,7 +88,7 @@ class FaissClient(search_server.SearchClient):
             "top_k": top_k,
             "array_type": input_type_enum.value,
         }
-        response = requests.post(f"{self.url}/fast-search", json=payload)
+        response = requests.post(f"{self.url}/fast-search", json=payload, timeout=timeout)
         try:
             response.raise_for_status()
         except requests.exceptions.HTTPError as exc:
@@ -148,7 +149,7 @@ class FaissMaster(search_server.SearchMaster[FaissClient]):
 
     def _make_cmd(self) -> list[str]:
         executable_path = sys.executable
-        cmd = [
+        return [
             str(executable_path),
             str(server_run_path),
             "--index-path",
@@ -162,7 +163,6 @@ class FaissMaster(search_server.SearchMaster[FaissClient]):
             "--logging-level",
             str(self.logging_level),
         ]
-        return cmd
 
     def get_client(self) -> FaissClient:
         """Get the client for interacting with the Faiss server."""

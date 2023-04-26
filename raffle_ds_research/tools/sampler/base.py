@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import abc
 from dataclasses import dataclass
 from typing import Any, Optional
@@ -62,7 +64,7 @@ class Categorical(Sampler):
         self,
         scores: torch.Tensor,
         *,
-        label: Optional[torch.Tensor] = None,
+        label: Optional[torch.Tensor] = None,  # noqa: ARG002
         n: int = 3,
     ) -> Samples:
         """Sample from a categorical distribution."""

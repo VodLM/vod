@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import functools
 import json
 from typing import Callable
@@ -46,8 +48,7 @@ def _hash_tokenizer(hasher: fingerprint.Hasher, value: transformers.PreTrainedTo
     data["vocab"] = json.dumps(data["vocab"], sort_keys=True)
     hashed_data = {k: hasher.hash(v) for k, v in data.items()}
     json_data = json.dumps(hashed_data, sort_keys=True)
-    tokenizer_hash = hasher.hash(json_data)
-    return tokenizer_hash
+    return hasher.hash(json_data)
 
 
 def _hash_partial(hasher: fingerprint.Hasher, value: functools.partial) -> str:

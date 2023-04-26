@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import os
+import pathlib
 import shutil
 
-import loguru
-import pathlib
 import lightning.pytorch as pl
+import loguru
 
 
 class CleanableDirectory:
@@ -35,9 +34,9 @@ class CleanableDirectory:
     @pl.utilities.rank_zero_only
     def _cleanup(self, path: pathlib.Path) -> None:
         for f in path.iterdir():
-            loguru.logger.info(f"Deleting {f} ({os.stat(f).st_size / 1e6:.2f} MB)..")
+            loguru.logger.info(f"Deleting {f} ({f.stat().st_size / 1e6:.2f} MB)..")
             if f.is_dir():
                 shutil.rmtree(f)
             else:
-                os.remove(f)
+                f.unlink()
         shutil.rmtree(path)

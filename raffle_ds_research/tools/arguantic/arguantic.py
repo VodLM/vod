@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import argparse
-from typing_extensions import Self, Type
 
 import pydantic
+from typing_extensions import Self, Type
 
 
 class Arguantic(pydantic.BaseModel):

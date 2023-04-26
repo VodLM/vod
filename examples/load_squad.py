@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import rich
 
 from raffle_ds_research.tools import arguantic, raffle_datasets
@@ -18,4 +20,4 @@ if __name__ == "__main__":
     rich.print("==== train ====")
     question = squad.qa_splits["train"][args.sample_idx]
     section = squad.sections[question["section_ids"][0]]
-    rich.print(dict(question=question, section=section))
+    rich.print({"question": question, "section": section})

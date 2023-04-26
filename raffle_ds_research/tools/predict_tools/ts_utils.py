@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Iterable, Literal, Union
-from typing_extensions import Type, Self
 
 import pydantic
 import tensorstore
 from pydantic import BaseModel
+from typing_extensions import Self, Type
 
 
 class TensorStoreKvStoreConfig(BaseModel):
@@ -72,9 +72,8 @@ class TensorStoreFactory(BaseModel):
             },
         }
         metadata = driver_meta[driver]
-        instance = cls(
+        return cls(
             driver=driver,
             kvstore=TensorStoreKvStoreConfig(driver="file", path=path),
             metadata=metadata,
         )
-        return instance

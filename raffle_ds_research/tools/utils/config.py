@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import socket
 from random import randint
@@ -27,36 +29,33 @@ def init_hydra_config(
         if overrides is None:
             overrides = []
 
-        config = compose(
+        return compose(
             config_name=config_name,
             overrides=overrides,
             return_hydra_config=return_hydra_config,
         )
 
-    return config
 
-
-def register_omgeaconf_resolvers() -> None:
+def register_omgeaconf_resolvers() -> None:  # noqa: C901
     """Register OmegaConf resolvers. Resolvers a dynamically computed values that can be used in the config."""
-    N_GPUS = torch.cuda.device_count()
-    GIT_HASH = git_revision_hash()
-    GIT_HASH_SHORT = git_revision_short_hash()
-    GIT_BRANCH_NAME = git_branch_name()
-    SEED = randint(0, 100_000)
+    N_GPUS = torch.cuda.device_count()  # noqa: N806
+    GIT_HASH = git_revision_hash()  # noqa: N806
+    GIT_HASH_SHORT = git_revision_short_hash()  # noqa: N806
+    GIT_BRANCH_NAME = git_branch_name()  # noqa: N806
+    SEED = randint(0, 100_000)  # noqa: N806
 
     def _default_trainer_accelerator(*args: Any, **kwargs: Any) -> str:
         if N_GPUS == 0:
             return "cpu"
-        else:
-            return "gpu"
+
+        return "gpu"
 
     def _default_trainer_single_device(*args: Any, **kwargs: Any) -> str:
         if N_GPUS == 0:
             return "cpu"
-        elif N_GPUS == 1:
+        if N_GPUS == 1:
             return "cuda:0"
-        else:
-            raise ValueError("N_GPUS > 1. Please specify the device.")
+        raise ValueError("N_GPUS > 1. Please specify the device.")
 
     def _infer_model_type(model_name: str) -> str:
         known_model_types = ["bert", "t5"]
@@ -75,7 +74,7 @@ def register_omgeaconf_resolvers() -> None:
     def _reverse_frank_split(x: str) -> str:
         if x.startswith("frank.A"):
             return x.replace("frank.A", "frank.B.")
-        elif x.startswith("frank.B"):
+        if x.startswith("frank.B"):
             return x.replace("frank.B", "frank.A.")
         return x
 

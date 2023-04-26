@@ -24,6 +24,7 @@ from raffle_ds_research.core.workflows.utils import (
 )
 
 
+@pl.utilities.rank_zero_only
 @torch.inference_mode()
 def benchmark(
     *,
@@ -49,7 +50,6 @@ def benchmark(
     benchmark_data: dict[str, Any] = collections.defaultdict(dict)
     for builder in builders:
         loguru.logger.info(f"Running benchmark for `{builder.name}` ({builder.splits})")
-        trainer.strategy.barrier(f"benchmark_{builder.name}_{'+'.join(builder.splits)}")
         with index_manager.IndexManager(
             ranker=ranker,
             trainer=trainer,

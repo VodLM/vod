@@ -6,10 +6,10 @@ from abc import ABC
 from enum import Enum
 from numbers import Number
 from typing import Any, Generic, Iterable, TypeVar, Union
-from typing_extensions import Type, TypeAlias
 
 import numpy as np
 import torch
+from typing_extensions import Type, TypeAlias
 
 from raffle_ds_research.tools import c_tools
 
@@ -123,13 +123,11 @@ class RetrievalData(ABC, Generic[Ts]):
         return self.scores.shape
 
     def _get_repr_parts(self) -> list[str]:
-        parts = [
+        return [
             f"{type(self).__name__}[{_type_repr(self.scores)}](",
             f"scores={repr(self.scores)}, ",
             f"indices={repr(self.indices)}",
         ]
-
-        return parts
 
     def __repr__(self) -> str:
         """Representation of the object."""
@@ -257,7 +255,7 @@ def merge_retrieval_batches(batches: Iterable[RetrievalBatch]) -> RetrievalBatch
         raise ValueError("No batches provided")
     if len(batches) == 1:
         return batches[0]
-    if len(batches) > 2:
+    if len(batches) > 2:  # noqa: PLR2004
         raise NotImplementedError("Merging more than 2 batches is not implemented")
 
     first_batch, second_batches = batches
@@ -269,5 +267,4 @@ def merge_retrieval_batches(batches: Iterable[RetrievalBatch]) -> RetrievalBatch
         b_indices=second_batches.indices,
         b_scores=second_batches.scores,
     )
-    output = RetrievalBatch(indices=new_indices, scores=new_scores).to(py_type)
-    return output
+    return RetrievalBatch(indices=new_indices, scores=new_scores).to(py_type)

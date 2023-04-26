@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import collections
-from typing import Iterable, Any
+from typing import Any, Iterable
 
 import datasets
 import numpy as np
@@ -46,7 +46,7 @@ class LookupIndex:
         max_n = 0
         for query in queries:
             if isinstance(query, int):
-                query = [query]
+                query = [query]  # noqa: PLW2901
             q_indices = list(set.union(*[self._lookup_table[q] for q in query if q >= 0]))
             max_n = max(max_n, len(q_indices))
             indices.append(np.array(q_indices))
@@ -100,7 +100,7 @@ class LookupIndexKnowledgeBase:
         max_n = 0
         for query, kb in zip(labels, kb_labels):
             if isinstance(query, int):
-                query = [query]
+                query = [query]  # noqa: PLW2901
             lookup_table = self._lookup_table[kb]
             q_indices = list(set.union(*[lookup_table[q] for q in query if q >= 0]))
             max_n = max(max_n, len(q_indices))

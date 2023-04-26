@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import itertools
 import logging
 import uuid
@@ -58,22 +59,20 @@ class Bm25Client(search_server.SearchClient):
 
     def __del__(self) -> None:
         """Close the client."""
-        try:
+        with contextlib.suppress(AttributeError):
             self._client.close()
-        except AttributeError:
-            pass
 
     def search(
         self,
         *,
         text: list[str],
-        vector: Optional[rtypes.Ts] = None,
+        vector: Optional[rtypes.Ts] = None,  # noqa: ARG
         label: Optional[list[str | int]] = None,
         top_k: int = 3,
     ) -> rtypes.RetrievalBatch[rtypes.Ts]:
         """Search elasticsearch for the batch of text queries using `msearch`. NB: `vector` is not used here."""
         if self.supports_label and label is None:
-            warnings.warn("This index supports labels, but no label is provided.")
+            warnings.warn("This index supports labels, but no label is provided.", stacklevel=2)
 
         queries = self._make_queries(text, top_k=top_k, labels=label)
         responses = self._client.msearch(searches=queries)
@@ -107,7 +106,7 @@ class Bm25Client(search_server.SearchClient):
                 body["filter"] = {"term": {LABEL_KEY: label}}
             return {"query": {"bool": body}}
 
-        queries = [
+        return [
             part
             for text, label in itertools.zip_longest(texts, labels)
             for part in [
@@ -120,7 +119,6 @@ class Bm25Client(search_server.SearchClient):
                 },
             ]
         ]
-        return queries
 
 
 class Bm25Master(search_server.SearchMaster[Bm25Client]):
@@ -155,9 +153,8 @@ class Bm25Master(search_server.SearchMaster[Bm25Client]):
         self._persistent = persistent
         self._exist_ok = exist_ok
 
-        if input_size is None:
-            if isinstance(texts, (list, datasets.Dataset)):
-                input_size = len(texts)
+        if input_size is None and isinstance(texts, (list, datasets.Dataset)):
+            input_size = len(texts)
         self._input_data_size = input_size
 
     def _on_init(self) -> None:

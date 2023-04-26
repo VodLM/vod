@@ -52,7 +52,10 @@ class Args(arguantic.Arguantic):
         return pathlib.Path(v).expanduser().resolve()
 
 
-def run() -> None:
+MAX_BATCHES = 10
+
+
+def run() -> None:  # noqa: PLR0915
     """Load retrieval dataset, load a model, index, and iterate over the train set."""
     args = Args.parse()
     args.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -61,7 +64,7 @@ def run() -> None:
     logger.info(f"{type(tokenizer).__name__}: hash={datasets.fingerprint.Hasher.hash(tokenizer)}")
     builder = dataset_builders.RetrievalBuilder.from_name(
         name=args.dset_name,
-        prep_map_kwargs=dict(num_proc=4, batch_size=1000),
+        prep_map_kwargs={"num_proc": 4, "batch_size": 1000},
         tokenizer=tokenizer,
     )
 
@@ -83,7 +86,7 @@ def run() -> None:
     trainer = pl.Trainer(accelerator=args.accelerator)
 
     # define the collates and dataloader args
-    loader_kwargs = dict(batch_size=args.batch_size, num_workers=4, pin_memory=True)
+    loader_kwargs = {"batch_size": args.batch_size, "num_workers": 4, "pin_memory": True}
     question_collate = functools.partial(
         pipes.torch_tokenize_collate,
         tokenizer=builder.tokenizer,
@@ -176,7 +179,7 @@ def run() -> None:
 
             hits: dict[str, Any] = {"score": [], "bm25": [], "faiss": []}
             for idx, batch in enumerate(tqdm(loader, desc="Iterating over batches")):
-                if idx > 10:
+                if idx > MAX_BATCHES:
                     break
 
                 monitor.update_from_retrieval_batch(batch, field="section")
@@ -184,11 +187,11 @@ def run() -> None:
                     logits = batch[f"section.{key}"]
                     targets = batch["section.label"]
                     for logits_i, target_i in zip(logits, targets):
-                        logits_i = logits_i.masked_fill(target_i.isnan(), -math.inf)
-                        target_i = target_i.masked_fill(logits_i.isinf(), 0)
-                        ids = torch.argsort(logits_i, descending=True)
-                        target_i = target_i[ids]
-                        r = {f"hitrate@{k}": (target_i[:k] > 0).any().item() for k in [1, 3, 10, 30]}
+                        logits_i_ = logits_i.masked_fill(target_i.isnan(), -math.inf)
+                        target_i_ = target_i.masked_fill(logits_i.isinf(), 0)
+                        ids = torch.argsort(logits_i_, descending=True)
+                        target_i_ = target_i_[ids]
+                        r = {f"hitrate@{k}": (target_i_[:k] > 0).any().item() for k in [1, 3, 10, 30]}
                         hit.append(r)
 
                 retrieved_section_ids = batch["section.id"]
@@ -199,7 +202,8 @@ def run() -> None:
                     labels_i = retrieved_section_labels[i, :].tolist()
                     pos_ids = [id_ for id_, label in zip(ids_i, labels_i) if label > 0]
                     neg_ids = [id_ for id_, label in zip(ids_i, labels_i) if label <= 0]
-                    assert set.intersection(set(pos_ids), set(neg_ids)) == set()
+                    if set.intersection(set(pos_ids), set(neg_ids)) != set():
+                        raise ValueError("Overlap between positive and negative sections.")
 
             metrics = monitor.compute()
             print_metric_groups(metrics)

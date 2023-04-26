@@ -13,7 +13,7 @@ seed: 1
 
 builder:
 #  name: frank.A.en.pos #+squad.en
-  name: frank.A.en.pos+squad.en
+  name: frank.A.en.pos+squad.en+msmarco.en
 
 benchmark:
   on_init: false
@@ -24,6 +24,8 @@ benchmark:
       splits: [ validation ]
     - name: squad.en
       splits: [ validation ]
+    - name: msmarco.en
+      splits: [ validation ]
 
 
 model:
@@ -31,7 +33,7 @@ model:
   embedding_size: 1_024
   use_pooler_layer: false
   optimizer:
-    lr: 1e-4
+    lr: 4e-4
     weight_decay: 0
     eps: 1e-8
   scheduler:
@@ -45,9 +47,10 @@ resources:
   num_proc: 4
 
 batch_size:
-  effective: 32
+  effective: 64
   per_device: 16
   per_device_eval: 8
+  gradient_accumulation_steps: 1
   per_device_predict: 512
 
 trainer:
@@ -56,7 +59,7 @@ trainer:
   detect_anomaly: false
   max_steps: 50_000
   limit_val_batches: 50
-  val_check_interval: ${int_mul:${trainer.accumulate_grad_batches},100}
+  val_check_interval: ${int_mul:${trainer.accumulate_grad_batches},300}
 
 
 collates:

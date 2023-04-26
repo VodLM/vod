@@ -46,10 +46,7 @@ class ConstrainedTensor:
     def _validate_py_type(cls: Type[Self], v: torch.Tensor | np.ndarray) -> torch.Tensor:
         if not isinstance(v, torch.Tensor):
             if cls.allow_casting:
-                if isinstance(v, np.ndarray):
-                    v = torch.from_numpy(v)
-                else:
-                    v = torch.tensor(v)
+                v = torch.from_numpy(v) if isinstance(v, np.ndarray) else torch.tensor(v)
             else:
                 raise TypeError(f"Expected `torch.Tensor` or `np.ndarray`, got {v.dtype}")
         return v
@@ -120,7 +117,7 @@ def constrained_tensor(
     """Define a `ConstrainedTensor` class with the given constraints."""
     if shape is not None:
         shape = list(shape)
-    namespace = dict(allow_casting=allow_casting, dtype=dtype, device=device, shape=shape)
+    namespace = {"allow_casting": allow_casting, "dtype": dtype, "device": device, "shape": shape}
     attrs = [
         f"{k}={repr_tensor(v)}" if isinstance(v, torch.Tensor) else f"{k}={v}"
         for k, v in namespace.items()
@@ -128,8 +125,7 @@ def constrained_tensor(
     ]
     attrs = ",".join(attrs)
     cls_name = f"ConstrainedTensor[{attrs}]"
-    parameterized_type = type(cls_name, (ConstrainedTensor,), namespace)
-    return parameterized_type  # type: ignore
+    return type(cls_name, (ConstrainedTensor,), namespace)
 
 
 def validate_shapes_consistency(model: BaseModel, values: dict[str, Any]) -> dict[str, Any]:

@@ -1,4 +1,6 @@
 # pylint: disable=no-member
+from __future__ import annotations
+
 import base64
 import io
 from typing import Optional, Type

@@ -108,12 +108,12 @@ def sample_sections(
 
     if (concatenated.labels.sum(axis=1) == 0).any():
         rich.print(
-            dict(
-                positive_indices=positives.indices,
-                positive_logits=positive_logits,
-                negative_indices=candidates.indices,
-                negative_logits=negative_logits,
-            )
+            {
+                "positive_indices": positives.indices,
+                "positive_logits": positive_logits,
+                "negative_indices": candidates.indices,
+                "negative_logits": negative_logits,
+            }
         )
         rich.print(output)
         raise ValueError("No positive sections were sampled.")
@@ -128,8 +128,7 @@ def _fill_nans_with_min(values: np.ndarray, offset_min_value: Optional[float] = 
         min_scores = np.where(np.isnan(min_scores), 0, min_scores)
         if offset_min_value is not None:
             min_scores += offset_min_value  # make sure the min is lower than the rest
-    values = np.where(np.isnan(values), min_scores, values)
-    return values
+    return np.where(np.isnan(values), min_scores, values)
 
 
 class RetrievalCollate(pipes.Collate):
@@ -178,29 +177,29 @@ class RetrievalCollate(pipes.Collate):
 
         if not self.config.search_enabled:
             raise ValueError("Search is not enabled. Make sure to enable `faiss` or `bm25`.")
+
+        # fetch the query vectors
+        if self.config.requires_vectors:
+            question_ids = batch[ROW_IDX_COL_NAME]
+            query_vectors = self.config.query_vectors[question_ids]
+            if np.all(query_vectors == 0):
+                raise ValueError("Query vectors are all zeros.")
         else:
-            # fetch the query vectors
-            if self.config.requires_vectors:
-                question_ids = batch[ROW_IDX_COL_NAME]
-                query_vectors = self.config.query_vectors[question_ids]
-                if np.all(query_vectors == 0):
-                    raise ValueError("Query vectors are all zeros.")
-            else:
-                query_vectors = None
+            query_vectors = None
 
-            # search the indexes
-            samples_: list[ClientResults] = []
-            for cfg in self.config.enabled_clients:
-                samples: index_tools.RetrievalBatch = cfg.client.search(
-                    vector=query_vectors,
-                    text=batch["text"],
-                    label=batch[cfg.label_key],
-                    top_k=self.config.prefetch_n_sections,
-                )
-                samples_.append(ClientResults(samples=samples, cfg=cfg))
+        # search the indexes
+        samples_: list[ClientResults] = []
+        for cfg in self.config.enabled_clients:
+            samples: index_tools.RetrievalBatch = cfg.client.search(
+                vector=query_vectors,
+                text=batch["text"],
+                label=batch[cfg.label_key],
+                top_k=self.config.prefetch_n_sections,
+            )
+            samples_.append(ClientResults(samples=samples, cfg=cfg))
 
-            # concatenate the results
-            candidate_samples, client_scores = _merge_candidate_samples(samples_)
+        # concatenate the results
+        candidate_samples, client_scores = _merge_candidate_samples(samples_)
 
         # filter the candidates base on the `config.ensure_match` keys
         if self._features is not None:
@@ -314,10 +313,7 @@ def _ensure_match(
         section_features_key = section_features[key]
         section_features_key = np.asarray(section_features_key).reshape(batch_features_key.shape[0], -1)
         keep_mask_key = batch_features_key[:, None] == section_features_key
-        if keep_mask is None:
-            keep_mask = keep_mask_key
-        else:
-            keep_mask = keep_mask & keep_mask_key
+        keep_mask = keep_mask_key if keep_mask is None else keep_mask & keep_mask_key
 
     candidate_samples.scores = np.where(keep_mask, candidate_samples.scores, -math.inf)
     return candidate_samples

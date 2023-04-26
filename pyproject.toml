@@ -92,29 +92,9 @@ requires = [
 generate-setup-file = false
 script = "build.py"
 
-[tool.mypy]
-python_version = "3.11"
-disable_error_code = [
-    "assignment",
-    "index",
-    "arg-type",
-    "call-arg",
-    "call-overload",
-    "union-attr",
-    "attr-defined",
-    "valid-type",
-    "dict-item",
-]
-ignore_missing_imports = true
-follow_imports = "skip"
-disallow_untyped_defs = true
-
 [tool.ruff]
-# pycodestyle (`E`)
-# Pyflakes (`F`)
-# PyDocstyle (`D`)
-select = ["E", "F", "D", "ANN"]
-ignore = ["D107", "D100", "ANN101", "ANN204"]
+select = ["E", "F", "D", "ANN", "PL", "I", "B", "N", "C", "S", "G", "DTZ", "ICN", "RET", "SIM", "TID", "PTH", "ARG"]
+ignore = ["D107", "D100", "ANN101", "ANN204", "B905", "N805", "S311"]
 
 # Allow autofix for all enabled rules (when `--fix`) is provided.
 fixable = ["A", "B", "C", "D", "E", "F", "G", "I", "N", "Q", "S", "T", "W", "ANN", "ARG", "BLE", "COM", "DJ", "DTZ", "EM", "ERA", "EXE", "FBT", "ICN", "INP", "ISC", "NPY", "PD", "PGH", "PIE", "PL", "PT", "PTH", "PYI", "RET", "RSE", "RUF", "SIM", "SLF", "TCH", "TID", "TRY", "UP", "YTT"]
@@ -144,6 +124,9 @@ exclude = [
     "venv",
 ]
 
+# don't remove unsued imports from __init__.py files
+ignore-init-module-imports = true
+
 # Same as Black.
 line-length = 120
 
@@ -155,6 +138,7 @@ target-version = "py311"
 
 [tool.ruff.per-file-ignores]
 "*/__init__.py" = ["F401"]
+"tests/*" = ["S101"]
 
 [tool.ruff.mccabe]
 # Unlike Flake8, default to a complexity level of 10.
@@ -162,12 +146,19 @@ max-complexity = 10
 
 [tool.ruff.isort]
 required-imports = ["from __future__ import annotations"]
+split-on-trailing-comma = true
 
 [tool.ruff.pydocstyle]
 convention = "google"
 
 [tool.ruff.flake8-annotations]
 allow-star-arg-any = true
+
+[tool.ruff.flake8-unused-arguments]
+ignore-variadic-names = true
+
+[tool.ruff.pylint]
+max-args = 8
 
 [tool.black]
 line-length = 120

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from copy import copy
 from typing import Any, Optional
 
@@ -20,10 +22,7 @@ def filter_inputs_wrapper(pipe: Pipe, keys: list[str], strict: bool = True) -> P
     """Filter the inputs to a pipe."""
 
     def wrapper(batch: dict[str, Any], idx: Optional[list[int]] = None, **kwargs: Any) -> dict[str, Any]:
-        if strict:
-            input_batch = {key: batch[key] for key in keys}
-        else:
-            input_batch = {key: batch[key] for key in keys if key in batch}
+        input_batch = {key: batch[key] for key in keys} if strict else {key: batch[key] for key in keys if key in batch}
         if len(input_batch) == 0:
             raise KeyError(f"No keys found in batch. Expected keys: `{keys}`. Found keys: `{list(batch.keys())}`")
         output_batch = pipe(input_batch, idx, **kwargs)

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import warnings
 from typing import Any, Optional
@@ -39,11 +41,11 @@ class AppendQaExtras:
 
 @datasets.fingerprint.hashregister(AppendQaExtras)
 def _register_append_qa_extras(hasher: datasets.fingerprint.Hasher, value: AppendQaExtras) -> str:
-    data = json.dumps(dict(lookup=value.lookup, language=value.language))
+    data = json.dumps({"lookup": value.lookup, "language": value.language})
     return hasher.hash(data)
 
 
-@pydantic.validate_arguments(config=dict(arbitrary_types_allowed=True))
+@pydantic.validate_arguments(config={"arbitrary_types_allowed": True})
 def load_squad(
     language: str = "en",
     subset_name: Optional[str] = None,
@@ -58,22 +60,22 @@ def load_squad(
         raise ValueError(f"Language `{language}` not supported")
 
     if invalidate_cache is not None:
-        warnings.warn("Invalidate cache not supported for SQuAD and will be ignored.")
+        warnings.warn("Invalidate cache not supported for SQuAD and will be ignored.", stacklevel=2)
 
     if subset_name is not None:
-        warnings.warn("Subset name not supported for SQuAD and will be ignored.")
+        warnings.warn("Subset name not supported for SQuAD and will be ignored.", stacklevel=2)
 
     if only_positive_sections is not None:
-        warnings.warn("Only positive sections not supported for SQuAD and will be ignored.")
+        warnings.warn("Only positive sections not supported for SQuAD and will be ignored.", stacklevel=2)
 
     qa_splits = datasets.load_dataset("squad", cache_dir=cache_dir, keep_in_memory=keep_in_memory)
 
     # fetch the sections
-    lookup = dict()
+    lookup = {}
     sections = []
     section_id = 0
     for dset in qa_splits.values():
-        for i, row in enumerate(dset):
+        for _i, row in enumerate(dset):
             row_id = row["context"]
             if row_id not in lookup:
                 lookup[row_id] = section_id

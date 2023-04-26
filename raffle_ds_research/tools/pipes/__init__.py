@@ -1,4 +1,5 @@
 """A collection of Pipes and Collates: transform batches of data."""
+from __future__ import annotations
 
 from .compose import Sequential  # noqa: F401
 from .debug import pprint_batch, pprint_supervised_retrieval_batch  # noqa: F401

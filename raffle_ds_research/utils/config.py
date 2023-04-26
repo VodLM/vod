@@ -29,5 +29,5 @@ def config_to_flat_dict(config: DictConfig, resolve: bool = True, sep: str = "."
     if isinstance(config, omegaconf.DictConfig):
         config = OmegaConf.to_container(config, resolve=resolve)
     flat_config = flatten_dict(config, sep=sep)
-    flat_config = {k: v for k, v in flat_config.items()}
+    flat_config = dict(flat_config.items())
     return flat_config

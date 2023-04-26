@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Literal, Protocol
 
 import pydantic
@@ -11,18 +13,18 @@ class Schedule(Protocol):
         ...
 
 
-def LinearSchedule(step: float, start: float, end: float, period: int, offset: int = 0) -> float:
+def linear_schedule(step: float, start: float, end: float, period: int, offset: int = 0) -> float:
     """Linear schedule."""
     if step < offset:
         return start
-    elif step >= offset + period:
+    if step >= offset + period:
         return end
-    else:
-        return start + (end - start) * (step - offset) / period
+
+    return start + (end - start) * (step - offset) / period
 
 
 SCHEDULES = {
-    "linear": LinearSchedule,
+    "linear": linear_schedule,
 }
 
 

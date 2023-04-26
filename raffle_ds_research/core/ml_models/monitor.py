@@ -147,8 +147,7 @@ class Monitor(nn.Module):
 
 def _rank_labels(*, labels: torch.Tensor, scores: torch.Tensor) -> torch.Tensor:
     sort_ids = torch.argsort(scores, dim=-1, descending=True)
-    ranked_labels = torch.gather(labels, dim=-1, index=sort_ids)
-    return ranked_labels
+    return torch.gather(labels, dim=-1, index=sort_ids)
 
 
 def _mask_inputs(preds: torch.Tensor, target: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -172,7 +171,7 @@ class HitRate(torchmetrics.Metric):
         self.add_state("hits", default=torch.tensor(0), dist_reduce_fx="sum")
         self.add_state("total", default=torch.tensor(0), dist_reduce_fx="sum")
 
-    def update(self, preds: torch.Tensor, target: torch.Tensor, indices: Optional[torch.Tensor] = None) -> None:
+    def update(self, preds: torch.Tensor, target: torch.Tensor) -> None:
         """Update the metric with the given predictions and targets."""
         preds, target = _mask_inputs(preds, target)
         ranked_labels = _rank_labels(labels=target, scores=preds)
@@ -210,7 +209,7 @@ class MeanReciprocalRank(AveragedMetric):
     higher_is_better: bool = True
     full_state_update: bool = False
 
-    def update(self, preds: torch.Tensor, target: torch.Tensor, indices: Optional[torch.Tensor] = None) -> None:
+    def update(self, preds: torch.Tensor, target: torch.Tensor) -> None:
         """Update the metric given the predictions and the targets."""
         preds, target = _mask_inputs(preds, target)
         ranked_labels = _rank_labels(labels=target, scores=preds)
@@ -224,8 +223,7 @@ class MeanReciprocalRank(AveragedMetric):
 def _arg_first_non_zero(values: torch.Tensor) -> torch.Tensor:
     ids = torch.arange(values.shape[-1], device=values.device)
     nnz_ordered_values = torch.where(values > 0, ids, 1 + ids.max())
-    idx_first_non_zero = nnz_ordered_values.argmin(dim=-1)
-    return idx_first_non_zero
+    return nnz_ordered_values.argmin(dim=-1)
 
 
 class NormalizedDCG(AveragedMetric):
@@ -239,7 +237,7 @@ class NormalizedDCG(AveragedMetric):
         super().__init__(**kwargs)
         self.top_k = top_k
 
-    def update(self, preds: torch.Tensor, target: torch.Tensor, indices: Optional[torch.Tensor] = None) -> None:
+    def update(self, preds: torch.Tensor, target: torch.Tensor) -> None:
         """Update the metric."""
         preds, target = _mask_inputs(preds, target)
         batch_size = preds[..., 0].numel()
@@ -274,8 +272,7 @@ class RetrievalMetricCollection(MetricCollection):
 
     def __init__(self, metrics: list[str], **kwargs: Any):
         def clean_name(x: str) -> str:
-            x = x.replace("@", "_")
-            return x
+            return x.replace("@", "_")
 
         metrics = {clean_name(name): retrieval_metric_factory(name=name, **kwargs) for name in metrics}
         super().__init__(metrics=metrics)

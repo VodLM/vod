@@ -45,12 +45,12 @@ class TensorStoreCallback(pl.Callback):
 
     def on_predict_batch_end(
         self,
-        trainer: pl.Trainer,
-        pl_module: pl.LightningModule,
+        trainer: pl.Trainer,  # noqa: ARG002
+        pl_module: pl.LightningModule,  # noqa: ARG002
         outputs: dict[str, Any],
         batch: dict[str, Any],
-        batch_idx: int,
-        dataloader_idx: int = 0,
+        batch_idx: int,  # noqa: ARG002
+        dataloader_idx: int = 0,  # noqa: ARG002
     ) -> None:
         """Store the outputs of the prediction step to the cache."""
         try:
@@ -83,8 +83,7 @@ def _write_vectors_to_store(
     vectors = vectors.astype(dtype.numpy_dtype)
 
     if asynchronous:
-        write_future = store[idx].write(vectors)
-        return write_future
+        return store[idx].write(vectors)
 
     store[idx] = vectors
     return None

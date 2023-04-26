@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import rich
 
 from raffle_ds_research.tools import arguantic, raffle_datasets
@@ -23,7 +25,7 @@ if __name__ == "__main__":
         only_positive_sections=True,
         invalidate_cache=bool(args.invalidate_cache),
     )
-    rich.print(dict(frank_only_positives=frank))
+    rich.print({"frank_only_positives": frank})
     rich.print(frank.qa_splits["train"][0])
     n_sections_small = len(frank.sections)
 
@@ -34,7 +36,7 @@ if __name__ == "__main__":
         only_positive_sections=False,
         invalidate_cache=bool(args.invalidate_cache),
     )
-    rich.print(dict(frank_full=frank))
+    rich.print({"frank_full": frank})
     n_sections_full = len(frank.sections)
 
     rich.print(f"Fraction of sections in the small version: {n_sections_small / n_sections_full:.2%}")

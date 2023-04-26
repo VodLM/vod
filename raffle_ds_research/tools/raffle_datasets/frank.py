@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import collections
 import enum
+import functools
 import json
 import shutil
 from os import PathLike
@@ -20,8 +21,8 @@ from raffle_ds_research.tools.raffle_datasets.base import (
     QueryModel,
     RetrievalDataset,
     SectionModel,
-    init_gcloud_filesystem,
     SilentHuggingfaceDecorator,
+    init_gcloud_filesystem,
 )
 
 
@@ -65,7 +66,7 @@ class HfFrankPart(RetrievalDataset):
             raise ValueError(f"Expected qa_splits {set(self.qa_splits.keys())}, got {set(other.qa_splits.keys())}")
 
         qa_splits = datasets.DatasetDict(
-            {k: datasets.concatenate_datasets([self.qa_splits[k], other.qa_splits[k]]) for k in self.qa_splits.keys()}
+            {k: datasets.concatenate_datasets([self.qa_splits[k], other.qa_splits[k]]) for k in self.qa_splits}
         )
 
         sections = datasets.concatenate_datasets([self.sections, other.sections])
@@ -99,24 +100,44 @@ def _download_and_parse_frank(
         if not fs.exists(path):
             raise FileNotFoundError(f"Path {path} does not exist on storage {fs}.")
         return _pase_frank_dir(path, split, language=language, fs=fs)  # type: ignore
-    else:
-        path = f"raffle-datasets-1/datasets/frank/{language}/translated_da_frank_V{version}{split.value}/kb_indexes/"
-        loguru.logger.debug(f"Reading Frank from {path} using {fs}")
-        if not fs.exists(path):
-            raise FileNotFoundError(f"Path {path} does not exist on storage {fs}.")
-        full_frank_split = None
-        for part_path in track(fs.ls(path), description=f"Processing Frank {split}"):
-            if not fs.exists(Path(part_path, "sections.json")):
-                rich.print(f"Skipping {part_path} (no sections.json)")
-                continue
-            frank_part = _pase_frank_dir(part_path, split, language=language, fs=fs)  # type: ignore
-            if full_frank_split is None:
-                full_frank_split = frank_part
-            else:
-                full_frank_split += frank_part
+
+    path = f"raffle-datasets-1/datasets/frank/{language}/translated_da_frank_V{version}{split.value}/kb_indexes/"
+    loguru.logger.debug(f"Reading Frank from {path} using {fs}")
+    if not fs.exists(path):
+        raise FileNotFoundError(f"Path {path} does not exist on storage {fs}.")
+    full_frank_split = None
+    for part_path in track(fs.ls(path), description=f"Processing Frank {split}"):
+        if not fs.exists(Path(part_path, "sections.json")):
+            rich.print(f"Skipping {part_path} (no sections.json)")
+            continue
+        frank_part = _pase_frank_dir(part_path, split, language=language, fs=fs)  # type: ignore
         if full_frank_split is None:
-            raise ValueError(f"Frank {split} is empty.")
-        return full_frank_split
+            full_frank_split = frank_part
+        else:
+            full_frank_split += frank_part
+    if full_frank_split is None:
+        raise ValueError(f"Frank {split} is empty.")
+    return full_frank_split
+
+
+def _gen_qa_split(
+    qa_split_path: PathLike | dict[str, PathLike],
+    fs: fsspec.AbstractFileSystem,
+    language: str,
+    answer2section: dict[int, set[int]],
+) -> Iterable[dict[str, Any]]:
+    for row in _iter_examples_from_json(qa_split_path, fs=fs):
+        answer_id = int(row["answer_id"])
+        section_id = row["section_id"]
+        if section_id is None:
+            section_ids = answer2section[answer_id]
+            section_ids = sorted(section_ids)
+            row["section_ids"] = section_ids
+        else:
+            section_id = int(section_id)
+            row["section_ids"] = [section_id]
+        struct_row = FrankQueryModel(language=language, **row)
+        yield struct_row.dict()
 
 
 def _pase_frank_dir(local_frank_path: str, split: str, language: str, *, fs: fsspec.AbstractFileSystem) -> HfFrankPart:
@@ -143,22 +164,15 @@ def _pase_frank_dir(local_frank_path: str, split: str, language: str, *, fs: fss
     # generate QA splits
     qa_splits = {}
     for split_name, qa_split_path in qa_splits_paths.items():
-
-        def gen_qa_split() -> Iterable[dict[str, Any]]:
-            for row in _iter_examples_from_json(qa_split_path, fs=fs):
-                answer_id = int(row["answer_id"])
-                section_id = row["section_id"]
-                if section_id is None:
-                    section_ids = answer2section[answer_id]
-                    section_ids = [i for i in sorted(section_ids)]
-                    row["section_ids"] = section_ids
-                else:
-                    section_id = int(section_id)
-                    row["section_ids"] = [section_id]
-                row = FrankQueryModel(language=language, **row)
-                yield row.dict()
-
-        qa_splits[split_name] = datasets.Dataset.from_generator(gen_qa_split)
+        qa_splits[split_name] = datasets.Dataset.from_generator(
+            _gen_qa_split=functools.partial(
+                _gen_qa_split,
+                qa_split_path=qa_split_path,
+                fs=fs,
+                language=language,
+                answer2section=answer2section,
+            )
+        )
     qa_splits = datasets.DatasetDict(qa_splits)
 
     return HfFrankPart(split=split, qa_splits=qa_splits, sections=sections)
@@ -180,7 +194,7 @@ def _make_local_sync_path(
     )
 
 
-@pydantic.validate_arguments(config=dict(arbitrary_types_allowed=True))
+@pydantic.validate_arguments(config={"arbitrary_types_allowed": True})
 def load_frank(
     language: str = "en",
     subset_name: Union[str, FrankSplitName] = "A",

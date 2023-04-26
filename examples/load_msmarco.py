@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Optional
 
 import rich
@@ -27,18 +29,18 @@ if __name__ == "__main__":
     question = marco.qa_splits["train"][args.sample_idx]
     section = marco.sections[question["section_ids"][0]]
     rich.print(
-        dict(
-            question=question,
-            section=section,
-        )
+        {
+            "question": question,
+            "section": section,
+        }
     )
 
     rich.print("==== validation ====")
     question = marco.qa_splits["validation"][args.sample_idx]
     section = marco.sections[question["section_ids"][0]]
     rich.print(
-        dict(
-            question=question,
-            section=section,
-        )
+        {
+            "question": question,
+            "section": section,
+        }
     )

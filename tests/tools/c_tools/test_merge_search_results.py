@@ -1,4 +1,5 @@
 # mypy: ignore-errors
+from __future__ import annotations
 
 import math
 
@@ -20,7 +21,7 @@ def gen_batch(batch_size: int, n_points: int, n_range: int, seed: int) -> index_
         indices = np.pad(indices, (0, n_points - indices.size), mode="constant", constant_values=-1)
         scores = rgn.rand(n_points)
         scores[indices == -1] = -math.inf
-        examples.append(dict(indices=indices, scores=scores))
+        examples.append({"indices": indices, "scores": scores})
     indices = np.stack([ex["indices"] for ex in examples], axis=0)
     scores = np.stack([ex["scores"] for ex in examples], axis=0)
     return index_tools.RetrievalBatch(scores=scores, indices=indices)

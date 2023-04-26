@@ -1,4 +1,5 @@
 # pylint: disable=no-member
+from __future__ import annotations
 
 from typing import Any
 
@@ -69,8 +70,7 @@ class SupervisedRetrievalBatch(pydantic.BaseModel):
 
     @pydantic.root_validator
     def _validate_shapes(cls, values: dict[str, Any]) -> dict[str, Any]:
-        values = validate_shapes_consistency(cls, values)
-        return values
+        return validate_shapes_consistency(cls, values)
 
     def __repr__(self) -> str:
         """String representation of the batch."""

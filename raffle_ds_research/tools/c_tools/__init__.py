@@ -1,4 +1,5 @@
 """A collection of functions implemented in Cython for fast retrieval."""
+from __future__ import annotations
 
 from .concat_search_results import ConcatenatedTopk, concat_search_results  # noqa: F401
 from .frequencies import Frequencies, get_frequencies  # noqa: F401

@@ -46,12 +46,12 @@ def _log_retrieval_batch(
             skip_special_tokens=True,
             max_sections=max_sections,
         )
-        html_path = str(pathlib.Path(f"batch-{gloabl_step}.html"))
+        html_path = pathlib.Path(f"batch-{gloabl_step}.html")
         console.save_html(html_path, theme=terminal_theme.MONOKAI)
 
         import wandb
 
-        wandb.log({f"trainer/{locator}/batch": wandb.Html(open(html_path))}, step=gloabl_step)
+        wandb.log({f"trainer/{locator}/batch": wandb.Html(html_path.open())}, step=gloabl_step)
     except Exception as e:
         loguru.logger.debug(f"Could not log batch to wandb: {e}")
 

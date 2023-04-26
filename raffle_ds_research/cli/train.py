@@ -1,20 +1,19 @@
 from __future__ import annotations
-from typing import Iterable, Optional
-import omegaconf
-import multiprocessing
 
+import multiprocessing
 from pathlib import Path
+from typing import Iterable, Optional
 
 import dotenv
 import hydra
-import torch
-
 import loguru
+import omegaconf
+import richuru
+import torch
 from hydra.utils import instantiate
 from lightning_fabric import seed_everything
 from loguru import logger
 from omegaconf import DictConfig
-import richuru
 
 try:
     multiprocessing.set_start_method("forkserver", force=True)
@@ -50,7 +49,7 @@ class ModelGenerator:
             seed_everything(self.seed)
         ranker: Ranker = instantiate(self.model_config)
         if self.compile:
-            ranker = torch.compile(ranker)
+            return torch.compile(ranker)
         return ranker
 
 

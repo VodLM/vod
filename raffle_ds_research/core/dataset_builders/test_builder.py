@@ -51,7 +51,7 @@ def _gen_row(i: int, data_type: Literal["questions", "sections"]) -> dict[str, A
             kb_id=i // 30,
         ).dict()
 
-    elif data_type == "sections":
+    if data_type == "sections":
         return retrieval_builder.SectionModel(
             section=f"{inflect_engine.number_to_words(i)}",
             id=i,
@@ -59,5 +59,4 @@ def _gen_row(i: int, data_type: Literal["questions", "sections"]) -> dict[str, A
             kb_id=i // 30,
         ).dict()
 
-    else:
-        raise ValueError(f"Unknown data type: {data_type}")
+    raise ValueError(f"Unknown data type: {data_type}")

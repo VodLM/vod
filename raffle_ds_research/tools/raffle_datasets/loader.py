@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import functools
-from typing import Optional, TypeVar, Any
+from typing import Any, Optional, TypeVar
 
 import datasets
 import pydantic
@@ -65,8 +65,8 @@ def _add_dset_idx(_: dict, dset_idx: int, key: str = "dset_idx") -> dict:
 def _get_fingerprints(dset: datasets.Dataset | datasets.DatasetDict) -> str | dict[str, str]:
     if isinstance(dset, datasets.DatasetDict):
         return {k: v._fingerprint for k, v in dset.items()}
-    else:
-        return dset._fingerprint
+
+    return dset._fingerprint
 
 
 class ConcatenatedDatasetLoader:
@@ -96,7 +96,7 @@ class ConcatenatedDatasetLoader:
 
         # concatenate all qa splits
         all_qa_splits = {}
-        for split in {split for dset in dsets for split in dset.qa_splits.keys()}:
+        for split in {split for dset in dsets for split in dset.qa_splits}:
             split_dsets = [dset.qa_splits[split] for dset in dsets if split in dset.qa_splits]
             all_qa_splits[split] = datasets.concatenate_datasets(split_dsets)
 

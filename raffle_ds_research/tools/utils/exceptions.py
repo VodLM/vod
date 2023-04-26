@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import wraps
 from pathlib import Path
 from typing import Any, Callable, TypeVar
@@ -21,12 +21,12 @@ def dump_exceptions_to_file(func: Callable[..., T]) -> Callable[..., T]:
             output = func(*args, **kwargs)
         except Exception as e:
             log_file = Path(".exceptions")
-            log_file /= datetime.now().strftime("%Y-%m-%d")
-            log_file /= datetime.now().strftime("%H-%M")
+            log_file /= datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
+            log_file /= datetime.now(tz=timezone.utc).strftime("%H-%M")
             log_file /= f"exception-{type(e).__name__}-{func.__name__}-{os.getpid()}.txt"
             log_file.parent.mkdir(exist_ok=True, parents=True)
             logger.warning(f"Error in {type(func).__name__}. " f"See full stack in {log_file.absolute()}")
-            with open(log_file, "w") as f:
+            with log_file.open("w") as f:
                 f.write(stackprinter.format())
 
                 # log args and kwargs

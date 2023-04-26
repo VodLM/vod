@@ -113,7 +113,7 @@ def _(x: list | set | tuple) -> Properties:
     n_nans = sum(1 for y in _iter_leaves(x) if y is None)
     leaves_types = list({type(y) for y in _iter_leaves(x)})
     if all(issubclass(t, Number) for t in leaves_types):
-        leaves_mean = np.mean([y for y in _iter_leaves(x)])
+        leaves_mean = np.mean(list(_iter_leaves(x)))
         leaves_min = min(_iter_leaves(x))
         leaves_max = max(_iter_leaves(x))
     else:
@@ -216,7 +216,7 @@ def _format_field(field_name: str, field_value: Any) -> str:  # noqa: ANN401
 
 def pprint_batch(
     batch: dict[str, Any],
-    idx: Optional[list[int]] = None,
+    idx: Optional[list[int]] = None,  # noqa: ARG
     console: Optional[rich.console.Console] = None,
     header: Optional[str] = None,
     **kwargs: Any,
@@ -263,7 +263,7 @@ def _safe_yaml(section: str) -> str:
 # pylint: disable=too-many-locals
 def pprint_supervised_retrieval_batch(
     batch: dict[str, Any],
-    idx: Optional[list[int]] = None,
+    idx: Optional[list[int]] = None,  # noqa: ARG
     *,
     tokenizer: transformers.PreTrainedTokenizer,
     header: str = "Supervised retrieval batch",
@@ -312,10 +312,7 @@ def pprint_supervised_retrieval_batch(
             }
             section_data_str = yaml.dump(section_data, sort_keys=False)
             section_node = rich.syntax.Syntax(section_data_str, "yaml", indent_guides=False, word_wrap=True)
-            if section_data.get("section.label", False):
-                node_style = "bold cyan"
-            else:
-                node_style = "white"
+            node_style = "bold cyan" if section_data.get("section.label", False) else "white"
 
             question_tree.add(section_node, style=node_style)
             if max_sections is not None and j >= max_sections:

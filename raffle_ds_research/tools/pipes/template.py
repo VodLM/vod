@@ -9,7 +9,7 @@ from raffle_ds_research.tools.pipes.utils.misc import iter_examples
 
 def template_pipe(
     batch: dict[str, Any],
-    idx: Optional[list[int]] = None,
+    idx: Optional[list[int]] = None,  # noqa: ARG
     *,
     template: str,
     input_keys: list[str],

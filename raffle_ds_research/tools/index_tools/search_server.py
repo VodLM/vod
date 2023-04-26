@@ -3,6 +3,7 @@ from __future__ import annotations
 import abc
 import copy
 import os
+import pathlib
 import subprocess
 import time
 from typing import Any, Generic, Optional, TypeVar
@@ -99,17 +100,18 @@ class SearchMaster(Generic[Sc], abc.ABC):
             if self._allow_existing_server:
                 loguru.logger.info(f"Using existing server {self.service_name}.")
                 return None
-            else:
-                raise RuntimeError(f"Server {self.service_name} is already running.")
+            raise RuntimeError(f"Server {self.service_name} is already running.")
 
         cmd = self._make_cmd()
         env = self._make_env()
 
+        stdout_file = pathlib.Path(f"{self.service_name}.stdout.log")
+        stderr_file = pathlib.Path(f"{self.service_name}.stderr.log")
         server_proc = subprocess.Popen(
             cmd,
             env=env,
-            stdout=open(f"{self.service_name}.stdout.log", "w"),
-            stderr=open(f"{self.service_name}.es.stderr.log", "w"),
+            stdout=stdout_file.open("w"),
+            stderr=stderr_file.open("w"),
         )
 
         t0 = time.time()

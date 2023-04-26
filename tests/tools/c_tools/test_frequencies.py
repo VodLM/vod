@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections import defaultdict
 
 import numpy as np
@@ -63,7 +65,7 @@ def _test_single(pids: np.ndarray, labels: np.ndarray, freqs: c_tools.Frequencie
         upids.shape[0],
         n_labels,
     )
-    if list(sorted(upids.tolist())) != list(sorted(set(upids.tolist()))):
+    if sorted(upids.tolist()) != sorted(set(upids.tolist())):
         raise ValueError("The output upids are not unique.")
     if set(pids.tolist()) != set(upids.tolist()):
         raise ValueError(
@@ -84,7 +86,7 @@ def _test_single(pids: np.ndarray, labels: np.ndarray, freqs: c_tools.Frequencie
     # compare the results
     if set(expected_unique_pids_per_labels.keys()) != set(found_unique_pids_per_labels.keys()):
         raise ValueError("The labels are not the same as the expected ones.")
-    for label in expected_unique_pids_per_labels.keys():
+    for label in expected_unique_pids_per_labels:
         if expected_unique_pids_per_labels[label] != found_unique_pids_per_labels[label]:
             raise ValueError(
                 f"The unique pids are not the same as the expected ones. "

@@ -30,7 +30,7 @@ def _py_sort_filter(
         exclude = []
     indices = [int(i) for i in indices]
     scores = [float(s) for s in scores]
-    zipped = list((i, s) for i, s in zip(indices, scores) if i >= 0 and i not in exclude)
+    zipped = [(i, s) for i, s in zip(indices, scores) if i >= 0 and i not in exclude]
     zipped.sort(key=lambda x: x[1], reverse=True)
     indices, scores = zip(*zipped)
     return list(indices), list(scores)
@@ -41,8 +41,7 @@ def _py_sort_filter(
 @pytest.mark.parametrize("b_size", [10, 20, 30])
 @pytest.mark.parametrize("total", [10, 20, 30])
 @pytest.mark.parametrize("max_a_size", [10, 20, 30])
-@pytest.mark.parametrize("batched", [False])
-def test_concat_topk(a_size: int, b_size: int, total: int, max_a_size: int, seed: int, batched: bool) -> None:
+def test_concat_topk(a_size: int, b_size: int, total: int, max_a_size: int, seed: int) -> None:
     """Test the `concat_topk` function."""
     rgn = np.random.RandomState(seed)
     a_indices = rgn.randint(0, a_size, size=(a_size,))
@@ -62,12 +61,12 @@ def test_concat_topk(a_size: int, b_size: int, total: int, max_a_size: int, seed
         import rich
 
         rich.print(
-            dict(
-                a_indices=a_indices,
-                a_scores=a_scores,
-                b_indices=b_indices,
-                b_scores=b_scores,
-            )
+            {
+                "a_indices": a_indices,
+                "a_scores": a_scores,
+                "b_indices": b_indices,
+                "b_scores": b_scores,
+            }
         )
 
     # compute the expected result using a slow python implementation
@@ -94,10 +93,10 @@ def test_concat_topk(a_size: int, b_size: int, total: int, max_a_size: int, seed
         import rich
 
         rich.print(
-            dict(
-                concatenated_indices=concatenated.indices,
-                expected_indices=expected.indices,
-            )
+            {
+                "concatenated_indices": concatenated.indices,
+                "expected_indices": expected.indices,
+            }
         )
 
     # check the results
