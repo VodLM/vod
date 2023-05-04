@@ -4,10 +4,9 @@ import abc
 import math
 from typing import Any
 
-import datasets
 import numpy as np
 
-from raffle_ds_research.tools import dstruct, index_tools, pipes
+from raffle_ds_research.tools import dstruct, index_tools
 
 
 class PostFilter(abc.ABC):
@@ -24,40 +23,55 @@ class PostFilter(abc.ABC):
         raise NotImplementedError()
 
 
-def _ensure_match(
+class EnsureMatch(PostFilter):
+    """Ensure that the retrieved sections match the query."""
+
+    __slots__ = ("_features", "_query_key", "_section_key")
+    _features: np.ndarray
+    _query_key: str
+    _section_key: str
+
+    def __init__(
+        self,
+        *,
+        sections: dstruct.SizedDataset[dict[str, Any]],
+        query_key: str = "group_hash",
+        section_key: str = "group_hash",
+    ):
+        """Initialize the post-filtering method."""
+        self._query_key = query_key
+        self._section_key = section_key
+
+        # build the features
+        self._features = np.full((len(sections),), -1, dtype=np.int64)
+        for i in range(len(sections)):
+            section = sections[i]
+            self._features[i] = section[self._section_key]
+
+    def __call__(
+        self,
+        results: index_tools.RetrievalBatch,
+        *,
+        query: dict[str, Any],
+    ) -> index_tools.RetrievalBatch:
+        """Filter the results."""
+        batch_features = np.asarray(query[self._query_key], dtype=np.int64)
+        results_features = self._features[results.indices]
+        keep_mask = batch_features[:, None] == results_features
+        keep_mask |= (keep_mask.sum(axis=1) == 0)[:, None]  # <- don't filter out rows without match
+        results.scores = np.where(keep_mask, results.scores, -math.inf)
+        return results
+
+
+def post_filter_factory(
+    mode: str = "ensure_match",
     *,
-    batch: dict[str, Any],
-    candidate_samples: index_tools.RetrievalBatch,
-    features: dstruct.SizedDataset[dict[str, Any]],
-    features_keys: list[str],
-) -> index_tools.RetrievalBatch:
-    """Filter the candidates sections based on the `config.ensure_match` keys."""
-    batch_features = {key: np.asarray(batch[key]) for key in features_keys}
-    section_indices = candidate_samples.indices.flatten().tolist()
-    section_features = features[section_indices]
-
-    keep_mask = None
-    for key, batch_features_key in batch_features.items():
-        section_features_key = section_features[key]
-        section_features_key = np.asarray(section_features_key).reshape(batch_features_key.shape[0], -1)
-        keep_mask_key = batch_features_key[:, None] == section_features_key
-        keep_mask = keep_mask_key if keep_mask is None else keep_mask & keep_mask_key
-    if keep_mask is None:
-        raise ValueError("No features to match")
-
-    candidate_samples.scores = np.where(keep_mask, candidate_samples.scores, -math.inf)
-    return candidate_samples
-
-
-def _gather_features(
     sections: dstruct.SizedDataset[dict[str, Any]],
-    features: list[str],
-) -> dstruct.SizedDataset[dict[str, Any]]:
-    """Gather the selected features from the sections."""
-    if isinstance(sections, datasets.Dataset):
-        return pipes.misc.keep_only_columns(sections, features)  # type: ignore
+    query_key: str = "group_hash",
+    section_key: str = "group_hash",
+) -> PostFilter:
+    """Build a post-filtering method."""
+    if mode == "ensure_match":
+        return EnsureMatch(sections=sections, query_key=query_key, section_key=section_key)
 
-    if isinstance(sections, dstruct.ConcatenatedSizedDataset):
-        return dstruct.ConcatenatedSizedDataset(parts=[_gather_features(p, features) for p in sections.parts])
-
-    return sections
+    raise ValueError(f"Unknown post-filtering mode: {mode}")

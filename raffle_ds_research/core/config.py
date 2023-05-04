@@ -210,6 +210,7 @@ class RetrievalCollateConfig(BaseCollateConfig):
     n_sections: int = 10
     prefetch_n_sections: int = 100
     max_pos_sections: int = 3
+    post_filter: Optional[str] = None
     do_sample: bool = False
 
     # name of the keys to use on the query side and on the section side

@@ -214,7 +214,7 @@ class StopAtCallback(pl.Callback):
         super().__init__()
         self.stop_at = stop_at
 
-    def on_train_start(self, trainer: pl.Trainer, pl_module: pl.LightningModule) -> None:  # noqa: ARG002
+    def on_fit_start(self, trainer: pl.Trainer, pl_module: pl.LightningModule) -> None:  # noqa: ARG002
         """Called when the training begins."""
         trainer.should_stop = False
 

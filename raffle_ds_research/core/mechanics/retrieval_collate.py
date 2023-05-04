@@ -11,7 +11,7 @@ import transformers
 from loguru import logger
 
 from raffle_ds_research.core import config as core_config
-from raffle_ds_research.core.mechanics.post_filtering import PostFilter
+from raffle_ds_research.core.mechanics.post_filtering import PostFilter, post_filter_factory
 from raffle_ds_research.core.mechanics.section_sampler import SampledSections, sample_sections
 from raffle_ds_research.core.mechanics.utils import fill_nans_with_min
 from raffle_ds_research.tools import dstruct, index_tools, pipes
@@ -50,15 +50,25 @@ class RetrievalCollate(pipes.Collate):
         search_client: index_tools.MultiSearchClient,
         sections: dstruct.SizedDataset[dict[str, Any]],
         config: core_config.RetrievalCollateConfig,
-        post_filter: Optional[PostFilter] = None,  # TODO: add post_filter
         parameters: Optional[dict[str, Any]] = None,
     ):
         self.tokenizer = tokenizer
         self.search_client = search_client
         self.sections = sections
-        self.post_filter = post_filter
         self.config = config
         self.parameters = parameters or {}
+
+        # Build the post-filter
+        if config.post_filter is not None:
+            post_filter = post_filter_factory(
+                config.post_filter,
+                sections=sections,
+                query_key=config.group_id_keys.query,
+                section_key=config.group_id_keys.section,
+            )
+        else:
+            post_filter = None
+        self.post_filter = post_filter
 
         # validate the parameters
         client_names = set(self.search_client.clients.keys())

@@ -97,7 +97,7 @@ class SearchMaster(Generic[Sc], abc.ABC):
         _client = self.get_client()
         if _client.ping():
             if self._allow_existing_server:
-                loguru.logger.info(f"Using existing search instance {self.service_info}")
+                loguru.logger.info(f"Connecting to existing {self.service_info}")
                 return None
             raise RuntimeError(f"Server {self.service_name} is already running.")
 
