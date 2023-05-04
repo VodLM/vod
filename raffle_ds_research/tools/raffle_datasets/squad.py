@@ -60,15 +60,24 @@ def load_squad(
         raise ValueError(f"Language `{language}` not supported")
 
     if invalidate_cache is not None:
-        warnings.warn("Invalidate cache not supported for SQuAD and will be ignored.", stacklevel=2)
+        warnings.warn(
+            f"`invalidate_cache={invalidate_cache}` not supported for SQuAD and will be ignored.", stacklevel=2
+        )
 
     if subset_name is not None:
-        warnings.warn("Subset name not supported for SQuAD and will be ignored.", stacklevel=2)
+        warnings.warn(f"`subset_name={subset_name}` not supported for SQuAD and will be ignored.", stacklevel=2)
 
     if only_positive_sections is not None:
-        warnings.warn("Only positive sections not supported for SQuAD and will be ignored.", stacklevel=2)
+        warnings.warn(
+            f"`only_positive_sections={only_positive_sections}` not supported for SQuAD and will be ignored.",
+            stacklevel=2,
+        )
 
-    qa_splits = datasets.load_dataset("squad", cache_dir=cache_dir, keep_in_memory=keep_in_memory)
+    qa_splits: datasets.DatasetDict = datasets.load_dataset(
+        "squad",
+        cache_dir=cache_dir,
+        keep_in_memory=keep_in_memory,
+    )  # type: ignore
 
     # fetch the sections
     lookup = {}

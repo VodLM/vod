@@ -1,0 +1,2 @@
+question: "<extra_id_0>Question: {{ text }}"
+section: "<extra_id_1>{% if title %}Title: {{ title }}. {% endif %}Document: {{ content }}"

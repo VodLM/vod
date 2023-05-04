@@ -3,34 +3,38 @@ from __future__ import annotations
 from typing import Optional
 
 import faiss
+import numpy as np
 
-from raffle_ds_research.tools.index_tools.vector_handler import VectorType, vector_handler
+from raffle_ds_research.tools import dstruct
 
 
-def build_index(
-    vectors: VectorType,
+def build_faiss_master(
+    vectors: dstruct.SizedDataset[np.ndarray],
     *,
     factory_string: str,
-    add_batch_size: Optional[int] = None,
+    train_size: Optional[int] = None,
     faiss_metric: int = faiss.METRIC_INNER_PRODUCT,
 ) -> faiss.Index:
     """Build an index from a factory string."""
-    vectors = vector_handler(vectors)
-    if len(vectors.shape) != 2:  # noqa: PLR2004
-        raise ValueError(f"Only 2D tensors can be handled. Found shape `{vectors.shape}`")
-    vector_size = vectors.shape[-1]
+    vector_shape = vectors[0].shape
+    if len(vector_shape) > 1:  # noqa: PLR2004
+        raise ValueError(f"Only 1D vectors can be handled. Found shape `{vector_shape}`")
+    vector_size = vector_shape[-1]
     index = faiss.index_factory(vector_size, factory_string, faiss_metric)
-    if add_batch_size is None:
-        add_batch_size = vectors.shape[0]
-    for i, (_, batch) in enumerate(vectors.iter_batches(add_batch_size)):
+
+    if train_size is None:
+        train_size = len(vectors)
+
+    for i in range(0, len(vectors), train_size):
+        batch = vectors[i : i + train_size]
         if i == 0:
             index.train(batch)
         index.add(batch)
 
-    if index.ntotal != len(vectors) or index.d != vectors.shape[1]:
+    if index.ntotal != len(vectors) or index.d != vector_size:
         raise ValueError(
             f"Index size doesn't match the size of the vectors."
-            f"Found vectors: `{vectors.shape}`, index: `{index.ntotal, index.d}`"
+            f"Found vectors: `{vector_size}`, index: `{index.ntotal, index.d}`"
         )
 
     return index

@@ -4,9 +4,9 @@ import functools
 import json
 from typing import Callable
 
+import datasets
 import torch
 import transformers
-from datasets import fingerprint
 
 from raffle_ds_research.tools.utils.tensor_tools import serialize_tensor
 
@@ -27,12 +27,14 @@ def _register_special_hashers() -> None:
     rules: list[tuple[Callable, list[type]]] = [
         (_hash_tokenizer, _TOKENIZERS_CLASSES),
         (_hash_partial, [functools.partial]),
+        (_hash_dataset, [datasets.Dataset]),
+        (_hash_dataset_dict, [datasets.DatasetDict]),
     ]
     for rule in rules:
-        fingerprint.hashregister(*rule[1])(rule[0])
+        datasets.fingerprint.hashregister(*rule[1])(rule[0])
 
 
-def _hash_tokenizer(hasher: fingerprint.Hasher, value: transformers.PreTrainedTokenizer) -> str:
+def _hash_tokenizer(hasher: datasets.fingerprint.Hasher, value: transformers.PreTrainedTokenizer) -> str:
     """Implement a hash function for a pretrained tokenizer.
 
     The default hash of `transformers.PreTrainedTokenizer` is non-deterministic: it changes after a first iteration.
@@ -51,7 +53,7 @@ def _hash_tokenizer(hasher: fingerprint.Hasher, value: transformers.PreTrainedTo
     return hasher.hash(json_data)
 
 
-def _hash_partial(hasher: fingerprint.Hasher, value: functools.partial) -> str:
+def _hash_partial(hasher: datasets.fingerprint.Hasher, value: functools.partial) -> str:
     """The default hash of `functools.partial`."""
     data = {
         "cls": value.__class__,
@@ -65,11 +67,20 @@ def _hash_partial(hasher: fingerprint.Hasher, value: functools.partial) -> str:
     return hasher.hash(hashed)
 
 
-def fingerprint_torch_module(hasher: fingerprint.Hasher, value: torch.nn.Module) -> str:
+def fingerprint_torch_module(hasher: datasets.fingerprint.Hasher, value: torch.nn.Module) -> str:
     """Fingerprint a `torch.nn.Module`."""
-    hasher = fingerprint.Hasher()
+    hasher = datasets.fingerprint.Hasher()
     for k, v in value.state_dict().items():
         hasher.update(k)
         u = serialize_tensor(v)
         hasher.update(u)
     return hasher.hexdigest()
+
+
+def _hash_dataset(_: datasets.fingerprint.Hasher, value: datasets.Dataset) -> str:
+    return value._fingerprint
+
+
+def _hash_dataset_dict(hasher: datasets.fingerprint.Hasher, value: datasets.DatasetDict) -> str:
+    values = {key: value[key]._fingerprint for key in value}
+    return hasher.hash(json.dumps(values))

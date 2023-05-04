@@ -1,1 +1,1 @@
-_target_: raffle_ds_research.core.ml_models.gradients.SelfSupervisedGradients
+_target_: raffle_ds_research.core.ml.gradients.SelfSupervisedGradients

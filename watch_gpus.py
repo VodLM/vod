@@ -28,9 +28,10 @@ def get_user_processes(exclude_users: Optional[list[str]] = None) -> list[dict]:
     return processes
 
 
-if __name__ == "__main__":
+def run() -> None:  # noqa: D103
     args = Arguments.parse()
     last_active = time.time()
+    loguru.logger.info(f"Starting `watch_gpus.py` with args: {args}")
     while True:
         time.sleep(args.base * args.freq)
         user_processes = get_user_processes(exclude_users=["root", "gdm"])
@@ -43,3 +44,7 @@ if __name__ == "__main__":
             loguru.logger.info(f"Running command: {args.cmd}")
             subprocess.run(args.cmd.split())
             break
+
+
+if __name__ == "__main__":
+    run()

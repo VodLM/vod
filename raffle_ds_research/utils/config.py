@@ -1,18 +1,41 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TypeVar
 
 import omegaconf
-from omegaconf import DictConfig, OmegaConf
+
+T = TypeVar("T")
 
 
-def flatten_dict(node: dict[str, dict | Any], sep: str = ".") -> dict[str, Any]:
+def maybe_cast_omegaconf(
+    x: T | omegaconf.DictConfig | omegaconf.ListConfig,
+    **kwargs: Any,
+) -> T | dict | None | str | Any:
+    """Cast an OmegaConf object to a dict."""
+    if isinstance(x, (omegaconf.DictConfig)):
+        return omegaconf.OmegaConf.to_container(x, **kwargs)
+
+    if isinstance(x, (omegaconf.ListConfig)):
+        return omegaconf.OmegaConf.to_container(x, **kwargs)
+
+    return x
+
+
+def as_pyobj_validator(
+    cls: Any, x: T | omegaconf.DictConfig | omegaconf.ListConfig  # noqa: ARG, ANN
+) -> T | dict | None | str | Any:
+    """Pydantic validator to cast an OmegaConf object to a dict/list."""
+    return maybe_cast_omegaconf(x, resolve=True)
+
+
+def flatten_dict(node: dict[Any, dict | Any], sep: str = ".") -> dict[str, Any]:
     """Flatten a nested dictionary. Keys are joined with `sep`.
 
     Example:
+    ```
         >>> flatten_dict({"a": {"b": 1, "c": 2}})
         {"a.b": 1, "a.c": 2}
-
+    ```
     """
     output = {}
     for k, v in node.items():
@@ -24,10 +47,9 @@ def flatten_dict(node: dict[str, dict | Any], sep: str = ".") -> dict[str, Any]:
     return output
 
 
-def config_to_flat_dict(config: DictConfig, resolve: bool = True, sep: str = ".") -> dict[str, str]:
+def config_to_flat_dict(config: dict | omegaconf.DictConfig, resolve: bool = True, sep: str = ".") -> dict[str, str]:
     """Convert a config to a flat dictionary."""
-    if isinstance(config, omegaconf.DictConfig):
-        config = OmegaConf.to_container(config, resolve=resolve)
-    flat_config = flatten_dict(config, sep=sep)
+    py_config: dict = maybe_cast_omegaconf(config, resolve=resolve)  # type: ignore
+    flat_config = flatten_dict(py_config, sep=sep)
     flat_config = dict(flat_config.items())
     return flat_config

@@ -19,7 +19,7 @@ def _torch_pad_tokenized_field(
     idx: Optional[list[int]] = None,  # noqa: ARG
     *,
     prefix_key: Optional[str] = None,
-    tokenizer: transformers.PreTrainedTokenizer,
+    tokenizer: transformers.PreTrainedTokenizerBase,
     **kwargs: Any,
 ) -> dict[str, torch.Tensor]:
     """Pad a tokenized field."""
@@ -47,7 +47,7 @@ def tokenize_pipe(
     *,
     text_key: str = "text",
     prefix_key: Optional[str] = None,
-    tokenizer: transformers.PreTrainedTokenizer,
+    tokenizer: transformers.PreTrainedTokenizerBase,
     **kwargs: Any,
 ) -> dict[str, Any]:
     """Tokenize a text field."""
@@ -63,7 +63,7 @@ def torch_tokenize_pipe(
     *,
     text_key: str = "text",
     prefix_key: Optional[str] = None,
-    tokenizer: transformers.PreTrainedTokenizer,
+    tokenizer: transformers.PreTrainedTokenizerBase,
     lazy: bool = True,
     padding: bool | str = True,
     return_token_type_ids: bool = False,
@@ -97,7 +97,7 @@ def torch_tokenize_pipe(
 def torch_tokenize_collate(
     examples: Iterable[dict[str, Any]],
     *,
-    tokenizer: transformers.PreTrainedTokenizer,
+    tokenizer: transformers.PreTrainedTokenizerBase,
     text_key: str = "text",
     prefix_key: Optional[str] = None,
     **kwargs: Any,

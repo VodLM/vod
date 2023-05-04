@@ -1,7 +1,6 @@
 # @package _global_
 
 defaults:
-  - override /builder: retrieval
   - override /model/encoder: bert-base
   - override /model/gradients: kl_div
   - override /trainer/strategy: deepspeed_2
@@ -11,21 +10,18 @@ defaults:
 
 seed: 1
 
-builder:
-#  name: frank.A.en.pos #+squad.en
-  name: frank.A.en.pos+squad.en+msmarco.en
-
-benchmark:
-  on_init: false
-  builders:
-    - name: frank.B.en
-      splits: [ validation ]
-    - name: frank.A.en
-      splits: [ validation ]
-    - name: squad.en
-      splits: [ validation ]
-    - name: msmarco.en
-      splits: [ validation ]
+dataset:
+# dataset groups
+  train:
+    - frank.A.en-pos:train
+    - squad.en:train
+  validation:
+    - frank.A.en-pos:val
+    - squad.en:val
+  benchmark:
+    - frank.A.en:val
+    - frank.B.en:val
+    - squad.en:val
 
 
 model:
@@ -33,7 +29,7 @@ model:
   embedding_size: 1_024
   use_pooler_layer: false
   optimizer:
-    lr: 4e-4
+    lr: 1e-4
     weight_decay: 0
     eps: 1e-8
   scheduler:
@@ -47,11 +43,10 @@ resources:
   num_proc: 4
 
 batch_size:
-  effective: 64
+  effective: 32
   per_device: 16
   per_device_eval: 8
-  gradient_accumulation_steps: 1
-  per_device_predict: 512
+  per_device_predict: 2048
 
 trainer:
   accelerator: gpu
@@ -69,36 +64,35 @@ collates:
     max_pos_sections: 8
     prefetch_n_sections: 512
     do_sample: false
-    question_max_length: 128
-    section_max_length: 200
-  eval:
+  benchmark:
     n_sections: 300
     max_pos_sections: 100
     prefetch_n_sections: 1000
     do_sample: false
-    question_max_length: 128
-    section_max_length: 200
 
-
-indexes:
-  # Defines the configuration for the multi-index
-  update_freq: 3_000
-  reset_model: false
-  faiss:
-    factory: IVF32,Flat
-    nprobe: 32
-    schedule:
-      # progressively increase the model score weight
-      type: linear
+schedule:
+  index_update_freq: 1_000
+  reset_model_on_period_start: false
+  benchmark_on_init: true
+  parameters:
+    faiss:
+      mode: linear
       start: 0
-      end: 1
-      period: 20
-  bm25:
-    indexed_key: text
-    use_labels: true
-    schedule:
-      # progressively increase the model score weight
-      type: linear
+      value: 1
+      period: 50_000
+
+    bm25:
+      mode: linear
       start: 1
-      end: 0.1
-      period: 20
+      value: 0
+      period: 50_000
+
+search:
+  faiss:
+    factory: IVF2048,Flat
+    metric: inner_product
+    nprobe: 32
+  bm25:
+    text_key: text
+    group_key: group_hash
+    persistent: true

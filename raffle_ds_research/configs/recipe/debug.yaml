@@ -8,10 +8,19 @@ defaults:
       - csv
   - _self_
 
-embedding_size: 64
+seed: 1
 
-builder:
+dataset:
   subset_size: 100
+  filter_unused_sections: true
+  train: frank.A.en-pos:train
+  validation: frank.A.en-pos:val
+  benchmark:
+    - frank.A.en-pos:val
+    - frank.B.en-pos:val
+
+schedule:
+  benchmark_on_init: false
 
 batch_size:
   per_device: 4

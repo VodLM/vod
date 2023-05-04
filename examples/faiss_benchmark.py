@@ -60,7 +60,7 @@ class Args(arguantic.Arguantic):
     cache_dir: pathlib.Path = "~/.raffle/datasets/vectors-bases/"
     output_dir: pathlib.Path = "faiss-index-benchmark/"
     repeat: int = 0
-    expand: int = 4
+    expand: int = 0
     noise: float = 1.0
     factory: str = "Flat"
     n_train: int = -1
@@ -68,6 +68,7 @@ class Args(arguantic.Arguantic):
     batch_size: int = 100
     top_k: int = 300
     n_samples: int = -1
+    omp_num_threads: int = 32
 
     @pydantic.validator("cache_dir", pre=True, always=True, allow_reuse=True)
     @pydantic.validator("output_dir", pre=True, always=True, allow_reuse=True)
@@ -232,6 +233,7 @@ def run(args: Args) -> None:
     rich.print(dset)
     runtimes = {}
 
+    faiss.omp_set_num_threads(args.omp_num_threads)
     index = faiss.index_factory(dset.vectors.shape[1], args.factory, faiss.METRIC_INNER_PRODUCT)
     index.nprobe = args.n_probe
 

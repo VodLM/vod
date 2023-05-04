@@ -7,7 +7,7 @@ from pathlib import Path
 import datasets
 import dotenv
 import rich
-import tensorstore
+import tensorstore as ts
 import torch
 import transformers
 from transformers import BertModel
@@ -15,7 +15,7 @@ from transformers import BertModel
 from raffle_ds_research.tools import pipes, predict
 from raffle_ds_research.tools.utils.trainer import Trainer
 
-dotenv.load_dotenv(Path(__file__).parent / ".predict.env")
+dotenv.load_dotenv(str(Path(__file__).parent / ".predict.env"))
 
 
 class Encoder(torch.nn.Module):
@@ -38,24 +38,32 @@ def run() -> None:
     model = Encoder(bert)
     model.eval()
     tokenizer = transformers.AutoTokenizer.from_pretrained(model_name)
-    squad = datasets.load_dataset("squad", split="train[:1%]")
+    squad: datasets.Dataset = datasets.load_dataset("squad", split="train[:1%]")  # type: ignore
     rich.print(squad)
-    collate_fn = partial(pipes.torch_tokenize_collate, tokenizer=tokenizer, field="question")
+    collate_fn = partial(pipes.torch_tokenize_collate, tokenizer=tokenizer, text_key="question")
 
     # init the trainer and compute the vectors
     trainer = Trainer()
     with tempfile.TemporaryDirectory() as tmpdir:
-        stores = predict(
-            {"valid": squad, "train": squad},
-            trainer=trainer,
-            cache_dir=tmpdir,
-            model=model,
-            model_output_key="pooler_output",
-            collate_fn=collate_fn,
-            loader_kwargs={"batch_size": 10, "num_workers": 0},
-        )
+        open_mode = {"valid": "x", "train": "r"}
+        dsets = {"valid": squad, "train": squad}
+        stores = {
+            key: predict(
+                dset,  # type: ignore
+                trainer=trainer,
+                cache_dir=tmpdir,
+                model=model,
+                model_output_key="pooler_output",
+                collate_fn=collate_fn,
+                loader_kwargs={"batch_size": 10, "num_workers": 0},
+                open_mode=open_mode[key],  # type: ignore
+            )
+            for key, dset in dsets.items()
+        }
 
-        store: tensorstore.TensorStore = stores["valid"].open()
+        rich.print(stores)
+
+        store: ts.TensorStore = stores["valid"].open()
         rich.print(store[:].read().result())
 
 

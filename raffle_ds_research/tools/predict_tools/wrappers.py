@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import typing
 from typing import Any, Iterable
 
 import lightning.pytorch as pl
 import torch
 
-from raffle_ds_research.tools import pipes
-from raffle_ds_research.tools.dataset_builder.builder import DatasetProtocol
+from raffle_ds_research.tools import dstruct, pipes
 
 PREDICT_IDX_COL_NAME = "__idx__"
+
+T = typing.TypeVar("T", bound=dict)
 
 
 class ModuleWrapper(pl.LightningModule):
@@ -23,17 +25,20 @@ class ModuleWrapper(pl.LightningModule):
         return self.module(batch)
 
 
-class DatasetWithIndices(DatasetProtocol):
+D_co = typing.TypeVar("D_co", bound=dict, covariant=True)
+
+
+class DatasetWithIndices(dstruct.SizedDataset[D_co]):
     """This class is used to add the column `IDX_COL` to the batch."""
 
-    def __init__(self, dataset: DatasetProtocol):
+    def __init__(self, dataset: dstruct.SizedDataset[D_co]):
         self.dataset = dataset
 
     def __len__(self) -> int:
         """Returns the number of rows in the dataset."""
         return len(self.dataset)
 
-    def __getitem__(self, item: int) -> dict:
+    def __getitem__(self, item: int) -> D_co:
         """Returns a row from the dataset."""
         batch = self.dataset[item]
         if PREDICT_IDX_COL_NAME in batch:
@@ -44,6 +49,11 @@ class DatasetWithIndices(DatasetProtocol):
 
         batch[PREDICT_IDX_COL_NAME] = item
         return batch
+
+    def __iter__(self) -> Iterable[dict]:
+        """Returns an iterator over the rows of the dataset."""
+        for i in range(len(self)):
+            yield self[i]
 
 
 def _safely_fetch_key(row: dict) -> int:

@@ -9,7 +9,6 @@ import time
 from typing import Any, Generic, Optional, TypeVar
 
 import loguru
-import rich.status
 from typing_extensions import Self
 
 from raffle_ds_research.tools.index_tools import retrieval_data_type as rtypes
@@ -38,7 +37,7 @@ class SearchClient(abc.ABC):
         self,
         *,
         text: list[str],
-        vector: rtypes.Ts,
+        vector: Optional[rtypes.Ts] = None,
         label: Optional[list[str | int]] = None,
         top_k: int = 3,
     ) -> rtypes.RetrievalBatch[rtypes.Ts]:
@@ -46,7 +45,7 @@ class SearchClient(abc.ABC):
         raise NotImplementedError()
 
 
-Sc = TypeVar("Sc", bound=SearchClient)
+Sc = TypeVar("Sc", bound=SearchClient, covariant=True)
 
 
 class SearchMaster(Generic[Sc], abc.ABC):
@@ -98,7 +97,7 @@ class SearchMaster(Generic[Sc], abc.ABC):
         _client = self.get_client()
         if _client.ping():
             if self._allow_existing_server:
-                loguru.logger.info(f"Using existing server {self.service_name}.")
+                loguru.logger.info(f"Using existing search instance {self.service_info}")
                 return None
             raise RuntimeError(f"Server {self.service_name} is already running.")
 
@@ -115,12 +114,12 @@ class SearchMaster(Generic[Sc], abc.ABC):
         )
 
         t0 = time.time()
-        with rich.status.Status(f"Waiting for server {self.service_name} to start..."):
-            while not _client.ping():
-                time.sleep(0.1)
-                if time.time() - t0 > self._timeout:
-                    server_proc.terminate()
-                    raise TimeoutError(f"Couldn't ping the server after {self._timeout:.0f}s.")
+        loguru.logger.info(f"Spawning {self.service_info} ...")
+        while not _client.ping():
+            time.sleep(0.1)
+            if time.time() - t0 > self._timeout:
+                server_proc.terminate()
+                raise TimeoutError(f"Couldn't ping the server after {self._timeout:.0f}s.")
 
         return server_proc
 
@@ -129,12 +128,17 @@ class SearchMaster(Generic[Sc], abc.ABC):
         """Return the name of the service."""
         return self.__class__.__name__.lower()
 
+    @property
+    def service_info(self) -> str:
+        """Return the name of the service."""
+        return self.service_name
+
     def __getstate__(self) -> dict[str, Any]:
         """Prevent pickling."""
         raise DoNotPickleError(
             f"{type(self).__name__} is not pickleable. "
             f"To use in multiprocessing, using a client instead (`server.get_client()`)."
-        )
+        )  # type: ignore
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         """Prevent unpickling."""

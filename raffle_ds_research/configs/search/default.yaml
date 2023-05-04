@@ -1,0 +1,8 @@
+faiss:
+  factory: Flat
+  metric: inner_product
+  nprobe: 16
+bm25:
+  text_key: text
+  group_key: group_hash
+  persistent: true

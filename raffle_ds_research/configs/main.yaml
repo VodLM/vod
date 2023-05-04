@@ -1,10 +1,11 @@
 defaults:
-  - builder: retrieval
+  - dataset: retrieval
+  - search: default
   - model: default
+  - schedule: default
   - resources: default
   - batch_size: default
   - trainer: default
-  - monitor: retrieval
   - sys: default
   - hydra: default
   # enable color logging
@@ -14,19 +15,11 @@ defaults:
 seed: ${global_seed:}
 compile: false
 model_name: ${model.encoder.pretrained_model_name_or_path}
-exp_version: "v1.9"
+exp_version: "v2.0"
 exp_suffix: ""
 exp_name: retrieval
 run_name: ${fmt_mn:${model_name}}--${rdn_name:}-${exp_version}${exp_suffix}
 
-benchmark:
-  # defines the benchmarks to be run after each training period
-  on_init: false
-  builders:
-    - name: frank.B.en
-      splits: [ validation ]
-    - name: frank.A.en
-      splits: [ validation ]
 
 dataloaders:
   # Defines the configurations for `torch.utils.data.Dataloader`
@@ -48,51 +41,22 @@ dataloaders:
 
 collates:
   # Defines the configurations for `dataset_builder.HfBuilder._collate_config`
+  predict:
+    question_max_length: 128
+    section_max_length: 200
   train:
-    # Configuration for the training `Collate`
+    # Configuration for the training/evaluation `Collate`
     n_sections: 16
     max_pos_sections: 4
     prefetch_n_sections: 300
     do_sample: false
-    question_max_length: 128
-    section_max_length: 200
-  eval:
-    # Configuration for the eval. `Collate`
-    n_sections: 16
-    max_pos_sections: 4
-    prefetch_n_sections: 300
-    do_sample: false
-    question_max_length: 128
-    section_max_length: 200
-  static:
-    # Configuration for the static eval. `Collate`
+    question_max_length: ${collates.predict.question_max_length}
+    section_max_length:  ${collates.predict.section_max_length}
+  benchmark:
+    # Configuration for the benchmark eval. `Collate`
     n_sections: 500
     max_pos_sections: 50
     prefetch_n_sections: 1000
     do_sample: false
-    question_max_length: 128
-    section_max_length: 200
-
-
-indexes:
-  # Defines the configuration for the multi-index
-  update_freq: 5_000
-  reset_model: false
-  faiss:
-    factory: IVF16,Flat
-    nprobe: 16
-    schedule:
-      # progressively increase the model score weight
-      type: linear
-      start: 0
-      end: 1
-      period: 5
-  bm25:
-    indexed_key: text
-    use_labels: true
-    schedule:
-      # progressively increase the model score weight
-      type: linear
-      start: 1
-      end: 0.1
-      period: 5
+    question_max_length: ${collates.predict.question_max_length}
+    section_max_length:  ${collates.predict.section_max_length}

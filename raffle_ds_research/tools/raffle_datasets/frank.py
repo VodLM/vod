@@ -4,6 +4,7 @@ import collections
 import enum
 import functools
 import json
+import pathlib
 import shutil
 from os import PathLike
 from pathlib import Path
@@ -165,7 +166,7 @@ def _pase_frank_dir(local_frank_path: str, split: str, language: str, *, fs: fss
     qa_splits = {}
     for split_name, qa_split_path in qa_splits_paths.items():
         qa_splits[split_name] = datasets.Dataset.from_generator(
-            _gen_qa_split=functools.partial(
+            functools.partial(
                 _gen_qa_split,
                 qa_split_path=qa_split_path,
                 fs=fs,
@@ -179,18 +180,18 @@ def _pase_frank_dir(local_frank_path: str, split: str, language: str, *, fs: fss
 
 
 def _make_local_sync_path(
-    cache_dir: PathLike,
+    cache_dir: str | pathlib.Path,
     language: str,
     split: FrankSplitName,
     version: int,
     only_positive_sections: bool = False,
-) -> tuple[Path, Path]:
-    base_path = Path(
+) -> tuple[pathlib.Path, pathlib.Path]:
+    base_path = pathlib.Path(
         cache_dir, "raffle_datasets", "frank", language, "only-positives" if only_positive_sections else "full"
     )
     return (
-        Path(base_path, f"frank_V{version}{split.value}_qa_splits.hf"),
-        Path(base_path, f"frank_V{version}{split.value}_sections.hf"),
+        pathlib.Path(base_path, f"frank_V{version}{split.value}_qa_splits.hf"),
+        pathlib.Path(base_path, f"frank_V{version}{split.value}_sections.hf"),
     )
 
 
@@ -199,14 +200,14 @@ def load_frank(
     language: str = "en",
     subset_name: Union[str, FrankSplitName] = "A",
     version: int = 0,
-    cache_dir: Optional[PathLike] = None,
+    cache_dir: Optional[Union[str, pathlib.Path]] = None,
     keep_in_memory: Optional[bool] = None,
     only_positive_sections: bool = False,
     invalidate_cache: bool = False,
 ) -> HfFrankPart:
     """Load the Frank dataset."""
     if cache_dir is None:
-        cache_dir = DATASETS_CACHE_PATH
+        cache_dir = pathlib.Path(DATASETS_CACHE_PATH)
     if isinstance(subset_name, str):
         subset_name = FrankSplitName(subset_name)
 

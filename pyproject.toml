@@ -3,11 +3,10 @@ version = "0.1.0"
 version_files = [
     "raffle_ds_research/__init__.py:__version__",
     "pyproject.toml:version",
-    "VERSION"
+    "VERSION",
 ]
 tag_format = "v$version"
 bump_message = "[ci skip] bump: $current_version → $new_version"
-
 
 
 [tool.poetry]
@@ -16,12 +15,11 @@ version = "0.1.0"
 description = "User-friendly and scalable experimentation framework for modern NLP"
 authors = ["Valentin Liévin <vl@raffle.ai>"]
 readme = "README.md"
-packages = [
-    { include = "raffle_ds_research" },
-]
+packages = [{ include = "raffle_ds_research" }]
 
 [tool.poetry.scripts]
 train = 'raffle_ds_research.cli.train:run'
+watch = 'watch_gpus:run'
 
 [tool.poetry.dependencies]
 python = "^3.9"
@@ -41,7 +39,8 @@ tensorstore = "^0.1.32"
 hydra-colorlog = "^1.2.0"
 rich = "^13.3.1"
 optimum = "^1.7.1"
-faiss-cpu = "^1.7"
+faiss-cpu = { platform = "darwin", version = "==1.6.5" }
+faiss-gpu = { platform = "linux", version = "^1.7" }
 fastapi = ">=0.80"
 uvicorn = ">=0.20.0"
 psutil = "^5.9.4"
@@ -50,21 +49,12 @@ cython = "^0.29.33"
 deepspeed = "^0.8.3"
 elasticsearch = "^8.6.2"
 gcsfs = "^2023.3.0"
-
-## below are required to fix some dependency issues
-## -------------------->
-#greenlet = "=2.0.1"
-#llvmlite = "^0.39.1"
-#protobuf = "=3.20"
-#markupsafe = "=2.0.1"
-#scikit-learn = "^1"
-## <--------------------
 richuru = "^0.1.1"
 
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.1"
-black = {extras = ["d"], version = "^23.3.0"}
+black = { extras = ["d"], version = "^23.3.0" }
 isort = "^5.12.0"
 pre-commit = "^3.0.4"
 commitizen = "^2.42.0"
@@ -81,11 +71,7 @@ faiss-gpu = "^1.7"
 
 [build-system]
 build-backend = "poetry.core.masonry.api"
-requires = [
-    "poetry-core",
-    "Cython",
-    "numpy",
-]
+requires = ["poetry-core", "Cython", "numpy"]
 
 
 [tool.poetry.build]
@@ -93,11 +79,75 @@ generate-setup-file = false
 script = "build.py"
 
 [tool.ruff]
-select = ["E", "F", "D", "ANN", "PL", "I", "B", "N", "C", "S", "G", "DTZ", "ICN", "RET", "SIM", "TID", "PTH", "ARG"]
+select = [
+    "E",
+    "F",
+    "D",
+    "ANN",
+    "PL",
+    "I",
+    "B",
+    "N",
+    "C",
+    "S",
+    "G",
+    "DTZ",
+    "ICN",
+    "RET",
+    "SIM",
+    "TID",
+    "PTH",
+    "ARG",
+]
 ignore = ["D107", "D100", "ANN101", "ANN204", "B905", "N805", "S311"]
 
 # Allow autofix for all enabled rules (when `--fix`) is provided.
-fixable = ["A", "B", "C", "D", "E", "F", "G", "I", "N", "Q", "S", "T", "W", "ANN", "ARG", "BLE", "COM", "DJ", "DTZ", "EM", "ERA", "EXE", "FBT", "ICN", "INP", "ISC", "NPY", "PD", "PGH", "PIE", "PL", "PT", "PTH", "PYI", "RET", "RSE", "RUF", "SIM", "SLF", "TCH", "TID", "TRY", "UP", "YTT"]
+fixable = [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "G",
+    "I",
+    "N",
+    "Q",
+    "S",
+    "T",
+    "W",
+    "ANN",
+    "ARG",
+    "BLE",
+    "COM",
+    "DJ",
+    "DTZ",
+    "EM",
+    "ERA",
+    "EXE",
+    "FBT",
+    "ICN",
+    "INP",
+    "ISC",
+    "NPY",
+    "PD",
+    "PGH",
+    "PIE",
+    "PL",
+    "PT",
+    "PTH",
+    "PYI",
+    "RET",
+    "RSE",
+    "RUF",
+    "SIM",
+    "SLF",
+    "TCH",
+    "TID",
+    "TRY",
+    "UP",
+    "YTT",
+]
 unfixable = []
 
 # Exclude a variety of commonly ignored directories.

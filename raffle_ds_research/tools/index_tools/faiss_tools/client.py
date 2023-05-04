@@ -4,7 +4,7 @@ import os
 import sys
 from copy import copy
 from pathlib import Path
-from typing import Optional, Type
+from typing import Optional
 
 import numpy as np
 import requests
@@ -168,14 +168,12 @@ class FaissMaster(search_server.SearchMaster[FaissClient]):
         """Get the client for interacting with the Faiss server."""
         return FaissClient(host=self.host, port=self.port)
 
+    @property
+    def url(self) -> str:
+        """Return the URL of the server."""
+        return f"{self.host}:{self.port}"
 
-def decode_faiss_results(
-    *, indices: str, scores: str, target_type: Type[rtypes.Ts]
-) -> rtypes.RetrievalBatch[rtypes.Ts]:
-    """Decoded serialized faiss search results."""
-    indices = io.deserialize_np_array(indices)
-    scores = io.deserialize_np_array(scores)
-    if target_type == torch.Tensor:
-        indices = torch.from_numpy(indices)
-        scores = torch.from_numpy(scores)
-    return rtypes.RetrievalBatch(indices=indices, scores=scores)
+    @property
+    def service_info(self) -> str:
+        """Return the name of the service."""
+        return f"FaissServer[{self.url}]"

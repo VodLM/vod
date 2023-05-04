@@ -11,7 +11,7 @@ import torch
 import transformers
 import yaml
 
-from raffle_ds_research.core.ml_models import Ranker
+from raffle_ds_research.core.ml import Ranker
 from raffle_ds_research.utils.config import config_to_flat_dict
 
 T = TypeVar("T")

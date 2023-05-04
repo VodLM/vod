@@ -6,7 +6,6 @@ import pathlib
 from pathlib import Path
 from typing import Any
 
-import datasets.fingerprint
 import dill
 import dotenv
 import faiss
@@ -18,9 +17,9 @@ import transformers
 from loguru import logger
 from tqdm import tqdm
 
-from raffle_ds_research.core import dataset_builders
-from raffle_ds_research.core.ml_models.monitor import Monitor, RetrievalMetricCollection
-from raffle_ds_research.core.ml_models.simple_ranker import SimpleRanker
+from raffle_ds_research.core import mechanics
+from raffle_ds_research.core.ml.monitor import Monitor, RetrievalMetricCollection
+from raffle_ds_research.core.ml.simple_ranker import SimpleRanker
 from raffle_ds_research.tools import arguantic, index_tools, pipes, predict
 from raffle_ds_research.tools.index_tools import faiss_tools
 from raffle_ds_research.utils.pretty import print_metric_groups
@@ -61,8 +60,8 @@ def run() -> None:  # noqa: PLR0915
     args.cache_dir.mkdir(parents=True, exist_ok=True)
     logger.info(f"Using cache dir: {args.cache_dir.absolute()}")
     tokenizer = transformers.AutoTokenizer.from_pretrained(args.model_name)
-    logger.info(f"{type(tokenizer).__name__}: hash={datasets.fingerprint.Hasher.hash(tokenizer)}")
-    builder = dataset_builders.RetrievalBuilder.from_name(
+    logger.info(f"{type(tokenizer).__name__}: hash={pipes.fingerprint(tokenizer)}")
+    builder = mechanics.DatasetFactory.from_name(
         name=args.dset_name,
         prep_map_kwargs={"num_proc": 4, "batch_size": 1000},
         tokenizer=tokenizer,
@@ -73,13 +72,13 @@ def run() -> None:  # noqa: PLR0915
     rich.print("=== dataset ===")
     rich.print(dataset)
     rich.print("=== dataset.corpus ===")
-    sections = builder.get_corpus()
+    sections = builder.get_sections()
     rich.print(sections)
 
     # Init the model and wrap it
     model = transformers.AutoModel.from_pretrained(args.model_name)
     model = SimpleRanker(model, fields=["question", "section"], vector_name="vector")
-    logger.info(f"model hash: {datasets.fingerprint.Hasher.hash(model)}")
+    logger.info(f"model hash: {pipes.fingerprint(model)}")
 
     # Init the trainer
     logger.info("Instantiating the Trainer")
@@ -89,20 +88,20 @@ def run() -> None:  # noqa: PLR0915
     loader_kwargs = {"batch_size": args.batch_size, "num_workers": 4, "pin_memory": True}
     question_collate = functools.partial(
         pipes.torch_tokenize_collate,
-        tokenizer=builder.tokenizer,
+        tokenizer=tokenizer,
         prefix_key="question.",
         max_length=512,
         truncation=True,
     )
-    logger.info(f"question_collate: hash={datasets.fingerprint.Hasher.hash(question_collate)}")
+    logger.info(f"question_collate: hash={pipes.fingerprint(question_collate)}")
     section_collate = functools.partial(
         pipes.torch_tokenize_collate,
-        tokenizer=builder.tokenizer,
+        tokenizer=tokenizer,
         prefix_key="section.",
         max_length=512,
         truncation=True,
     )
-    logger.info(f"section_collate: hash={datasets.fingerprint.Hasher.hash(section_collate)}")
+    logger.info(f"section_collate: hash={pipes.fingerprint(section_collate)}")
 
     # Predict - compute the vectors for the question datasets and the sections
     dataset_vectors = predict(
@@ -125,7 +124,7 @@ def run() -> None:  # noqa: PLR0915
     )
 
     # build the faiss index and save to disk
-    faiss_index = faiss_tools.build_index(sections_vectors, factory_string=args.factory_string)
+    faiss_index = faiss_tools.build_faiss_master(sections_vectors, factory_string=args.factory_string)
     faiss_path = Path(args.cache_dir, "index.faiss")
     faiss.write_index(faiss_index, str(faiss_path))
 
@@ -153,11 +152,11 @@ def run() -> None:  # noqa: PLR0915
             # run the collate_fn on a single batch and print the result
             batch = collate_fn([dataset["train"][0], dataset["train"][1]])
             pipes.pprint_batch(batch, header="Frank - Batch")
-            pipes.pprint_supervised_retrieval_batch(batch, tokenizer=builder.tokenizer, skip_special_tokens=True)
+            pipes.pprint_retrieval_batch(batch, tokenizer=builder.tokenizer, skip_special_tokens=True)
 
             # check if the collate_fn can be pickled
             if dill.pickles(collate_fn):
-                logger.info(f"Collate is serializable. hash={datasets.fingerprint.Hasher.hash(collate_fn)}")
+                logger.info(f"Collate is serializable. hash={pipes.fingerprint(collate_fn)}")
             else:
                 logger.warning("Collate is not serializable.")
 

@@ -1,0 +1,2 @@
+question: "Question: {{ text }}"
+section: "{% if title %}Title: {{ title }}. {% endif %}Document: {{ content }}"

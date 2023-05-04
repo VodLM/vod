@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import multiprocessing
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Optional
 
 import dotenv
 import hydra
@@ -21,10 +21,11 @@ except RuntimeError:
     loguru.logger.debug("Could not set multiprocessing start method to `forkserver`")
 
 import lightning.pytorch as pl  # noqa: E402
+from lightning.pytorch import utilities as pl_utils  # noqa: E402
 
 from raffle_ds_research.cli import utils as cli_utils  # noqa: E402
-from raffle_ds_research.core import dataset_builders, workflows  # noqa: E402
-from raffle_ds_research.core.ml_models import Ranker  # noqa: E402
+from raffle_ds_research.core import workflows  # noqa: E402
+from raffle_ds_research.core.ml import Ranker  # noqa: E402
 from raffle_ds_research.tools.utils.config import register_omgeaconf_resolvers  # noqa: E402
 from raffle_ds_research.tools.utils.pretty import print_config  # noqa: E402
 
@@ -58,46 +59,27 @@ def run(config: DictConfig) -> None:
     """Train a ranker for a retrieval task."""
     loguru.logger.debug(f"Multiprocessing method set to `{multiprocessing.get_start_method()}`")  # type: ignore
     cli_utils.set_training_context()
-    pl.utilities.rank_zero_only(print_config)(config)
+    pl_utils.rank_zero_only(print_config)(config)
     exp_dir = Path()
     logger.info(f"Experiment directory: {exp_dir.absolute()}")
 
-    # Instantiate the dataset builder
-    logger.info(f"Instantiating builder <{config.builder._target_}>")
-    builder: dataset_builders.RetrievalBuilder = instantiate(config.builder)
-
     # load the model
-    logger.info(f"Instantiating model <{config.model._target_}>")
+    logger.info(f"Instantiating model generator <{config.model._target_}>")
     seed_everything(config.seed)
     ranker_generator = ModelGenerator(model_config=config.model, seed=config.seed, compile=config.compile)
 
     # Init the trainer, log the hyperparameters
     logger.info(f"Instantiating model <{config.trainer._target_}>")
     trainer: pl.Trainer = instantiate(config.trainer)
-    pl.utilities.rank_zero_only(cli_utils.log_config)(ranker=ranker_generator(), config=config, exp_dir=exp_dir)
+    pl_utils.rank_zero_only(cli_utils.log_config)(ranker=ranker_generator(), config=config, exp_dir=exp_dir)
 
     logger.info(f"Training the ranker with seed={config.seed}")
     seed_everything(config.seed, workers=True)
-    benchmark_builders = list(_fetch_benchmark_builders(ref_builder=builder, config=config.benchmark))
     workflows.train_with_index_updates(
-        ranker_generator=ranker_generator,
         trainer=trainer,
-        builder=builder,
+        ranker_generator=ranker_generator,
         config=config,
-        monitor=instantiate(config.monitor),
-        benchmark_builders=benchmark_builders,
-        benchmark_on_init=config.benchmark.on_init,
     )
-
-
-def _fetch_benchmark_builders(
-    ref_builder: dataset_builders.RetrievalBuilder, config: omegaconf.DictConfig
-) -> Iterable[dataset_builders.RetrievalBuilder]:
-    for builder_config in config.builders:
-        overrides = omegaconf.OmegaConf.to_container(builder_config, resolve=True)
-        new_config = ref_builder.config.copy(update=overrides)
-        new_builder = dataset_builders.RetrievalBuilder.from_name(**new_config.dict())
-        yield new_builder
 
 
 if __name__ == "__main__":

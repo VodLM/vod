@@ -1,9 +1,0 @@
-_target_: raffle_ds_research.core.ml_models.monitor.Monitor
-splits: [ "score", "faiss", "bm25" ]
-log_on_step: false
-metrics:
-  _target_: raffle_ds_research.core.ml_models.monitor.RetrievalMetricCollection
-  metrics: [ "ndcg", "mrr","hitrate@01", "hitrate@03", "hitrate@10", "hitrate@30" ]
-  compute_on_cpu: true
-  dist_sync_on_step: true
-  sync_on_compute: false # todo: remove this line, this is needed in this version of lightning, otherwise it will crash.

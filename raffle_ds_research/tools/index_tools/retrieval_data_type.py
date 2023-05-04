@@ -22,8 +22,9 @@ class RetrievalDataType(Enum):
 
 
 SliceType: TypeAlias = Union[int, slice, Iterable[int]]
-Ts = TypeVar("Ts", bound=Union[np.ndarray, torch.Tensor])
-Ts_o = TypeVar("Ts_o", bound=Union[np.ndarray, torch.Tensor])
+Ts = TypeVar("Ts", np.ndarray, torch.Tensor)
+Ts_co = TypeVar("Ts_co", np.ndarray, torch.Tensor, covariant=True)
+Ts_out = TypeVar("Ts_out", np.ndarray, torch.Tensor)
 
 
 def _type_repr(x: Ts) -> str:
@@ -34,7 +35,7 @@ def _array_repr(x: Ts) -> str:
     return f"{type(x).__name__}(shape={x.shape}, dtype={x.dtype}))"
 
 
-def _convert_array(scores: Union[np.ndarray, torch.Tensor], target_type: Type[Ts_o]) -> Ts_o:
+def _convert_array(scores: Union[np.ndarray, torch.Tensor], target_type: Type[Ts_out]) -> Ts_out:
     conversions = {
         torch.Tensor: {
             np.ndarray: torch.from_numpy,
@@ -67,17 +68,17 @@ def _concat_arrays(arrays: Iterable[Ts]) -> Ts:
     return operator([first, *rest])
 
 
-class RetrievalData(ABC, Generic[Ts]):
+class RetrievalData(ABC, Generic[Ts_co]):
     """Model search results."""
 
     __slots__ = ("scores", "indices")
     _expected_dim: int
     _str_sep: str = ""
     _repr_sep: str = ""
-    scores: Ts
-    indices: Ts
+    scores: Ts_co
+    indices: Ts_co
 
-    def __init__(self, scores: Ts, indices: Ts):
+    def __init__(self, scores: Ts_co, indices: Ts_co):
         dim = len(indices.shape)
         # note: only check shapes up to the number of dimensions of the indices. This allows
         # for the scores to have more dimensions than the indices, e.g. for the case of
@@ -95,9 +96,9 @@ class RetrievalData(ABC, Generic[Ts]):
         self.scores = scores
         self.indices = indices
 
-    def to(self, target_type: Type[Ts_o]) -> RetrievalData[Ts_o]:
+    def to(self, target_type: Type[Ts_out]) -> RetrievalData[Ts_out]:
         """Cast a `RetrievalData` object to a different type."""
-        output: RetrievalData[Ts_o] = type(self)(
+        output: RetrievalData = type(self)(
             scores=_convert_array(self.scores, target_type),
             indices=_convert_array(self.indices, target_type),
         )
@@ -171,20 +172,20 @@ class RetrievalTuple(RetrievalData[Ts]):
         raise NotImplementedError("RetrievalTuple is not iterable")
 
 
-class RetrievalSample(RetrievalData[Ts]):
+class RetrievalSample(RetrievalData[Ts_co]):
     """A single value of a search result."""
 
     _expected_dim = 1
     _str_sep: str = ""
 
-    def __getitem__(self, item: int) -> RetrievalTuple[Ts]:
+    def __getitem__(self, item: int) -> RetrievalTuple:
         """Get a single value from the sample."""
         return RetrievalTuple(
             scores=self.scores[item],
             indices=self.indices[item],
         )
 
-    def __iter__(self) -> Iterable[RetrievalTuple[Ts]]:
+    def __iter__(self) -> Iterable[RetrievalTuple[Ts_co]]:
         """Iterate over the sample dimension."""
         for i in range(len(self)):
             yield self[i]
@@ -197,13 +198,13 @@ class RetrievalSample(RetrievalData[Ts]):
         )
 
 
-class RetrievalBatch(RetrievalData[Ts]):
+class RetrievalBatch(RetrievalData[Ts_co]):
     """A batch of search results."""
 
     _expected_dim = 2
     _str_sep: str = "\n"
 
-    def __getitem__(self, item: int) -> RetrievalSample[Ts]:
+    def __getitem__(self, item: int) -> RetrievalSample:
         """Get a single sample from the batch."""
         return RetrievalSample(
             scores=self.scores[item],
@@ -222,16 +223,18 @@ class RetrievalBatch(RetrievalData[Ts]):
             indices=_concat_arrays([self.indices, other.indices]),
         )
 
-    def to(self, target_type: Type[Ts_o]) -> RetrievalBatch[Ts_o]:
+    def to(self, target_type: Type[Ts_out]) -> RetrievalBatch[Ts_out]:
         """Cast a `RetrievalBatch` object to a different type."""
         return RetrievalBatch(
             scores=_convert_array(self.scores, target_type),
             indices=_convert_array(self.indices, target_type),
         )
 
-    def sorted(self) -> RetrievalBatch[Ts]:
+    def sorted(self) -> RetrievalBatch[Ts_co]:
         """Sort the batch by score in descending order."""
         if isinstance(self.indices, np.ndarray):
+            if not isinstance(self.scores, np.ndarray):
+                raise TypeError(f"Incomapatible types {type(self.scores)} and {type(self.indices)}")
             sort_ids = np.argsort(self.scores, axis=-1)
             sort_ids = np.flip(sort_ids, axis=-1)
             return RetrievalBatch(
@@ -239,6 +242,8 @@ class RetrievalBatch(RetrievalData[Ts]):
                 indices=np.take_along_axis(self.indices, sort_ids, axis=-1),
             )
         if isinstance(self.indices, torch.Tensor):
+            if not isinstance(self.scores, torch.Tensor):
+                raise TypeError(f"Incomapatible types {type(self.scores)} and {type(self.indices)}")
             sort_ids = torch.argsort(self.scores, dim=-1, descending=True)
             return RetrievalBatch(
                 scores=torch.gather(self.scores, -1, sort_ids),

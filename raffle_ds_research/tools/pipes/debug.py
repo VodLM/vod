@@ -71,6 +71,7 @@ def _(x: torch.Tensor) -> Properties:
         mean=f"{_smart_str(x_float.mean().item())}",
         min=f"{_smart_str(x.min().item())}",
         max=f"{_smart_str(x.max().item())}",
+        n_nans=int(torch.isnan(x).sum().item()),
     )
 
 
@@ -86,6 +87,7 @@ def _(x: np.ndarray) -> Properties:
         mean=f"{_smart_str(x_float.mean())}",
         min=f"{_smart_str(np.min(x))}",
         max=f"{_smart_str(np.max(x))}",
+        n_nans=int(np.isnan(x).sum()),
     )
 
 
@@ -219,6 +221,7 @@ def pprint_batch(
     idx: Optional[list[int]] = None,  # noqa: ARG
     console: Optional[rich.console.Console] = None,
     header: Optional[str] = None,
+    footer: Optional[str] = None,
     **kwargs: Any,
 ) -> dict:
     """Pretty print a batch of data."""
@@ -242,6 +245,8 @@ def pprint_batch(
         console = rich.console.Console()
 
     console.print(table)
+    if footer is not None:
+        console.print(footer)
     return {}
 
 
@@ -261,11 +266,11 @@ def _safe_yaml(section: str) -> str:
 
 
 # pylint: disable=too-many-locals
-def pprint_supervised_retrieval_batch(
+def pprint_retrieval_batch(
     batch: dict[str, Any],
     idx: Optional[list[int]] = None,  # noqa: ARG
     *,
-    tokenizer: transformers.PreTrainedTokenizer,
+    tokenizer: transformers.PreTrainedTokenizerBase,
     header: str = "Supervised retrieval batch",
     max_sections: Optional[int] = None,
     console: Optional[rich.console.Console] = None,
@@ -286,9 +291,9 @@ def pprint_supervised_retrieval_batch(
         return x
 
     tree = rich.tree.Tree(header, guide_style="dim")
-    question_keys = ["id", "section_ids", "answer_id", "kb_id", "language"]
+    question_keys = ["id", "section_ids", "answer_id", "kb_id", "language", "group_hash"]
     question_keys = [f"question.{key}" for key in question_keys]
-    section_keys = ["id", "answer_id", "kb_id", "score", "label", "language"]
+    section_keys = ["id", "answer_id", "kb_id", "score", "label", "language", "group_hash"]
     section_keys = [f"section.{key}" for key in section_keys]
 
     # get the data

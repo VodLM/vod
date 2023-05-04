@@ -13,6 +13,7 @@ import elasticsearch as es
 import numpy as np
 import rich.progress
 from elasticsearch import helpers as es_helpers
+from loguru import logger
 
 from raffle_ds_research.tools.index_tools import retrieval_data_type as rtypes
 from raffle_ds_research.tools.index_tools import search_server
@@ -69,7 +70,7 @@ class Bm25Client(search_server.SearchClient):
         vector: Optional[rtypes.Ts] = None,  # noqa: ARG
         label: Optional[list[str | int]] = None,
         top_k: int = 3,
-    ) -> rtypes.RetrievalBatch[rtypes.Ts]:
+    ) -> rtypes.RetrievalBatch[np.ndarray]:
         """Search elasticsearch for the batch of text queries using `msearch`. NB: `vector` is not used here."""
         if self.supports_label and label is None:
             warnings.warn("This index supports labels, but no label is provided.", stacklevel=2)
@@ -91,10 +92,7 @@ class Bm25Client(search_server.SearchClient):
             scores_ = np.pad(scores_, (0, top_k - len(scores_)), constant_values=-np.inf)
             scores.append(scores_)
 
-        return rtypes.RetrievalBatch(
-            indices=np.stack(indices),
-            scores=np.stack(scores),
-        )
+        return rtypes.RetrievalBatch(indices=np.stack(indices), scores=np.stack(scores))
 
     def _make_queries(self, texts: list[str], *, top_k: int, labels: Optional[list[str | int]] = None) -> list:
         if labels is None:
@@ -103,7 +101,7 @@ class Bm25Client(search_server.SearchClient):
         def _make_search_body(text: str, label: Optional[str | int] = None) -> dict[str, Any]:
             body = {"should": {"match": {BODY_KEY: text}}}
             if label is not None:
-                body["filter"] = {"term": {LABEL_KEY: label}}
+                body["filter"] = {"term": {LABEL_KEY: label}}  # type: ignore
             return {"query": {"bool": body}}
 
         return [
@@ -146,7 +144,6 @@ class Bm25Master(search_server.SearchMaster[Bm25Client]):
         self._proc_kwargs = proc_kwargs
         self._input_texts = texts
         self._input_labels = labels
-        self.supports_label = labels is not None
         if index_name is None:
             index_name = f"auto-{uuid.uuid4().hex}"
         self._index_name = index_name
@@ -157,8 +154,13 @@ class Bm25Master(search_server.SearchMaster[Bm25Client]):
             input_size = len(texts)
         self._input_data_size = input_size
 
+    @property
+    def supports_label(self) -> bool:
+        """Whether the index supports labels."""
+        return self._input_labels is not None
+
     def _on_init(self) -> None:
-        if not self.supports_label:
+        if self._input_labels is None:
             stream = ({IDX_KEY: i, BODY_KEY: text} for i, text in enumerate(self._input_texts))
         else:
             stream = (
@@ -168,12 +170,14 @@ class Bm25Master(search_server.SearchMaster[Bm25Client]):
         stream = rich.progress.track(
             stream, description=f"Building ES index {self._index_name}", total=self._input_data_size
         )
-        ingest_data(stream, url=self.url, index_name=self._index_name, exist_ok=self._exist_ok)
+        maybe_ingest_data(stream, url=self.url, index_name=self._index_name, exist_ok=self._exist_ok)
 
     def _on_exit(self) -> None:
+        client = es.Elasticsearch(self.url)
         if not self._persistent:
-            client = es.Elasticsearch(self.url)
             client.indices.delete(index=self._index_name)
+        else:
+            client.indices.close(index=self._index_name)
 
     def _make_cmd(self) -> list[str]:
         return ["elasticsearch"]
@@ -183,12 +187,17 @@ class Bm25Master(search_server.SearchMaster[Bm25Client]):
         """Get the url of the search server."""
         return f"{self._host}:{self._port}"
 
+    @property
+    def service_info(self) -> str:
+        """Return the name of the service."""
+        return f"Elasticsearch[{self.url}]"
+
     def get_client(self) -> Bm25Client:
         """Get a client to the search server."""
         return Bm25Client(self.url, index_name=self._index_name, supports_label=self.supports_label)
 
 
-def ingest_data(
+def maybe_ingest_data(
     stream: Iterable[dict[str, Any]],
     *,
     url: str,
@@ -197,10 +206,12 @@ def ingest_data(
     exist_ok: bool = False,
 ) -> None:
     """Ingest data into Elasticsearch."""
-    asyncio.run(_async_ingest_data(stream, url=url, index_name=index_name, chunk_size=chunk_size, exist_ok=exist_ok))
+    asyncio.run(
+        _async_maybe_ingest_data(stream, url=url, index_name=index_name, chunk_size=chunk_size, exist_ok=exist_ok)
+    )
 
 
-async def _async_ingest_data(
+async def _async_maybe_ingest_data(
     stream: Iterable[dict[str, Any]],
     *,
     url: str,
@@ -211,9 +222,12 @@ async def _async_ingest_data(
     async with es.AsyncElasticsearch(url) as client:
         if await client.indices.exists(index=index_name):
             if exist_ok:
+                logger.info(f"Re-using existing ES index `{index_name}`")
+                await client.indices.open(index=index_name)
                 return
             raise RuntimeError(f"Index {index_name} already exists")
         try:
+            logger.info(f"Creating new ES index `{index_name}`")
             await client.indices.create(index=index_name)
             actions = ({"_index": index_name, "_source": eg} for eg in stream)
             await es_helpers.async_bulk(
