@@ -47,7 +47,7 @@ class Args(arguantic.Arguantic):
     bm25_weight: float = 1.0
 
     @pydantic.validator("cache_dir")
-    def _validate_cache_dir(cls, v: str | Path) -> pathlib.Path:
+    def _validate_cache_dir(cls, v: str | Path) -> pathlib.Path:  # noqa: N805
         return pathlib.Path(v).expanduser().resolve()
 
 
@@ -124,7 +124,7 @@ def run() -> None:  # noqa: PLR0915
     )
 
     # build the faiss index and save to disk
-    faiss_index = faiss_tools.build_faiss_master(sections_vectors, factory_string=args.factory_string)
+    faiss_index = faiss_tools.build_faiss_index(sections_vectors, factory_string=args.factory_string)
     faiss_path = Path(args.cache_dir, "index.faiss")
     faiss.write_index(faiss_index, str(faiss_path))
 

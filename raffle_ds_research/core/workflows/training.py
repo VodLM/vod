@@ -5,8 +5,10 @@ import functools
 import pathlib
 import typing
 
+import lightning as L
+import rich
+import torch
 import transformers
-from lightning import pytorch as pl
 
 from raffle_ds_research.core import config as core_config
 from raffle_ds_research.core import mechanics
@@ -31,7 +33,7 @@ class RetrievalTask:
 def index_and_train(
     ranker: Ranker,
     *,
-    trainer: pl.Trainer,
+    trainer: L.Trainer,
     train_factories: dict[K, mechanics.DatasetFactory],
     val_factories: dict[K, mechanics.DatasetFactory],
     vectors: dict[K, None | PrecomputedDsetVectors],
@@ -44,12 +46,16 @@ def index_and_train(
     parameters: typing.Optional[dict[str, float]] = None,
 ) -> Ranker:
     """Index the sections and train the ranker."""
+    barrier_fn = functools.partial(support._barrier_fn, trainer=trainer)
     task = _make_retrieval_task(
         train_factories=train_factories,
         val_factories=val_factories,
         vectors=vectors,
     )
+    if trainer.is_global_zero:
+        rich.print(task)
 
+    trainer.strategy.barrier("Init search engines..")
     with search_engine.build_search_engine(
         sections=task.sections.data,
         vectors=task.sections.vectors,
@@ -58,8 +64,10 @@ def index_and_train(
         faiss_enabled=support.is_engine_enabled(parameters, "faiss"),
         bm25_enabled=support.is_engine_enabled(parameters, "bm25"),
         skip_setup=not trainer.is_global_zero,
+        barrier_fn=barrier_fn,
+        gpu_devices=list(range(torch.cuda.device_count())),
     ) as master:
-        trainer.strategy.barrier("index-and-train-search-setup")
+        barrier_fn("index-and-train-search-setup")
         search_client = master.get_client()
 
         # instantiate the dataloader

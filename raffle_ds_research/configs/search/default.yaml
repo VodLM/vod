@@ -1,7 +1,13 @@
 faiss:
-  factory: Flat
+  factory: IVFauto,Flat
   metric: inner_product
   nprobe: 16
+  gpu:
+    use_float16: true
+    use_precomputed_tables: true
+    keep_indices_on_cpu: true
+    verbose: true
+    shard: true
 bm25:
   text_key: text
   group_key: group_hash

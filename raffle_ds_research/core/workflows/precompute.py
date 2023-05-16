@@ -3,11 +3,11 @@ from __future__ import annotations
 import dataclasses
 import functools
 import pathlib
-from typing import Callable, Literal, TypeVar
+from typing import Any, Callable, Literal, TypeVar
 
+import lightning as L  # noqa: N812
 import loguru
 import transformers
-from lightning import pytorch as pl
 
 from raffle_ds_research.core import config as core_config
 from raffle_ds_research.core.mechanics import dataset_factory
@@ -15,6 +15,10 @@ from raffle_ds_research.core.ml import Ranker
 from raffle_ds_research.tools import dstruct, pipes, predict_tools
 
 K = TypeVar("K")
+
+
+def _get_key(x: tuple) -> str:
+    return str(x[0])
 
 
 @dataclasses.dataclass(frozen=True)
@@ -29,7 +33,7 @@ def compute_vectors(
     factories: dict[K, dataset_factory.DatasetFactory],
     *,
     ranker: Ranker,
-    trainer: pl.Trainer,
+    trainer: L.Trainer,
     cache_dir: pathlib.Path,
     dataset_config: core_config.MultiDatasetFactoryConfig,
     collate_config: core_config.BaseCollateConfig,
@@ -37,7 +41,7 @@ def compute_vectors(
 ) -> dict[K, PrecomputedDsetVectors]:
     """Compute the vectors for a collection of datasets."""
     predict_fn: Callable[..., dstruct.TensorStoreFactory] = functools.partial(
-        _compute_field_vectors,
+        compute_dataset_vectors,
         ranker=ranker,
         trainer=trainer,
         collate_config=collate_config,
@@ -47,18 +51,22 @@ def compute_vectors(
     )
 
     # compute the vectors for each dataset
-    question_vecs = {key: predict_fn(factory, field="question") for key, factory in factories.items()}
-    section_vecs = {key: predict_fn(factory, field="section") for key, factory in factories.items()}
+    question_vecs = {
+        key: predict_fn(factory, field="question") for key, factory in sorted(factories.items(), key=_get_key)
+    }
+    section_vecs = {
+        key: predict_fn(factory, field="section") for key, factory in sorted(factories.items(), key=_get_key)
+    }
 
     # format the output and return
     return {key: PrecomputedDsetVectors(questions=question_vecs[key], sections=section_vecs[key]) for key in factories}
 
 
-def _compute_field_vectors(
-    factory: dataset_factory.DatasetFactory,
+def compute_dataset_vectors(
+    factory: dataset_factory.DatasetFactory | dstruct.SizedDataset[dict[str, Any]],
     *,
     ranker: Ranker,
-    trainer: pl.Trainer,
+    trainer: L.Trainer,
     tokenizer: transformers.PreTrainedTokenizerBase,
     collate_config: core_config.BaseCollateConfig,
     dataloader_config: core_config.DataLoaderConfig,
@@ -67,12 +75,16 @@ def _compute_field_vectors(
     validate_store: int = 10_000,
 ) -> dstruct.TensorStoreFactory:
     """Compute the vectors for a given dataset and field."""
-    locator = f"{factory.name}:{factory.split}({field})"
     model_output_key = {"question": "hq", "section": "hd"}[field]
     collate_fn = _init_predict_collate_fn(collate_config, field=field, tokenizer=tokenizer)
 
     # construct the dataset
-    dataset = factory(what=field)
+    if isinstance(factory, dataset_factory.DatasetFactory):
+        dataset = factory(what=field)
+        locator = f"{factory.name}:{factory.split}({field})"
+    else:
+        dataset = factory
+        locator = type(dataset).__name__
 
     # construct the `predict` function
     predict_fn = predict_tools.Predict(
@@ -90,16 +102,18 @@ def _compute_field_vectors(
         if predict_fn.validate_store(validate_store, raise_exc=False):
             loguru.logger.debug(f"{locator} - loading `{predict_fn.store_path}`")
             return predict_fn.read()
-        loguru.logger.warning(f"{locator} - Invalid store. Deleting it..")
-        predict_fn.rm()
+        if trainer.is_global_zero:
+            loguru.logger.warning(f"{locator} - Invalid store. Deleting it..")
+            predict_fn.rm()
 
     # create the store
+    trainer.strategy.barrier(f"{locator} - Creating vector store.")
     loguru.logger.info(f"{locator} - Creating vector store at `{predict_fn.store_path}`")
-    trainer.strategy.barrier(f"{locator} - Creating vector store..")
-    if trainer.global_rank == 0:
+    if trainer.is_global_zero:
         predict_fn.instantiate()
 
     # compute the vectors
+    trainer.strategy.barrier(f"{locator} - Computing vectors.")
     return predict_fn(
         trainer=trainer,
         loader_kwargs=dataloader_config,

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pathlib
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 import omegaconf
@@ -37,9 +37,10 @@ def build_search_engine(
     vectors: None | dstruct.SizedDataset[np.ndarray],
     config: SearchConfig,
     cache_dir: pathlib.Path,
-    skip_setup: bool = False,
     faiss_enabled: bool = True,
     bm25_enabled: bool = True,
+    skip_setup: bool = False,
+    barrier_fn: None | Callable[[str], None] = None,
 ) -> index_tools.MultiSearchMaster:
     """Build a search engine."""
     servers = {}
@@ -48,11 +49,12 @@ def build_search_engine(
         if vectors is None:
             raise ValueError("`vectors` must be provided if `faiss_enabled`")
 
-        faiss_server = index_tools.build_faiss_master(
+        faiss_server = index_tools.build_faiss_index(
             vectors=vectors,
             config=config.faiss,
             cache_dir=cache_dir,
             skip_setup=skip_setup,
+            barrier_fn=barrier_fn,
         )
         servers["faiss"] = faiss_server
 

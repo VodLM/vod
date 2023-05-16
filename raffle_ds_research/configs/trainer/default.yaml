@@ -16,4 +16,5 @@ fast_dev_run: false
 gradient_clip_val: 0.5
 accumulate_grad_batches: ${batch_size.gradient_accumulation_steps}
 accelerator: ${default_trainer_accelerator:}
+devices: ${resources.n_devices}
 precision: 32

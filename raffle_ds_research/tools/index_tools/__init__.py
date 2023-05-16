@@ -7,7 +7,7 @@ from .index_factory import (
     Bm25FactoryConfig,
     FaissFactoryConfig,
     build_bm25_master,
-    build_faiss_master,
+    build_faiss_index,
     build_search_client,
 )
 from .lookup_index import LookupIndex, LookupIndexbyGroup

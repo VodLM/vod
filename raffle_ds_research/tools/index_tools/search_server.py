@@ -104,8 +104,17 @@ class SearchMaster(Generic[Sc], abc.ABC):
         cmd = self._make_cmd()
         env = self._make_env()
 
+        # setup log files
         stdout_file = pathlib.Path(f"{self.service_name}.stdout.log")
+        loguru.logger.debug(f"Writing stdout to `{stdout_file.absolute()}`")
+        if stdout_file.exists():
+            stdout_file.unlink()
         stderr_file = pathlib.Path(f"{self.service_name}.stderr.log")
+        loguru.logger.debug(f"Writing stderr to `{stderr_file.absolute()}`")
+        if stderr_file.exists():
+            stderr_file.unlink()
+
+        # spawn server
         server_proc = subprocess.Popen(
             cmd,
             env=env,
@@ -120,7 +129,7 @@ class SearchMaster(Generic[Sc], abc.ABC):
             if time.time() - t0 > self._timeout:
                 server_proc.terminate()
                 raise TimeoutError(f"Couldn't ping the server after {self._timeout:.0f}s.")
-
+        loguru.logger.info(f"Spawned {self.service_info} in {time.time() - t0:.1f}s.")
         return server_proc
 
     @property

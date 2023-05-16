@@ -5,10 +5,10 @@ import os
 import pathlib
 from typing import Any, Callable, Iterable
 
+import lightning as L  # noqa: N812
 import loguru
 import numpy as np
 import omegaconf
-from lightning import pytorch as pl
 
 from raffle_ds_research.core import config as core_config
 from raffle_ds_research.core.mechanics import dataset_factory
@@ -24,11 +24,12 @@ def _do_nothing(*args, **kwargs):  # noqa: ANN
 
 def train_with_index_updates(
     *,
-    trainer: pl.Trainer,
+    trainer: L.Trainer,
     ranker_generator: Callable[..., Ranker],
     config: core_config.TrainWithIndexUpdatesConfigs | omegaconf.DictConfig,
 ) -> Ranker:
     """Train a ranking model while periodically updating the index."""
+    barrier = functools.partial(support._barrier_fn, trainer=trainer)
     if isinstance(config, omegaconf.DictConfig):
         config = core_config.TrainWithIndexUpdatesConfigs.parse(config)
 
@@ -41,11 +42,12 @@ def train_with_index_updates(
     if len(update_steps) == 0:
         raise ValueError("No index update steps were defined.")
 
-    # setup the distributed environment, if any.
-    # This is done automatically by the trainer when lauching a task (hacky, but working).
-    # Might be unnecessary in future versions of lightning.
-    if trainer.strategy.launcher is not None:
-        trainer.strategy.launcher.launch(_do_nothing)
+    # Setup the distributed environment, skipping this step would break the `barrier()`
+    loguru.logger.info("Setting up environment...")
+    _setup_distributed_env(trainer=trainer, config=config, ranker=ranker)
+
+    barrier("Setup done.")
+    barrier("Training starting..")
 
     # Train the model for each period
     update_steps = update_steps + [None]
@@ -86,6 +88,8 @@ def train_with_index_updates(
                 vectors = {dset: None for dset in factories}
 
             # benchmark the ranker
+            barrier("running benchmarks..")
+            ranker.cpu()  # <- free up the GPU memory so it can be used to build faiss
             if trainer.is_global_zero and period_idx > 0 or config.schedule.benchmark_on_init:
                 loguru.logger.info(f"Running benchmarks ... (period={1+period_idx})")
                 for j, dset in enumerate(config.dataset.benchmark):
@@ -114,6 +118,7 @@ def train_with_index_updates(
                 continue
 
             # potentially re-init the ranker
+            barrier("Setting up ranker..")
             if config.schedule.reset_model_on_period_start:
                 loguru.logger.info(f"Re-initializing the Ranker ... (period={1+period_idx}))")
                 ranker = ranker_generator()
@@ -137,6 +142,7 @@ def train_with_index_updates(
                     ),
                 ],  # type: ignore
             ):
+                ranker.cpu()  # <- free up the GPU memory so it can be used to build faiss
                 ranker = training.index_and_train(
                     ranker=ranker,
                     trainer=trainer,
@@ -154,6 +160,32 @@ def train_with_index_updates(
                 loguru.logger.info(f"Training period completed ({1+period_idx})")
 
     return ranker
+
+
+def _setup_distributed_env(
+    *, trainer: L.Trainer, ranker: Ranker, config: core_config.TrainWithIndexUpdatesConfigs
+) -> None:
+    """Setup the distributed environment, if any.
+
+    This is done automatically by the trainer when lauching a task (hacky, but working).
+    Might be unnecessary in future versions of lightning.
+    If not done, `barrier()` will not work as expected.
+    """
+    with caching.CacheManager(
+        pathlib.Path(config.sys.cache_dir, "tmp-preds"), delete_existing=True, persist=False
+    ) as tmpdir:
+        factory = next(iter(_get_dset_factories(config.dataset.get("validation"), config=config.dataset).values()))
+        dset = factory(what="question").select(range(3))
+        precompute.compute_dataset_vectors(
+            factory=dset,  # type: ignore
+            ranker=ranker,
+            trainer=trainer,
+            collate_config=config.collates.benchmark,
+            dataloader_config=config.dataloaders.predict,
+            tokenizer=config.dataset.tokenizer,
+            cache_dir=tmpdir,
+            field="question",
+        )
 
 
 def _get_dset_factories(
@@ -194,11 +226,11 @@ def _pretty_steps(steps: list[int], max_steps: int = 6) -> str:
 class WithCallbacks:
     """Context manager to temporarily add a `StopAtCallback` to a trainer."""
 
-    def __init__(self, trainer: pl.Trainer, callbacks: list[pl.Callback]) -> None:
+    def __init__(self, trainer: L.Trainer, callbacks: list[L.Callback]) -> None:
         self.trainer = trainer
         self.callbacks = callbacks
 
-    def __enter__(self) -> pl.Trainer:  # noqa: D105
+    def __enter__(self) -> L.Trainer:  # noqa: D105
         self.trainer.callbacks.extend(self.callbacks)  # type: ignore
         return self.trainer
 
@@ -207,33 +239,33 @@ class WithCallbacks:
             self.trainer.callbacks.remove(callback)  # type: ignore
 
 
-class StopAtCallback(pl.Callback):
+class StopAtCallback(L.Callback):
     """Stops the training after a given number of steps."""
 
     def __init__(self, stop_at: int):
         super().__init__()
         self.stop_at = stop_at
 
-    def on_fit_start(self, trainer: pl.Trainer, pl_module: pl.LightningModule) -> None:  # noqa: ARG002
+    def on_fit_start(self, trainer: L.Trainer, pl_module: L.LightningModule) -> None:  # noqa: ARG002
         """Called when the training begins."""
         trainer.should_stop = False
 
     def on_train_batch_start(
-        self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", batch: Any, batch_idx: int  # noqa: ANN, ARG
+        self, trainer: "L.Trainer", pl_module: "L.LightningModule", batch: Any, batch_idx: int  # noqa: ANN, ARG
     ) -> None:
         """Called when the training batch ends."""
         if trainer.global_step >= self.stop_at:
             trainer.should_stop = True
 
 
-class OnFirstBatchCallback(pl.Callback):
+class OnFirstBatchCallback(L.Callback):
     """Log the first batch of the training."""
 
     def __init__(self, fn: Callable[[dict[str, Any]], Any]) -> None:
         self.fn = fn
 
     def on_train_batch_start(
-        self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", batch: Any, batch_idx: int  # noqa: ANN, ARG
+        self, trainer: "L.Trainer", pl_module: "L.LightningModule", batch: Any, batch_idx: int  # noqa: ANN, ARG
     ) -> None:
         """Called when the training batch starts."""
         if batch_idx == 0 and trainer.global_step == 0 and trainer.is_global_zero:

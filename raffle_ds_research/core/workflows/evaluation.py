@@ -39,6 +39,7 @@ def benchmark(
         cache_dir=cache_dir,
         faiss_enabled=support.is_engine_enabled(parameters, "faiss"),
         bm25_enabled=support.is_engine_enabled(parameters, "bm25"),
+        gpu_devices=list(range(torch.cuda.device_count())),
     ) as master:
         search_client = master.get_client()
 

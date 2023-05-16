@@ -1,3 +1,2 @@
 _target_: lightning.pytorch.strategies.DDPStrategy
-accelerator: gpu
-devices: ${resources.n_devices}
+find_unused_parameters: true

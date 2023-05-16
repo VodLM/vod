@@ -35,6 +35,14 @@ class ConcatenatedSizedDataset(SizedDataset[T_co]):
         """Get the length of the indexable."""
         return sum(len(part) for part in self.parts)
 
+    def __str__(self) -> str:
+        """Get a string representation of the indexable."""
+        return f"{type(self).__name__}(parts={self.parts})"
+
+    def __repr__(self) -> str:
+        """Get a string representation of the indexable."""
+        return str(self)
+
 
 def _get_item_int(idx: int, parts: typing.Iterable[SizedDataset[T]]) -> T:
     i, part = _get_intersect(idx, parts)

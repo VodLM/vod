@@ -128,10 +128,11 @@ class FaissMaster(search_server.SearchMaster[FaissClient]):
         self,
         index_path: str | Path,
         nprobe: int = 8,
-        logging_level: str = "CRITICAL",
+        logging_level: str = "DEBUG",
         host: str = "http://localhost",
         port: int = 7678,
         skip_setup: bool = False,
+        serve_on_gpu: bool = False,
     ):
         super().__init__(skip_setup=skip_setup)
         self.index_path = Path(index_path)
@@ -139,12 +140,18 @@ class FaissMaster(search_server.SearchMaster[FaissClient]):
         self.logging_level = logging_level
         self.host = host
         self.port = port
+        self.serve_on_gpu = serve_on_gpu
 
     def _make_env(self) -> dict[str, str]:
         env = copy(dict(os.environ))
         if "KMP_DUPLICATE_LIB_OK" not in env:
             env["KMP_DUPLICATE_LIB_OK"] = "TRUE"
         env["LOGURU_LEVEL"] = self.logging_level.upper()
+        # add the local path, so importing the library will work.
+        if "PYTHONPATH" not in env:
+            env["PYTHONPATH"] = str(Path.cwd())
+        else:
+            os.environ["PYTHONPATH"] = f"{os.environ['PYTHONPATH']}:{Path.cwd()}"
         return env
 
     def _make_cmd(self) -> list[str]:
@@ -162,6 +169,7 @@ class FaissMaster(search_server.SearchMaster[FaissClient]):
             str(self.port),
             "--logging-level",
             str(self.logging_level),
+            *(["--serve-on-gpu"] if self.serve_on_gpu else []),
         ]
 
     def get_client(self) -> FaissClient:

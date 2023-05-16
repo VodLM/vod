@@ -11,7 +11,6 @@ defaults:
 seed: 1
 
 dataset:
-# dataset groups
   train:
     - frank.A.en-pos:train
     - squad.en:train
@@ -89,9 +88,10 @@ schedule:
 
 search:
   faiss:
-    factory: IVF2048,Flat
+    factory: OPQ32,IVFauto,PQ32x8
     metric: inner_product
     nprobe: 32
+    train_size: 1_000_000
   bm25:
     text_key: text
     group_key: group_hash

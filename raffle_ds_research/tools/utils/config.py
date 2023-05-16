@@ -42,7 +42,7 @@ def register_omgeaconf_resolvers() -> None:  # noqa: C901
     GIT_HASH = git_revision_hash()  # noqa: N806
     GIT_HASH_SHORT = git_revision_short_hash()  # noqa: N806
     GIT_BRANCH_NAME = git_branch_name()  # noqa: N806
-    SEED = randint(0, 100_000)  # noqa: N806
+    SEED = randint(0, 100_000)  # noqa: N806, S311
 
     def _default_trainer_accelerator(*args: Any, **kwargs: Any) -> str:
         if N_GPUS == 0:

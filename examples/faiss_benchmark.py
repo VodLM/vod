@@ -70,9 +70,9 @@ class Args(arguantic.Arguantic):
     n_samples: int = -1
     omp_num_threads: int = 32
 
-    @pydantic.validator("cache_dir", pre=True, always=True, allow_reuse=True)
+    @pydantic.validator("cache_dir", pre=True, always=True, allow_reuse=True)  # type: ignore
     @pydantic.validator("output_dir", pre=True, always=True, allow_reuse=True)
-    def _validate_dir(cls, v: str | pathlib.Path) -> pathlib.Path:
+    def _validate_dir(cls, v: str | pathlib.Path) -> pathlib.Path:  # noqa: N805
         return pathlib.Path(v).expanduser().resolve()
 
     @property

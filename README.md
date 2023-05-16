@@ -28,6 +28,10 @@ sudo apt-get update && sudo apt-get install elasticsearch
 sudo /bin/systemctl daemon-reload
 sudo /bin/systemctl enable elasticsearch.service
 sudo systemctl start elasticsearch.service
+
+
+# Install faiss-gpu on A100 - see `https://github.com/kyamagu/faiss-wheels/issues/54`
+# dl wheels from  `https://github.com/kyamagu/faiss-wheels/releases/tag/v1.7.3`
 ```
 
 ## Usage
@@ -60,3 +64,21 @@ poetry run train +recipe=frank-t5-base
 ```shell
 # api stuff, coming soon
 ```
+
+## Tips and Tricks
+
+### Build faiss-gpu
+
+```bash
+# install mamba
+curl -L -O "https://github.com/conda-forge/miniforge/releases/latest/download/Mambaforge-$(uname)-$(uname -m).sh"
+bash Mambaforge-$(uname)-$(uname -m).sh
+# setup base env - try to run it, or follow the script step by step
+bash setup-mamba.sh
+# build faiss - try to run it, or follow the script step by step
+bash build-faiss.sh
+```
+
+### Slow faiss initialization on GPU
+
+Faiss can take up to 30min to compile CUDA kernels. See [this GitHub issue](https://github.com/facebookresearch/faiss/issues/1177).

@@ -49,7 +49,7 @@ collates:
     n_sections: 16
     max_pos_sections: 4
     prefetch_n_sections: 300
-    post_filter: ensure_match
+    post_filter: null
     do_sample: false
     question_max_length: ${collates.predict.question_max_length}
     section_max_length:  ${collates.predict.section_max_length}

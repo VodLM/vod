@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pathlib
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 import faiss
 import numpy as np
@@ -10,6 +10,7 @@ from loguru import logger
 
 from raffle_ds_research.tools import dstruct, pipes
 from raffle_ds_research.tools.index_tools import bm25_tools, faiss_tools, search_server
+from raffle_ds_research.tools.index_tools.faiss_tools.build_gpu import FaissGpuConfig
 
 FAISS_METRICS = {
     "l2": faiss.METRIC_L2,
@@ -29,9 +30,10 @@ class FaissFactoryConfig(pydantic.BaseModel):
     nprobe: int = 16
     metric: int = faiss.METRIC_INNER_PRODUCT
     train_size: Optional[int] = None
-    logging_level: str = "CRITICAL"
+    logging_level: str = "DEBUG"
     host: str = "http://localhost"
     port: int = 7678
+    gpu: Optional[FaissGpuConfig] = None
 
     @pydantic.validator("metric", pre=True)
     def _validate_metric(cls, v: str | int) -> int:
@@ -73,16 +75,20 @@ def build_search_client(
     config: dict[str, Any],
     cache_dir: str | pathlib.Path,
     skip_setup: bool = False,
+    barrier_fn: None | Callable[[str], None] = None,
 ) -> search_server.SearchMaster:
     """Build a search Master client."""
+    if sections is not None and vectors is not None and len(sections) != len(vectors):
+        raise ValueError(f"Sections and vectors must have the same length. Found: {len(sections)} != {len(vectors)}")
     if index_type == "faiss":
         if vectors is None:
             raise ValueError("Must provide vectors for `faiss` index")
-        return build_faiss_master(
+        return build_faiss_index(
             vectors=vectors,
             config=FaissFactoryConfig(**config),
             cache_dir=cache_dir,
             skip_setup=skip_setup,
+            barrier_fn=barrier_fn,
         )
     if index_type == "bm25":
         if sections is None:
@@ -94,48 +100,6 @@ def build_search_client(
         )
 
     raise ValueError(f"Unknown index type `{index_type}`")
-
-
-def build_faiss_master(
-    vectors: dstruct.SizedDataset[np.ndarray],
-    *,
-    config: FaissFactoryConfig,
-    cache_dir: str | pathlib.Path,
-    skip_setup: bool = False,
-) -> search_server.SearchMaster:
-    """Build a faiss index."""
-    index_fingerprint = f"{pipes.fingerprint(vectors)}-{config.fingerprint()}"
-    logger.info(
-        f"Init. faiss index `{index_fingerprint}`, "
-        f"factory: `{config.factory}`, "
-        f"metric: `{FAISS_METRICS_INV[config.metric]}`, "
-        f"train_size: `{config.train_size}`"
-    )
-    index_path = pathlib.Path(cache_dir, f"{index_fingerprint}.faiss")
-
-    if not skip_setup and not index_path.exists():
-        logger.info(f"Building faiss index at `{index_path}`")
-        index = faiss_tools.build_faiss_master(
-            vectors=vectors,
-            factory_string=config.factory,
-            faiss_metric=config.metric,
-            train_size=config.train_size,
-        )
-        faiss.write_index(index, str(index_path))
-    else:
-        logger.info(f"Loading existing faiss index from `{index_path}`")
-
-    if not index_path.exists():
-        raise FileNotFoundError(f"Could not find index at {index_path}")
-
-    return faiss_tools.FaissMaster(
-        index_path=index_path,
-        nprobe=config.nprobe,
-        logging_level=config.logging_level,
-        host=config.host,
-        port=config.port,
-        skip_setup=skip_setup,
-    )
 
 
 def build_bm25_master(
@@ -161,4 +125,55 @@ def build_bm25_master(
         persistent=config.persistent,
         exist_ok=True,
         skip_setup=skip_setup,
+    )
+
+
+def build_faiss_index(
+    vectors: dstruct.SizedDataset[np.ndarray],
+    *,
+    config: FaissFactoryConfig,
+    cache_dir: str | pathlib.Path,
+    skip_setup: bool = False,
+    barrier_fn: None | Callable[[str], None] = None,
+    serve_on_gpu: bool = False,
+) -> search_server.SearchMaster:
+    """Build a faiss index."""
+    index_fingerprint = f"{pipes.fingerprint(vectors)}-{config.fingerprint()}"
+    logger.info(
+        f"Init. faiss index `{index_fingerprint}`, "
+        f"factory: `{config.factory}`, "
+        f"metric: `{FAISS_METRICS_INV[config.metric]}`, "
+        f"train_size: `{config.train_size}`"
+    )
+    index_path = pathlib.Path(cache_dir, "indices", f"{index_fingerprint}.faiss")
+    index_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if not skip_setup:
+        if not index_path.exists():
+            logger.info(f"Building faiss index at `{index_path}`")
+            index = faiss_tools.build_faiss_index(
+                vectors=vectors,
+                factory_string=config.factory,
+                faiss_metric=config.metric,
+                train_size=config.train_size,
+                gpu_config=config.gpu,
+            )
+            faiss.write_index(index, str(index_path))
+        else:
+            logger.info(f"Loading existing faiss index from `{index_path}`")
+
+    if barrier_fn is not None:
+        barrier_fn(f"faiss built : {index_path.name}")
+
+    if not index_path.exists():
+        raise FileNotFoundError(f"Could not find index at `{index_path}`")
+
+    return faiss_tools.FaissMaster(
+        index_path=index_path,
+        nprobe=config.nprobe,
+        logging_level=config.logging_level,
+        host=config.host,
+        port=config.port,
+        skip_setup=skip_setup,
+        serve_on_gpu=serve_on_gpu,
     )

@@ -107,7 +107,7 @@ def _download_and_parse_frank(
     if not fs.exists(path):
         raise FileNotFoundError(f"Path {path} does not exist on storage {fs}.")
     full_frank_split = None
-    for part_path in track(fs.ls(path), description=f"Processing Frank {split}"):
+    for part_path in track(fs.ls(path), description=f"Processing Frank {split.value}"):
         if not fs.exists(Path(part_path, "sections.json")):
             rich.print(f"Skipping {part_path} (no sections.json)")
             continue
@@ -117,7 +117,7 @@ def _download_and_parse_frank(
         else:
             full_frank_split += frank_part
     if full_frank_split is None:
-        raise ValueError(f"Frank {split} is empty.")
+        raise ValueError(f"Frank {split.value} is empty.")
     return full_frank_split
 
 

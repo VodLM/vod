@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import argparse
-import os
 import re
-from pathlib import Path
 
 import faiss
 import numpy as np
@@ -16,6 +14,7 @@ from loguru import logger
 
 from raffle_ds_research.tools.index_tools import io
 from raffle_ds_research.tools.index_tools.faiss_tools import SearchFaissQuery
+from raffle_ds_research.tools.index_tools.faiss_tools.build_gpu import FaissGpuConfig
 from raffle_ds_research.tools.index_tools.faiss_tools.models import (
     FaissSearchResponse,
     FastFaissSearchResponse,
@@ -33,7 +32,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--host", type=str, default="localhost")
     parser.add_argument("--port", type=int, default=7678)
     parser.add_argument("--logging-level", type=str, default="INFO")
-    parser.add_argument("--log-dir", type=str, default=None)
+    parser.add_argument("--serve-on-gpu", action="store_true", default=False)
     return parser.parse_args()
 
 
@@ -46,11 +45,13 @@ def init_index(arguments: argparse.Namespace) -> faiss.Index:
 
 
 args = parse_args()
-if args.log_dir is not None:
-    logger.add(Path(args.log_dir, f"{os.getpid()}-faiss_server.log"), level="DEBUG")  # todos
 app = FastAPI()
 logger.info("Starting API")
 faiss_index = init_index(args)
+if args.serve_on_gpu:
+    logger.info("Using GPU")
+    co = FaissGpuConfig().cloner_options()
+    faiss_index = faiss.index_cpu_to_all_gpus(faiss_index, co=co)
 
 
 @app.get("/")

@@ -11,13 +11,13 @@ defaults:
 seed: 1
 
 dataset:
-  subset_size: 100
-  filter_unused_sections: true
-  train: frank.A.en-pos:train
-  validation: frank.A.en-pos:val
+  subset_size: null
+  filter_unused_sections: false
+  train: frank.A.en:train
+  validation: frank.A.en:val
   benchmark:
-    - frank.A.en-pos:val
-    - frank.B.en-pos:val
+    - frank.A.en:val
+    - frank.B.en:val
 
 schedule:
   benchmark_on_init: false
@@ -25,7 +25,7 @@ schedule:
 batch_size:
   per_device: 4
   per_device_eval: 8
-  per_device_predict: 10
+  per_device_predict: 512
 
 resources:
   num_workers: 1

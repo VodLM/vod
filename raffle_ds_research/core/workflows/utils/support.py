@@ -7,7 +7,9 @@ import typing
 from typing import Any, Callable, Optional, TypeVar
 
 import datasets
+import lightning as L  # noqa: N812
 import numpy as np
+import rich
 import transformers
 from loguru import logger
 from torch.utils import data as torch_data
@@ -162,3 +164,14 @@ def _concat_data(data: list[D]) -> D:
         return datasets.concatenate_datasets(data)  # type: ignore
 
     return dstruct.ConcatenatedSizedDataset(data)  # type: ignore
+
+
+def _barrier_fn(name: str, trainer: L.Trainer) -> None:
+    """Barrier to synchronize all processes."""
+    rich.print(
+        f"[bold yellow][Rank {(trainer.global_rank + 1)} / {trainer.world_size}][/bold yellow] waiting: `{name}` ..."
+    )
+    trainer.strategy.barrier(name)
+    rich.print(
+        f"[bold green][Rank {(trainer.global_rank + 1)} / {trainer.world_size}][/bold green] completed: `{name}` ..."
+    )
