@@ -378,7 +378,7 @@ def _populate_index_multigpu(  # noqa: PLR0912
     )
 
     # add the vectors
-    with WithTimer(f"Populating index ({steps} steps)", logger.info):
+    with WithTimer(f"Populating index ({len(steps)} steps)", logger.info):
         for i_slice, xs in tqdm(vectors_batch_iter, desc="Adding vectors to sharded index", total=len(steps)):
             i0 = i_slice.start
             i1 = i0 + xs.shape[0]

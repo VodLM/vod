@@ -13,22 +13,23 @@ if __name__ == "__main__":
     if output_file.exists():
         output_file.unlink()
     base_config = {
-        "train_size": 1_000_000,
+        "n_trials": 1_000,
+        "use_float16": True,
         "verbose": False,
     }
 
     parameter_groups = [
         [
-            {"nvecs": 1_000_000},
-            {"nvecs": 10_000_000},
-        ],
-        [{"use_float16": True}, {"use_float16": False}],
+            {"nvecs": 1_000_000, "train_size": None},
+            {"nvecs": 10_000_000, "train_size": 1_000_000},
+            {"nvecs": 10_000_000, "train_size": None},
+            {"nvecs": 100_000_000, "train_size": 10_000_000},
+        ][::-1],
         [{"serve_on_gpu": False}, {"serve_on_gpu": True}],
         [
             {"factory": "IVFauto,Flat"},
             {"factory": "IVFauto,PQ32x8"},
             {"factory": "OPQ32,IVFauto,PQ32x8"},
-            {"factory": "OPQ32_512,IVFauto,PQ32x8"},
         ],
     ]
     # multiply the parameters into a flat list
@@ -37,13 +38,13 @@ if __name__ == "__main__":
 
     for p in parameters:
         rich.print(p)
-        args = Args(**base_config, **p)
+        args = Args(**{**base_config, **p})
         try:
             r = build_and_eval_index(args)
             r["status"] = "success"
         except Exception as e:
             rich.print(f"[red]Failed to run with {p}")
-            r = {"status": "failed", "error": str(e), "args": args.dict()}
+            r = {"status": "failed", "error": str(e), "args": args.dict(), "params": p}
         with output_file.open("a") as f:
             f.write(json.dumps(r) + "\n")
         rich.print(r)

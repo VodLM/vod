@@ -41,6 +41,7 @@ def build_search_engine(
     bm25_enabled: bool = True,
     skip_setup: bool = False,
     barrier_fn: None | Callable[[str], None] = None,
+    serve_on_gpu: bool = False,
 ) -> index_tools.MultiSearchMaster:
     """Build a search engine."""
     servers = {}
@@ -55,6 +56,7 @@ def build_search_engine(
             cache_dir=cache_dir,
             skip_setup=skip_setup,
             barrier_fn=barrier_fn,
+            serve_on_gpu=serve_on_gpu,
         )
         servers["faiss"] = faiss_server
 

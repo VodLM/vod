@@ -76,6 +76,7 @@ def build_search_client(
     cache_dir: str | pathlib.Path,
     skip_setup: bool = False,
     barrier_fn: None | Callable[[str], None] = None,
+    serve_on_gpu: bool = False,
 ) -> search_server.SearchMaster:
     """Build a search Master client."""
     if sections is not None and vectors is not None and len(sections) != len(vectors):
@@ -89,6 +90,7 @@ def build_search_client(
             cache_dir=cache_dir,
             skip_setup=skip_setup,
             barrier_fn=barrier_fn,
+            serve_on_gpu=serve_on_gpu,
         )
     if index_type == "bm25":
         if sections is None:

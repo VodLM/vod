@@ -7,7 +7,6 @@ import typing
 
 import lightning as L
 import rich
-import torch
 import transformers
 
 from raffle_ds_research.core import config as core_config
@@ -44,6 +43,7 @@ def index_and_train(
     eval_dataloader_config: core_config.DataLoaderConfig,
     cache_dir: pathlib.Path,
     parameters: typing.Optional[dict[str, float]] = None,
+    serve_on_gpu: bool = False,
 ) -> Ranker:
     """Index the sections and train the ranker."""
     barrier_fn = functools.partial(support._barrier_fn, trainer=trainer)
@@ -65,7 +65,7 @@ def index_and_train(
         bm25_enabled=support.is_engine_enabled(parameters, "bm25"),
         skip_setup=not trainer.is_global_zero,
         barrier_fn=barrier_fn,
-        gpu_devices=list(range(torch.cuda.device_count())),
+        serve_on_gpu=serve_on_gpu,
     ) as master:
         barrier_fn("index-and-train-search-setup")
         search_client = master.get_client()

@@ -10,6 +10,11 @@ defaults:
 
 seed: 1
 
+
+benchmark_search:
+  faiss:
+    factory: Flat
+
 dataset:
   subset_size: null
   filter_unused_sections: false

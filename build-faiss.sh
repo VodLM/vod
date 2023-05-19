@@ -1,6 +1,6 @@
 CURR_DIR=$(pwd)
 PYPATH=`which python`
-echo "Install faiss for $PYPATH"
+echo "Installing faiss for $PYPATH"
 pip install swig
 
 # Cloning faiss
@@ -10,10 +10,12 @@ git clone https://github.com/facebookresearch/faiss.git
 cd faiss
 
 # install Cmake, BLAS, MKL and swig
-mamba install -y -c conda-forge cmake==3.23.1 libblas liblapack mkl swig==4.1.1 numpy
+mamba install -y -c conda-forge cmake==3.23.1 libblas liblapack mkl mkl-include swig==4.1.1 numpy
 # mamba install -y -c rapidsai -c conda-forge -c nvidia raft-dask pylibraft
 
 # Build faiss `https://github.com/facebookresearch/faiss/blob/main/INSTALL.md`
+# check your cuda arch number at `https://developer.nvidia.com/cuda-gpus`
+# tips: use -jY to use Y cores
 rm -rf build/
 cmake \
 -DFAISS_ENABLE_RAFT=OFF \
@@ -21,8 +23,7 @@ cmake \
 -DFAISS_ENABLE_GPU=ON \
 -DFAISS_ENABLE_PYTHON=ON \
 -DCMAKE_BUILD_TYPE=Release \
--DCUDAToolkit_ROOT=/usr/local/cuda-11.8/ \
--DCMAKE_CUDA_ARCHITECTURES="80" \
+-DCMAKE_CUDA_ARCHITECTURES="80;86" \
 -DPython_EXECUTABLE=$PYPATH \
 -DCMAKE_INSTALL_PREFIX=$PYPATH \
 -B build .

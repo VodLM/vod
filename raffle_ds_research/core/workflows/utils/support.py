@@ -168,6 +168,9 @@ def _concat_data(data: list[D]) -> D:
 
 def _barrier_fn(name: str, trainer: L.Trainer) -> None:
     """Barrier to synchronize all processes."""
+    if trainer.world_size == 1:
+        return
+
     rich.print(
         f"[bold yellow][Rank {(trainer.global_rank + 1)} / {trainer.world_size}][/bold yellow] waiting: `{name}` ..."
     )

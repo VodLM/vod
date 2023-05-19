@@ -86,6 +86,11 @@ schedule:
       value: 0
       period: 50_000
 
+
+benchmark_search:
+  faiss:
+    factory: IVFauto,Flat
+
 search:
   faiss:
     factory: OPQ32,IVFauto,PQ32x8

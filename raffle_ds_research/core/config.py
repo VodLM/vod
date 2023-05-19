@@ -10,7 +10,7 @@ import hydra
 import omegaconf
 import pydantic
 import transformers
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 from typing_extensions import Self, Type
 
 from raffle_ds_research.core.mechanics.search_engine import SearchConfig
@@ -317,6 +317,22 @@ class SysConfig:
 
 
 @dataclasses.dataclass
+class SearchConfigs:
+    """Models the search engines for the training and benchmark steps."""
+
+    training: SearchConfig
+    benchmark: SearchConfig
+
+    @classmethod
+    def parse(cls: Type[Self], config: DictConfig) -> Self:
+        """Parse an omegaconf config into a CollateConfigs instance."""
+        return cls(
+            training=SearchConfig(**config.training),
+            benchmark=SearchConfig(**config.benchmark),
+        )
+
+
+@dataclasses.dataclass
 class TrainWithIndexUpdatesConfigs:
     """Models the configuration for a workflow that trains a model and periodically indexes the data."""
 
@@ -324,8 +340,9 @@ class TrainWithIndexUpdatesConfigs:
     dataloaders: DataLoaderConfigs
     collates: CollateConfigs
     schedule: ScheduleConfig
-    search: SearchConfig
+    search: SearchConfigs
     sys: SysConfig
+    benchmark_search_overrides: Optional[dict] = None
 
     @classmethod
     def parse(cls: Type[Self], config: DictConfig) -> Self:
@@ -334,14 +351,21 @@ class TrainWithIndexUpdatesConfigs:
         schedule_config = ScheduleConfig.parse(config.schedule)
         dataloaders = DataLoaderConfigs.parse(config.dataloaders)
         collates = CollateConfigs.parse(config.collates)
-        search = SearchConfig.parse(config.search)
         sys_config = SysConfig.parse(config.sys)
+
+        # parse the search configs. if benchmark_search is not specified, use the training search.
+        training_search = SearchConfig.parse(config.search)
+        if config.benchmark_search is None:
+            benchmark_search = training_search
+        else:
+            merged_config = OmegaConf.merge(config.search, config.benchmark_search)
+            benchmark_search = SearchConfig.parse(merged_config)  # type: ignore
 
         return cls(
             dataset=dataset,
             schedule=schedule_config,
             dataloaders=dataloaders,
             collates=collates,
-            search=search,
+            search=SearchConfigs(training=training_search, benchmark=benchmark_search),
             sys=sys_config,
         )

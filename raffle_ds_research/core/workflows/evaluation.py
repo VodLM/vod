@@ -30,6 +30,7 @@ def benchmark(
     cache_dir: pathlib.Path,
     parameters: Optional[dict[str, float]] = None,
     output_keys: Optional[list[str]] = None,
+    serve_on_gpu: bool = True,
 ) -> dict[str, float]:
     """Run benchmarks on a retrieval task."""
     with search_engine.build_search_engine(
@@ -39,7 +40,7 @@ def benchmark(
         cache_dir=cache_dir,
         faiss_enabled=support.is_engine_enabled(parameters, "faiss"),
         bm25_enabled=support.is_engine_enabled(parameters, "bm25"),
-        gpu_devices=list(range(torch.cuda.device_count())),
+        serve_on_gpu=serve_on_gpu,
     ) as master:
         search_client = master.get_client()
 

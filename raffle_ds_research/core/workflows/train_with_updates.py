@@ -18,10 +18,6 @@ from raffle_ds_research.core.workflows.utils import logging, support
 from raffle_ds_research.tools import caching, pipes
 
 
-def _do_nothing(*args, **kwargs):  # noqa: ANN
-    pass
-
-
 def train_with_index_updates(
     *,
     trainer: L.Trainer,
@@ -100,11 +96,12 @@ def train_with_index_updates(
                         factory=factories[dset],
                         vectors=vectors[dset],
                         metrics=config.dataset.metrics,
-                        search_config=config.search,
+                        search_config=config.search.benchmark,
                         collate_config=config.collates.benchmark,
                         dataloader_config=config.dataloaders.eval,
                         cache_dir=cache_dir,
                         parameters=parameters,
+                        serve_on_gpu=True,
                     )
                     logging.log(
                         {f"{dset.name}/{dset.split_alias}/{k}": v for k, v in metrics.items()},
@@ -150,12 +147,13 @@ def train_with_index_updates(
                     train_factories=_get_dset_factories(config.dataset.get("train"), config=config.dataset),
                     val_factories=_get_dset_factories(config.dataset.get("validation"), config=config.dataset),
                     tokenizer=config.dataset.tokenizer,
-                    search_config=config.search,
+                    search_config=config.search.training,
                     collate_config=config.collates.train,
                     train_dataloader_config=config.dataloaders.train,
                     eval_dataloader_config=config.dataloaders.eval,
                     cache_dir=cache_dir,
                     parameters=parameters,
+                    serve_on_gpu=False,
                 )
                 loguru.logger.info(f"Training period completed ({1+period_idx})")
 
