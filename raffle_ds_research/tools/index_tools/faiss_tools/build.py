@@ -25,7 +25,8 @@ def build_faiss_index(
         raise ValueError(f"Only 1D vectors can be handled. Found shape `{vector_shape}`")
 
     # Infer the number of centroids if needed.
-    factory_string = support.infer_factory_centroids(factory_string, train_size or len(vectors))
+    nvecs = len(vectors) if train_size is None else min(train_size, len(vectors))
+    factory_string = support.infer_factory_centroids(factory_string, nvecs)
     logger.info(f"Building index with factory string `{factory_string}`")
 
     if gpu_config is not None and torch.cuda.is_available():

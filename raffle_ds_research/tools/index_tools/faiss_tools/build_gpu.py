@@ -311,6 +311,10 @@ def build_faiss_index_multigpu(
         logger.info("Wrapping index with preprocessor.")
         index = faiss.IndexPreTransform(preprocessor, index)
 
+    # free memory
+    for res in gpu_config.gpu_resources():
+        res.noTempMemory()
+
     return index
 
 

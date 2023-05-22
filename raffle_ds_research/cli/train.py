@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import multiprocessing
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -8,7 +9,6 @@ import dotenv
 import hydra
 import loguru
 import omegaconf
-import richuru
 import torch
 from hydra.utils import instantiate
 from lightning_fabric import seed_everything
@@ -29,7 +29,7 @@ from raffle_ds_research.core.ml import Ranker  # noqa: E402
 from raffle_ds_research.tools.utils.config import register_omgeaconf_resolvers  # noqa: E402
 from raffle_ds_research.tools.utils.pretty import print_config  # noqa: E402
 
-richuru.install(rich_traceback=False)  # <- setup rich logging with loguru
+# richuru.install(rich_traceback=False)  # <- setup rich logging with loguru
 
 dotenv.load_dotenv(Path(__file__).parent / ".train.env")
 
@@ -57,7 +57,10 @@ class ModelGenerator:
 @hydra.main(config_path="../configs/", config_name="main", version_base="1.3")
 def run(config: DictConfig) -> None:
     """Train a ranker for a retrieval task."""
-    loguru.logger.debug(f"Multiprocessing method set to `{multiprocessing.get_start_method()}`")  # type: ignore
+    logger.debug(f"Multiprocessing method set to `{multiprocessing.get_start_method()}`")  # type: ignore
+    logger.debug(
+        f"Distributed: RANK={os.environ.get('GLOBAL_RANK', None)}, " f"WORLD_SIZE={os.environ.get('WORLD_SIZE', None)}"
+    )
     cli_utils.set_training_context()
     pl_utils.rank_zero_only(print_config)(config)
     exp_dir = Path()

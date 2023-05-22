@@ -21,10 +21,14 @@ class ConcatenatedSizedDataset(SizedDataset[T_co]):
 
     def __getitem__(self, idx: SliceType) -> T_co:
         """Get an item by index."""
-        if isinstance(idx, int):
+        if isinstance(idx, (int, np.int64, np.int32, np.uint64, np.uint32)):
             return _get_item_int(idx, self.parts)
 
         if isinstance(idx, slice):
+            if idx.start is None:
+                idx = slice(0, idx.stop, idx.step)
+            if idx.stop is None:
+                idx = slice(idx.start, len(self), idx.step)
             chunks = list(_get_interset_slice(idx, self.parts))
             chunks = (p[i] for i, p in chunks)
             return _join_results(chunks)

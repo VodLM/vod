@@ -10,22 +10,31 @@ defaults:
 
 seed: 1
 
+# dataset:
+#   train:
+#     - frank.A.en-pos:train
+#   validation:
+#     - frank.A.en-pos:val
+#   benchmark:
+#     - frank.A.en-pos:val
+
 dataset:
   train:
     - frank.A.en-pos:train
     - squad.en:train
+    - msmarco.en:train
   validation:
     - frank.A.en-pos:val
     - squad.en:val
+    - msmarco.en:val
   benchmark:
     - frank.A.en:val
     - frank.B.en:val
-    - squad.en:val
-
+    - msmarco.en:val
 
 model:
   compile: true
-  embedding_size: 1_024
+  embedding_size: 512
   use_pooler_layer: false
   optimizer:
     lr: 1e-4
@@ -39,7 +48,7 @@ model:
 
 resources:
   num_workers: 4
-  num_proc: 4
+  num_proc: 8
 
 batch_size:
   effective: 32
@@ -54,6 +63,7 @@ trainer:
   max_steps: 50_000
   limit_val_batches: 50
   val_check_interval: ${int_mul:${trainer.accumulate_grad_batches},300}
+  inference_mode: false  # https://github.com/Lightning-AI/lightning/issues/17175#issuecomment-1487074273
 
 
 collates:
@@ -66,13 +76,13 @@ collates:
   benchmark:
     n_sections: 300
     max_pos_sections: 100
-    prefetch_n_sections: 1000
+    prefetch_n_sections: 512
     do_sample: false
 
 schedule:
-  index_update_freq: 1_000
+  index_update_freq: 3_000
   reset_model_on_period_start: false
-  benchmark_on_init: true
+  benchmark_on_init: false
   parameters:
     faiss:
       mode: linear

@@ -160,6 +160,7 @@ def build_faiss_index(
                 train_size=config.train_size,
                 gpu_config=config.gpu,
             )
+            logger.info(f"Saving faiss index to `{index_path}`")
             faiss.write_index(index, str(index_path))
         else:
             logger.info(f"Loading existing faiss index from `{index_path}`")

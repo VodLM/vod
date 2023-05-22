@@ -169,6 +169,7 @@ def _concat_data(data: list[D]) -> D:
 def _barrier_fn(name: str, trainer: L.Trainer) -> None:
     """Barrier to synchronize all processes."""
     if trainer.world_size == 1:
+        rich.print(">> world size is 1, skipping barrier")
         return
 
     rich.print(

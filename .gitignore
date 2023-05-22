@@ -1,5 +1,5 @@
 faiss-index-benchmark/
-setup_vm.sh
+setup-vm-env.sh
 cache/
 runs/
 lightning_logs/

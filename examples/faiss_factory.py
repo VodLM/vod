@@ -1,6 +1,7 @@
 import functools
 import multiprocessing as mp
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -25,7 +26,7 @@ from raffle_ds_research.tools.index_tools.index_factory import FaissFactoryConfi
 class Args(arguantic.Arguantic):
     """Arguments for the script."""
 
-    nvecs: int = 10_000_000
+    nvecs: int = 100_000
     vdim: int = 512
     init_bs: int = 1_000
     train_size: Optional[int] = None
@@ -45,11 +46,13 @@ class Args(arguantic.Arguantic):
 
 def _get_cuda_device_info() -> dict[str, Any]:
     def _get_device_info() -> str:
-        line_as_bytes = subprocess.check_output("nvidia-smi -L", shell=True)
-        line = line_as_bytes.decode("ascii")
-        _, line = line.split(":", 1)
-        line, _ = line.split("(")
-        return line.strip()
+        content_as_bytes = subprocess.check_output("nvidia-smi -L", shell=True)
+        content = content_as_bytes.decode("ascii")
+        ptrn = re.compile(r"GPU (\d+): (?P<device>.*) \(UUID: (?P<uuid>.*)")
+        device_info = ptrn.search(content)
+        if device_info is None:
+            raise RuntimeError(f"Failed to parse `nvidia-smi -L` content={content}")
+        return device_info.groupdict()["device"]
 
     return {
         "device": _get_device_info(),
@@ -95,22 +98,14 @@ def build_and_eval_index(args: Args) -> dict[str, Any]:
 
         # generate some random data.
         if not vec_path.exists():
-            store = dstruct.TensorStoreFactory.instantiate(vec_path, shape=(args.nvecs, args.vdim))
-            vstore = store.open(create=True, delete_existing=False)
-            gn_values_fn = functools.partial(_gen_random_values, shape=vstore.shape)
-            # ids_chunks = (range(i, min(i + args.init_bs, args.nvecs)) for i in range(0, args.nvecs, args.init_bs))
-            # for _ in track((fill_values_fn(i) for i in ids_chunks), total=args.nvecs // args.init_bs):
-            #         pass
-            with mp.Pool(processes=max(1, os.cpu_count() - 2)) as pool:
-                ids_chunks = (range(i, min(i + args.init_bs, args.nvecs)) for i in range(0, args.nvecs, args.init_bs))
-                for ids, vec in track(pool.imap_unordered(gn_values_fn, ids_chunks), total=args.nvecs // args.init_bs):
-                    vstore[ids] = vec  # TODO: asynch write
-            if not vec_path.exists():
-                raise RuntimeError(f"Failed to write vectors to {vec_path}")
+            _write_store(args, vec_path)
 
         store = dstruct.TensorStoreFactory.from_path(vec_path)
         vectors = dstruct.as_lazy_array(store)
+        # vectors = np.random.randn(args.nvecs, args.vdim).astype(np.float32)
         logger.info(f"Vectors: {vectors.shape}")
+        if args.verbose:
+            rich.print(vectors[:])
 
         with Status("Waiting to free up memory..."):
             time.sleep(1)  # <-- this is a hack to get the memory usage to be more accurate
@@ -147,9 +142,40 @@ def build_and_eval_index(args: Args) -> dict[str, Any]:
     return {"times": times, "args": args.dict(), "cuda": _get_cuda_device_info(), "mem_usage": mem_usage}
 
 
+def _write_store(args: Args, vec_path: Path) -> None:
+    store = dstruct.TensorStoreFactory.instantiate(vec_path, shape=(args.nvecs, args.vdim))
+    vstore = store.open(create=True, delete_existing=False)
+    gn_values_fn = functools.partial(_gen_random_values, shape=vstore.shape)
+    futures = []
+    buffer_size = 10
+    with mp.Pool(processes=max(1, os.cpu_count() - 2)) as pool:
+        ids_chunks = (list(range(i, min(i + args.init_bs, args.nvecs))) for i in range(0, args.nvecs, args.init_bs))
+        for j, (ids, vec) in enumerate(
+            track(
+                pool.imap_unordered(gn_values_fn, ids_chunks),
+                total=args.nvecs // args.init_bs,
+                description="Generating random vectors",
+            )
+        ):
+            f = vstore[ids].write(vec)
+            futures.append(f)
+
+            # start consumming the queue
+            if j > buffer_size:
+                f = futures.pop(0)
+                f.result()
+
+                # wait for the rest of the futures to finish
+        for f in futures:
+            f.result()
+
+    if not vec_path.exists():
+        raise RuntimeError(f"Failed to write vectors to {vec_path}")
+
+
 def _gen_random_values(ids: list[int], *, shape: tuple[int, ...]) -> tuple[list[int], np.ndarray]:
-    ids = list(ids)
-    return ids, np.random.randn(len(ids), shape[1]).astype(np.float32)
+    rgn = np.random.RandomState(ids[0])
+    return ids, rgn.randn(len(ids), shape[1]).astype(np.float32)
 
 
 if __name__ == "__main__":

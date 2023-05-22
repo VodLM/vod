@@ -76,7 +76,7 @@ def compute_dataset_vectors(
 ) -> dstruct.TensorStoreFactory:
     """Compute the vectors for a given dataset and field."""
     model_output_key = {"question": "hq", "section": "hd"}[field]
-    collate_fn = _init_predict_collate_fn(collate_config, field=field, tokenizer=tokenizer)
+    collate_fn = init_predict_collate_fn(collate_config, field=field, tokenizer=tokenizer)
 
     # construct the dataset
     if isinstance(factory, dataset_factory.DatasetFactory):
@@ -122,7 +122,7 @@ def compute_dataset_vectors(
     )  # type: ignore
 
 
-def _init_predict_collate_fn(
+def init_predict_collate_fn(
     config: core_config.BaseCollateConfig,
     *,
     field: str,

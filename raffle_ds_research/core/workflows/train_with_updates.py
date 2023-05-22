@@ -9,6 +9,7 @@ import lightning as L  # noqa: N812
 import loguru
 import numpy as np
 import omegaconf
+from torch.utils import data as torch_data
 
 from raffle_ds_research.core import config as core_config
 from raffle_ds_research.core.mechanics import dataset_factory
@@ -18,14 +19,13 @@ from raffle_ds_research.core.workflows.utils import logging, support
 from raffle_ds_research.tools import caching, pipes
 
 
-def train_with_index_updates(
+def train_with_index_updates(  # noqa: C901
     *,
     trainer: L.Trainer,
     ranker_generator: Callable[..., Ranker],
     config: core_config.TrainWithIndexUpdatesConfigs | omegaconf.DictConfig,
 ) -> Ranker:
     """Train a ranking model while periodically updating the index."""
-    barrier = functools.partial(support._barrier_fn, trainer=trainer)
     if isinstance(config, omegaconf.DictConfig):
         config = core_config.TrainWithIndexUpdatesConfigs.parse(config)
 
@@ -41,7 +41,9 @@ def train_with_index_updates(
     # Setup the distributed environment, skipping this step would break the `barrier()`
     loguru.logger.info("Setting up environment...")
     _setup_distributed_env(trainer=trainer, config=config, ranker=ranker)
+    # trainer.strategy.setup_environment()
 
+    barrier = functools.partial(support._barrier_fn, trainer=trainer)
     barrier("Setup done.")
     barrier("Training starting..")
 
@@ -69,6 +71,16 @@ def train_with_index_updates(
             persist=period_idx == 0,  # keep the cache during the first period
         ) as cache_dir:
             factories = _get_dset_factories(config.dataset.get("all"), config=config.dataset)
+
+            # pre-process all datasets on global zero, this is done implicitely when loading a dataset
+            if trainer.is_global_zero:
+                for key, factory in factories.items():
+                    loguru.logger.debug(f"Pre-processing `{key}` ...")
+                    factory.get_qa_split()
+                    factory.get_sections()
+            barrier("Pre-processing done.")
+
+            # pre-compute the vectors for each dataset, this is deactivated when faiss is not in use
             if support.is_engine_enabled(parameters, "faiss"):
                 vectors = precompute.compute_vectors(
                     factories,
@@ -83,7 +95,7 @@ def train_with_index_updates(
                 loguru.logger.info("Faiss engine is disabled. Skipping vector pre-computation.")
                 vectors = {dset: None for dset in factories}
 
-            # benchmark the ranker
+            # benchmark the ranker on each dataset separately
             barrier("running benchmarks..")
             ranker.cpu()  # <- free up the GPU memory so it can be used to build faiss
             if trainer.is_global_zero and period_idx > 0 or config.schedule.benchmark_on_init:
@@ -103,15 +115,16 @@ def train_with_index_updates(
                         parameters=parameters,
                         serve_on_gpu=True,
                     )
-                    logging.log(
-                        {f"{dset.name}/{dset.split_alias}/{k}": v for k, v in metrics.items()},
-                        trainer=trainer,
-                        console=True,
-                        header=f"{dset.name}:{dset.split_alias} - Period {period_idx + 1}",
-                    )
+                    if metrics is not None:
+                        logging.log(
+                            {f"{dset.name}/{dset.split_alias}/{k}": v for k, v in metrics.items()},
+                            trainer=trainer,
+                            console=True,
+                            header=f"{dset.name}:{dset.split_alias} - Period {period_idx + 1}",
+                        )
 
             if end_step is None:
-                # we reached the end of the training
+                # If there is no defined `end_step`, we reached the end of the training
                 continue
 
             # potentially re-init the ranker
@@ -169,21 +182,19 @@ def _setup_distributed_env(
     Might be unnecessary in future versions of lightning.
     If not done, `barrier()` will not work as expected.
     """
-    with caching.CacheManager(
-        pathlib.Path(config.sys.cache_dir, "tmp-preds"), delete_existing=True, persist=False
-    ) as tmpdir:
-        factory = next(iter(_get_dset_factories(config.dataset.get("validation"), config=config.dataset).values()))
-        dset = factory(what="question").select(range(3))
-        precompute.compute_dataset_vectors(
-            factory=dset,  # type: ignore
-            ranker=ranker,
-            trainer=trainer,
-            collate_config=config.collates.benchmark,
-            dataloader_config=config.dataloaders.predict,
-            tokenizer=config.dataset.tokenizer,
-            cache_dir=tmpdir,
-            field="question",
-        )
+    factory = next(iter(_get_dset_factories(config.dataset.get("validation"), config=config.dataset).values()))
+    dset = factory(what="question").select(range(3))
+    collate_fn = precompute.init_predict_collate_fn(
+        config.collates.benchmark,
+        field="question",
+        tokenizer=config.dataset.tokenizer,
+    )
+    dl = torch_data.DataLoader(
+        dset,  # type: ignore
+        collate_fn=collate_fn,
+        **config.dataloaders.predict.dict(),
+    )
+    trainer.predict(model=ranker, dataloaders=dl)
 
 
 def _get_dset_factories(

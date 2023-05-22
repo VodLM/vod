@@ -5,6 +5,9 @@ defaults:
   - override /model/encoder: t5-xl
   - _self_
 
+model:
+  embedding_size: 1024
+
 batch_size:
   effective: 32
   per_device: 1
