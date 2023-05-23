@@ -6,9 +6,9 @@ import pathlib
 from typing import Any, Callable, Iterable
 
 import lightning as L  # noqa: N812
-import loguru
 import numpy as np
 import omegaconf
+from loguru import logger
 from torch.utils import data as torch_data
 
 from raffle_ds_research.core import config as core_config
@@ -29,18 +29,18 @@ def train_with_index_updates(  # noqa: C901
     if isinstance(config, omegaconf.DictConfig):
         config = core_config.TrainWithIndexUpdatesConfigs.parse(config)
 
-    loguru.logger.info("Instantiating the Ranker (init.)")
+    logger.info("Instantiating the Ranker (init.)")
     ranker: Ranker = ranker_generator()
 
     # Define the index update steps and the `PeriodicStoppingCallback` callback.
     update_steps = _infer_update_steps(trainer.max_steps, config.schedule.index_update_freq)
-    loguru.logger.info(f"Index will be updated at steps: {_pretty_steps(update_steps)}")
+    logger.info(f"Index will be updated at steps: {_pretty_steps(update_steps)}")
     if len(update_steps) == 0:
         raise ValueError("No index update steps were defined.")
 
     # Setup the distributed environment, skipping this step would break the `barrier()`
-    loguru.logger.info("Setting up environment...")
-    _setup_distributed_env(trainer=trainer, config=config, ranker=ranker)
+    logger.info("Setting up environment...")
+    _hacky_setup_distributed_env(trainer=trainer, config=config, ranker=ranker)
     # trainer.strategy.setup_environment()
 
     barrier = functools.partial(support._barrier_fn, trainer=trainer)
@@ -58,9 +58,7 @@ def train_with_index_updates(  # noqa: C901
             },
             trainer=trainer,
         )
-        loguru.logger.info(
-            f"Starting period {period_idx + 1}/{len(update_steps) - 1} (step {start_step} -> {end_step})"
-        )
+        logger.info(f"Starting period {period_idx + 1}/{len(update_steps) - 1} (step {start_step} -> {end_step})")
 
         # wrap everything in a temporary directory to avoid filling up the disk.
         # The temporary directory will be deleted at the end of each period except the first one
@@ -75,7 +73,7 @@ def train_with_index_updates(  # noqa: C901
             # pre-process all datasets on global zero, this is done implicitely when loading a dataset
             if trainer.is_global_zero:
                 for key, factory in factories.items():
-                    loguru.logger.debug(f"Pre-processing `{key}` ...")
+                    logger.debug(f"Pre-processing `{key}` ...")
                     factory.get_qa_split()
                     factory.get_sections()
             barrier("Pre-processing done.")
@@ -92,16 +90,16 @@ def train_with_index_updates(  # noqa: C901
                     dataloader_config=config.dataloaders.predict,
                 )
             else:
-                loguru.logger.info("Faiss engine is disabled. Skipping vector pre-computation.")
+                logger.info("Faiss engine is disabled. Skipping vector pre-computation.")
                 vectors = {dset: None for dset in factories}
 
             # benchmark the ranker on each dataset separately
             barrier("running benchmarks..")
             ranker.cpu()  # <- free up the GPU memory so it can be used to build faiss
             if trainer.is_global_zero and period_idx > 0 or config.schedule.benchmark_on_init:
-                loguru.logger.info(f"Running benchmarks ... (period={1+period_idx})")
+                logger.info(f"Running benchmarks ... (period={1+period_idx})")
                 for j, dset in enumerate(config.dataset.benchmark):
-                    loguru.logger.info(
+                    logger.info(
                         f"{1+j}/{len(config.dataset.benchmark)} - Benchmarking `{dset.name}:{dset.split_alias}` ..."
                     )
                     metrics = evaluation.benchmark(
@@ -130,12 +128,12 @@ def train_with_index_updates(  # noqa: C901
             # potentially re-init the ranker
             barrier("Setting up ranker..")
             if config.schedule.reset_model_on_period_start:
-                loguru.logger.info(f"Re-initializing the Ranker ... (period={1+period_idx}))")
+                logger.info(f"Re-initializing the Ranker ... (period={1+period_idx}))")
                 ranker = ranker_generator()
 
             # training for the current period.
             # We use a `StopAtTrainer` to stop the training at the end of the current period (max `end_step`).
-            loguru.logger.info(f"Training ... (period={1+period_idx})")
+            logger.info(f"Starting training period {1+period_idx}")
             with WithCallbacks(
                 trainer,
                 callbacks=[
@@ -168,12 +166,12 @@ def train_with_index_updates(  # noqa: C901
                     parameters=parameters,
                     serve_on_gpu=False,
                 )
-                loguru.logger.info(f"Training period completed ({1+period_idx})")
+                logger.info(f"Completed training period {1+period_idx}")
 
     return ranker
 
 
-def _setup_distributed_env(
+def _hacky_setup_distributed_env(
     *, trainer: L.Trainer, ranker: Ranker, config: core_config.TrainWithIndexUpdatesConfigs
 ) -> None:
     """Setup the distributed environment, if any.

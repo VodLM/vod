@@ -212,6 +212,7 @@ class RetrievalCollateConfig(BaseCollateConfig):
     max_pos_sections: int = 3
     post_filter: Optional[str] = None
     do_sample: bool = False
+    prep_num_proc: int = 4
 
     # name of the keys to use on the query side and on the section side
     text_keys: KeyMap = KeyMap(query="text", section="text")  #  text field

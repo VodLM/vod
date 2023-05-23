@@ -107,6 +107,7 @@ class FaissClient(search_server.SearchClient):
         }[input_type]
         indices = cast_fn(indices_list)
         scores = cast_fn(scores_list)
+
         try:
             return rtypes.RetrievalBatch(indices=indices, scores=scores)
         except Exception as exc:

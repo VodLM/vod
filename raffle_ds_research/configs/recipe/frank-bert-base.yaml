@@ -20,12 +20,12 @@ seed: 1
 
 dataset:
   train:
-    - frank.A.en-pos:train
-    - squad.en:train
+    # - frank.A.en-pos:train
+    # - squad.en:train
     - msmarco.en:train
   validation:
-    - frank.A.en-pos:val
-    - squad.en:val
+    # - frank.A.en-pos:val
+    # - squad.en:val
     - msmarco.en:val
   benchmark:
     - frank.A.en:val
@@ -47,8 +47,8 @@ model:
     bm25_guidance_weight: 0.0
 
 resources:
-  num_workers: 4
-  num_proc: 8
+  num_workers: 2 # <--- 2 workers per GPU
+  num_proc: 8 # <--- 8 workers to preprocess data on global rank zero
 
 batch_size:
   effective: 32
@@ -71,7 +71,7 @@ collates:
   train:
     n_sections: 24
     max_pos_sections: 8
-    prefetch_n_sections: 512
+    prefetch_n_sections: 128
     do_sample: false
   benchmark:
     n_sections: 300
@@ -80,7 +80,7 @@ collates:
     do_sample: false
 
 schedule:
-  index_update_freq: 3_000
+  index_update_freq: 10_000
   reset_model_on_period_start: false
   benchmark_on_init: false
   parameters:

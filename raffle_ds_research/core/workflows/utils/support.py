@@ -3,6 +3,8 @@ from __future__ import annotations
 import collections
 import dataclasses
 import functools
+import os
+import pathlib
 import typing
 from typing import Any, Callable, Optional, TypeVar
 
@@ -19,6 +21,7 @@ from raffle_ds_research.core import config as core_config
 from raffle_ds_research.core import mechanics
 from raffle_ds_research.core.workflows.utils import support
 from raffle_ds_research.tools import dstruct, index_tools, pipes
+from raffle_ds_research.tools.utils.pretty import human_format_nb
 
 T = TypeVar("T")
 
@@ -90,14 +93,41 @@ def instantiate_retrieval_dataloader(
     collate_config: core_config.RetrievalCollateConfig,
     dataloader_config: core_config.DataLoaderConfig,
     parameters: Optional[dict[str, float]],
+    cache_dir: pathlib.Path,
+    barrier_fn: Callable[[str], None],
+    rank: int = 0,
 ) -> torch_data.DataLoader[dict[str, Any]]:
     """Instantiate a dataloader for the retrieval task."""
+    lookup_args = {
+        "key": collate_config.section_id_keys.section,
+        "group_key": collate_config.group_id_keys.section,
+    }
+    fname = f"lookup-{pipes.fingerprint(sections.data)}-{pipes.fingerprint(lookup_args)}.pkl"
+    lookup_path = cache_dir / "lookups" / fname
+    if rank == 0 and not lookup_path.exists():
+        logger.debug(f"Building the section id lookup index at `{lookup_path}`")
+        target_lookup = index_tools.LookupIndexbyGroup(
+            sections.data,
+            num_proc=collate_config.prep_num_proc,
+            **lookup_args,
+        )
+        target_lookup.save(lookup_path)
+        del target_lookup
+
+    barrier_fn("Building lookup index")
+    if rank == 0:
+        logger.debug(f"Loading the section id lookup index at `{lookup_path}`")
+        target_lookup = index_tools.LookupIndexbyGroup.load(lookup_path)
+        target_lookup.validate(sections.data)
+        logger.debug(f"Lookup index built ({human_format_nb(target_lookup.memsize, base=1024)}B)")
+
     collate_fn = mechanics.RetrievalCollate(
         tokenizer=tokenizer,
         sections=sections.data,
         search_client=search_client,
         config=collate_config,
         parameters=parameters,
+        target_lookup=lookup_path,
     )
     dataset = WithVectors(
         dataset=questions.data,
@@ -146,9 +176,16 @@ def concatenate_datasets(dsets: typing.Iterable[support.DsetWithVectors]) -> sup
         fgn = pipes.fingerprint(dset.data)
         dsets_by_fingerprint[fgn].append(dset)
 
-    for fgn, dsets in dsets_by_fingerprint.items():
-        logger.debug(f"Gathered ({fgn}) : {[str(d) for d in dsets]}")
+    # sort them by fingerprint
+    dsets_by_fingerprint = collections.OrderedDict(sorted(dsets_by_fingerprint.items(), key=lambda x: x[0]))
 
+    # log the fingerprints with their datasets
+    rank = os.getenv("RANK", None)
+    winfo = f"[{rank}] " if rank is not None else ""
+    for fgn, dsets in dsets_by_fingerprint.items():
+        logger.debug(f"{winfo}Gathered ({fgn}) : {[str(d) for d in dsets]}")
+
+    # concatenate the datasets
     unique_dsets = [dsets[0] for dsets in dsets_by_fingerprint.values()]
     return support.DsetWithVectors(
         data=_concat_data([dset.data for dset in unique_dsets]),
@@ -169,7 +206,6 @@ def _concat_data(data: list[D]) -> D:
 def _barrier_fn(name: str, trainer: L.Trainer) -> None:
     """Barrier to synchronize all processes."""
     if trainer.world_size == 1:
-        rich.print(">> world size is 1, skipping barrier")
         return
 
     rich.print(

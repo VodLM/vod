@@ -12,10 +12,9 @@ from rich.syntax import Syntax
 from rich.tree import Tree
 
 
-def human_format_nb(num: int | float, precision: int = 2) -> str:
+def human_format_nb(num: int | float, precision: int = 2, base: float = 1000.0) -> str:
     """Converts a number to a human-readable format."""
     magnitude = 0
-    base = 1000.0
     while abs(num) >= base:
         magnitude += 1
         num /= base

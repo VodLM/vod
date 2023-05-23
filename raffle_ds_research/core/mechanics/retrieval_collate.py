@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import functools
 import math
+import pathlib
 import warnings
 from typing import Any, Optional, TypeVar
 
@@ -36,12 +38,13 @@ class RetrievalCollate(pipes.Collate):
         8. return the batch (`torch.Tensor`)
     """
 
-    _pos_section_id_lookup: index_tools.LookupIndexbyGroup
     tokenizer: transformers.PreTrainedTokenizer | transformers.PreTrainedTokenizerFast
     search_client: index_tools.MultiSearchClient
     post_filter: Optional[PostFilter]
     sections: dstruct.SizedDataset[dict[str, Any]]
     config: core_config.RetrievalCollateConfig
+    _target_lookup: Optional[index_tools.LookupIndexbyGroup]
+    _target_lookup_path: Optional[pathlib.Path]
 
     def __init__(
         self,
@@ -51,6 +54,7 @@ class RetrievalCollate(pipes.Collate):
         sections: dstruct.SizedDataset[dict[str, Any]],
         config: core_config.RetrievalCollateConfig,
         parameters: Optional[dict[str, Any]] = None,
+        target_lookup: index_tools.LookupIndexbyGroup | pathlib.Path,
     ):
         self.tokenizer = tokenizer
         self.search_client = search_client
@@ -82,12 +86,24 @@ class RetrievalCollate(pipes.Collate):
             for client in missing_clients:
                 self.parameters[client] = 1.0
 
-        # Build the section id lookup index
-        self._pos_section_id_lookup = index_tools.LookupIndexbyGroup(
-            sections,
-            key=config.section_id_keys.section,
-            group_key=config.group_id_keys.section,
-        )
+        # lookup table for the positive sections
+        if isinstance(target_lookup, index_tools.LookupIndexbyGroup):
+            self._target_lookup = target_lookup
+            self._target_lookup_path = None
+        elif isinstance(target_lookup, pathlib.Path):
+            self._target_lookup_path = target_lookup
+            self._target_lookup = None
+        else:
+            raise TypeError(f"Invalid type for `target_lookup`: {type(target_lookup)}")
+
+    @property
+    def target_lookup(self) -> index_tools.LookupIndexbyGroup:
+        """Lazy loading of the target lookup table."""
+        if self._target_lookup is None:
+            if self._target_lookup_path is None:
+                raise ValueError("Both `target_lookup` and `target_lookup_path` are `None`")
+            self._target_lookup = index_tools.LookupIndexbyGroup.load(self._target_lookup_path)
+        return self._target_lookup
 
     def __call__(self, examples: list[dict[str, Any]], **kwargs: Any) -> dict[str, Any]:
         """Collate function for retrieval tasks. This function is used to convert a list of examples into a batch."""
@@ -106,7 +122,7 @@ class RetrievalCollate(pipes.Collate):
         # fetch the positive `section_ids`
         kb_ids = batch[self.config.group_id_keys.query]
         query_section_ids = batch[self.config.section_id_keys.query]
-        positive_samples: index_tools.RetrievalBatch = self._pos_section_id_lookup.search(query_section_ids, kb_ids)
+        positive_samples: index_tools.RetrievalBatch = self.target_lookup.search(query_section_ids, kb_ids)
 
         # sample the sections given the positive ones and the pool of candidates
         sections: SampledSections = sample_sections(
@@ -209,12 +225,14 @@ class RetrievalCollate(pipes.Collate):
         if isinstance(query_vectors, list):
             query_vectors = np.stack(query_vectors)
 
-        # search the query text
-        return self.search_client.search(
-            text=query_text,
-            vector=query_vectors,
-            label=query_group_ids,
-            top_k=top_k,
+        # async search the query text using `search_client.async_search`
+        return asyncio.run(
+            self.search_client.async_search(
+                text=query_text,
+                vector=query_vectors,
+                label=query_group_ids,
+                top_k=top_k,
+            )
         )
 
 

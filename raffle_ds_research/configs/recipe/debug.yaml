@@ -16,13 +16,12 @@ benchmark_search:
     factory: Flat
 
 dataset:
-  subset_size: null
+  subset_size: 1_000
   filter_unused_sections: false
-  train: frank.A.en:train
-  validation: frank.A.en:val
+  train: frank.A.en-pos:train
+  validation: frank.A.en-pos:val
   benchmark:
-    - frank.A.en:val
-    - frank.B.en:val
+    - frank.A.en-pos:val
 
 schedule:
   benchmark_on_init: false

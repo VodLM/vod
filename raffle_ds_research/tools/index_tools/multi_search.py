@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Optional
+import asyncio
+from typing import Any, Optional
 
 import numpy as np
 
@@ -33,10 +34,7 @@ class MultiSearchClient(search_server.SearchClient):
         label: Optional[list[str | int]] = None,
         top_k: int = 3,
     ) -> dict[str, rtypes.RetrievalBatch[np.ndarray]]:
-        """Search the server given a batch of text and/or vectors.
-
-        TODO: add support for async.
-        """
+        """Search the server given a batch of text and/or vectors."""
         return {
             name: client.search(
                 vector=vector,
@@ -46,6 +44,40 @@ class MultiSearchClient(search_server.SearchClient):
             )
             for name, client in self.clients.items()
         }
+
+    async def async_search(
+        self,
+        *,
+        text: list[str],
+        vector: Optional[rtypes.Ts] = None,
+        label: Optional[list[str | int]] = None,
+        top_k: int = 3,
+    ) -> dict[str, rtypes.RetrievalBatch[np.ndarray]]:
+        """Search the server given a batch of text and/or vectors."""
+
+        def search_fn(args: dict[str, Any]) -> rtypes.RetrievalBatch[np.ndarray]:
+            client = args.pop("client")
+            return client.search(**args)
+
+        names = list(self.clients.keys())
+        loop = asyncio.get_event_loop()
+        futures = [
+            loop.run_in_executor(
+                None,
+                search_fn,
+                {
+                    "client": self.clients[name],
+                    "vector": vector,
+                    "text": text,
+                    "label": label,
+                    "top_k": top_k,
+                },
+            )
+            for name in names
+        ]
+
+        results = await asyncio.gather(*futures)
+        return dict(zip(names, results))
 
 
 class MultiSearchMaster:

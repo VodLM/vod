@@ -41,7 +41,7 @@ echo 'mamba activate dev' >>~/.zshrc
 source ~/.zshrc
 mamba install -y -c nvidia cuda
 mamba install -y -c conda-forge cudnn cudatoolkit==12.1
-pip install gpustat
+pip install gpustat nvitop
 
 # install and setup elasticsearch
 if [[ $PKGMD != "apt-get" ]]; then

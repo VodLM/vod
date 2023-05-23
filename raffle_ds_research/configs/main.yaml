@@ -52,6 +52,7 @@ collates:
     prefetch_n_sections: 300
     post_filter: null
     do_sample: false
+    prep_num_proc: ${resources.num_proc}
     question_max_length: ${collates.predict.question_max_length}
     section_max_length:  ${collates.predict.section_max_length}
   benchmark:
@@ -61,5 +62,6 @@ collates:
     prefetch_n_sections: 1000
     post_filter: null
     do_sample: false
+    prep_num_proc: ${resources.num_proc}
     question_max_length: ${collates.predict.question_max_length}
     section_max_length:  ${collates.predict.section_max_length}

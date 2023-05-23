@@ -44,6 +44,22 @@ class SearchClient(abc.ABC):
         """Search the server given a batch of text and/or vectors."""
         raise NotImplementedError()
 
+    async def async_search(
+        self,
+        *,
+        text: list[str],
+        vector: Optional[rtypes.Ts] = None,
+        label: Optional[list[str | int]] = None,
+        top_k: int = 3,
+    ) -> rtypes.RetrievalBatch[rtypes.Ts]:
+        """Search the server given a batch of text and/or vectors."""
+        return self.search(
+            text=text,
+            vector=vector,
+            label=label,
+            top_k=top_k,
+        )
+
 
 Sc = TypeVar("Sc", bound=SearchClient, covariant=True)
 

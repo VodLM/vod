@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import pathlib
 from typing import Any, Callable, Optional
 
@@ -162,14 +163,18 @@ def build_faiss_index(
             )
             logger.info(f"Saving faiss index to `{index_path}`")
             faiss.write_index(index, str(index_path))
+            if not index_path.exists():
+                raise FileNotFoundError(
+                    f"{_rank_info()}Could not find index at `{index_path}` right after building it."
+                )
         else:
             logger.info(f"Loading existing faiss index from `{index_path}`")
 
     if barrier_fn is not None:
-        barrier_fn(f"faiss built : {index_path.name}")
+        barrier_fn(f"faiss build: `{index_path.name}`")
 
     if not index_path.exists():
-        raise FileNotFoundError(f"Could not find index at `{index_path}`")
+        raise FileNotFoundError(f"{_rank_info()}Could not find faiss index at `{index_path}`.")
 
     return faiss_tools.FaissMaster(
         index_path=index_path,
@@ -180,3 +185,9 @@ def build_faiss_index(
         skip_setup=skip_setup,
         serve_on_gpu=serve_on_gpu,
     )
+
+
+def _rank_info() -> str:
+    rank = os.getenv("RANK", None)
+    winfo = f"[{rank}] " if rank is not None else ""
+    return winfo

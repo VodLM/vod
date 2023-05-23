@@ -124,6 +124,10 @@ def _stack_results(results: typing.Iterable[T]) -> T:
 
 
 @datasets.fingerprint.hashregister(ConcatenatedSizedDataset)
-def _hash_partitioned_indexable(hasher: datasets.fingerprint.Hasher, value: ConcatenatedSizedDataset) -> str:
-    hash_parts = [hasher.hash(value) for value in value.parts]
-    return hasher.hash(hash_parts)
+def _hash_partitioned_indexable(
+    hasher: datasets.fingerprint.Hasher, value: ConcatenatedSizedDataset  # noqa: ARG001
+) -> str:  # noqa: ARG001
+    hasher_ = datasets.fingerprint.Hasher()
+    for part in value.parts:
+        hasher_.update(hasher_.hash(part))
+    return hasher_.hexdigest()

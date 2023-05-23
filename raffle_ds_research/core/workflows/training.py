@@ -8,6 +8,7 @@ import typing
 import lightning as L
 import rich
 import transformers
+from loguru import logger
 
 from raffle_ds_research.core import config as core_config
 from raffle_ds_research.core import mechanics
@@ -71,6 +72,7 @@ def index_and_train(
         search_client = master.get_client()
 
         # instantiate the dataloader
+        logger.debug("Instantiating dataloader..")
         init_dataloader = functools.partial(
             support.instantiate_retrieval_dataloader,
             sections=task.sections,
@@ -78,9 +80,13 @@ def index_and_train(
             search_client=search_client,
             collate_config=collate_config,
             parameters=parameters,
+            cache_dir=cache_dir,
+            barrier_fn=barrier_fn,
+            rank=trainer.global_rank,
         )
 
         # train the ranker
+        logger.debug("Training ranker..")
         trainer.fit(
             ranker,
             train_dataloaders=init_dataloader(

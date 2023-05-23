@@ -14,7 +14,7 @@ benchmark:
   - squad.en:val
 
 # benchmark config
-metrics: [ "ndcg", "mrr","hitrate@01", "hitrate@03", "hitrate@10", "hitrate@30" ]
+metrics: [ "ndcg", "mrr@10","hitrate@01", "hitrate@03", "hitrate@10", "hitrate@30" , "recall@50"]
 
 # dataset factory config
 subset_size: null

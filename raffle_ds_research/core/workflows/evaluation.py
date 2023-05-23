@@ -5,6 +5,7 @@ from typing import Iterable, Optional
 
 import torch
 from lightning.pytorch import utilities as pl_utils
+from loguru import logger
 from rich.progress import track
 
 from raffle_ds_research.core import config as core_config
@@ -59,6 +60,9 @@ def benchmark(
             collate_config=collate_config,
             dataloader_config=dataloader_config,
             parameters=parameters,
+            cache_dir=cache_dir,
+            barrier_fn=logger.debug,
+            rank=0,
         )
 
         # run the evaluation

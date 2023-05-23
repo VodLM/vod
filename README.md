@@ -77,6 +77,15 @@ bash Mambaforge-$(uname)-$(uname -m).sh
 bash setup-mamba.sh
 # build faiss - try to run it, or follow the script step by step
 bash build-faiss.sh
+
+# then install faiss in the env
+poetry install
+PYPATH=`which python`
+cd libs/faiss/build/faiss/python
+$PYPATH setup.py install
+# if stuff break (temporary)
+poetry run pip uninstall torch
+poetry run pip install -U torch transformers
 ```
 
 ### Slow faiss initialization on GPU

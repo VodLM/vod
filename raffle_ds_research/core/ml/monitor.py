@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import abc
 import copy
 import math
 from abc import ABC
@@ -188,8 +189,9 @@ class HitRate(torchmetrics.Metric):
 class AveragedMetric(torchmetrics.Metric, ABC):
     """Base class for metrics that are computed at the sample level and averaged over the entire dataset."""
 
-    def __init__(self, **kwargs: Any):
+    def __init__(self, top_k: Optional[int] = None, **kwargs: Any):
         super().__init__(**kwargs)
+        self.top_k = top_k
         self.add_state("value", default=torch.tensor(0.0), dist_reduce_fx="sum")
         self.add_state("weight", default=torch.tensor(0.0), dist_reduce_fx="sum")
 
@@ -213,10 +215,11 @@ class MeanReciprocalRank(AveragedMetric):
         """Update the metric given the predictions and the targets."""
         preds, target = _mask_inputs(preds, target)
         ranked_labels = _rank_labels(labels=target, scores=preds)
+        ranked_labels = ranked_labels[..., : self.top_k]
         idx_first_non_zero = _arg_first_non_zero(ranked_labels)
-        has_positive = (ranked_labels > 0).sum(dim=-1) > 0
+        at_least_one_target = (ranked_labels > 0).sum(dim=-1) > 0
         mrr = 1.0 / (1 + idx_first_non_zero)
-        mmr = torch.where(has_positive, mrr, 0)
+        mmr = torch.where(at_least_one_target, mrr, 0)
         self._update(mmr)
 
 
@@ -226,26 +229,49 @@ def _arg_first_non_zero(values: torch.Tensor) -> torch.Tensor:
     return nnz_ordered_values.argmin(dim=-1)
 
 
-class NormalizedDCG(AveragedMetric):
-    """Normalized Discounted Cumulative Gain (NDCG)."""
+class LightningAveragedMetric(AveragedMetric):
+    """Base class for metrics that are computed at the sample level and averaged over the entire dataset."""
 
+    # torchmetrics stuff
     is_differentiable: bool = False
     higher_is_better: bool = True
     full_state_update: bool = False
-
-    def __init__(self, top_k: Optional[int] = None, **kwargs: Any):
-        super().__init__(**kwargs)
-        self.top_k = top_k
 
     def update(self, preds: torch.Tensor, target: torch.Tensor) -> None:
         """Update the metric."""
         preds, target = _mask_inputs(preds, target)
         batch_size = preds[..., 0].numel()
-        ndcg = torchmetrics.functional.retrieval_normalized_dcg(preds=preds, target=target, k=self.top_k)
-        # `retrieval_normalized_dcg` returns the mean over the batch,
+        batch_avg = self._metric_fn(preds=preds, target=target, k=self.top_k)
+        # `metric_fn` returns the mean over the batch,
         # so we need to multiply by the batch size to get the sum
-        ndcg = ndcg.repeat(batch_size)
-        self._update(ndcg)
+        batch_avg = batch_avg.repeat(batch_size)
+        self._update(batch_avg)
+
+    @abc.abstractmethod
+    def _metric_fn(self, preds: torch.Tensor, target: torch.Tensor, k: Optional[int]) -> torch.Tensor:
+        """Compute the metric given the predictions and the targets."""
+        ...
+
+
+class NormalizedDCG(LightningAveragedMetric):
+    """Normalized Discounted Cumulative Gain (NDCG)."""
+
+    def _metric_fn(self, preds: torch.Tensor, target: torch.Tensor, k: Optional[int]) -> torch.Tensor:
+        return torchmetrics.functional.retrieval_normalized_dcg(preds=preds, target=target, k=k)
+
+
+class Recall(LightningAveragedMetric):
+    """Recall metric."""
+
+    def _metric_fn(self, preds: torch.Tensor, target: torch.Tensor, k: Optional[int]) -> torch.Tensor:
+        return torchmetrics.functional.retrieval_recall(preds=preds, target=target, k=k)
+
+
+class Precision(LightningAveragedMetric):
+    """Precision metric."""
+
+    def _metric_fn(self, preds: torch.Tensor, target: torch.Tensor, k: Optional[int]) -> torch.Tensor:
+        return torchmetrics.functional.retrieval_precision(preds=preds, target=target, k=k)
 
 
 def retrieval_metric_factory(name: str, **kwargs: Any) -> Metric:
@@ -260,6 +286,8 @@ def retrieval_metric_factory(name: str, **kwargs: Any) -> Metric:
         "mrr": MeanReciprocalRank,
         "ndcg": NormalizedDCG,
         "hitrate": HitRate,
+        "recall": Recall,
+        "precision": Precision,
     }
 
     cls = avail_cls[name]

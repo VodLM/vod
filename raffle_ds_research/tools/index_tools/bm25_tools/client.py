@@ -80,7 +80,13 @@ class Bm25Client(search_server.SearchClient):
         indices, scores = [], []
         for response in responses["responses"]:
             # process the indices
-            hits = response["hits"]["hits"]
+            try:
+                hits = response["hits"]["hits"]
+            except KeyError:
+                import rich
+
+                rich.print(response)
+                raise
             indices_ = (hit["_source"][IDX_KEY] for hit in hits[:top_k])
             indices_ = np.fromiter(indices_, dtype=np.int64)
             indices_ = np.pad(indices_, (0, top_k - len(indices_)), constant_values=-1)
