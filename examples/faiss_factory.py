@@ -110,7 +110,7 @@ def build_and_eval_index(args: Args) -> dict[str, Any]:
         with Status("Waiting to free up memory..."):
             time.sleep(1)  # <-- this is a hack to get the memory usage to be more accurate
         _pre_mem = _get_available_memory()
-        t_0 = time.time()
+        t_0 = time.perf_counter()
         logger.info(f"Avaliable memory: {_pre_mem:.3f} GB")
         with index_tools.build_faiss_index(
             vectors=vectors,  # type: ignore
@@ -120,7 +120,7 @@ def build_and_eval_index(args: Args) -> dict[str, Any]:
             barrier_fn=None,
             serve_on_gpu=args.serve_on_gpu,
         ) as master:
-            times["build"] = time.time() - t_0
+            times["build"] = time.perf_counter() - t_0
             mem_usage = _pre_mem - _get_available_memory()
             logger.info(f"Memory usage: {mem_usage:.3f} GB")
             faiss_client = master.get_client()
@@ -131,11 +131,11 @@ def build_and_eval_index(args: Args) -> dict[str, Any]:
 
             # time the API
             logger.info(f"Timing API calls (n_trials={args.n_trials})")
-            t_0 = time.time()
+            t_0 = time.perf_counter()
             for _ in track(range(args.n_trials), description=f"{args.n_trials} API calls ({args.bs}x{args.top_k})"):
                 query = np.random.randn(args.bs, args.vdim).astype(np.float32)
                 faiss_client.search(vector=query, top_k=args.top_k)
-            t_1 = time.time()
+            t_1 = time.perf_counter()
             times["search"] = (t_1 - t_0) / args.n_trials
             logger.info(f"API call time: {1000*times['search']:.3f} ms/batch")
 

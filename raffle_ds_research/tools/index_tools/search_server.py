@@ -67,7 +67,7 @@ Sc = TypeVar("Sc", bound=SearchClient, covariant=True)
 class SearchMaster(Generic[Sc], abc.ABC):
     """A class that manages a search server."""
 
-    _timeout: float = 180
+    _timeout: float = 300
     _server_proc: Optional[subprocess.Popen] = None
     _allow_existing_server: bool = False
     skip_setup: bool

@@ -4,8 +4,6 @@ defaults:
   - override /model/encoder: bert-tiny
   - _self_
 
-embedding_size: 64
-
 batch_size:
   per_device: 4
   per_device_eval: 8

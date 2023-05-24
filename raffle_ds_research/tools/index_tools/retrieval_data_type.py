@@ -1,11 +1,11 @@
-# pylint: disable=no-member,invalid-name
 from __future__ import annotations
 
 import abc
+import copy
 from abc import ABC
 from enum import Enum
 from numbers import Number
-from typing import Any, Generic, Iterable, TypeVar, Union
+from typing import Any, Generic, Iterable, Optional, TypeVar, Union
 
 import numpy as np
 import torch
@@ -77,8 +77,9 @@ class RetrievalData(ABC, Generic[Ts_co]):
     _repr_sep: str = ""
     scores: Ts_co
     indices: Ts_co
+    meta: dict[str, Any]
 
-    def __init__(self, scores: Ts_co, indices: Ts_co):
+    def __init__(self, scores: Ts_co, indices: Ts_co, meta: Optional[dict[str, Any]] = None):
         dim = len(indices.shape)
         # note: only check shapes up to the number of dimensions of the indices. This allows
         # for the scores to have more dimensions than the indices, e.g. for the case of
@@ -95,12 +96,14 @@ class RetrievalData(ABC, Generic[Ts_co]):
             )
         self.scores = scores
         self.indices = indices
+        self.meta = meta or {}
 
     def to(self, target_type: Type[Ts_out]) -> RetrievalData[Ts_out]:
         """Cast a `RetrievalData` object to a different type."""
         output: RetrievalData = type(self)(
             scores=_convert_array(self.scores, target_type),
             indices=_convert_array(self.indices, target_type),
+            meta=copy.copy(self.meta),
         )
         return output
 
@@ -128,6 +131,8 @@ class RetrievalData(ABC, Generic[Ts_co]):
             f"{type(self).__name__}[{_type_repr(self.scores)}](",
             f"scores={repr(self.scores)}, ",
             f"indices={repr(self.indices)}",
+            f"meta={repr(self.meta)}",
+            ")",
         ]
 
     def __repr__(self) -> str:
@@ -228,6 +233,7 @@ class RetrievalBatch(RetrievalData[Ts_co]):
         return RetrievalBatch(
             scores=_convert_array(self.scores, target_type),
             indices=_convert_array(self.indices, target_type),
+            meta=copy.copy(self.meta),
         )
 
     def sorted(self) -> RetrievalBatch[Ts_co]:
@@ -240,6 +246,7 @@ class RetrievalBatch(RetrievalData[Ts_co]):
             return RetrievalBatch(
                 scores=np.take_along_axis(self.scores, sort_ids, axis=-1),
                 indices=np.take_along_axis(self.indices, sort_ids, axis=-1),
+                meta=copy.copy(self.meta),
             )
         if isinstance(self.indices, torch.Tensor):
             if not isinstance(self.scores, torch.Tensor):
@@ -248,6 +255,7 @@ class RetrievalBatch(RetrievalData[Ts_co]):
             return RetrievalBatch(
                 scores=torch.gather(self.scores, -1, sort_ids),
                 indices=torch.gather(self.indices, -1, sort_ids),
+                meta=copy.copy(self.meta),
             )
 
         raise NotImplementedError(f"Sorting is not implemented for {type(self.scores)}")

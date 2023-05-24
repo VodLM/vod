@@ -197,6 +197,9 @@ D = TypeVar("D", bound=typing.Union[dstruct.SizedDataset, datasets.Dataset])
 
 
 def _concat_data(data: list[D]) -> D:
+    if len(data) == 1:
+        return data[0]
+
     if all(isinstance(d, datasets.Dataset) for d in data):
         return datasets.concatenate_datasets(data)  # type: ignore
 

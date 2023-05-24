@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
+import time
 from copy import copy
 from pathlib import Path
 from typing import Optional
@@ -77,6 +78,7 @@ class FaissClient(search_server.SearchClient):
         timeout: float = 120,
     ) -> rtypes.RetrievalBatch[rtypes.Ts]:
         """Search the server given a batch of vectors."""
+        start_time = time.time()
         input_type = type(vector)
         input_type_enum, serialized_fn = {
             torch.Tensor: (rtypes.RetrievalDataType.TORCH, io.serialize_torch_tensor),
@@ -109,7 +111,11 @@ class FaissClient(search_server.SearchClient):
         scores = cast_fn(scores_list)
 
         try:
-            return rtypes.RetrievalBatch(indices=indices, scores=scores)
+            return rtypes.RetrievalBatch(
+                indices=indices,
+                scores=scores,
+                meta={"time": time.time() - start_time},
+            )
         except Exception as exc:
             rich.print({"indices": indices, "scores": scores})
             raise exc

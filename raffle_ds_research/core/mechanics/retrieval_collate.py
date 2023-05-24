@@ -4,6 +4,7 @@ import asyncio
 import functools
 import math
 import pathlib
+import time
 import warnings
 from typing import Any, Optional, TypeVar
 
@@ -16,7 +17,7 @@ from raffle_ds_research.core import config as core_config
 from raffle_ds_research.core.mechanics.post_filtering import PostFilter, post_filter_factory
 from raffle_ds_research.core.mechanics.section_sampler import SampledSections, sample_sections
 from raffle_ds_research.core.mechanics.utils import fill_nans_with_min
-from raffle_ds_research.tools import dstruct, index_tools, pipes
+from raffle_ds_research.tools import c_tools, dstruct, index_tools, pipes
 from raffle_ds_research.tools.pipes.utils.misc import pack_examples
 
 T = TypeVar("T")
@@ -107,60 +108,76 @@ class RetrievalCollate(pipes.Collate):
 
     def __call__(self, examples: list[dict[str, Any]], **kwargs: Any) -> dict[str, Any]:
         """Collate function for retrieval tasks. This function is used to convert a list of examples into a batch."""
+        start_time = time.perf_counter()
         batch = pack_examples(examples)
 
         # search within each client
         search_results = self.search(batch, top_k=self.config.prefetch_n_sections)
+        diagnostics = {f"diagnostics.{key}_time": s.meta.get("time", None) for key, s in search_results.items()}
 
         # merge the results
         candidate_samples, client_scores = _merge_search_results(search_results, weights=self.parameters)
 
-        # post-filtering
+        # post-filtering sections based on the group hash
         if self.post_filter is not None:
             candidate_samples = self.post_filter(candidate_samples, query=batch)
 
         # fetch the positive `section_ids`
-        kb_ids = batch[self.config.group_id_keys.query]
-        query_section_ids = batch[self.config.section_id_keys.query]
-        positive_samples: index_tools.RetrievalBatch = self.target_lookup.search(query_section_ids, kb_ids)
+        with BlockTimer(name="diagnostics.target_lookup_time", output=diagnostics):
+            kb_ids = batch[self.config.group_id_keys.query]
+            query_section_ids = batch[self.config.section_id_keys.query]
+            positive_samples: index_tools.RetrievalBatch = self.target_lookup.search(query_section_ids, kb_ids)
 
         # sample the sections given the positive ones and the pool of candidates
-        sections: SampledSections = sample_sections(
-            candidates=candidate_samples,
-            positives=positive_samples,
-            n_sections=self.config.n_sections,
-            max_pos_sections=self.config.max_pos_sections,
-            do_sample=self.config.do_sample,
-            other_scores=client_scores,
-        )
+        with BlockTimer(name="diagnostics.sample_sections_time", output=diagnostics):
+            sections: SampledSections = sample_sections(
+                candidates=candidate_samples,
+                positives=positive_samples,
+                n_sections=self.config.n_sections,
+                max_pos_sections=self.config.max_pos_sections,
+                do_sample=self.config.do_sample,
+                other_scores=client_scores,
+            )
+
+        # flatten sections (in-batch negative)
+        if self.config.in_batch_negatives:
+            sections = flatten_sections(
+                sections,
+                positive_samples,
+                world_size=len(self.sections),
+                padding=True,  # <-- padding is required for `torch.compile()` to compile a single graph.
+            )
 
         # fetch the content of each section from the huggingface `datasets.Dataset`
         flat_ids = sections.indices.flatten().tolist()
         flat_sections_content: dict[str, Any] = self.sections[flat_ids]
 
         # tokenize the sections and add them to the output
-        tokenized_sections = pipes.torch_tokenize_pipe(
-            flat_sections_content,
-            tokenizer=self.tokenizer,
-            text_key="text",
-            prefix_key="section.",
-            max_length=self.config.section_max_length,
-            truncation=True,
-            padding="max_length",
-        )
-        tokenized_sections = {k: v.view(*sections.indices.shape, -1) for k, v in tokenized_sections.items()}
+        with BlockTimer(name="diagnostics.tokenize_time", output=diagnostics):
+            tokenized_sections = pipes.torch_tokenize_pipe(
+                flat_sections_content,
+                tokenizer=self.tokenizer,
+                text_key="text",
+                prefix_key="section.",
+                max_length=self.config.section_max_length,
+                truncation=True,
+                padding="max_length",
+            )
+            tokenized_sections = {k: v.view(*sections.indices.shape, -1) for k, v in tokenized_sections.items()}
 
-        # tokenize the questions
-        tokenized_question = pipes.torch_tokenize_pipe(
-            batch,
-            tokenizer=self.tokenizer,
-            text_key="text",
-            prefix_key="question.",
-            max_length=self.config.question_max_length,
-            truncation=True,
-            padding="max_length",
-        )
+            # tokenize the questions
+            tokenized_question = pipes.torch_tokenize_pipe(
+                batch,
+                tokenizer=self.tokenizer,
+                text_key="text",
+                prefix_key="question.",
+                max_length=self.config.question_max_length,
+                truncation=True,
+                padding="max_length",
+            )
 
+        # build the batch
+        diagnostics["diagnostics.collate_time"] = time.perf_counter() - start_time
         batch = {
             **tokenized_question,
             **tokenized_sections,
@@ -170,6 +187,7 @@ class RetrievalCollate(pipes.Collate):
                 flat_sections_content,
                 sections_shape=sections.indices.shape,
             ),
+            **diagnostics,
         }
 
         return batch
@@ -339,3 +357,68 @@ def _merge_search_results(
         client_scores[k] = np.take_along_axis(v, sort_ids, axis=-1)
 
     return candidate_samples, client_scores
+
+
+class BlockTimer:
+    """A context manager for timing code blocks."""
+
+    def __init__(self, name: str, output: dict[str, Any]) -> None:
+        self.name = name
+        self.output = output
+
+    def __enter__(self) -> None:
+        self.start = time.perf_counter()
+
+    def __exit__(self, *args: Any) -> None:
+        self.output[self.name] = time.perf_counter() - self.start
+
+
+def flatten_sections(
+    sections: SampledSections,
+    positives: index_tools.RetrievalBatch,
+    world_size: int,
+    fill_score_offset: int = -1,
+    padding: bool = True,
+) -> SampledSections:
+    """Merge all sections as a flat batch."""
+    n_full = math.prod(sections.indices.shape)
+    unique_indices = np.unique(sections.indices)
+    if padding:
+        # padd the unique indices with random indices, we sample iid so there might be some collisions
+        # but this is ok unlikely, so not worth the extra computation to check.
+        n_pad = n_full - unique_indices.shape[0]
+        random_indices = np.random.randint(0, world_size, size=n_pad)
+        unique_indices = np.concatenate([unique_indices, random_indices])
+
+    # repeat the unique indices for each section
+    unique_indices_ = unique_indices[None, :].repeat(sections.indices.shape[0], axis=0)
+
+    # gather the scores from the `sections` batch
+    scores = c_tools.gather_by_index(unique_indices_, sections.indices, sections.scores)
+    scores = _fill_nan_scores(scores, fill_score_offset)
+
+    # gather the labels from the `positives` batch
+    labels = c_tools.gather_by_index(unique_indices_, positives.indices, positives.indices >= 0)
+    labels = (~np.isnan(labels)) & (labels > 0)
+
+    # other scores (gather scores)
+    if sections.other_scores is not None:
+        others = {}
+        for key, other_scores in sections.other_scores.items():
+            others[key] = c_tools.gather_by_index(unique_indices_, sections.indices, other_scores)
+            others[key] = _fill_nan_scores(others[key], fill_score_offset)
+    else:
+        others = None
+
+    return SampledSections(
+        indices=unique_indices,
+        scores=scores,
+        labels=labels,
+        other_scores=others,
+    )
+
+
+def _fill_nan_scores(scores: np.ndarray, fill_value_offset: int = -1) -> np.ndarray:
+    fill_value = np.nanmin(scores, axis=-1) + fill_value_offset
+    scores = np.where(np.isnan(scores), fill_value[:, None], scores)
+    return scores

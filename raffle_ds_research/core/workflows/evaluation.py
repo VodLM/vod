@@ -80,6 +80,7 @@ def benchmark(
                 if preds is None:
                     continue
                 monitor.update(preds, target)
+            break  # TODO: !!!!
 
         metrics = {key: monitor.compute() for key, monitor in monitors.items()}
         return flatten_dict(metrics, sep="/")

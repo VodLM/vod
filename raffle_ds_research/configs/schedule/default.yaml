@@ -1,5 +1,5 @@
 _target_: raffle_ds_research.core.config.ScheduleConfig
-index_update_freq: 3000
+period: 3000
 reset_model_on_period_start: false
 benchmark_on_init: false
 parameters:

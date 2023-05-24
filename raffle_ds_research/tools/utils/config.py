@@ -10,8 +10,8 @@ import torch
 from hydra import compose, initialize_config_module
 from omegaconf import DictConfig, OmegaConf
 
+from raffle_ds_research.tools.utils import misc
 from raffle_ds_research.tools.utils.git import git_branch_name, git_revision_hash, git_revision_short_hash
-from raffle_ds_research.tools.utils.misc import int_div, int_max, int_mul
 
 
 def init_hydra_config(
@@ -83,9 +83,10 @@ def register_omgeaconf_resolvers() -> None:  # noqa: C901
     OmegaConf.register_new_resolver("hostname", socket.gethostname)
     OmegaConf.register_new_resolver("getcwd", os.getcwd)
     OmegaConf.register_new_resolver("int", lambda x: int(x))
-    OmegaConf.register_new_resolver("int_mul", int_mul)
-    OmegaConf.register_new_resolver("int_div", int_div)
-    OmegaConf.register_new_resolver("int_max", int_max)
+    OmegaConf.register_new_resolver("int_mul", misc.int_mul)
+    OmegaConf.register_new_resolver("int_add", misc.add_int)
+    OmegaConf.register_new_resolver("int_div", misc.int_div)
+    OmegaConf.register_new_resolver("int_max", misc.int_max)
     OmegaConf.register_new_resolver("n_gpus", lambda *_: N_GPUS)
     OmegaConf.register_new_resolver("n_devices", lambda: max(1, N_GPUS))
     OmegaConf.register_new_resolver("git_hash", lambda *_: GIT_HASH)

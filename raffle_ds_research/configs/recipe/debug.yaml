@@ -4,6 +4,7 @@ defaults:
   - override /model/encoder: bert-tiny
   - override /trainer/callbacks:
       - rich_progress_bar
+      - lr_master
   - override /trainer/logger:
       - csv
   - _self_
@@ -34,3 +35,8 @@ batch_size:
 resources:
   num_workers: 1
   num_proc: 4
+
+
+collates:
+  train:
+    in_batch_negatives: true

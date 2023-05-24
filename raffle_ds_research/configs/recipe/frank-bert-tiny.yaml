@@ -16,21 +16,9 @@ model:
   optimizer:
     lr: 1e-4
     weight_decay: 1e-3
-  scheduler:
-    total_iters: 10
 
 batch_size:
   effective: 32
   per_device: 32
   per_device_eval: 32
   per_device_predict: 1024
-
-
-indexes:
-  update_freq: 2_000
-  faiss:
-    factory: Flat
-    schedule: 0
-  bm25:
-    use_labels: true
-    schedule: 1

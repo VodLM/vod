@@ -34,14 +34,10 @@ dataset:
 
 model:
   compile: true
-  embedding_size: 512
-  use_pooler_layer: false
   optimizer:
     lr: 1e-4
     weight_decay: 0
     eps: 1e-8
-  scheduler:
-    total_iters: 100
   gradients:
     self_supervision_weight: 0.0
     bm25_guidance_weight: 0.0
@@ -60,10 +56,10 @@ trainer:
   accelerator: gpu
   precision: 16-mixed
   detect_anomaly: false
-  max_steps: 50_000
+  max_steps: 100_000
   limit_val_batches: 50
   val_check_interval: ${int_mul:${trainer.accumulate_grad_batches},300}
-  inference_mode: false  # https://github.com/Lightning-AI/lightning/issues/17175#issuecomment-1487074273
+  inference_mode: false  # TODO: https://github.com/Lightning-AI/lightning/issues/17175#issuecomment-1487074273
 
 
 collates:
@@ -73,6 +69,7 @@ collates:
     max_pos_sections: 8
     prefetch_n_sections: 128
     do_sample: false
+    in_batch_negatives: true
   benchmark:
     n_sections: 300
     max_pos_sections: 100
@@ -80,7 +77,7 @@ collates:
     do_sample: false
 
 schedule:
-  index_update_freq: 10_000
+  period: 10_000
   reset_model_on_period_start: false
   benchmark_on_init: false
   parameters:
@@ -88,13 +85,13 @@ schedule:
       mode: linear
       start: 0
       value: 1
-      period: 50_000
+      period: ${trainer.max_steps}
 
     bm25:
       mode: linear
       start: 1
       value: 0
-      period: 50_000
+      period: ${trainer.max_steps}
 
 
 benchmark_search:

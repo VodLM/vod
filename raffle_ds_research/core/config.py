@@ -212,6 +212,7 @@ class RetrievalCollateConfig(BaseCollateConfig):
     max_pos_sections: int = 3
     post_filter: Optional[str] = None
     do_sample: bool = False
+    in_batch_negatives: bool = False
     prep_num_proc: int = 4
 
     # name of the keys to use on the query side and on the section side
@@ -224,13 +225,13 @@ class RetrievalCollateConfig(BaseCollateConfig):
 class ScheduleConfig(pydantic.BaseModel):
     """Configures a group of indexes (e.g., bm25, faiss)."""
 
-    index_update_freq: Union[int, list[int]]
+    period: Union[int, list[int]]
     reset_model_on_period_start: bool = False
     benchmark_on_init: bool = True
     parameters: dict[str, BaseSchedule] = {}
 
     # validators
-    _validate_update_freq = pydantic.validator("index_update_freq", allow_reuse=True, pre=True)(as_pyobj_validator)
+    _validate_update_freq = pydantic.validator("period", allow_reuse=True, pre=True)(as_pyobj_validator)
 
     @pydantic.validator("parameters", pre=True)
     def _validate_parameters(cls, x: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:

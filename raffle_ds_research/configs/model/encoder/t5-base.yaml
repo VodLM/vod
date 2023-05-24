@@ -1,2 +1,6 @@
-_target_: transformers.T5EncoderModel.from_pretrained
-pretrained_model_name_or_path: t5-base
+defaults:
+  - bert-base
+  - _self_
+model_name: t5-base
+cls_name: T5EncoderModel
+agg: mean

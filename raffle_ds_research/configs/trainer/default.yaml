@@ -13,7 +13,7 @@ _target_: raffle_ds_research.tools.utils.trainer.Trainer
 max_steps: 1_000_000
 val_check_interval: null
 fast_dev_run: false
-gradient_clip_val: 0.5
+gradient_clip_val: 1.0
 accumulate_grad_batches: ${batch_size.gradient_accumulation_steps}
 accelerator: ${default_trainer_accelerator:}
 devices: ${resources.n_devices}

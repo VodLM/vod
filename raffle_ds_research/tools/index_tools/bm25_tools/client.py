@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import itertools
 import logging
+import time
 import uuid
 import warnings
 from typing import Any, Iterable, Optional
@@ -72,6 +73,7 @@ class Bm25Client(search_server.SearchClient):
         top_k: int = 3,
     ) -> rtypes.RetrievalBatch[np.ndarray]:
         """Search elasticsearch for the batch of text queries using `msearch`. NB: `vector` is not used here."""
+        start_time = time.time()
         if self.supports_label and label is None:
             warnings.warn("This index supports labels, but no label is provided.", stacklevel=2)
 
@@ -98,7 +100,11 @@ class Bm25Client(search_server.SearchClient):
             scores_ = np.pad(scores_, (0, top_k - len(scores_)), constant_values=-np.inf)
             scores.append(scores_)
 
-        return rtypes.RetrievalBatch(indices=np.stack(indices), scores=np.stack(scores))
+        return rtypes.RetrievalBatch(
+            indices=np.stack(indices),
+            scores=np.stack(scores),
+            meta={"time": time.time() - start_time},
+        )
 
     def _make_queries(self, texts: list[str], *, top_k: int, labels: Optional[list[str | int]] = None) -> list:
         if labels is None:

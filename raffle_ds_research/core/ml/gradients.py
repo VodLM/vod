@@ -108,7 +108,12 @@ class KlDivGradients(Gradients):
         # Define the logits of the model `q_model(z)`
         # set -inf wherever:
         #   - the section is masked (padding)
-        model_scores = torch.einsum("bh, bdh -> bd", data.hq, data.hd)
+        if data.hd.dim() == 2:  # noqa: PLR2004
+            model_scores = torch.einsum("bh, dh -> bd", data.hq, data.hd)
+        elif data.hd.dim() == 3:  # noqa: PLR2004
+            model_scores = torch.einsum("bh, bdh -> bd", data.hq, data.hd)
+        else:
+            raise ValueError(f"Invalid dimension for `hd`: {data.hd.shape}")
         model_scores.masked_fill_(is_padding, -torch.inf)
         model_logits = model_scores.log_softmax(dim=-1)
 

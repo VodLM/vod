@@ -1,0 +1,7 @@
+lr_master:
+  _target_: raffle_ds_research.core.mechanics.callbacks.DecayLrOnFitCallaback
+  schedule:
+    mode: linear
+    start: ${model.optimizer.lr}
+    value: ${eval:0.1 * ${model.optimizer.lr}}
+    period: ${trainer.max_steps}

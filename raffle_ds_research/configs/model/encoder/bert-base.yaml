@@ -1,2 +1,5 @@
-_target_: transformers.BertModel.from_pretrained
-pretrained_model_name_or_path: bert-base-uncased
+_target_: raffle_ds_research.core.ml.TransformerEncoder
+cls_name: BertModel
+model_name: bert-base-uncased
+vector_size: null
+agg: cls

@@ -31,9 +31,10 @@ def train_with_index_updates(  # noqa: C901
 
     logger.info("Instantiating the Ranker (init.)")
     ranker: Ranker = ranker_generator()
+    logger.info(f"Encoder output shape: `{ranker.get_output_shape()}`")
 
     # Define the index update steps and the `PeriodicStoppingCallback` callback.
-    update_steps = _infer_update_steps(trainer.max_steps, config.schedule.index_update_freq)
+    update_steps = _infer_update_steps(trainer.max_steps, config.schedule.period)
     logger.info(f"Index will be updated at steps: {_pretty_steps(update_steps)}")
     if len(update_steps) == 0:
         raise ValueError("No index update steps were defined.")
@@ -166,7 +167,8 @@ def train_with_index_updates(  # noqa: C901
                     parameters=parameters,
                     serve_on_gpu=False,
                 )
-                logger.info(f"Completed training period {1+period_idx}")
+            logger.info(f"Completed training period {1+period_idx}")
+            barrier("Period completed.")
 
     return ranker
 

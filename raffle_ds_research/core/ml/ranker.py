@@ -1,4 +1,3 @@
-# pylint: disable=too-many-arguments,arguments-differ,inconsistent-return-statements,too-many-instance-attributes,fixme
 from __future__ import annotations
 
 import functools
@@ -8,18 +7,15 @@ from typing import Any, Iterable, Optional, Union
 import lightning.pytorch as pl
 import loguru
 import torch
-import transformers
 from datasets.fingerprint import Hasher, hashregister
 from hydra.utils import instantiate
 from loguru import logger
 from omegaconf import DictConfig
-from transformers import BertConfig, BertModel, T5EncoderModel
 
+from raffle_ds_research.core.ml import public
 from raffle_ds_research.core.ml.gradients import Gradients
 from raffle_ds_research.core.ml.monitor import Monitor
 from raffle_ds_research.tools.pipes import fingerprint_torch_module
-
-TransformerEncoder = Union[T5EncoderModel, BertModel]
 
 
 def only_trainable(parameters: Iterable[torch.nn.Parameter]) -> Iterable[torch.nn.Parameter]:
@@ -44,13 +40,11 @@ class Ranker(pl.LightningModule):
 
     def __init__(  # noqa: PLR0913
         self,
-        encoder: TransformerEncoder,
+        encoder: public.ProtocolEncoder,
         gradients: Gradients,
         optimizer: Optional[dict | DictConfig | functools.partial] = None,
         scheduler: Optional[dict | DictConfig | functools.partial] = None,
         monitor: Optional[Monitor] = None,
-        embedding_size: Optional[int] = 512,
-        use_pooler_layer: bool = False,
         compile: bool = False,
     ):
         super().__init__()
@@ -69,16 +63,6 @@ class Ranker(pl.LightningModule):
         self.monitor = monitor
         self.encoder = encoder
 
-        # projection layer
-        self.use_pooler_layer = use_pooler_layer
-        h_model = self._infer_model_output_size(encoder)
-        if embedding_size is None:
-            self._output_size = h_model
-            self.proj = torch.nn.Identity()
-        else:
-            self.proj = torch.nn.Linear(h_model, embedding_size, bias=False)
-            self._output_size = embedding_size
-
         # setup the encoder
         if compile:
             loguru.logger.info("Compiling the encoder...")
@@ -88,20 +72,11 @@ class Ranker(pl.LightningModule):
 
     def get_output_shape(self, model_output_key: Optional[str] = None) -> tuple[int, ...]:  # noqa: ARG002
         """Dimension of the model output."""
-        return (self._output_size,)
-
-    @staticmethod
-    def _infer_model_output_size(encoder: TransformerEncoder) -> int:
-        if isinstance(encoder.config, BertConfig):
-            h_model = encoder.config.hidden_size
-        elif isinstance(encoder.config, transformers.T5Config):
-            h_model = encoder.config.d_model
-        else:
-            raise ValueError(f"Unknown encoder config type: {type(encoder.config)}")
-        return h_model
+        return self.encoder.get_output_shape(model_output_key)  # type: ignore
 
     def configure_optimizers(self) -> dict:
         """Configure the optimizer and the learning rate scheduler."""
+        logger.info("Configuring the optimizer and the learning rate scheduler...")
         # define the optimizer using the above groups
         # todo: do not apply weight decay to bias and LayerNorm parameters
         #       do this with a special constructor for the optimizer
@@ -135,15 +110,14 @@ class Ranker(pl.LightningModule):
             },
         }
 
-    def _forward_field(self, batch: dict) -> torch.Tensor:
+    def _forward_field(self, batch: dict, field: str) -> torch.Tensor:
         input_ids = batch["input_ids"]
         attention_mask = batch["attention_mask"]
         original_shape = input_ids.shape
         input_ids = input_ids.view(-1, original_shape[-1])
         attention_mask = attention_mask.view(-1, original_shape[-1])
-        outputs = self.encoder(input_ids, attention_mask=attention_mask)
-        embedding = outputs.pooler_output if self.use_pooler_layer else outputs.last_hidden_state[..., 0, :]
-        embedding = self.proj(embedding)
+        inputs = public.TokenizedField(input_ids=input_ids, attention_mask=attention_mask, field=field)  # type: ignore
+        embedding = self.encoder(inputs)
         embedding = embedding.view(*original_shape[:-1], -1)
         return embedding
 
@@ -167,7 +141,7 @@ class Ranker(pl.LightningModule):
             fields = self._fetch_fields(batch, field)
             if fields is None:
                 continue
-            output[key] = self._forward_field(fields)
+            output[key] = self._forward_field(fields, field)
         if len(output) == 0:
             raise ValueError(
                 f"No fields to process. " f"Batch keys = {batch.keys()}. Expected fields = {mapping.keys()}."
@@ -190,6 +164,7 @@ class Ranker(pl.LightningModule):
         # filter the output and log
         output = self._filter_output(output)
         on_step = split == "train"
+        output.update({k: v for k, v in batch.items() if k.startswith("diagnostics.")})
         self._log_metrics(output, split=split, on_step=on_step, on_epoch=not on_step)
 
         return output
@@ -204,6 +179,7 @@ class Ranker(pl.LightningModule):
         **kwargs: Any,
     ) -> None:
         for key, value in output.items():
+            key = key.replace(".", "/")  # noqa: PLW2901
             if isinstance(value, torch.Tensor) and value.numel() > 1:
                 value = value.mean()  # noqa: PLW2901
 

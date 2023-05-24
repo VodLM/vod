@@ -159,6 +159,8 @@ BASE_DEVICE_STYLES = {
 
 def _format_dtype(x: str) -> str:
     """Format a dtype as a string."""
+    if "." not in x:
+        return f"[white]{x}[/]"
     type_, dtype_str = x.split(".")
     style = BASE_STYLES.get(type_, "")
     dtype_str = f"[{style}]{dtype_str}[/]"
@@ -174,12 +176,14 @@ def _format_py_type(x: str) -> str:
         "None": "bold red",
         "Tensor": BASE_STYLES["torch"],
         "ndarray": BASE_STYLES["np"],
-    }.get(x, "")
+    }.get(x, "white")
     return f"[{style}]{x}[/]"
 
 
 def _format_device(device: str) -> str:
     """Format a device sas a string."""
+    if device is None:
+        return "-"
     if device.strip() == "-":
         return _default_formatter(device)
     if ":" in device:
@@ -265,7 +269,6 @@ def _safe_yaml(section: str) -> str:
     return section
 
 
-# pylint: disable=too-many-locals
 def pprint_retrieval_batch(
     batch: dict[str, Any],
     idx: Optional[list[int]] = None,  # noqa: ARG
