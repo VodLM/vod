@@ -141,11 +141,14 @@ class RetrievalCollate(pipes.Collate):
 
         # flatten sections (in-batch negative)
         if self.config.in_batch_negatives:
-            sections = flatten_sections(
+            sections = gather_in_batch_negatives(
                 sections,
-                positive_samples,
+                candidates=candidate_samples,
+                positives=positive_samples,
+                client_scores=client_scores,
                 world_size=len(self.sections),
                 padding=True,  # <-- padding is required for `torch.compile()` to compile a single graph.
+                fill_score_offset=self.config.in_batch_neg_offset,
             )
 
         # fetch the content of each section from the huggingface `datasets.Dataset`
@@ -373,40 +376,51 @@ class BlockTimer:
         self.output[self.name] = time.perf_counter() - self.start
 
 
-def flatten_sections(
-    sections: SampledSections,
+def gather_in_batch_negatives(
+    samples: SampledSections,
+    candidates: index_tools.RetrievalBatch,
     positives: index_tools.RetrievalBatch,
+    client_scores: dict[str, np.ndarray],
     world_size: int,
-    fill_score_offset: int = -1,
+    fill_score_offset: int = 0,
     padding: bool = True,
 ) -> SampledSections:
-    """Merge all sections as a flat batch."""
-    n_full = math.prod(sections.indices.shape)
-    unique_indices = np.unique(sections.indices)
+    """Merge all sections (positive and negative) as a flat batch."""
+    unique_indices = np.unique(samples.indices)
     if padding:
-        # padd the unique indices with random indices, we sample iid so there might be some collisions
-        # but this is ok unlikely, so not worth the extra computation to check.
+        # pad the unique indices with random indices to a fixed size
+        n_full = math.prod(samples.indices.shape)
         n_pad = n_full - unique_indices.shape[0]
+        # We sample iid so there might be some collisions
+        # but this is ok unlikely, so not worth the extra computation to check.
         random_indices = np.random.randint(0, world_size, size=n_pad)
         unique_indices = np.concatenate([unique_indices, random_indices])
 
     # repeat the unique indices for each section
-    unique_indices_ = unique_indices[None, :].repeat(sections.indices.shape[0], axis=0)
+    unique_indices_ = unique_indices[None, :].repeat(samples.indices.shape[0], axis=0)
 
-    # gather the scores from the `sections` batch
-    scores = c_tools.gather_by_index(unique_indices_, sections.indices, sections.scores)
-    scores = _fill_nan_scores(scores, fill_score_offset)
+    # gather the scores from the `candidates` batch, set the NaNs to the minimum score
+    scores = c_tools.gather_by_index(unique_indices_, candidates.indices, candidates.scores)
+    scores = _fill_nan_scores(
+        scores,
+        ref_scores=candidates.scores,
+        fill_value_offset=fill_score_offset,
+    )
 
-    # gather the labels from the `positives` batch
+    # gather the labels from the `positives` batch, set NaNs to negatives
     labels = c_tools.gather_by_index(unique_indices_, positives.indices, positives.indices >= 0)
     labels = (~np.isnan(labels)) & (labels > 0)
 
-    # other scores (gather scores)
-    if sections.other_scores is not None:
+    # other scores (client scores)
+    if samples.other_scores is not None:
         others = {}
-        for key, other_scores in sections.other_scores.items():
-            others[key] = c_tools.gather_by_index(unique_indices_, sections.indices, other_scores)
-            others[key] = _fill_nan_scores(others[key], fill_score_offset)
+        for key in samples.other_scores:
+            others[key] = c_tools.gather_by_index(unique_indices_, candidates.indices, client_scores[key])
+            others[key] = _fill_nan_scores(
+                others[key],
+                ref_scores=candidates.scores,
+                fill_value_offset=fill_score_offset,
+            )
     else:
         others = None
 
@@ -418,7 +432,8 @@ def flatten_sections(
     )
 
 
-def _fill_nan_scores(scores: np.ndarray, fill_value_offset: int = -1) -> np.ndarray:
-    fill_value = np.nanmin(scores, axis=-1) + fill_value_offset
+def _fill_nan_scores(scores: np.ndarray, ref_scores: np.ndarray, fill_value_offset: int = 0) -> np.ndarray:
+    ref_scores_ = np.where(np.isfinite(ref_scores), ref_scores, np.nan)
+    fill_value = np.nanmin(ref_scores_, axis=-1) + fill_value_offset
     scores = np.where(np.isnan(scores), fill_value[:, None], scores)
     return scores

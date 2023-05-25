@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import pathlib
 from typing import Any, Optional
 
@@ -41,9 +40,9 @@ def log_retrieval_batch(
             skip_special_tokens=True,
             max_sections=max_sections,
         )
-        console.print(
-            "." * os.get_terminal_size().columns + "\n"
-        )  # <- this is a hack to make sure the console is flushed
+        # console.print(
+        #     "." * os.get_terminal_size().columns + "\n"
+        # )  # <- this is a hack to make sure the console is flushed
         html_path = pathlib.Path("retrieval-batch.html")
         console.save_html(str(html_path), theme=terminal_theme.MONOKAI)
 

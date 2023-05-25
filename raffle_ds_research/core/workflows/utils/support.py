@@ -11,7 +11,6 @@ from typing import Any, Callable, Optional, TypeVar
 import datasets
 import lightning as L  # noqa: N812
 import numpy as np
-import rich
 import transformers
 from loguru import logger
 from torch.utils import data as torch_data
@@ -19,6 +18,7 @@ from typing_extensions import Self, Type
 
 from raffle_ds_research.core import config as core_config
 from raffle_ds_research.core import mechanics
+from raffle_ds_research.core.mechanics.dataloader_sampler import DataloaderSampler
 from raffle_ds_research.core.workflows.utils import support
 from raffle_ds_research.tools import dstruct, index_tools, pipes
 from raffle_ds_research.tools.utils.pretty import human_format_nb
@@ -96,6 +96,7 @@ def instantiate_retrieval_dataloader(
     cache_dir: pathlib.Path,
     barrier_fn: Callable[[str], None],
     rank: int = 0,
+    dl_sampler: typing.Optional[DataloaderSampler] = None,
 ) -> torch_data.DataLoader[dict[str, Any]]:
     """Instantiate a dataloader for the retrieval task."""
     lookup_args = {
@@ -129,19 +130,19 @@ def instantiate_retrieval_dataloader(
         parameters=parameters,
         target_lookup=lookup_path,
     )
-    dataset = WithVectors(
+    dataset = _WithVectors(
         dataset=questions.data,
         vectors=questions.vectors,
         vector_key="vector",
     )
-    return torch_data.DataLoader(
-        dataset=dataset,  # type: ignore
-        collate_fn=collate_fn,
-        **dataloader_config.dict(),
-    )
+    kws = dataloader_config.dict()
+    if dl_sampler is not None:
+        kws["sampler"] = dl_sampler(questions.data)
+        kws["shuffle"] = False
+    return torch_data.DataLoader(dataset=dataset, collate_fn=collate_fn, **kws)  # type: ignore
 
 
-class WithVectors(dstruct.SizedDataset[dict[str, Any]]):
+class _WithVectors(dstruct.SizedDataset[dict[str, Any]]):
     """A wrapper around a dataset that adds vectors to each item."""
 
     __slots__ = ("dataset", "vectors", "vector_key")
@@ -210,11 +211,6 @@ def _barrier_fn(name: str, trainer: L.Trainer) -> None:
     """Barrier to synchronize all processes."""
     if trainer.world_size == 1:
         return
-
-    rich.print(
-        f"[bold yellow][Rank {(trainer.global_rank + 1)} / {trainer.world_size}][/bold yellow] waiting: `{name}` ..."
-    )
+    logger.debug(f"waiting: `{name}` ...")
     trainer.strategy.barrier(name)
-    rich.print(
-        f"[bold green][Rank {(trainer.global_rank + 1)} / {trainer.world_size}][/bold green] completed: `{name}` ..."
-    )
+    logger.success(f"completed: `{name}` ...")

@@ -103,3 +103,4 @@ def register_omgeaconf_resolvers() -> None:  # noqa: C901
     OmegaConf.register_new_resolver("fmt_mn", _format_model_name)
     OmegaConf.register_new_resolver("reverse_frank_split", _reverse_frank_split)
     OmegaConf.register_new_resolver("is_cuda_available", torch.cuda.is_available)
+    OmegaConf.register_new_resolver("null_cls", lambda *_: None)

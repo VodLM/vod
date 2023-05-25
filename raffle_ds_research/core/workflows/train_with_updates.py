@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import functools
-import os
 import pathlib
+import sys
 from typing import Any, Callable, Iterable
 
 import lightning as L  # noqa: N812
@@ -19,7 +19,7 @@ from raffle_ds_research.core.workflows.utils import logging, support
 from raffle_ds_research.tools import caching, pipes
 
 
-def train_with_index_updates(  # noqa: C901
+def train_with_index_updates(  # noqa: C901, PLR0915
     *,
     trainer: L.Trainer,
     ranker_generator: Callable[..., Ranker],
@@ -47,6 +47,9 @@ def train_with_index_updates(  # noqa: C901
     barrier = functools.partial(support._barrier_fn, trainer=trainer)
     barrier("Setup done.")
     barrier("Training starting..")
+
+    # configure logging
+    _configure_logger(trainer)
 
     # Train the model for each period
     update_steps = update_steps + [None]
@@ -146,7 +149,7 @@ def train_with_index_updates(  # noqa: C901
                         functools.partial(
                             pipes.pprint_batch,
                             header=f"Train batch - period = {1+period_idx}",
-                            footer="." * os.get_terminal_size().columns + "\n\n",  # <- force a new line
+                            # footer="." * os.get_terminal_size().columns + "\n\n",  # <- force a new line
                         )
                     ),
                 ],  # type: ignore
@@ -163,11 +166,12 @@ def train_with_index_updates(  # noqa: C901
                     collate_config=config.collates.train,
                     train_dataloader_config=config.dataloaders.train,
                     eval_dataloader_config=config.dataloaders.eval,
+                    dl_sampler=config.dl_sampler,
                     cache_dir=cache_dir,
                     parameters=parameters,
                     serve_on_gpu=False,
                 )
-            logger.info(f"Completed training period {1+period_idx}")
+            logger.success(f"Completed training period {1+period_idx}")
             barrier("Period completed.")
 
     return ranker
@@ -279,3 +283,17 @@ class OnFirstBatchCallback(L.Callback):
         """Called when the training batch starts."""
         if batch_idx == 0 and trainer.global_step == 0 and trainer.is_global_zero:
             self.fn(batch)
+
+
+def _configure_logger(trainer: L.Trainer) -> None:
+    logger_format = (
+        "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
+        "<level>{level: <8}</level> | "
+        "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> | "
+        "<yellow>rank</yellow>:<yellow>{extra[rank]}/{extra[world_size]}</yellow> - <level>{message}</level>"
+    )
+    if trainer.world_size == 1:
+        return
+    logger.configure(extra={"rank": 1 + trainer.global_rank, "world_size": trainer.world_size})  # Default values
+    logger.remove()
+    logger.add(sys.stderr, format=logger_format)

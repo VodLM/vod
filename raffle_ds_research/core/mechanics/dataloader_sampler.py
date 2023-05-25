@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import abc
 import collections
+import copy
 from typing import Iterable
 
-import datasets
 import omegaconf
 from torch.utils import data as torch_data
 
+from raffle_ds_research.tools import dstruct
 from raffle_ds_research.utils.config import maybe_cast_omegaconf
 
 
@@ -15,7 +16,7 @@ class DataloaderSampler(abc.ABC):
     """Abstract class for dataloader samplers."""
 
     @abc.abstractmethod
-    def __call__(self, dataset: datasets.Dataset) -> torch_data.WeightedRandomSampler:
+    def __call__(self, dataset: dstruct.SizedDataset[dict]) -> torch_data.WeightedRandomSampler:
         """Return a `torch.utils.data.DataLoader` for the given dataset."""
         pass
 
@@ -28,9 +29,9 @@ class LookupSampler(DataloaderSampler):
         self.lookup: dict[str, float] = maybe_cast_omegaconf(lookup)  # type: ignore
         self.default_weight = default_weight
 
-    def __call__(self, dataset: datasets.Dataset) -> torch_data.WeightedRandomSampler:
+    def __call__(self, dataset: dstruct.SizedDataset[dict]) -> torch_data.WeightedRandomSampler:
         """Return a `torch.utils.data.DataLoader` for the given dataset."""
-        features = dataset[self.key]
+        features = (row[self.key] for row in dataset)
         weights = [self.lookup.get(feature, self.default_weight) for feature in features]
         return torch_data.WeightedRandomSampler(
             weights=weights,
@@ -45,9 +46,9 @@ class InverseFrequencySampler(DataloaderSampler):
     def __init__(self, key: str):
         self.key = key
 
-    def __call__(self, dataset: datasets.Dataset) -> torch_data.WeightedRandomSampler:
+    def __call__(self, dataset: dstruct.SizedDataset[dict]) -> torch_data.WeightedRandomSampler:
         """Return a `torch.utils.data.DataLoader` for the given dataset."""
-        features = dataset[self.key]
+        features = (row[self.key] for row in dataset)
         counts = collections.Counter(features)
         inverse_frequency = [1 / counts[feature] for feature in features]
         return torch_data.WeightedRandomSampler(
@@ -63,13 +64,33 @@ class ProductSampler(DataloaderSampler):
     def __init__(self, samplers: Iterable[DataloaderSampler]):
         self.samplers = samplers
 
-    def __call__(self, dataset: datasets.Dataset) -> torch_data.WeightedRandomSampler:
+    def __call__(self, dataset: dstruct.SizedDataset[dict]) -> torch_data.WeightedRandomSampler:
         """Return a `torch.utils.data.DataLoader` for the given dataset."""
         samplers = [sampler(dataset) for sampler in self.samplers]
         weights = [sampler.weights for sampler in samplers]
         weights = [sum(ws) for ws in zip(*weights)]
         return torch_data.WeightedRandomSampler(
-            weights=weights,
+            weights=weights,  # type: ignore
             num_samples=len(dataset),
             replacement=True,
         )
+
+
+def dl_sampler_factory(config: dict | omegaconf.DictConfig) -> None | DataloaderSampler:
+    """Return a dataloader sampler from the given config."""
+    if isinstance(config, omegaconf.DictConfig):
+        config = omegaconf.OmegaConf.to_container(config, resolve=True)  # type: ignore
+    else:
+        config = copy.deepcopy(config)
+    if len(config) == 0:
+        return None
+    mode = config.pop("mode")
+    if mode == "product":
+        return ProductSampler([dl_sampler_factory(sub_config) for sub_config in config["samplers"]])  # type: ignore
+
+    sampler = {
+        "lookup": LookupSampler,
+        "inverse_frequency": InverseFrequencySampler,
+    }
+
+    return sampler[mode](**config)

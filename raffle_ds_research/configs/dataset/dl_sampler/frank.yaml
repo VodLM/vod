@@ -1,6 +1,0 @@
-_target_: raffle_ds_research.core.dataset_builders.dataloader_sampler.LookupSampler
-key: data_source
-lookup:
-  ai_trainer: 2.5
-  production: 1.5
-  default_weight: 1.0

@@ -1,5 +1,6 @@
 defaults:
   - dataset: retrieval
+  - dl_sampler: none
   - search: default
   - model: default
   - schedule: default

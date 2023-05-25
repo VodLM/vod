@@ -13,6 +13,7 @@ import transformers
 from omegaconf import DictConfig, OmegaConf
 from typing_extensions import Self, Type
 
+from raffle_ds_research.core.mechanics.dataloader_sampler import DataloaderSampler, dl_sampler_factory
 from raffle_ds_research.core.mechanics.search_engine import SearchConfig
 from raffle_ds_research.core.workflows.utils.schedule import BaseSchedule, schedule_factory
 from raffle_ds_research.tools.utils.loader_config import DataLoaderConfig
@@ -213,6 +214,7 @@ class RetrievalCollateConfig(BaseCollateConfig):
     post_filter: Optional[str] = None
     do_sample: bool = False
     in_batch_negatives: bool = False
+    in_batch_neg_offset: int = 0
     prep_num_proc: int = 4
 
     # name of the keys to use on the query side and on the section side
@@ -345,6 +347,7 @@ class TrainWithIndexUpdatesConfigs:
     search: SearchConfigs
     sys: SysConfig
     benchmark_search_overrides: Optional[dict] = None
+    dl_sampler: Optional[DataloaderSampler] = None
 
     @classmethod
     def parse(cls: Type[Self], config: DictConfig) -> Self:
@@ -370,4 +373,5 @@ class TrainWithIndexUpdatesConfigs:
             collates=collates,
             search=SearchConfigs(training=training_search, benchmark=benchmark_search),
             sys=sys_config,
+            dl_sampler=dl_sampler_factory(config.dl_sampler) if config.dl_sampler is not None else None,
         )

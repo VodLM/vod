@@ -13,6 +13,7 @@ from loguru import logger
 from raffle_ds_research.core import config as core_config
 from raffle_ds_research.core import mechanics
 from raffle_ds_research.core.mechanics import search_engine
+from raffle_ds_research.core.mechanics.dataloader_sampler import DataloaderSampler
 from raffle_ds_research.core.ml.ranker import Ranker
 from raffle_ds_research.core.workflows.precompute import PrecomputedDsetVectors
 from raffle_ds_research.core.workflows.utils import support
@@ -42,6 +43,7 @@ def index_and_train(
     collate_config: core_config.RetrievalCollateConfig,
     train_dataloader_config: core_config.DataLoaderConfig,
     eval_dataloader_config: core_config.DataLoaderConfig,
+    dl_sampler: typing.Optional[DataloaderSampler] = None,
     cache_dir: pathlib.Path,
     parameters: typing.Optional[dict[str, float]] = None,
     serve_on_gpu: bool = False,
@@ -83,23 +85,42 @@ def index_and_train(
             cache_dir=cache_dir,
             barrier_fn=barrier_fn,
             rank=trainer.global_rank,
+            dl_sampler=dl_sampler,
         )
 
         # train the ranker
         logger.debug("Training ranker..")
-        trainer.fit(
-            ranker,
-            train_dataloaders=init_dataloader(
-                questions=task.train_questions,
-                dataloader_config=train_dataloader_config,
-            ),
-            val_dataloaders=init_dataloader(
-                questions=task.val_questions,
-                dataloader_config=eval_dataloader_config,
-            ),
-        )
+        with _PatchTrainer(trainer, keep_dl_sampler=dl_sampler is not None):
+            trainer.fit(
+                ranker,
+                train_dataloaders=init_dataloader(
+                    questions=task.train_questions,
+                    dataloader_config=train_dataloader_config,
+                ),
+                val_dataloaders=init_dataloader(
+                    questions=task.val_questions,
+                    dataloader_config=eval_dataloader_config,
+                ),
+            )
 
     return ranker
+
+
+class _PatchTrainer:
+    """Patch the trainer to the provided dataloader sampler."""
+
+    def __init__(self, trainer: L.Trainer, keep_dl_sampler: bool = False) -> None:
+        self.trainer = trainer
+        self.keep_dl_sampler = keep_dl_sampler
+
+    def __enter__(self) -> None:
+        if self.keep_dl_sampler:
+            self._use_distributed_sampler = self.trainer._accelerator_connector.use_distributed_sampler
+            self.trainer._accelerator_connector.use_distributed_sampler = False
+
+    def __exit__(self, *args, **kwargs) -> None:  # noqa: ANN
+        if self.keep_dl_sampler:
+            self.trainer._accelerator_connector.use_distributed_sampler = self._use_distributed_sampler
 
 
 def _make_retrieval_task(
