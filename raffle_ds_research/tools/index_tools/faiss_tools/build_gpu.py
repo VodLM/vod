@@ -7,6 +7,7 @@ import time
 from typing import Callable, Optional
 
 import faiss.contrib.torch_utils  # type: ignore
+import gpustat
 import numpy as np
 import pydantic
 import torch
@@ -15,6 +16,14 @@ from tqdm import tqdm
 
 from raffle_ds_research.tools import dstruct
 from raffle_ds_research.tools.index_tools.faiss_tools import support
+
+_MAX_GPU_MEM_USAGE = 0.8
+
+
+def _get_max_gpu_usage() -> float:
+    """Get the maximum GPU usage."""
+    stats = gpustat.GPUStatCollection.new_query().jsonify()
+    return max(g["memory.used"] / g["memory.total"] for g in stats["gpus"])
 
 
 def _get_gpu_resources(
@@ -352,7 +361,7 @@ def _populate_index_cpu(
     return index
 
 
-def _populate_index_multigpu(  # noqa: PLR0912
+def _populate_index_multigpu(  # noqa: PLR0912, PLR0915
     vectors: dstruct.SizedDataset[np.ndarray],
     *,
     index: faiss.Index,
@@ -382,6 +391,7 @@ def _populate_index_multigpu(  # noqa: PLR0912
     )
 
     # add the vectors
+    prev_gpu_usage = _get_max_gpu_usage()
     with WithTimer(f"Populating index ({len(steps)} steps)", logger.info):
         for i_slice, xs in tqdm(vectors_batch_iter, desc="Adding vectors to sharded index", total=len(steps)):
             i0 = i_slice.start
@@ -390,8 +400,17 @@ def _populate_index_multigpu(  # noqa: PLR0912
                 logger.warning(f"NaN detected in vectors {i0}-{i1}")
                 xs[np.isnan(xs)] = 0
 
+            # add a batch
             gpu_index.add_with_ids(xs, np.arange(i0, i1))
-            if gpu_index.ntotal > max_add:
+
+            # check if the GPU must be emptied
+            gpu_usage = _get_max_gpu_usage()
+            gpu_batch_usage = max(0, gpu_usage - prev_gpu_usage)
+            must_be_emptied = (gpu_batch_usage + gpu_usage) > _MAX_GPU_MEM_USAGE
+            prev_gpu_usage = gpu_usage
+
+            # if gpu_index.ntotal > max_add:
+            if must_be_emptied:
                 # logger.debug(f"Reached max. size per GPU ({max_add}). Flushing indices to CPU")
                 if ngpu > 1:
                     for i in range(ngpu):
@@ -410,6 +429,8 @@ def _populate_index_multigpu(  # noqa: PLR0912
                 except AttributeError:
                     with contextlib.suppress(AttributeError):
                         gpu_index.syncWithSubIndexes()
+                # reset the memory usage
+                prev_gpu_usage = _get_max_gpu_usage()
 
             sys.stdout.flush()
 

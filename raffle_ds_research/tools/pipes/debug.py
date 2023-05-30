@@ -97,6 +97,10 @@ def _(x: Number) -> Properties:
     return Properties(
         py_type=type(x),
         dtype="-",
+        shape="-",
+        device="-",
+        min="-",
+        max="-",
         mean=f"{_smart_str(x)}",
     )
 

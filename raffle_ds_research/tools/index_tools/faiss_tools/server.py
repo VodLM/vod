@@ -49,7 +49,7 @@ app = FastAPI()
 logger.info("Starting API")
 faiss_index = init_index(args)
 if args.serve_on_gpu:
-    logger.info("Using GPU")
+    logger.info("Moving index to GPU")
     co = FaissGpuConfig().cloner_options()
     faiss_index = faiss.index_cpu_to_all_gpus(faiss_index, co=co)
 

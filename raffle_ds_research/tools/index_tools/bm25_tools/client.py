@@ -148,6 +148,7 @@ class Bm25Master(search_server.SearchMaster[Bm25Client]):
         persistent: bool = False,
         exist_ok: bool = False,
         skip_setup: bool = False,
+        es_body: Optional[dict] = None,
         **proc_kwargs: Any,
     ):
         super().__init__(skip_setup=skip_setup)
@@ -156,6 +157,7 @@ class Bm25Master(search_server.SearchMaster[Bm25Client]):
         self._proc_kwargs = proc_kwargs
         self._input_texts = texts
         self._input_labels = labels
+        self._es_body = es_body
         if index_name is None:
             index_name = f"auto-{uuid.uuid4().hex}"
         self._index_name = index_name
@@ -182,7 +184,13 @@ class Bm25Master(search_server.SearchMaster[Bm25Client]):
         stream = rich.progress.track(
             stream, description=f"Building ES index {self._index_name}", total=self._input_data_size
         )
-        maybe_ingest_data(stream, url=self.url, index_name=self._index_name, exist_ok=self._exist_ok)
+        maybe_ingest_data(
+            stream,
+            url=self.url,
+            index_name=self._index_name,
+            exist_ok=self._exist_ok,
+            es_body=self._es_body,
+        )
 
     def _on_exit(self) -> None:
         client = es.Elasticsearch(self.url)
@@ -216,10 +224,13 @@ def maybe_ingest_data(
     index_name: str,
     chunk_size: int = 1000,
     exist_ok: bool = False,
+    es_body: Optional[dict] = None,
 ) -> None:
     """Ingest data into Elasticsearch."""
     asyncio.run(
-        _async_maybe_ingest_data(stream, url=url, index_name=index_name, chunk_size=chunk_size, exist_ok=exist_ok)
+        _async_maybe_ingest_data(
+            stream, url=url, index_name=index_name, chunk_size=chunk_size, exist_ok=exist_ok, es_body=es_body
+        )
     )
 
 
@@ -230,6 +241,7 @@ async def _async_maybe_ingest_data(
     index_name: str,
     chunk_size: int = 1000,
     exist_ok: bool = False,
+    es_body: Optional[dict] = None,
 ) -> None:
     async with es.AsyncElasticsearch(url) as client:
         if await client.indices.exists(index=index_name):
@@ -240,7 +252,7 @@ async def _async_maybe_ingest_data(
             raise RuntimeError(f"Index {index_name} already exists")
         try:
             logger.info(f"Creating new ES index `{index_name}`")
-            await client.indices.create(index=index_name)
+            await client.indices.create(index=index_name, body=es_body)
             actions = ({"_index": index_name, "_source": eg} for eg in stream)
             await es_helpers.async_bulk(
                 client,

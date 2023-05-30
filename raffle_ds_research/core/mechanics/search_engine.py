@@ -3,9 +3,12 @@ from __future__ import annotations
 import pathlib
 from typing import Any, Callable
 
+import elasticsearch
 import numpy as np
 import omegaconf
 import pydantic
+from lightning.pytorch import utilities as pl_utils
+from loguru import logger
 from typing_extensions import Self, Type
 
 from raffle_ds_research.tools import dstruct, index_tools
@@ -42,9 +45,14 @@ def build_search_engine(
     skip_setup: bool = False,
     barrier_fn: None | Callable[[str], None] = None,
     serve_on_gpu: bool = False,
+    close_existing_es_indices: bool = True,
 ) -> index_tools.MultiSearchMaster:
     """Build a search engine."""
     servers = {}
+
+    if close_existing_es_indices:
+        # Close all indices to avoid hitting memory limits
+        _close_all_es_indices()
 
     if faiss_enabled:
         if vectors is None:
@@ -75,3 +83,24 @@ def build_search_engine(
         raise ValueError("No search servers were enabled.")
 
     return MultiSearchMaster(servers=servers, skip_setup=skip_setup)
+
+
+@pl_utils.rank_zero_only
+def _close_all_es_indices(es_url: str = "http://localhost:9200") -> None:
+    """Close all `elasticsearch` indices."""
+    logger.info(f"Closing all ES indices on `{es_url}`")
+
+    try:
+        es = elasticsearch.Elasticsearch(es_url)
+        for index_name in es.indices.get(index="*"):
+            if index_name.startswith("."):
+                continue
+            logger.debug(f"Found ES index `{index_name}`")
+            try:
+                if es.indices.exists(index=index_name):
+                    logger.info(f"Closing ES index {index_name}")
+                    es.indices.close(index=index_name)
+            except Exception as exc:
+                logger.warning(f"Could not close index {index_name}: {exc}")
+    except Exception as exc:
+        logger.warning(f"Could not connect to ES: {exc}")

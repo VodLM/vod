@@ -187,7 +187,7 @@ def _hacky_setup_distributed_env(
     If not done, `barrier()` will not work as expected.
     """
     factory = next(iter(_get_dset_factories(config.dataset.get("validation"), config=config.dataset).values()))
-    dset = factory(what="question").select(range(3))
+    dset = factory(what="question").select(range(2 * trainer.num_devices))
     collate_fn = precompute.init_predict_collate_fn(
         config.collates.benchmark,
         field="question",
@@ -294,6 +294,7 @@ def _configure_logger(trainer: L.Trainer) -> None:
     )
     if trainer.world_size == 1:
         return
+
     logger.configure(extra={"rank": 1 + trainer.global_rank, "world_size": trainer.world_size})  # Default values
     logger.remove()
     logger.add(sys.stderr, format=logger_format)

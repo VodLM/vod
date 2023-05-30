@@ -14,18 +14,21 @@ defaults:
   - _self_
 
 
-seed: 1
+seed: 2
 
 dataset:
   train:
-    - frank.A.en:train
-    - squad.en:train
+    # - frank.A.en-pos:train
+    # - frank.A.en:train
+    # - squad.en:train
     - msmarco.en:train
   validation:
-    - frank.A.en:val
-    - squad.en:val
+    # - frank.A.en-pos:val
+    # - frank.A.en:val
+    # - squad.en:val
     - msmarco.en:val
   benchmark:
+    # - frank.B.en-pos:val
     - frank.A.en:val
     - frank.B.en:val
     - msmarco.en:val
@@ -33,7 +36,7 @@ dataset:
 model:
   compile: true
   optimizer:
-    lr: 1e-4
+    lr: 3e-4
     weight_decay: 0
     eps: 1e-8
   gradients:
@@ -45,7 +48,7 @@ resources:
   num_proc: 8 # <--- 8 workers to preprocess data on global rank zero
 
 batch_size:
-  effective: 32
+  effective: 64
   per_device: 16
   per_device_eval: 8
   per_device_predict: 2048
@@ -54,7 +57,7 @@ trainer:
   accelerator: gpu
   precision: 16-mixed
   detect_anomaly: false
-  max_steps: 100_000
+  max_steps: 50_000
   limit_val_batches: 100
   val_check_interval: ${int_mul:${trainer.accumulate_grad_batches},500}
   inference_mode: false  # TODO: https://github.com/Lightning-AI/lightning/issues/17175#issuecomment-1487074273
@@ -75,7 +78,7 @@ collates:
     do_sample: false
 
 schedule:
-  period: 20_000
+  period: 10_000
   reset_model_on_period_start: false
   benchmark_on_init: false
   parameters:

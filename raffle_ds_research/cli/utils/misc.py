@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import numbers
+import os
 from pathlib import Path
 from typing import Any, TypeVar
 
 import datasets
+import faiss
 import loguru
 import omegaconf
 import torch
@@ -38,6 +40,12 @@ def _cast_hps(value: object) -> str:
 
 def set_training_context() -> None:
     """Set the general context for torch, datasets, etc."""
+    omp_num_threads = os.environ.get("OMP_NUM_THREADS", None)
+    if omp_num_threads is not None:
+        loguru.logger.warning(f"OMP_NUM_THREADS={omp_num_threads}")
+        torch.set_num_threads(int(omp_num_threads))
+        faiss.omp_set_num_threads(int(omp_num_threads))
+
     datasets.utils.logging.set_verbosity_error()
     transformers.utils.logging.set_verbosity_error()
     torch.set_float32_matmul_precision("medium")

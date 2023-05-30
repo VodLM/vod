@@ -12,6 +12,7 @@ import transformers
 from raffle_ds_research.core import config as core_config
 from raffle_ds_research.core.mechanics import dataset_factory
 from raffle_ds_research.core.ml import Ranker
+from raffle_ds_research.core.workflows.utils import support
 from raffle_ds_research.tools import dstruct, pipes, predict_tools
 
 K = TypeVar("K")
@@ -72,11 +73,12 @@ def compute_dataset_vectors(
     dataloader_config: core_config.DataLoaderConfig,
     cache_dir: pathlib.Path,
     field: Literal["question", "section"] = "question",
-    validate_store: int = 10_000,
+    validate_store: int = 1_000,
 ) -> dstruct.TensorStoreFactory:
     """Compute the vectors for a given dataset and field."""
     model_output_key = {"question": "hq", "section": "hd"}[field]
     collate_fn = init_predict_collate_fn(collate_config, field=field, tokenizer=tokenizer)
+    barrier_fn = functools.partial(support._barrier_fn, trainer=trainer)
 
     # construct the dataset
     if isinstance(factory, dataset_factory.DatasetFactory):
@@ -107,13 +109,13 @@ def compute_dataset_vectors(
             predict_fn.rm()
 
     # create the store
-    trainer.strategy.barrier(f"{locator} - Creating vector store.")
-    loguru.logger.info(f"{locator} - Creating vector store at `{predict_fn.store_path}`")
+    barrier_fn(f"{locator} - Checked existing vector store.")
     if trainer.is_global_zero:
+        loguru.logger.info(f"{locator} - Instantiating vector store at `{predict_fn.store_path}`")
         predict_fn.instantiate()
 
     # compute the vectors
-    trainer.strategy.barrier(f"{locator} - Computing vectors.")
+    barrier_fn(f"{locator} - About to compute vectors.")
     return predict_fn(
         trainer=trainer,
         loader_kwargs=dataloader_config,

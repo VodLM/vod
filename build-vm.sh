@@ -60,14 +60,15 @@ else
 sudo nano /etc/elasticsearch/elasticsearch.yml
 # setup elasticsearch jvm: limit the virtual memory to 64GB
 es_opts='
--Xms80g
--Xmx800g
+-Xms64g
+-Xmx220g
 '
 sudo echo "$es_opts" | sudo tee /etc/elasticsearch/jvm.options.d/cfg.options
 
 # start ES
 sudo systemctl daemon-reload
 sudo systemctl enable elasticsearch.service
+sudo systemctl stop elasticsearch.service
 sudo systemctl start elasticsearch.service
 # sudo systemctl stop elasticsearch.service
 

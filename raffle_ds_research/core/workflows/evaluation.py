@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import collections
 import pathlib
 from typing import Iterable, Optional
 
+import numpy as np
 import torch
 from lightning.pytorch import utilities as pl_utils
 from loguru import logger
@@ -69,18 +71,26 @@ def benchmark(
         output_keys = output_keys or _DEFAULT_OUTPUT_KEYS
         cfg = {"compute_on_cpu": True, "dist_sync_on_step": True, "sync_on_compute": False}
         monitors = {key: RetrievalMetricCollection(metrics=metrics, **cfg) for key in output_keys}
+        diagnostics = collections.defaultdict(list)
         for batch in track(
             dataloader,
             description=f"Benchmarking `{factory.config.name}:{factory.config.split}`",
             total=len(dataloader),
         ):
+            # gather diagnostics
+            for k, v in batch.items():
+                if k.startswith("diagnostics."):
+                    diagnostics[k.replace("diagnostics.", "")].append(v)
+
+            # compute and collect the metrics
             target = batch["section.label"]
             for key, monitor in monitors.items():
                 preds = batch.get(f"section.{key}", None)
                 if preds is None:
                     continue
                 monitor.update(preds, target)
-            break  # TODO: !!!!
 
+        # aggregate the metrics and the diagnostics
         metrics = {key: monitor.compute() for key, monitor in monitors.items()}
+        metrics["diagnostics"] = {k: np.mean(v) for k, v in diagnostics.items()}
         return flatten_dict(metrics, sep="/")

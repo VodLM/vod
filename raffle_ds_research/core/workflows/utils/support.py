@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import collections
+import contextlib
 import dataclasses
 import functools
 import os
@@ -211,6 +212,9 @@ def _barrier_fn(name: str, trainer: L.Trainer) -> None:
     """Barrier to synchronize all processes."""
     if trainer.world_size == 1:
         return
-    logger.debug(f"waiting: `{name}` ...")
+    with contextlib.suppress(TypeError):
+        logger.level("WAIT", no=12, color="<magenta>", icon="⏳")
+        logger.level("PASS", no=13, color="<cyan>", icon="✅")
+    logger.log("WAIT", f"barrier:wait: `{name}`")
     trainer.strategy.barrier(name)
-    logger.success(f"completed: `{name}` ...")
+    logger.log("PASS", f"barrier:pass: `{name}`")

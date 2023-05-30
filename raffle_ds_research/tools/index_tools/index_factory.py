@@ -6,6 +6,7 @@ from typing import Any, Callable, Optional
 
 import faiss
 import numpy as np
+import omegaconf
 import pydantic
 from loguru import logger
 
@@ -57,6 +58,13 @@ class Bm25FactoryConfig(pydantic.BaseModel):
     host: str = "http://localhost"
     port: int = 9200
     persistent: bool = True
+    es_body: Optional[dict] = None
+
+    @pydantic.validator("es_body", pre=True)
+    def _validate_es_body(cls, v: dict | None) -> dict | None:
+        if isinstance(v, omegaconf.DictConfig):
+            v = omegaconf.OmegaConf.to_container(v, resolve=True)  # type: ignore
+        return v
 
     def fingerprint(self) -> str:
         """Return a fingerprint for this config."""
@@ -125,7 +133,9 @@ def build_bm25_master(
         host=config.host,
         port=config.port,
         index_name=f"research-{index_fingerprint}",
+        input_size=len(sections),
         persistent=config.persistent,
+        es_body=config.es_body,
         exist_ok=True,
         skip_setup=skip_setup,
     )
