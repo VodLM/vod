@@ -197,11 +197,19 @@ def _compute_kld(
     ref_scores: torch.Tensor,
 ) -> torch.Tensor:
     # compute the KL divergence between the model and the data
-    is_defined = ref_scores.isfinite()
-    ref_logits_ = ref_scores.masked_fill(~is_defined, -math.inf)
-    ref_logits_ = ref_logits_.log_softmax(dim=-1)
 
-    kl_div_terms = -ref_logits_.exp() * (model_logits - ref_logits_)
+    def _logprobs(logits: torch.Tensor, is_defined: torch.Tensor) -> torch.Tensor:
+        logits = logits.masked_fill(~is_defined, -math.inf)
+        logits = logits.log_softmax(dim=-1)
+        return logits
+
+    # compute the log-probabilities
+    is_defined = ref_scores.isfinite()
+    ref_logpropbs = _logprobs(ref_scores, is_defined)
+    model_logprobs = _logprobs(model_logits, is_defined)
+
+    # compute the KL
+    kl_div_terms = -model_logprobs.exp() * (ref_logpropbs - model_logprobs)
     kl_div_terms.masked_fill_(~is_defined, 0)
     return kl_div_terms.sum(dim=-1)
 

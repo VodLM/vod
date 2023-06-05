@@ -11,7 +11,7 @@ SliceType: typing_extensions.TypeAlias = typing.Union[int, slice, list[int]]
 
 
 @typing.runtime_checkable
-class SizedDataset(typing.Protocol[T_co]):
+class SizedDataset(typing.Generic[T_co], typing.Protocol):
     """An object that can be indexed."""
 
     def __getitem__(self, idx: SliceType) -> T_co:

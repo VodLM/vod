@@ -149,7 +149,7 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                         functools.partial(
                             pipes.pprint_batch,
                             header=f"Train batch - period = {1+period_idx}",
-                            # footer="." * os.get_terminal_size().columns + "\n\n",  # <- force a new line
+                            footer="\n\n",  # <- force a new line # os.get_terminal_size().columns +
                         )
                     ),
                 ],  # type: ignore

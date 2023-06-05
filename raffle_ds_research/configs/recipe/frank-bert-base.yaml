@@ -19,13 +19,13 @@ seed: 2
 dataset:
   train:
     # - frank.A.en-pos:train
-    # - frank.A.en:train
-    # - squad.en:train
+    - frank.A.en:train
+    - squad.en:train
     - msmarco.en:train
   validation:
     # - frank.A.en-pos:val
-    # - frank.A.en:val
-    # - squad.en:val
+    - frank.A.en:val
+    - squad.en:val
     - msmarco.en:val
   benchmark:
     # - frank.B.en-pos:val
@@ -36,8 +36,8 @@ dataset:
 model:
   compile: true
   optimizer:
-    lr: 1.41e-4
-    weight_decay: 0
+    lr: 1e-4
+    weight_decay: 1e-3
     eps: 1e-8
   gradients:
     self_supervision_weight: 0.0
@@ -48,8 +48,8 @@ resources:
   num_proc: 8 # <--- 8 workers to preprocess data on global rank zero
 
 batch_size:
-  effective: 64
-  per_device: 16
+  effective: 32
+  per_device: 8
   per_device_eval: 8
   per_device_predict: 2048
 
@@ -57,7 +57,7 @@ trainer:
   accelerator: gpu
   precision: 16-mixed
   detect_anomaly: false
-  max_steps: 50_000
+  max_steps: 160_000
   limit_val_batches: 100
   val_check_interval: ${int_mul:${trainer.accumulate_grad_batches},500}
   inference_mode: false  # TODO: https://github.com/Lightning-AI/lightning/issues/17175#issuecomment-1487074273
@@ -66,7 +66,7 @@ trainer:
 collates:
   # Defines the configurations for `dataset_builder.HfBuilder._collate_config`
   train:
-    n_sections: 24
+    n_sections: 48
     max_pos_sections: 8
     prefetch_n_sections: 128
     do_sample: false
@@ -78,7 +78,7 @@ collates:
     do_sample: false
 
 schedule:
-  period: 10_000
+  period: 20_000
   reset_model_on_period_start: false
   benchmark_on_init: false
   parameters:
@@ -86,13 +86,13 @@ schedule:
       mode: linear
       start: 0
       value: 1
-      period: ${trainer.max_steps}
+      period: 60_000
 
     bm25:
       mode: linear
       start: 1
       value: 0.1
-      period: ${trainer.max_steps}
+      period: 60_000
 
 
 benchmark_search:
