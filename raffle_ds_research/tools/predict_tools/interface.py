@@ -100,7 +100,7 @@ class Predict:
             logger.info(f"Store already exists at `{self.store_path}`.")
             store_factory = self.read()
             store = store_factory.open(create=False)
-            if not validate_store or self.validate_store(store, n_samples=validate_store):
+            if not validate_store or self.validate_store(n_samples=validate_store):
                 return store_factory
         if open_mode in {"r"}:
             raise FileNotFoundError(f"Store does not exist at `{self.store_path}` or is invalid.")
@@ -109,7 +109,7 @@ class Predict:
 
         # create or open the store
         if open_mode in {None, "x"}:
-            store = self.instantiate(ts_kwargs).open(create=True)
+            store = self.instantiate(ts_kwargs).open(create=False)
         elif open_mode in {"a"}:
             store = self.read().open(create=False)
         else:
@@ -177,7 +177,7 @@ class Predict:
             **(ts_kwargs or {}),
         )
 
-        factory.open(create=True)
+        factory.open(create=True, delete_existing=False)
         return factory
 
     def read(self) -> dstruct.TensorStoreFactory:
@@ -214,7 +214,7 @@ class Predict:
             if raise_exc:
                 raise FileNotFoundError(f"Store at `{self.store_path}` does not exist.")
             return False
-        store = self.read().open(create=False)
+        store = self.read().open()
         n_samples = len(self._dataset) if isinstance(n_samples, bool) else n_samples
         logger.info(f"Validating store at `{self.store_path}` with {n_samples} samples.")
         zero_ids = list(_get_zero_vec_indices(store, n_samples=n_samples))

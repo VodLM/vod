@@ -49,6 +49,10 @@ class TensorStoreFactory(BaseModel):
         future = ts.open(cfg, create=create, delete_existing=delete_existing, **kwargs)
         return future.result()
 
+    def exists(self) -> bool:
+        """Return whether the TensorStore exists."""
+        return pathlib.Path(self.kvstore.path).exists()
+
     @classmethod
     def instantiate(
         cls: Type[Self],
