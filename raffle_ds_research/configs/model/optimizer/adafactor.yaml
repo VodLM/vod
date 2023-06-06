@@ -1,0 +1,7 @@
+# see https://pytorch-optimizer.readthedocs.io/en/latest/_modules/torch_optimizer/adafactor.html
+_target_: torch_optimizer.Adafactor
+_partial_: true
+lr: 1e-5
+weight_decay: 0
+scale_parameter: false
+relative_step: false

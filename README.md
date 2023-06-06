@@ -1,48 +1,93 @@
-# ds-repo-template
-Template repository for data science projects
+# raffle-ds-research
+
+User-friendly and scalable experimentation framework for modern NLP
+
+## Install
+
+```shell
+poetry env use 3.9 # <- requires python 3.9 to be installed
+poetry install
+
+# in case of `InitError` (on GCP): run the following
+# --> see `https://github.com/python-poetry/poetry/issues/1917#issuecomment-1251667047`
+export PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring
+poetry install
+
+# faiss segmentation fault
+# --> install faiss using conda first
+# --> see `https://github.com/facebookresearch/faiss/issues/2317`
+conda install -c pytorch faiss-cpu
+
+# Install and start `elasticsearch`
+# https://www.elastic.co/guide/en/elasticsearch/reference/current/deb.html
+wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | sudo gpg --dearmor -o /usr/share/keyrings/elasticsearch-keyring.gpg
+sudo apt-get update
+sudo apt-get install apt-transport-https
+echo "deb [signed-by=/usr/share/keyrings/elasticsearch-keyring.gpg] https://artifacts.elastic.co/packages/8.x/apt stable main" | sudo tee /etc/apt/sources.list.d/elastic-8.x.list
+sudo apt-get update && sudo apt-get install elasticsearch
+sudo /bin/systemctl daemon-reload
+sudo /bin/systemctl enable elasticsearch.service
+sudo systemctl start elasticsearch.service
 
 
-# Repository settings setup
-When creating a repository, please setup the following.
+# Install faiss-gpu on A100 - see `https://github.com/kyamagu/faiss-wheels/issues/54`
+# dl wheels from  `https://github.com/kyamagu/faiss-wheels/releases/tag/v1.7.3`
+```
 
-## General
-- Check `Automatically delete head branches`
+## Usage
 
-## Collaborators and teams
-- Add `ds` as the team
-- Provide `ds` team with `Maintain DS` role
-- Provide `pdarulewski` with `Admin` role
+### Train models
 
-## Branches / main
-- Check the following:
-  - `Require a pull request before merging`
-  - `Require approvals` of at least 1 person
-  - `Dismiss stale pull request approvals when new commits are pushed`
-  - `Require review from Code Owners`
-  - `Allow specified actors to bypass required pull requests`
-    - Add `Lyngsoe`
-    - Add `hal9000raffle`
-  - `Do not allow bypassing the above settings`
+To train a model, use:
 
-## Webhooks
-- Create webhooks for:
-  - CircleCI
-  - Slack
-  - Gimlet (if needed)
+```shell
+poetry run train
+```
 
-## Deploy keys
-- Create CircleCI key 
+The `train` endpoint uses `hydra` to parse arguments and configure the run.
+See `configs/main.yaml` for the default configuration. You can override any of the default values by passing them as arguments to the `train` endpoint. For example, to train a model with a different encoder, use:
 
-## Secrets and variables / Actions
-- Create a new repository secret
-  - Name: `VERSIONING_TOKEN`
-  - Secret: you can find `GitHub Tokens` in Bitwarden under `Development` collection
+```shell
+poetry run train model/encoder=t5-base batch_size.per_device=4
+```
 
-When these steps are completed, you can remove yourself from collaborators and teams.
+Recipes define a pre-configured set of arguments.
+Recipes are defined in `configs/recipe`.
+To use a recipe, for example `t5-base`, use:
 
+```shell
+poetry run train +recipe=frank-t5-base
+```
 
-# Code setup
-- If you don't need `api` directory, you can remove it entirely.
-- If you plan to have multiple modules, you can rename `src` to something more meaningful or just put your main package code there.
-- To make auto version bump working, you need to manually push `v0.1.0` tag.
-- Rename `ds-repo-template` from all files to actual project name. 
+### Serve a model for testing
+
+```shell
+# api stuff, coming soon
+```
+
+## Tips and Tricks
+
+### Build faiss-gpu
+
+```bash
+# install mamba
+curl -L -O "https://github.com/conda-forge/miniforge/releases/latest/download/Mambaforge-$(uname)-$(uname -m).sh"
+bash Mambaforge-$(uname)-$(uname -m).sh
+# setup base env - try to run it, or follow the script step by step
+bash setup-mamba.sh
+# build faiss - try to run it, or follow the script step by step
+bash build-faiss.sh
+
+# then install faiss in the env
+poetry install
+PYPATH=`which python`
+cd libs/faiss/build/faiss/python
+$PYPATH setup.py install
+# if stuff break (temporary)
+poetry run pip uninstall torch
+poetry run pip install -U torch transformers
+```
+
+### Slow faiss initialization on GPU
+
+Faiss can take up to 30min to compile CUDA kernels. See [this GitHub issue](https://github.com/facebookresearch/faiss/issues/1177).

@@ -1,0 +1,7 @@
+_target_: raffle_ds_research.core.config.ScheduleConfig
+period: 3000
+reset_model_on_period_start: false
+benchmark_on_init: false
+parameters:
+  faiss: 1.0
+  bm25: 1.0

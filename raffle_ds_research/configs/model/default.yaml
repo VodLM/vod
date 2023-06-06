@@ -1,0 +1,10 @@
+defaults:
+  - encoder: bert-tiny
+  - gradients: kl_div
+  - optimizer: adamw # todo: lion
+  - scheduler: cycle
+  - monitor: retrieval
+  - _self_
+
+_target_: raffle_ds_research.core.ml.Ranker
+compile: false

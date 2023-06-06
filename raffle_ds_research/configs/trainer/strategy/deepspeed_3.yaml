@@ -1,0 +1,4 @@
+_target_: lightning.pytorch.strategies.DeepSpeedStrategy
+stage: 3
+offload_optimizer: true
+offload_parameters: true

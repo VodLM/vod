@@ -19,8 +19,8 @@ RUN $POETRY_VENV/bin/pip install poetry==${POETRY_VERSION}
 
 ENV PATH="${PATH}:${POETRY_VENV}/bin"
 
-WORKDIR /ds-repo-template
-COPY . /ds-repo-template
+WORKDIR /raffle-ds-research
+COPY . /raffle-ds-research
 
 COPY poetry.lock pyproject.toml ./
 RUN poetry install

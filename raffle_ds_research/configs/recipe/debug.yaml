@@ -1,0 +1,41 @@
+# @package _global_
+
+defaults:
+  - override /model/encoder: bert-tiny
+  - override /trainer/callbacks:
+      - rich_progress_bar
+  - override /trainer/logger:
+      - csv
+  - _self_
+
+seed: 1
+
+
+benchmark_search:
+  faiss:
+    factory: Flat
+
+dataset:
+  subset_size: 1_000
+  filter_unused_sections: false
+  train: frank.A.en-pos:train
+  validation: frank.A.en-pos:val
+  benchmark:
+    - frank.A.en-pos:val
+
+schedule:
+  benchmark_on_init: false
+
+batch_size:
+  per_device: 4
+  per_device_eval: 8
+  per_device_predict: 512
+
+resources:
+  num_workers: 1
+  num_proc: 4
+
+
+collates:
+  train:
+    in_batch_negatives: true

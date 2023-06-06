@@ -1,90 +1,247 @@
 [tool.commitizen]
 version = "0.1.0"
 version_files = [
-  "src/__init__.py:__version__",
-  "pyproject.toml:version",
-  "VERSION"
+    "raffle_ds_research/__init__.py:__version__",
+    "pyproject.toml:version",
+    "VERSION",
 ]
 tag_format = "v$version"
+bump_message = "[ci skip] bump: $current_version → $new_version"
+
 
 [tool.poetry]
-name = "ds-template-repo"
+name = "raffle-ds-research"
 version = "0.1.0"
-description = ""
-authors = ["Your Name <you@example.com>"]
+description = "User-friendly and scalable experimentation framework for modern NLP"
+authors = ["Valentin Liévin <vl@raffle.ai>"]
 readme = "README.md"
-packages = [{include = "src"}]
+packages = [{ include = "raffle_ds_research" }]
+
+[tool.poetry.scripts]
+train = 'raffle_ds_research.cli.train:run'
+watch = 'watch_gpus:run'
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = "^3.9"
+hydra-core = "^1.3.1"
 loguru = "^0.6.0"
-pydantic = "^1.10.5"
-fastapi = "^0.92.0"
-uvicorn = "^0.20.0"
+datasets = "^2.10.0"
+torch = { version = "^2.0", allow-prereleases = true }
+lightning = {version="^2.0.0", allow-prereleases = false}
+wandb = "^0.14.0"
+transformers = "^4.26.1"
+pydantic = "^1.8"
+jinja2 = ">=2.0"
+stackprinter = "^0.2.10"
+randomname = "^0.2.1"
+sentencepiece = "^0.1.97"
+tensorstore = "^0.1.32"
+hydra-colorlog = "^1.2.0"
+rich = "^13.3.1"
+optimum = "^1.7.1"
+faiss-cpu = { platform = "darwin", version = "==1.6.5" }
+faiss-gpu = { platform = "linux", version = "==1.7.4" } # <-- or build it using `build-faiss.sh`
+fastapi = ">=0.80"
+uvicorn = ">=0.20.0"
+psutil = "^5.9.4"
+python-dotenv = "^1.0.0"
+cython = "^0.29.33"
+deepspeed = "^0.8.3"
+elasticsearch = "^8.6.2"
+gcsfs = "^2023.3.0"
+richuru = "^0.1.1"
+
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.1"
-pylint = "^2.16.2"
-black = "^23.1.0"
-isort = "^5.12.0"
+black = { extras = ["d"], version = "^23.3.0" }
 pre-commit = "^3.0.4"
 commitizen = "^2.42.0"
+seaborn = "^0.12.2"
+inflect = "^6.0.2"
+ruff = "^0.0.261"
+gpustat = "^1.1"
+boto3 = "^1.26.137"
+
+
+[tool.poetry.group.cuda]
+optional = true
+
+[tool.poetry.group.cuda.dependencies]
+faiss-gpu = "^1.7"
 
 [build-system]
-requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+requires = ["poetry-core", "Cython", "numpy"]
 
-[tool.isort]
-line_length = 120
-include_trailing_comma = true
-profile = "black"
+
+[tool.poetry.build]
+generate-setup-file = false
+script = "build.py"
 
 [tool.black]
 line-length = 120
+exclude = '''
+(
+  /(
+      \.git
+    | \.pyx
+    | \.venv
+    | _build
+    | build
+    | dist
+  )/
+)
+'''
 
-[tool.pyright]
-reportOptionalMemberAccess = false
-
-[tool.pylint.main]
-ignore = ["tests"]
-py-version = "3.11"
-
-[tool.pylint.basic]
-bad-names = ["foo", "bar", "baz", "toto", "tutu", "tata", "l"]
-
-good-names = [
-    "i", "j", "k", # iterators
-    "f", # file in context managers
-    "ex", "e", # exceptions
-    "run", "Run", # factory code
-    "_", # unused variables
-    "ds", "df", # dataset, dataframe
-    "x", "y", "z", # polynomials, unknowns
-    "cv", # cross validation
-    "r", "s", # relevance, score
-    "m", "d", # faiss parameters
-    "p", "q", "a", # prediction, question, answer
+[tool.ruff]
+select = [
+  "E",   # pycodestyle
+  "F",   # pyflakes
+  "D",   # pydocstyle
+  "ANN", # flake8-annotations
+  "PL",  # pylint
+  "I",   # isort
+  "B",   # flake8-bugbear
+  "N",   # pep8-naming
+  "C",   # mccabe
+  "S",   # flake8-bandit
+  "G",   # flake8-logging-format
+  "DTZ", # flake8-datetimez
+  "ICN", # flake8-import-conventions
+  "RET", # flake8-return
+  "SIM", # flake8-simplify
+  "TID", # flake8-tidy-imports
+  "PTH", # flake8-use-pathlib
+  "ARG", # flake8-unused-arguments
 ]
 
-[tool.pylint.design]
+ignore = [
+  "D100",    # undocumented-public-module
+  "D104",    # undocumented-public-package
+  "D105",    # undocumented-magic-method
+  "D107",    # undocumented-public-init
+  "ANN101",  # missing-type-self
+  "ANN204",  # missing-return-type-special-method
+  "B905",    # zip-without-explicit-strict
+  "PLC1901", # compare-to-empty-string
+  "PTH123",  # builtin-open
+  "RET504",  # unnecessary-assign
+  "N805", # invalid-first-argument-name-for-method
+  "N812", # lowercase-underscore
+]
+
+# Allow autofix for all enabled rules (when `--fix`) is provided.
+fixable = [
+  "A",   # flake8-builtins
+  "B",   # flake8-bugbear
+  "C",   # mccabe
+  "D",   # pydocstyle
+  "E",   # pycodestyle error
+  "F",   # Pyflakes
+  "G",   # flake8-logging-format
+  "I",   # isort
+  "N",   # pep8-naming
+  "Q",   # flake8-quotes
+  "S",   # flake8-bandit
+  "T",   # pycodestyle
+  "W",   # pycodestyle warning
+  "ANN", # flake8-annotations
+  "ARG", # flake8-unused-arguments
+  "BLE", # flake8-blind-except
+  "COM", # flake8-commas
+  "DJ",  # flake8-django
+  "DTZ", # flake8-datetimez
+  "EM",  # flake8-errmsg
+  "ERA", # eradicate
+  "EXE", # flake8-executable
+  "FBT", # flake8-boolean-trap
+  "ICN", # flake8-import-conventions
+  "INP", # flake8-no-pep420
+  "ISC", # flake8-implicit-str-concat
+  "NPY", # NumPy-specific rules
+  "PD",  # pandas-vet
+  "PGH", # pygrep-hooks
+  "PIE", # flake8-pie
+  "PL",  # Pylint
+  "PT",  # flake8-pytest-style
+  "PTH", # flake8-use-pathlib
+  "PYI", # flake8-pyi
+  "RET", # flake8-return
+  "RSE", # flake8-raise
+  "RUF", # Ruff-specific rules
+  "SIM", # flake8-simplify
+  "SLF", # flake8-self
+  "TCH", # flake8-type-checking
+  "TID", # flake8-tidy-imports
+  "TRY", # tryceratops
+  "UP",  # pyupgrade
+  "YTT", # flake8-2020
+]
+unfixable = []
+
+# Exclude a variety of commonly ignored directories.
+exclude = [
+  ".bzr",
+  ".direnv",
+  ".eggs",
+  ".git",
+  ".hg",
+  ".mypy_cache",
+  ".nox",
+  ".pants.d",
+  ".pytype",
+  ".ruff_cache",
+  ".svn",
+  ".tox",
+  ".venv",
+  "__pypackages__",
+  "_build",
+  "buck-out",
+  "build",
+  "dist",
+  "node_modules",
+  "venv",
+]
+
+# don't remove unsued imports from __init__.py files
+ignore-init-module-imports = true
+
+line-length = 120
+
+# Allow unused variables when underscore-prefixed.
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+# Assume Python 3.11.
+target-version = "py311"
+
+[tool.ruff.per-file-ignores]
+"*/__init__.py" = [
+  "F401", # unused-import
+]
+"tests/*" = [
+  "S101",    # assert
+  "D102",    # undocumented-public-method
+  "D103",    # undocumented-public-function
+  "PLR2004", # magic-value-comparison
+
+]
+
+[tool.ruff.mccabe]
+# Unlike Flake8, default to a complexity level of 10.
+max-complexity = 10
+
+[tool.ruff.isort]
+split-on-trailing-comma = true
+
+[tool.ruff.pydocstyle]
+convention = "google"
+
+[tool.ruff.flake8-annotations]
+allow-star-arg-any = true
+
+[tool.ruff.flake8-unused-arguments]
+ignore-variadic-names = true
+
+[tool.ruff.pylint]
 max-args = 8
-
-[tool.pylint.format]
-max-line-length = 120
-
-[tool.pylint."messages control"]
-disable = [
-    "raw-checker-failed",
-    "bad-inline-option",
-    "locally-disabled",
-    "file-ignored",
-    "suppressed-message",
-    "useless-suppression",
-    "deprecated-pragma",
-    "use-symbolic-message-instead",
-    "missing-module-docstring",
-    "too-few-public-methods",
-    "use-dict-literal",
-]
-
-extension-pkg-whitelist = "pydantic"

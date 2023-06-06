@@ -1,0 +1,2 @@
+_target_: lightning.pytorch.strategies.SingleDeviceStrategy
+device: ${default_trainer_single_device:}

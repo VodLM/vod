@@ -1,0 +1,24 @@
+# @package _global_
+
+defaults:
+  - frank-bert-base
+  - override /model/encoder: bert-tiny
+  - override /trainer/strategy: single_device
+  - override /model/optimizer: adamw
+  - _self_
+
+
+update_freq: 2000
+
+model:
+  embedding_size: null
+  use_pooler_layer: true
+  optimizer:
+    lr: 1e-4
+    weight_decay: 1e-3
+
+batch_size:
+  effective: 32
+  per_device: 32
+  per_device_eval: 32
+  per_device_predict: 1024

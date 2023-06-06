@@ -1,0 +1,4 @@
+defaults:
+  - t5-base
+  - _self_
+model_name: google/t5-v1_1-base

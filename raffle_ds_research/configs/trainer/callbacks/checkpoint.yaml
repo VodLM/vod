@@ -1,0 +1,3 @@
+checkpoint:
+  _target_: lightning.pytorch.callbacks.ModelCheckpoint
+  dirpath: ${getcwd:}/checkpoints/
