@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import collections
+import json
+import os
 import pathlib
-from typing import Iterable, Optional
+import typing
+from typing import Any, Iterable, Optional
 
 import numpy as np
 import torch
@@ -34,11 +37,12 @@ def benchmark(
     parameters: Optional[dict[str, float]] = None,
     output_keys: Optional[list[str]] = None,
     serve_on_gpu: bool = True,
+    logsink: Optional[typing.TextIO] = None,
 ) -> dict[str, float]:
     """Run benchmarks on a retrieval task."""
     with search_engine.build_search_engine(
         sections=factory.get_sections(),  # type: ignore
-        vectors=support.maybe_as_lazy_array(vectors.sections),
+        vectors=support.maybe_as_lazy_array(vectors.sections) if vectors is not None else None,
         config=search_config,
         cache_dir=cache_dir,
         faiss_enabled=support.is_engine_enabled(parameters, "faiss"),
@@ -51,11 +55,11 @@ def benchmark(
         dataloader = support.instantiate_retrieval_dataloader(
             questions=support.DsetWithVectors.cast(
                 data=factory.get_qa_split(),
-                vectors=vectors.questions,
+                vectors=vectors.questions if vectors is not None else None,
             ),
             sections=support.DsetWithVectors.cast(
                 data=factory.get_sections(),
-                vectors=vectors.sections,
+                vectors=vectors.sections if vectors is not None else None,
             ),
             tokenizer=factory.config.tokenizer,
             search_client=search_client,
@@ -77,7 +81,12 @@ def benchmark(
             description=f"Benchmarking `{factory.config.name}:{factory.config.split}`",
             total=len(dataloader),
         ):
+            # log the batch
+            if logsink is not None:
+                logsink.write(_safe_json_dumps(batch) + os.linesep)
+
             # gather diagnostics
+            diagnostics["n_sections"].append(batch["section.score"].shape[-1])
             for k, v in batch.items():
                 if k.startswith("diagnostics."):
                     diagnostics[k.replace("diagnostics.", "")].append(v)
@@ -92,5 +101,20 @@ def benchmark(
 
         # aggregate the metrics and the diagnostics
         metrics = {key: monitor.compute() for key, monitor in monitors.items()}
-        metrics["diagnostics"] = {k: np.mean(v) for k, v in diagnostics.items()}
+        metrics["diagnostics/"] = {k: np.mean(v) for k, v in diagnostics.items()}
         return flatten_dict(metrics, sep="/")
+
+
+def _safe_json_cast(value: Any) -> str | int | list | dict:  # noqa: ANN401
+    """Cast a value to a JSON-safe type."""
+    if isinstance(value, torch.Tensor):
+        return value.cpu().detach().numpy().tolist()
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+
+    return value
+
+
+def _safe_json_dumps(batch: dict[str, Any]) -> str:
+    """Cast a value to a JSON-safe type and serialize it."""
+    return json.dumps({k: _safe_json_cast(v) for k, v in batch.items()})

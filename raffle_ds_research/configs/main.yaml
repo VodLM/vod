@@ -59,8 +59,8 @@ collates:
     section_max_length:  ${collates.predict.section_max_length}
   benchmark:
     # Configuration for the benchmark eval. `Collate`
-    n_sections: 500
-    max_pos_sections: 50
+    n_sections: null
+    max_pos_sections: null
     prefetch_n_sections: 1000
     post_filter: null
     do_sample: false

@@ -189,9 +189,10 @@ def concatenate_datasets(dsets: typing.Iterable[support.DsetWithVectors]) -> sup
 
     # concatenate the datasets
     unique_dsets = [dsets[0] for dsets in dsets_by_fingerprint.values()]
+    vecs = [dset.vectors for dset in unique_dsets if dset.vectors is not None]
     return support.DsetWithVectors(
         data=_concat_data([dset.data for dset in unique_dsets]),
-        vectors=_concat_data([dset.vectors for dset in unique_dsets if dset.vectors is not None]),
+        vectors=_concat_data(vecs) if vecs else None,
     )
 
 

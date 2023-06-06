@@ -130,7 +130,7 @@ class RetrievalData(ABC, Generic[Ts_co]):
         return [
             f"{type(self).__name__}[{_type_repr(self.scores)}](",
             f"scores={repr(self.scores)}, ",
-            f"indices={repr(self.indices)}",
+            f"indices={repr(self.indices)}, ",
             f"meta={repr(self.meta)}",
             ")",
         ]

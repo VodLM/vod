@@ -160,9 +160,9 @@ class KlDivGradients(Gradients):
         self_supervised_loss = (is_multi_targets * self_supervised_loss).sum() / is_multi_targets.sum()
 
         # 3. Compute the KL divergences between the model and the sampling distributions
-        # KL ( p_model(z) || p_ref(z)) for `p_ref` = score, bm25, faiss
+        # KL ( p_ref(z) | p_model(z)) for `p_ref` = score, bm25, faiss
         kls = {
-            key: _compute_kld(model_logits, ref_scores)
+            key: _compute_kld(ref_scores, model_logits)
             for key, ref_scores in {"score": data.scores, "bm25": data.bm25, "faiss": data.faiss}.items()
             if ref_scores is not None
         }
@@ -193,8 +193,8 @@ class KlDivGradients(Gradients):
 
 
 def _compute_kld(
-    model_logits: torch.Tensor,
-    ref_scores: torch.Tensor,
+    p_logits: torch.Tensor,
+    q_logits: torch.Tensor,
 ) -> torch.Tensor:
     # compute the KL divergence between the model and the data
 
@@ -204,12 +204,12 @@ def _compute_kld(
         return logits
 
     # compute the log-probabilities
-    is_defined = ref_scores.isfinite()
-    ref_logpropbs = _logprobs(ref_scores, is_defined)
-    model_logprobs = _logprobs(model_logits, is_defined)
+    is_defined = p_logits.isfinite()
+    p_logpropbs = _logprobs(p_logits, is_defined)
+    q_logprobs = _logprobs(q_logits, is_defined)
 
     # compute the KL
-    kl_div_terms = -model_logprobs.exp() * (ref_logpropbs - model_logprobs)
+    kl_div_terms = -q_logprobs.exp() * (p_logpropbs - q_logprobs)
     kl_div_terms.masked_fill_(~is_defined, 0)
     return kl_div_terms.sum(dim=-1)
 

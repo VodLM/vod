@@ -72,9 +72,7 @@ collates:
     do_sample: false
     in_batch_negatives: true
   benchmark:
-    n_sections: 300
-    max_pos_sections: 100
-    prefetch_n_sections: 512
+    prefetch_n_sections: 300
     do_sample: false
 
 schedule:
@@ -98,6 +96,7 @@ schedule:
 benchmark_search:
   faiss:
     factory: IVFauto,Flat
+    nprobe: 64
 
 search:
   faiss:

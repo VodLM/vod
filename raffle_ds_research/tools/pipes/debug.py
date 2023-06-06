@@ -279,7 +279,7 @@ def pprint_retrieval_batch(
     *,
     tokenizer: transformers.PreTrainedTokenizerBase,
     header: str = "Supervised retrieval batch",
-    max_sections: Optional[int] = None,
+    max_sections: Optional[int] = 10,
     console: Optional[rich.console.Console] = None,
     **kwargs: Any,
 ) -> dict:
@@ -306,6 +306,8 @@ def pprint_retrieval_batch(
     # get the data
     question_input_ids = batch["question.input_ids"]
     section_input_ids = batch["section.input_ids"]
+    if section_input_ids.ndim == 1:
+        section_input_ids = section_input_ids[None, :].expand(len(question_input_ids), -1)
 
     for i, q_ids in enumerate(question_input_ids):
         question = tokenizer.decode(q_ids, **kwargs)

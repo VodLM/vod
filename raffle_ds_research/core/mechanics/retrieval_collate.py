@@ -115,8 +115,13 @@ class RetrievalCollate(pipes.Collate):
         search_results = self.search(batch, top_k=self.config.prefetch_n_sections)
         diagnostics = {f"diagnostics.{key}_time": s.meta.get("time", None) for key, s in search_results.items()}
 
-        # merge the results
-        candidate_samples, client_scores = _merge_search_results(search_results, weights=self.parameters)
+        # merge the search results from the different clients
+        candidate_samples, client_scores = weighted_merge_search_results(
+            search_results,
+            weights=self.parameters,
+            fill_nan_scores=True,  # <-- replace NaNs for each client with the minimum score of that client
+            fill_nan_scores_offset=-1,  # <-- offset to use when replacing NaNs with minimum scores
+        )
 
         # post-filtering sections based on the group hash
         if self.post_filter is not None:
@@ -242,9 +247,12 @@ class RetrievalCollate(pipes.Collate):
         query_text = batch[self.config.text_keys.query]
 
         # get the query vectors
-        query_vectors = batch[self.config.vector_keys.query]
-        if isinstance(query_vectors, list):
-            query_vectors = np.stack(query_vectors)
+        if self.search_client.requires_vectors:
+            query_vectors = batch[self.config.vector_keys.query]
+            if isinstance(query_vectors, list):
+                query_vectors = np.stack(query_vectors)
+        else:
+            query_vectors = None
 
         # async search the query text using `search_client.async_search`
         return asyncio.run(
@@ -319,8 +327,11 @@ def _ensure_match(
     return candidate_samples
 
 
-def _merge_search_results(
-    candidates: dict[str, index_tools.RetrievalBatch], weights: dict[str, float]
+def weighted_merge_search_results(
+    candidates: dict[str, index_tools.RetrievalBatch],
+    weights: dict[str, float],
+    fill_nan_scores: bool = False,
+    fill_nan_scores_offset: float = -1,
 ) -> tuple[index_tools.RetrievalBatch, dict[str, np.ndarray]]:
     """Merge the candidate samples from multiple clients."""
     ordered_keys = list(candidates.keys())
@@ -328,30 +339,45 @@ def _merge_search_results(
     if len(candidates) == 1:
         key = ordered_keys[0]
         candidate = candidates[key]
-        candidate.scores *= weights[key]
-        return candidate, {key: candidate.scores}
+        candidate_scores = candidate.scores
+        candidate.scores = candidate_scores * weights[key]
+        return candidate, {key: candidate_scores}
     if len(candidates) == 0:
         raise ValueError("No candidates to merge")
 
     candidate_samples = index_tools.merge_retrieval_batches([candidates[key] for key in ordered_keys])
 
-    # replace nan scores with the minimum score
-    candidate_samples.scores = fill_nans_with_min(values=candidate_samples.scores, offset_min_value=-1, axis=1)
+    if fill_nan_scores:
+        # replace nan scores with the minimum score
+        candidate_samples.scores = fill_nans_with_min(
+            values=candidate_samples.scores,
+            offset_min_value=fill_nan_scores_offset,
+            axis=1,
+        )
 
     # Aggregate the scores
-    new_scores = np.zeros_like(candidate_samples.scores[..., 0])
+    aggregated_scores = np.full_like(candidate_samples.scores[..., 0], np.nan)
     client_scores = {}
     for i, key in enumerate(ordered_keys):
         weight = weights[key]
-        client_scores_i = np.copy(candidate_samples.scores[..., i])
-        new_scores += weight * client_scores_i
-        client_scores[key] = client_scores_i
+        client_scores[key] = candidate_samples.scores[..., i]
+        weighted_client_scores_i = weight * client_scores[key]
+        aggregated_scores = np.where(
+            np.isnan(aggregated_scores),
+            weighted_client_scores_i,
+            aggregated_scores + np.where(np.isnan(weighted_client_scores_i), 0, weighted_client_scores_i),
+        )
 
     # replace the negative indices with -inf
-    new_scores = np.where(candidate_samples.indices < 0, -np.inf, new_scores)
-    candidate_samples.scores = new_scores
+    aggregated_scores = np.where(candidate_samples.indices < 0, -np.inf, aggregated_scores)
+    candidate_samples.scores = aggregated_scores
+    return candidate_samples, client_scores
 
-    # sort by score - might not be necessary.
+
+def _sort_sections(
+    candidate_samples: index_tools.RetrievalBatch,
+    client_scores: dict[str, np.ndarray],
+) -> tuple[index_tools.RetrievalBatch, dict[str, np.ndarray]]:
     sort_ids = np.argsort(candidate_samples.scores, axis=-1)
     sort_ids = np.flip(sort_ids, axis=-1)
     candidate_samples.indices = np.take_along_axis(candidate_samples.indices, sort_ids, axis=-1)
@@ -382,7 +408,7 @@ def gather_in_batch_negatives(
     positives: index_tools.RetrievalBatch,
     client_scores: dict[str, np.ndarray],
     world_size: int,
-    fill_score_offset: int = 0,
+    fill_score_offset: float = 0,
     padding: bool = True,
 ) -> SampledSections:
     """Merge all sections (positive and negative) as a flat batch."""
@@ -432,7 +458,7 @@ def gather_in_batch_negatives(
     )
 
 
-def _fill_nan_scores(scores: np.ndarray, ref_scores: np.ndarray, fill_value_offset: int = 0) -> np.ndarray:
+def _fill_nan_scores(scores: np.ndarray, ref_scores: np.ndarray, fill_value_offset: float = 0) -> np.ndarray:
     ref_scores_ = np.where(np.isfinite(ref_scores), ref_scores, np.nan)
     fill_value = np.nanmin(ref_scores_, axis=-1) + fill_value_offset
     scores = np.where(np.isnan(scores), fill_value[:, None], scores)

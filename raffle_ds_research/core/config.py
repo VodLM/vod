@@ -208,9 +208,9 @@ class RetrievalCollateConfig(BaseCollateConfig):
         extra = "forbid"
 
     # base config
-    n_sections: int = 10
     prefetch_n_sections: int = 100
-    max_pos_sections: int = 3
+    n_sections: Optional[int] = 10
+    max_pos_sections: Optional[int] = 3
     post_filter: Optional[str] = None
     do_sample: bool = False
     in_batch_negatives: bool = False

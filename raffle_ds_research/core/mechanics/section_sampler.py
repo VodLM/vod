@@ -25,8 +25,8 @@ def sample_sections(
     *,
     positives: index_tools.RetrievalBatch,
     candidates: index_tools.RetrievalBatch,
-    n_sections: int,
-    max_pos_sections: int,
+    n_sections: Optional[int],
+    max_pos_sections: Optional[int],
     do_sample: bool = False,
     other_scores: Optional[dict[str, np.ndarray]] = None,
     lookup_positive_scores: bool = True,
@@ -37,7 +37,9 @@ def sample_sections(
     Gumbel-Max: https://timvieira.github.io/blog/post/2014/07/31/gumbel-max-trick/.
     """
     if max_pos_sections is None:
-        max_pos_sections = n_sections
+        max_pos_sections = positives.indices.shape[-1]
+    if n_sections is None:
+        n_sections = candidates.indices.shape[-1] + max_pos_sections
 
     positives = copy.copy(positives)
     if lookup_positive_scores:

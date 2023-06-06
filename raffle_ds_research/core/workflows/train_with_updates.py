@@ -17,6 +17,7 @@ from raffle_ds_research.core.ml import Ranker
 from raffle_ds_research.core.workflows import evaluation, precompute, training
 from raffle_ds_research.core.workflows.utils import logging, support
 from raffle_ds_research.tools import caching, pipes
+from raffle_ds_research.utils.pretty import print_metric_groups
 
 
 def train_with_index_updates(  # noqa: C901, PLR0915
@@ -103,26 +104,37 @@ def train_with_index_updates(  # noqa: C901, PLR0915
             if trainer.is_global_zero and period_idx > 0 or config.schedule.benchmark_on_init:
                 logger.info(f"Running benchmarks ... (period={1+period_idx})")
                 for j, dset in enumerate(config.dataset.benchmark):
-                    logger.info(
-                        f"{1+j}/{len(config.dataset.benchmark)} - Benchmarking `{dset.name}:{dset.split_alias}` ..."
-                    )
-                    metrics = evaluation.benchmark(
-                        factory=factories[dset],
-                        vectors=vectors[dset],
-                        metrics=config.dataset.metrics,
-                        search_config=config.search.benchmark,
-                        collate_config=config.collates.benchmark,
-                        dataloader_config=config.dataloaders.eval,
-                        cache_dir=cache_dir,
-                        parameters=parameters,
-                        serve_on_gpu=True,
-                    )
+                    bench_loc = f"{dset.name}:{dset.split_alias}"
+                    logger.info(f"{1+j}/{len(config.dataset.benchmark)} - Benchmarking `{bench_loc}` ...")
+                    logfile = pathlib.Path("benchmarks", f"{bench_loc}-{trainer.global_step}.jsonl")
+                    logfile.parent.mkdir(parents=True, exist_ok=True)
+                    with logfile.open("w") as sink:
+                        metrics = evaluation.benchmark(
+                            factory=factories[dset],
+                            vectors=vectors[dset],
+                            metrics=config.dataset.metrics,
+                            search_config=config.search.benchmark,
+                            collate_config=config.collates.benchmark,
+                            dataloader_config=config.dataloaders.eval,
+                            cache_dir=cache_dir,
+                            parameters=parameters,
+                            serve_on_gpu=True,
+                            logsink=sink,
+                        )
                     if metrics is not None:
+                        header = f"{dset.name}:{dset.split_alias} - Period {period_idx + 1}"
                         logging.log(
                             {f"{dset.name}/{dset.split_alias}/{k}": v for k, v in metrics.items()},
                             trainer=trainer,
-                            console=True,
-                            header=f"{dset.name}:{dset.split_alias} - Period {period_idx + 1}",
+                            header=header,
+                        )
+                        print_metric_groups(
+                            {
+                                f"{dset.name}/{dset.split_alias}/{k}": v
+                                for k, v in metrics.items()
+                                if "diagnostics" not in k
+                            },
+                            header=header,
                         )
 
             if end_step is None:
@@ -143,7 +155,11 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                 callbacks=[
                     StopAtCallback(end_step),
                     OnFirstBatchCallback(
-                        functools.partial(logging.log_retrieval_batch, tokenizer=config.dataset.tokenizer)
+                        functools.partial(
+                            logging.log_retrieval_batch,
+                            tokenizer=config.dataset.tokenizer,
+                            max_sections=10,
+                        )
                     ),
                     OnFirstBatchCallback(
                         functools.partial(
