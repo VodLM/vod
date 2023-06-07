@@ -1,0 +1,25 @@
+# @package _global_
+
+# This config is for 8 A100 GPUs
+
+defaults:
+  - override /model/encoder: bert-base
+
+resources:
+  num_proc: 16 # <--- 16 workers to preprocess data on global rank zero
+
+batch_size:
+  effective: 32
+  per_device: 4
+  per_device_eval: 16
+  per_device_predict: 2048
+
+collates:
+  # Defines the configurations for `dataset_builder.HfBuilder._collate_config`
+  train:
+    n_sections: 96
+    max_pos_sections: 16
+    prefetch_n_sections: 256
+
+trainer:
+  precision: bf16-mixed

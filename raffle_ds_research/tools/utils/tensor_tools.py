@@ -78,6 +78,8 @@ def serialize_tensor(x: torch.Tensor | np.ndarray) -> bytes:
     if isinstance(x, torch.Tensor):
         if x.is_sparse:
             x = x.to_dense()
+        if x.dtype == torch.bfloat16:
+            x = x.to(torch.float16)
         x = x.cpu().numpy()
     elif isinstance(x, np.ndarray):
         pass

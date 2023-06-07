@@ -9,6 +9,7 @@ defaults:
   - trainer: default
   - sys: default
   - hydra: default
+  - env: default
   # enable color logging
   - override hydra/hydra_logging: colorlog
   - override hydra/job_logging: colorlog

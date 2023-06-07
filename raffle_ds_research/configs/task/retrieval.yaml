@@ -18,20 +18,25 @@ seed: 2
 
 dataset:
   train:
-    # - frank.A.en-pos:train
-    - frank.A.en:train
-    - squad.en:train
-    - msmarco.en:train
+    - frank.A.en-pos:train
   validation:
-    # - frank.A.en-pos:val
-    - frank.A.en:val
-    - squad.en:val
-    - msmarco.en:val
+    - frank.A.en-pos:val
   benchmark:
-    # - frank.B.en-pos:val
-    - frank.A.en:val
-    - frank.B.en:val
-    - msmarco.en:val
+    - frank.B.en-pos:val
+
+# dataset:
+#   train:
+#     - frank.A.en:train
+#     - squad.en:train
+#     - msmarco.en:train
+#   validation:
+#     - frank.A.en:val
+#     - squad.en:val
+#     - msmarco.en:val
+#   benchmark:
+#     - frank.A.en:val
+#     - frank.B.en:val
+#     - msmarco.en:val
 
 model:
   compile: true
@@ -55,10 +60,10 @@ batch_size:
 
 trainer:
   accelerator: gpu
-  precision: 16-mixed
+  precision: bf16-mixed
   detect_anomaly: false
   max_steps: 160_000
-  limit_val_batches: 100
+  limit_val_batches: null
   val_check_interval: ${int_mul:${trainer.accumulate_grad_batches},500}
   inference_mode: false  # TODO: https://github.com/Lightning-AI/lightning/issues/17175#issuecomment-1487074273
 

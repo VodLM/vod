@@ -80,7 +80,7 @@ bash build-faiss.sh
 
 # then install faiss in the env
 poetry install
-PYPATH=`which python`
+PYPATH=`poetry run which python`
 cd libs/faiss/build/faiss/python
 $PYPATH setup.py install
 # if stuff break (temporary)

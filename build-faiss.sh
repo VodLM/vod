@@ -27,8 +27,8 @@ cmake \
 -DPython_EXECUTABLE=$PYPATH \
 -DCMAKE_INSTALL_PREFIX=$PYPATH \
 -B build .
-make -C build -j16 faiss faiss_avx2
-make -C build -j16 swigfaiss swigfaiss_avx2
+make -C build -j32 faiss faiss_avx2
+make -C build -j32 swigfaiss swigfaiss_avx2
 (cd build/faiss/python && $PYPATH setup.py install)
 
 # Optional: install C headers

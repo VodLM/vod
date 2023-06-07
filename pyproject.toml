@@ -40,13 +40,12 @@ hydra-colorlog = "^1.2.0"
 rich = "^13.3.1"
 optimum = "^1.7.1"
 faiss-cpu = { platform = "darwin", version = "==1.6.5" }
-faiss-gpu = { platform = "linux", version = "==1.7.4" }       # <-- or build it using `build-faiss.sh`
 fastapi = ">=0.80"
 uvicorn = ">=0.20.0"
 psutil = "^5.9.4"
 python-dotenv = "^1.0.0"
 cython = "^0.29.33"
-deepspeed = "^0.8.3"
+# deepspeed = "^0.8.3"
 elasticsearch = "^8.6.2"
 gcsfs = "^2023.3.0"
 richuru = "^0.1.1"
@@ -68,7 +67,7 @@ boto3 = "^1.26.137"
 optional = true
 
 [tool.poetry.group.cuda.dependencies]
-faiss-gpu = "^1.7"
+faiss-gpu = { platform = "linux", version = "==1.7.4" }       # <-- or build it using `build-faiss.sh`
 
 [build-system]
 build-backend = "poetry.core.masonry.api"

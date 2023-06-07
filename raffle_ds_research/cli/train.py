@@ -5,7 +5,6 @@ import os
 from pathlib import Path
 from typing import Optional
 
-import dotenv
 import hydra
 import loguru
 import omegaconf
@@ -30,9 +29,6 @@ from raffle_ds_research.tools.utils.config import register_omgeaconf_resolvers  
 from raffle_ds_research.tools.utils.pretty import print_config  # noqa: E402
 
 # richuru.install(rich_traceback=False)  # <- setup rich logging with loguru
-
-dotenv.load_dotenv(Path(__file__).parent / ".train.env")
-
 register_omgeaconf_resolvers()
 
 
@@ -57,6 +53,8 @@ class ModelGenerator:
 @hydra.main(config_path="../configs/", config_name="main", version_base="1.3")
 def run(config: DictConfig) -> None:
     """Train a ranker for a retrieval task."""
+    logger.debug(f"Setting environment variables from config: {config.env}")
+    os.environ.update({k: str(v) for k, v in config.env.items()})
     logger.debug(f"Multiprocessing method set to `{multiprocessing.get_start_method()}`")  # type: ignore
     logger.debug(
         f"Distributed: RANK={os.environ.get('GLOBAL_RANK', None)}, " f"WORLD_SIZE={os.environ.get('WORLD_SIZE', None)}"

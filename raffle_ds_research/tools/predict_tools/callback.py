@@ -78,6 +78,8 @@ def _write_vectors_to_store(
     """Write vectors to a `TensorStore`."""
     if idx is None:
         raise ValueError("idx must be provided")
+    if vectors.dtype == torch.bfloat16:
+        vectors = vectors.to(torch.float32)
     vectors = vectors.detach().cpu().numpy()
     dtype = store.spec().dtype
     vectors = vectors.astype(dtype.numpy_dtype)

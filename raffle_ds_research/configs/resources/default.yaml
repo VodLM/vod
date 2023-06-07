@@ -2,3 +2,4 @@ num_proc: 4
 num_workers: 4
 n_gpus: ${n_gpus:}
 n_devices: ${n_devices:}
+omp_threads: 16

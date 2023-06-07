@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import pathlib
 import socket
 from random import randint
 from typing import Any, Optional
@@ -78,6 +79,9 @@ def register_omgeaconf_resolvers() -> None:  # noqa: C901
             return x.replace("frank.B", "frank.A.")
         return x
 
+    def _join_path(*args: Any) -> str:
+        return pathlib.Path(*args).as_posix()
+
     # Register resolvers
     OmegaConf.register_new_resolver("whoami", lambda: os.environ.get("USER"))
     OmegaConf.register_new_resolver("hostname", socket.gethostname)
@@ -104,3 +108,4 @@ def register_omgeaconf_resolvers() -> None:  # noqa: C901
     OmegaConf.register_new_resolver("reverse_frank_split", _reverse_frank_split)
     OmegaConf.register_new_resolver("is_cuda_available", torch.cuda.is_available)
     OmegaConf.register_new_resolver("null_cls", lambda *_: None)
+    OmegaConf.register_new_resolver("join_path", _join_path)
