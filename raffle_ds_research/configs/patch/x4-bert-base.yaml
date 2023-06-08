@@ -4,6 +4,9 @@
 
 defaults:
   - override /model/encoder: bert-base
+  # model name
+  - override /trainer/strategy: deepspeed_2
+  # DeepSpeed strategy ZeRO-2
 
 resources:
   num_workers: 2
@@ -25,3 +28,4 @@ collates:
 
 trainer:
   precision: bf16-mixed
+  accelerator: gpu

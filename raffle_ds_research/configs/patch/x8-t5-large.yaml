@@ -1,16 +1,22 @@
 # @package _global_
 
+# This config is for 4xA100 GPUs (40GB)
+
 defaults:
   - override /model/encoder: t5-large
-  - _self_
+  # model name
+  - override /trainer/strategy: deepspeed_2
+  # DeepSpeed strategy ZeRO-2
 
 resources:
-  num_proc: 16 # <--- 16 workers to preprocess data on global rank zero
+  num_workers: 2
+  num_proc: 16
+  omp_threads: 32
 
 batch_size:
   effective: 32
   per_device: 4
-  per_device_eval: 8
+  per_device_eval: 16
   per_device_predict: 1024
 
 collates:
@@ -18,7 +24,8 @@ collates:
   train:
     n_sections: 24
     max_pos_sections: 8
-    prefetch_n_sections: 64
+    prefetch_n_sections: 128
 
 trainer:
   precision: bf16-mixed
+  accelerator: gpu
