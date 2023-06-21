@@ -224,13 +224,17 @@ class RetrievalCollateConfig(BaseCollateConfig):
     group_id_keys: KeyMap = KeyMap(query="group_hash", section="group_hash")  #  group hash (kb_id, lang, etc.)
 
 
-class ScheduleConfig(pydantic.BaseModel):
+class TrainerConfig(pydantic.BaseModel):
     """Configures a group of indexes (e.g., bm25, faiss)."""
 
+    max_steps: int = 1_000_000
+    val_check_interval: int = 500
+    log_interval: int = 100
+    gradient_clip_val: Optional[float] = None
     period: Union[int, list[int]]
-    reset_model_on_period_start: bool = False
     benchmark_on_init: bool = True
     parameters: dict[str, BaseSchedule] = {}
+    limit_val_batches: Optional[int] = None
 
     # validators
     _validate_update_freq = pydantic.validator("period", allow_reuse=True, pre=True)(as_pyobj_validator)
@@ -261,9 +265,24 @@ class ScheduleConfig(pydantic.BaseModel):
 
         return cls(**obj)  # type: ignore
 
-    def get_parameters(self, step: float) -> dict[str, float]:
-        """Return the parameters for a given step."""
-        return {k: v(step) for k, v in self.parameters.items()}
+
+class BatchSizeConfig(pydantic.BaseModel):
+    """Configures the batch size for the train, eval, and predict stages."""
+
+    effective: int = 32
+    per_device: int = 64
+    per_device_eval: int = 8
+    per_device_predict: int = 512
+
+    @classmethod
+    def parse(cls: Type[Self], obj: dict | Self) -> Self:
+        """Parse a benchmark config."""
+        if isinstance(obj, cls):
+            return obj
+        if isinstance(obj, omegaconf.DictConfig):
+            return hydra.utils.instantiate(obj)
+
+        return cls(**obj)  # type: ignore
 
 
 @dataclasses.dataclass
@@ -343,7 +362,8 @@ class TrainWithIndexUpdatesConfigs:
     dataset: MultiDatasetFactoryConfig
     dataloaders: DataLoaderConfigs
     collates: CollateConfigs
-    schedule: ScheduleConfig
+    trainer: TrainerConfig
+    batch_size: BatchSizeConfig
     search: SearchConfigs
     sys: SysConfig
     benchmark_search_overrides: Optional[dict] = None
@@ -353,7 +373,7 @@ class TrainWithIndexUpdatesConfigs:
     def parse(cls: Type[Self], config: DictConfig) -> Self:
         """Parse an omegaconf config into a TrainWithIndexConfigs instance."""
         dataset = MultiDatasetFactoryConfig.parse(config.dataset)
-        schedule_config = ScheduleConfig.parse(config.schedule)
+        trainer_config = TrainerConfig.parse(config.trainer)
         dataloaders = DataLoaderConfigs.parse(config.dataloaders)
         collates = CollateConfigs.parse(config.collates)
         sys_config = SysConfig.parse(config.sys)
@@ -368,7 +388,8 @@ class TrainWithIndexUpdatesConfigs:
 
         return cls(
             dataset=dataset,
-            schedule=schedule_config,
+            trainer=trainer_config,
+            batch_size=BatchSizeConfig.parse(config.batch_size),
             dataloaders=dataloaders,
             collates=collates,
             search=SearchConfigs(training=training_search, benchmark=benchmark_search),

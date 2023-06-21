@@ -53,7 +53,7 @@ def set_training_context() -> None:
     # torch.multiprocessing.set_sharing_strategy("file_system")
 
 
-def _make_meta_data(ranker: Ranker) -> dict[str, Any]:
+def _get_ranker_meta_data(ranker: Ranker) -> dict[str, Any]:
     return {
         "n_trainable_params": sum(p.numel() for p in ranker.parameters() if p.requires_grad),
         "n_total_params": sum(p.numel() for p in ranker.parameters()),
@@ -63,11 +63,10 @@ def _make_meta_data(ranker: Ranker) -> dict[str, Any]:
     }
 
 
-def log_config(ranker: Ranker, config: omegaconf.DictConfig, exp_dir: Path) -> None:
+def log_config(config: dict[str, Any] | omegaconf.DictConfig, exp_dir: Path) -> None:
     """Log the config as hyperparameters and save it locally."""
     config_path = Path(exp_dir, "config.yaml")
     all_data = omegaconf.OmegaConf.to_container(config, resolve=True)
-    all_data["meta"] = _make_meta_data(ranker)
     with config_path.open("w") as f:
         yaml.dump(all_data, f)
 

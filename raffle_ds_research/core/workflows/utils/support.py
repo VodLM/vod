@@ -21,6 +21,7 @@ from raffle_ds_research.core import config as core_config
 from raffle_ds_research.core import mechanics
 from raffle_ds_research.core.mechanics.dataloader_sampler import DataloaderSampler
 from raffle_ds_research.core.workflows.utils import support
+from raffle_ds_research.core.workflows.utils.schedule import BaseSchedule
 from raffle_ds_research.tools import dstruct, index_tools, pipes
 from raffle_ds_research.tools.utils.pretty import human_format_nb
 
@@ -209,13 +210,34 @@ def _concat_data(data: list[D]) -> D:
     return dstruct.ConcatenatedSizedDataset(data)  # type: ignore
 
 
-def _barrier_fn(name: str, trainer: L.Trainer) -> None:
+def _barrier_fn(name: str, fabric: L.Fabric) -> None:
     """Barrier to synchronize all processes."""
-    if trainer.world_size == 1:
+    if fabric.world_size == 1:
         return
     with contextlib.suppress(TypeError):
         logger.level("WAIT", no=12, color="<magenta>", icon="⏳")
         logger.level("PASS", no=13, color="<cyan>", icon="✅")
     logger.log("WAIT", f"barrier:wait: `{name}`")
-    trainer.strategy.barrier(name)
+    fabric.strategy.barrier(name)
     logger.log("PASS", f"barrier:pass: `{name}`")
+
+
+@dataclasses.dataclass(frozen=True)
+class TrainerState:
+    """Holds the state of the trainer."""
+
+    step: int
+    epoch: int
+    period: int
+    period_max_steps: int
+    max_steps: int
+    parameters: dict[str, BaseSchedule] = dataclasses.field(default_factory=dict)
+    val_check_interval: int = 500
+    log_interval: int = 100
+    accumulate_grad_batches: int = 1
+    gradient_clip_val: Optional[float] = None
+    limit_val_batches: Optional[int] = None
+
+    def get_parameters(self) -> dict[str, float]:
+        """Return the parameters for a given step."""
+        return {k: v(self.step) for k, v in self.parameters.items()}

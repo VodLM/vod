@@ -5,7 +5,7 @@
 defaults:
   - override /model/encoder: bert-base
   # model name
-  - override /trainer/strategy: deepspeed_2
+  - override /fabric/strategy: deepspeed_2
   # DeepSpeed strategy ZeRO-2
 
 resources:
@@ -26,6 +26,6 @@ collates:
     max_pos_sections: 16
     prefetch_n_sections: 128
 
-trainer:
+fabric:
   precision: bf16-mixed
   accelerator: gpu

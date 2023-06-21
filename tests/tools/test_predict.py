@@ -78,7 +78,7 @@ def test_predict(tmpdir: str | Path, data: VectorDataset, model_output_key: Opti
     predict_fn = functools.partial(
         predict_tools.predict,
         data,
-        trainer=L.Trainer(),
+        fabric=L.Fabric(),
         cache_dir=tmpdir,
         model=model,
         model_output_key=model_output_key,

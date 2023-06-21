@@ -11,6 +11,6 @@ batch_size:
   per_device_eval: 8
   per_device_predict: 512
 
-trainer:
+fabric:
   accelerator: gpu
-  precision: 32
+  precision: bf16-mixed

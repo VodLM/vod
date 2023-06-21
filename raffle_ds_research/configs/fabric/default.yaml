@@ -1,0 +1,8 @@
+defaults:
+  - strategy: single_device
+  - _self_
+
+_target_: lightning.fabric.Fabric
+accelerator: auto
+devices: ${resources.n_devices}
+precision: 32

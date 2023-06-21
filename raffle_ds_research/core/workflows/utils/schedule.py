@@ -27,6 +27,8 @@ class BaseSchedule(pydantic.BaseModel):
 class LinearSchedule(BaseSchedule):
     """Defines a linear schedule."""
 
+    mode: str = "linear"
+
     def __call__(self, step: float) -> float:
         """Return the value of the parameter at the given step."""
         if step < self.offset:
@@ -43,6 +45,7 @@ class ConstantSchedule(BaseSchedule):
     start: Optional[float] = None
     period: Optional[int] = None
     offset: Optional[int] = None
+    mode: str = "constant"
 
     def __call__(self, step: float) -> float:  # noqa: ARG002
         """Return the value of the parameter at the given step."""

@@ -57,11 +57,23 @@ batch_size:
   per_device_predict: 2048
 
 trainer:
-  detect_anomaly: false
-  max_steps: 160_000
+  max_steps: 200_000
   limit_val_batches: null
-  val_check_interval: ${int_mul:${trainer.accumulate_grad_batches},500}
-  inference_mode: false  # TODO: https://github.com/Lightning-AI/lightning/issues/17175#issuecomment-1487074273
+  val_check_interval: 500
+  period: 50_000
+  benchmark_on_init: false
+  parameters:
+    faiss:
+      mode: linear
+      start: 0
+      value: 1
+      period: 100_000
+
+    bm25:
+      mode: linear
+      start: 1
+      value: 0.1
+      period: 100_000
 
 
 collates:
@@ -75,23 +87,6 @@ collates:
   benchmark:
     prefetch_n_sections: 300
     do_sample: false
-
-schedule:
-  period: 20_000
-  reset_model_on_period_start: false
-  benchmark_on_init: false
-  parameters:
-    faiss:
-      mode: linear
-      start: 0
-      value: 1
-      period: 60_000
-
-    bm25:
-      mode: linear
-      start: 1
-      value: 0.1
-      period: 60_000
 
 
 benchmark_search:

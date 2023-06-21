@@ -3,10 +3,12 @@ defaults:
   - dl_sampler: none
   - search: default
   - model: default
-  - schedule: default
+  - trainer: default
   - resources: default
   - batch_size: default
-  - trainer: default
+  - fabric: default
+  - loggers:
+    - csv
   - sys: default
   - hydra: default
   - env: default

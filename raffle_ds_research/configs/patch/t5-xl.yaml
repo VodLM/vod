@@ -11,9 +11,9 @@ batch_size:
   per_device_eval: 2
   per_device_predict: 256
 
-trainer:
+fabric:
   accelerator: gpu
-  precision: 32
+  precision: bf16-mixed
 
 
 #collates:

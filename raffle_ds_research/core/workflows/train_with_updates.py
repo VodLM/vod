@@ -1,82 +1,93 @@
 from __future__ import annotations
 
+import dataclasses
 import functools
 import pathlib
-import sys
-from typing import Any, Callable, Iterable
+from typing import Iterable
 
 import lightning as L  # noqa: N812
 import numpy as np
 import omegaconf
 from loguru import logger
-from torch.utils import data as torch_data
 
 from raffle_ds_research.core import config as core_config
 from raffle_ds_research.core.mechanics import dataset_factory
 from raffle_ds_research.core.ml import Ranker
 from raffle_ds_research.core.workflows import evaluation, precompute, training
 from raffle_ds_research.core.workflows.utils import logging, support
-from raffle_ds_research.tools import caching, pipes
+from raffle_ds_research.tools import caching
 from raffle_ds_research.utils.pretty import print_metric_groups
 
 
 def train_with_index_updates(  # noqa: C901, PLR0915
     *,
-    trainer: L.Trainer,
-    ranker_generator: Callable[..., Ranker],
+    fabric: L.Fabric,
+    ranker: Ranker,
+    # optimizer: torch.optim.Optimizer,
     config: core_config.TrainWithIndexUpdatesConfigs | omegaconf.DictConfig,
 ) -> Ranker:
     """Train a ranking model while periodically updating the index."""
+    barrier = functools.partial(support._barrier_fn, fabric=fabric)
     if isinstance(config, omegaconf.DictConfig):
         config = core_config.TrainWithIndexUpdatesConfigs.parse(config)
 
-    logger.info("Instantiating the Ranker (init.)")
-    ranker: Ranker = ranker_generator()
-    logger.info(f"Encoder output shape: `{ranker.get_output_shape()}`")
-
     # Define the index update steps and the `PeriodicStoppingCallback` callback.
-    update_steps = _infer_update_steps(trainer.max_steps, config.schedule.period)
+    update_steps = _infer_update_steps(config.trainer.max_steps, config.trainer.period)
     logger.info(f"Index will be updated at steps: {_pretty_steps(update_steps)}")
     if len(update_steps) == 0:
         raise ValueError("No index update steps were defined.")
 
-    # Setup the distributed environment, skipping this step would break the `barrier()`
-    logger.info("Setting up environment...")
-    _hacky_setup_distributed_env(trainer=trainer, config=config, ranker=ranker)
-    # trainer.strategy.setup_environment()
+    # setting up model and scheduler
+    optimizer = ranker.get_optimizer()
+    scheduler = ranker.get_scheduler(optimizer)
+    ranker, optimizer = fabric.setup(ranker, optimizer)
 
-    barrier = functools.partial(support._barrier_fn, trainer=trainer)
-    barrier("Setup done.")
-    barrier("Training starting..")
-
-    # configure logging
-    _configure_logger(trainer)
+    # define the trainer State
+    state = support.TrainerState(
+        step=0,
+        period=0,
+        epoch=0,
+        period_max_steps=-1,
+        max_steps=config.trainer.max_steps,
+        log_interval=config.trainer.log_interval,
+        val_check_interval=config.trainer.val_check_interval,
+        limit_val_batches=config.trainer.limit_val_batches,
+        accumulate_grad_batches=_infer_accumulate_grad_batches(fabric, config.batch_size),
+        gradient_clip_val=config.trainer.gradient_clip_val,
+        parameters=config.trainer.parameters,
+    )
 
     # Train the model for each period
     update_steps = update_steps + [None]
-    for period_idx, (start_step, end_step) in enumerate(zip(update_steps[:-1], update_steps[1:])):
-        parameters = config.schedule.get_parameters(trainer.global_step)
+    barrier("Training starting..")
+    for pidx, (start_step, end_step) in enumerate(zip(update_steps[:-1], update_steps[1:])):
+        # update the max step for this period
+        state = dataclasses.replace(state, period=pidx, period_max_steps=end_step)
+
+        # fetch the parameters for this period
+        parameters = state.get_parameters()
         logging.log(
             {
-                "trainer/period": float(period_idx + 1),
+                "trainer/period": float(state.period + 1),
                 **{f"parameter/{k}": v for k, v in parameters.items()},
             },
-            trainer=trainer,
+            loggers=fabric.loggers,
+            step=state.step,
         )
-        logger.info(f"Starting period {period_idx + 1}/{len(update_steps) - 1} (step {start_step} -> {end_step})")
+        logger.info(f"Starting period {state.period + 1}/{len(update_steps) - 1} (step {start_step} -> {end_step})")
 
         # wrap everything in a temporary directory to avoid filling up the disk.
         # The temporary directory will be deleted at the end of each period except the first one
         # as dataset vectors won't change when using the same seed/model.
         with caching.CacheManager(
-            pathlib.Path(config.sys.cache_dir, f"train-with-updates-{period_idx}"),
+            pathlib.Path(config.sys.cache_dir, f"train-with-updates-{state.period}"),
             delete_existing=False,
-            persist=period_idx == 0,  # keep the cache during the first period
+            persist=state.period == 0,  # keep the cache during the first period
         ) as cache_dir:
             factories = _get_dset_factories(config.dataset.get("all"), config=config.dataset)
 
             # pre-process all datasets on global zero, this is done implicitely when loading a dataset
-            if trainer.is_global_zero:
+            if fabric.is_global_zero:
                 for key, factory in factories.items():
                     logger.debug(f"Pre-processing `{key}` ...")
                     factory.get_qa_split()
@@ -88,7 +99,7 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                 vectors = precompute.compute_vectors(
                     factories,
                     ranker=ranker,
-                    trainer=trainer,
+                    fabric=fabric,
                     cache_dir=cache_dir,
                     dataset_config=config.dataset,
                     collate_config=config.collates.predict,
@@ -100,13 +111,12 @@ def train_with_index_updates(  # noqa: C901, PLR0915
 
             # benchmark the ranker on each dataset separately
             barrier("running benchmarks..")
-            ranker.cpu()  # <- free up the GPU memory so it can be used to build faiss
-            if trainer.is_global_zero and period_idx > 0 or config.schedule.benchmark_on_init:
-                logger.info(f"Running benchmarks ... (period={1+period_idx})")
+            if fabric.is_global_zero and state.period > 0 or config.trainer.benchmark_on_init:
+                logger.info(f"Running benchmarks ... (period={1+state.period})")
                 for j, dset in enumerate(config.dataset.benchmark):
                     bench_loc = f"{dset.name}:{dset.split_alias}"
                     logger.info(f"{1+j}/{len(config.dataset.benchmark)} - Benchmarking `{bench_loc}` ...")
-                    logfile = pathlib.Path("benchmarks", f"{bench_loc}-{trainer.global_step}.jsonl")
+                    logfile = pathlib.Path("benchmarks", f"{bench_loc}-{state.period}-{state.step}.jsonl")
                     logfile.parent.mkdir(parents=True, exist_ok=True)
                     with logfile.open("w") as sink:
                         metrics = evaluation.benchmark(
@@ -122,11 +132,12 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                             logsink=sink,
                         )
                     if metrics is not None:
-                        header = f"{dset.name}:{dset.split_alias} - Period {period_idx + 1}"
+                        header = f"{dset.name}:{dset.split_alias} - Period {state.period + 1}"
                         logging.log(
                             {f"{dset.name}/{dset.split_alias}/{k}": v for k, v in metrics.items()},
-                            trainer=trainer,
+                            loggers=fabric.loggers,
                             header=header,
+                            step=state.step,
                         )
                         print_metric_groups(
                             {
@@ -141,80 +152,60 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                 # If there is no defined `end_step`, we reached the end of the training
                 continue
 
-            # potentially re-init the ranker
-            barrier("Setting up ranker..")
-            if config.schedule.reset_model_on_period_start:
-                logger.info(f"Re-initializing the Ranker ... (period={1+period_idx}))")
-                ranker = ranker_generator()
-
             # training for the current period.
             # We use a `StopAtTrainer` to stop the training at the end of the current period (max `end_step`).
-            logger.info(f"Starting training period {1+period_idx}")
-            with WithCallbacks(
-                trainer,
-                callbacks=[
-                    StopAtCallback(end_step),
-                    OnFirstBatchCallback(
-                        functools.partial(
-                            logging.log_retrieval_batch,
-                            tokenizer=config.dataset.tokenizer,
-                            max_sections=10,
-                        )
-                    ),
-                    OnFirstBatchCallback(
-                        functools.partial(
-                            pipes.pprint_batch,
-                            header=f"Train batch - period = {1+period_idx}",
-                            footer="\n\n",  # <- force a new line # os.get_terminal_size().columns +
-                        )
-                    ),
-                ],  # type: ignore
-            ):
-                ranker.cpu()  # <- free up the GPU memory so it can be used to build faiss
-                ranker = training.index_and_train(
-                    ranker=ranker,
-                    trainer=trainer,
-                    vectors=vectors,
-                    train_factories=_get_dset_factories(config.dataset.get("train"), config=config.dataset),
-                    val_factories=_get_dset_factories(config.dataset.get("validation"), config=config.dataset),
-                    tokenizer=config.dataset.tokenizer,
-                    search_config=config.search.training,
-                    collate_config=config.collates.train,
-                    train_dataloader_config=config.dataloaders.train,
-                    eval_dataloader_config=config.dataloaders.eval,
-                    dl_sampler=config.dl_sampler,
-                    cache_dir=cache_dir,
-                    parameters=parameters,
-                    serve_on_gpu=False,
-                )
-            logger.success(f"Completed training period {1+period_idx}")
+            logger.info(f"Starting training period {1+state.period}")
+            state = training.index_and_train(
+                ranker=ranker,
+                optimizer=optimizer,
+                scheduler=scheduler,
+                fabric=fabric,
+                vectors=vectors,  # type: ignore
+                train_factories=_get_dset_factories(config.dataset.get("train"), config=config.dataset),
+                val_factories=_get_dset_factories(config.dataset.get("validation"), config=config.dataset),
+                tokenizer=config.dataset.tokenizer,
+                search_config=config.search.training,
+                collate_config=config.collates.train,
+                train_dataloader_config=config.dataloaders.train,
+                eval_dataloader_config=config.dataloaders.eval,
+                dl_sampler=config.dl_sampler,
+                cache_dir=cache_dir,
+                serve_on_gpu=False,
+                trainer_state=state,
+            )
+            logger.success(f"Completed training period {1+state.period}")
             barrier("Period completed.")
 
     return ranker
 
 
-def _hacky_setup_distributed_env(
-    *, trainer: L.Trainer, ranker: Ranker, config: core_config.TrainWithIndexUpdatesConfigs
-) -> None:
-    """Setup the distributed environment, if any.
+def _infer_accumulate_grad_batches(fabric: L.Fabric, config: core_config.BatchSizeConfig) -> int:
+    step_batch_size = fabric.world_size * config.per_device
 
-    This is done automatically by the trainer when lauching a task (hacky, but working).
-    Might be unnecessary in future versions of lightning.
-    If not done, `barrier()` will not work as expected.
-    """
-    factory = next(iter(_get_dset_factories(config.dataset.get("validation"), config=config.dataset).values()))
-    dset = factory(what="question").select(range(2 * trainer.num_devices))
-    collate_fn = precompute.init_predict_collate_fn(
-        config.collates.benchmark,
-        field="question",
-        tokenizer=config.dataset.tokenizer,
+    # warn if the batch size per step is larger than the effective batch size
+    if step_batch_size > config.effective:
+        logger.warning(
+            f"Effective batch size ({config.effective}) is smaller than the batch size per step "
+            f"({step_batch_size}). This will lead to a slower training."
+        )
+        return 1
+
+    # accumulate gradients if the effective batch size is larger than the batch size per step
+    accumulation_steps = -(-config.effective // step_batch_size)
+
+    # warn if the effective batch size is not divisible by the batch size per step
+    if config.effective % step_batch_size != 0:
+        logger.warning(
+            f"The effective batch size ({config.effective}) is not divisible by the batch size per step "
+            f"({step_batch_size}). This will lead to a slower training."
+        )
+
+    logger.info(
+        f"Using {accumulation_steps} accumulation steps. "
+        f"Effective batch size: {fabric.world_size * accumulation_steps * config.per_device} "
+        f"(requested={config.effective})."
     )
-    dl = torch_data.DataLoader(
-        dset,  # type: ignore
-        collate_fn=collate_fn,
-        **config.dataloaders.predict.dict(),
-    )
-    trainer.predict(model=ranker, dataloaders=dl)
+    return accumulation_steps
 
 
 def _get_dset_factories(
@@ -250,67 +241,3 @@ def _pretty_steps(steps: list[int], max_steps: int = 6) -> str:
         return f"[{steps[0]}, {steps[1]}, {steps[2]}, {steps[3]}, {steps[4]} ... {steps[-1]}]"
 
     return str(steps)
-
-
-class WithCallbacks:
-    """Context manager to temporarily add a `StopAtCallback` to a trainer."""
-
-    def __init__(self, trainer: L.Trainer, callbacks: list[L.Callback]) -> None:
-        self.trainer = trainer
-        self.callbacks = callbacks
-
-    def __enter__(self) -> L.Trainer:  # noqa: D105
-        self.trainer.callbacks.extend(self.callbacks)  # type: ignore
-        return self.trainer
-
-    def __exit__(self, *args, **kwargs) -> None:  # noqa: ANN, D105, ANN
-        for callback in self.callbacks:
-            self.trainer.callbacks.remove(callback)  # type: ignore
-
-
-class StopAtCallback(L.Callback):
-    """Stops the training after a given number of steps."""
-
-    def __init__(self, stop_at: int):
-        super().__init__()
-        self.stop_at = stop_at
-
-    def on_fit_start(self, trainer: L.Trainer, pl_module: L.LightningModule) -> None:  # noqa: ARG002
-        """Called when the training begins."""
-        trainer.should_stop = False
-
-    def on_train_batch_start(
-        self, trainer: "L.Trainer", pl_module: "L.LightningModule", batch: Any, batch_idx: int  # noqa: ANN, ARG
-    ) -> None:
-        """Called when the training batch ends."""
-        if trainer.global_step >= self.stop_at:
-            trainer.should_stop = True
-
-
-class OnFirstBatchCallback(L.Callback):
-    """Log the first batch of the training."""
-
-    def __init__(self, fn: Callable[[dict[str, Any]], Any]) -> None:
-        self.fn = fn
-
-    def on_train_batch_start(
-        self, trainer: "L.Trainer", pl_module: "L.LightningModule", batch: Any, batch_idx: int  # noqa: ANN, ARG
-    ) -> None:
-        """Called when the training batch starts."""
-        if batch_idx == 0 and trainer.global_step == 0 and trainer.is_global_zero:
-            self.fn(batch)
-
-
-def _configure_logger(trainer: L.Trainer) -> None:
-    logger_format = (
-        "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
-        "<level>{level: <8}</level> | "
-        "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> | "
-        "<yellow>rank</yellow>:<yellow>{extra[rank]}/{extra[world_size]}</yellow> - <level>{message}</level>"
-    )
-    if trainer.world_size == 1:
-        return
-
-    logger.configure(extra={"rank": 1 + trainer.global_rank, "world_size": trainer.world_size})  # Default values
-    logger.remove()
-    logger.add(sys.stderr, format=logger_format)

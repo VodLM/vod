@@ -1,20 +1,10 @@
-defaults:
-  - strategy: single_device
-  - callbacks:
-      - rich_progress_bar
-      - lr_monitor
-      - checkpoint
-  - logger:
-      - csv
-      - wandb
-  - _self_
-
-_target_: raffle_ds_research.tools.utils.trainer.Trainer
+_target_: raffle_ds_research.core.config.TrainerConfig
 max_steps: 1_000_000
-val_check_interval: null
-fast_dev_run: false
+val_check_interval: 500
+period: 3000
 gradient_clip_val: 1.0
-accumulate_grad_batches: ${batch_size.gradient_accumulation_steps}
-accelerator: ${default_trainer_accelerator:}
-devices: ${resources.n_devices}
-precision: 32
+benchmark_on_init: false
+limit_val_batches: null
+parameters:
+  faiss: 1.0
+  bm25: 1.0

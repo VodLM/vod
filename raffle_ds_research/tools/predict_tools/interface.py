@@ -1,44 +1,29 @@
-from __future__ import annotations  # noqa: I001
+from __future__ import annotations
 
-import math
+import contextlib  # noqa: I001
 import pathlib
 import shutil
 from pathlib import Path
-from typing import Any, Iterable, Literal, Optional, Union
-from typing_extensions import TypeAlias
+from typing import Any, Iterable, Literal, Optional
 
-import datasets
-import lightning.pytorch as pl
+import lightning as L
 import numpy as np
-import pydantic
-import torch
-from datasets import fingerprint
-from loguru import logger
-from omegaconf import DictConfig, omegaconf
-from rich.progress import track
 import tensorstore as ts
-from torch.utils import data as torch_data
+import torch
+from loguru import logger
+from omegaconf import DictConfig
+from rich.progress import track
 from torch.utils.data.dataloader import default_collate
 
-from raffle_ds_research.tools import pipes, dstruct
+from raffle_ds_research.tools import dstruct, interfaces, pipes
 from raffle_ds_research.tools.utils import loader_config
-from raffle_ds_research.tools.utils.tensor_tools import serialize_tensor
 
-from .callback import StorePredictions
-from .wrappers import CollateWithIndices, DatasetWithIndices, _warp_as_lightning_model
-
-
-LoaderKwargs: TypeAlias = Union[dict[str, Any], DictConfig, loader_config.DataLoaderConfig]
+from .compute import LoaderKwargs, compute_and_store_predictions
+from .fingerprint import make_predict_fingerprint
 
 
-class DataLoaderForPredictKwargs(loader_config.DataLoaderConfig):
-    """Confiuguration for `torch.utils.data.Dataloader` for predictions."""
-
-    @pydantic.validator("shuffle", pre=True)
-    def _force_shuffle(cls, value: bool) -> bool:
-        if value:
-            logger.debug("Shuffle is set to True. This is unnecessary for predictions. Forcing `shuffle` to False.")
-        return False
+class StoreValidationError(ValueError):
+    """Raised when a store is not valid."""
 
 
 class Predict:
@@ -58,7 +43,7 @@ class Predict:
         *,
         dataset: dstruct.SizedDataset,
         cache_dir: str | pathlib.Path,
-        model: Union[torch.nn.Module, pl.LightningModule],
+        model: torch.nn.Module | interfaces.ProtocolEncoder,
         collate_fn: pipes.Collate = default_collate,  # type: ignore
         model_output_key: Optional[str] = None,
     ):
@@ -89,7 +74,7 @@ class Predict:
 
     def __call__(
         self,
-        trainer: Optional[pl.Trainer] = None,
+        fabric: Optional[L.Fabric] = None,
         loader_kwargs: Optional[LoaderKwargs] = None,
         ts_kwargs: Optional[dict[str, Any]] = None,
         validate_store: bool | int = True,
@@ -116,7 +101,7 @@ class Predict:
             raise ValueError(f"Invalid `open_mode`: {open_mode}")
 
         # compute the vectors
-        self._compute_vectors(store, trainer=trainer, loader_kwargs=(loader_kwargs or {}))
+        self._compute_vectors(store, fabric=fabric, loader_kwargs=(loader_kwargs or {}))
 
         # validate the store
         if validate_store:
@@ -127,15 +112,16 @@ class Predict:
     def _compute_vectors(
         self,
         store: ts.TensorStore,
-        trainer: Optional[pl.Trainer],
+        fabric: None | L.Fabric,
         loader_kwargs: LoaderKwargs,
     ) -> None:
-        if trainer is None:
-            trainer = pl.Trainer()
+        if fabric is None:
+            fabric = L.Fabric()
+            fabric.launch()
         try:
-            trainer.strategy.barrier(f"predict-start(fingerprint={self.fingerprint})")
-            _compute_and_store_predictions(
-                trainer=trainer,
+            fabric.strategy.barrier(f"predict-start(fingerprint={self.fingerprint})")
+            compute_and_store_predictions(
+                fabric=fabric,
                 dataset=self._dataset,
                 model=self._model,
                 model_output_key=self._model_output_key,
@@ -143,14 +129,15 @@ class Predict:
                 store=store,
                 loader_kwargs=loader_kwargs,
             )
-            trainer.strategy.barrier(f"predict-ends(fingerprint={self.fingerprint})")
+            fabric.strategy.barrier(f"predict-ends(fingerprint={self.fingerprint})")
         except KeyboardInterrupt as exc:
             logger.warning(f"`Predict` was keyboard-interrupted. Deleting store at `{self.store_path}`.")
-            shutil.rmtree(self.store_path)
+            with contextlib.suppress(FileNotFoundError):
+                shutil.rmtree(self.store_path)
             raise exc
         except Exception as exc:
             logger.warning(
-                f"`Predict` was failed with exception `{type(exc).__name__}`. " "Deleting store at `{self.store_path}`."
+                f"`Predict` was failed with exception `{type(exc).__name__}`. Deleting store at `{self.store_path}`."
             )
             shutil.rmtree(self.store_path)
             raise exc
@@ -234,9 +221,9 @@ class Predict:
 def predict(
     dataset: dstruct.SizedDataset,
     *,
-    trainer: pl.Trainer,
+    fabric: L.Fabric,
     cache_dir: str | Path,
-    model: torch.nn.Module | pl.LightningModule,
+    model: torch.nn.Module | interfaces.ProtocolEncoder,
     collate_fn: pipes.Collate,
     model_output_key: Optional[str] = None,
     loader_kwargs: Optional[dict[str, Any] | DictConfig | loader_config.DataLoaderConfig] = None,
@@ -261,7 +248,7 @@ def predict(
         cache_dir=cache_dir,
     )
     return predict_fn(
-        trainer=trainer,
+        fabric=fabric,
         loader_kwargs=loader_kwargs,
         ts_kwargs=ts_kwargs,
         validate_store=validate_store,
@@ -270,7 +257,7 @@ def predict(
 
 
 def _infer_vector_shape(
-    model: torch.nn.Module | pl.LightningModule,
+    model: torch.nn.Module,
     model_output_key: Optional[str],
     *,
     dataset: dstruct.SizedDataset,
@@ -285,7 +272,7 @@ def _infer_vector_shape(
             f"Implement `model.get_output_shape(output_key: str) -> tuple[int,...]` to skip this step."
         )
         batch = collate_fn([dataset[0]])
-        one_vec = model.predict(batch) if hasattr(model, "predict") else model(batch)  # type: ignore
+        one_vec = model(batch)  # type: ignore
         if model_output_key is not None:
             one_vec = one_vec[model_output_key]
         vector_shape = one_vec.shape[1:]
@@ -321,102 +308,5 @@ def _get_zero_vec_indices(store: ts.TensorStore, n_samples: int) -> Iterable[int
             yield i
 
 
-class StoreValidationError(ValueError):
-    """Raised when a store is not valid."""
-
-
 def _predict_store_path(*, op_fingerprint: str, cache_dir: pathlib.Path | str) -> pathlib.Path:
     return pathlib.Path(cache_dir, "predictions", f"{op_fingerprint}.ts")
-
-
-@torch.inference_mode()
-def _compute_and_store_predictions(
-    trainer: pl.Trainer,
-    dataset: dstruct.SizedDataset,
-    model: torch.nn.Module | pl.LightningModule,
-    collate_fn: pipes.Collate,
-    store: ts.TensorStore,
-    loader_kwargs: Optional[LoaderKwargs] = None,
-    model_output_key: Optional[str] = None,
-) -> ts.TensorStore:
-    """Compute predictions for a dataset and store them in a tensorstore."""
-    dset_with_ids: dstruct.SizedDataset[dict] = DatasetWithIndices[dict](dataset)
-    collate_fn_with_ids: pipes.Collate = CollateWithIndices(collate_fn)
-    pl_model: pl.LightningModule = _warp_as_lightning_model(model)
-
-    # build the dataloader
-    if isinstance(loader_kwargs, DictConfig):
-        loader_kwargs = omegaconf.OmegaConf.to_container(loader_kwargs, resolve=True)  # type: ignore
-    if not isinstance(loader_kwargs, DataLoaderForPredictKwargs):
-        if isinstance(loader_kwargs, pydantic.BaseModel):
-            loader_kwargs = loader_kwargs.dict()
-        loader_kwargs = loader_kwargs or {}
-        if len(loader_kwargs) == 0:
-            loader_kwargs = {"batch_size": 10}
-            logger.warning("No `loader_kwargs` were provided. Using default batch_size=10. ")
-        loader_kwargs = DataLoaderForPredictKwargs(**loader_kwargs)  # type: ignore
-
-    loader = torch_data.DataLoader(
-        dset_with_ids,  # type: ignore
-        collate_fn=collate_fn_with_ids,
-        **loader_kwargs.dict(),
-    )
-
-    # process the dataset and store the predictions in the tensorstore
-    with StorePredictions(trainer, store, model_output_key=model_output_key):
-        trainer.predict(pl_model, dataloaders=loader, return_predictions=False)
-
-    return store
-
-
-def make_predict_fingerprint(
-    *,
-    dataset: dstruct.SizedDataset | datasets.Dataset,
-    collate_fn: pipes.Collate,
-    model: torch.nn.Module | pl.LightningModule,
-    model_output_key: Optional[str] = None,
-) -> str:
-    """Make a fingerprint for the `predict` operation."""
-    dset_fingerprint = _get_dset_fingerprint(dataset)
-    model_fingerprint = _get_model_fingerprint(model)
-    collate_fn_fingerprint = _get_collate_fn_fingerprint(collate_fn)
-    op_fingerprint = f"{dset_fingerprint}_{model_fingerprint}_{collate_fn_fingerprint}"
-    if model_output_key:
-        op_fingerprint += f"_{model_output_key}"
-    return op_fingerprint
-
-
-def _get_model_fingerprint(model: torch.nn.Module) -> str:
-    state = model.state_dict()
-    hasher = fingerprint.Hasher()
-    hasher.update(type(model).__name__)
-    for k, v in sorted(state.items(), key=lambda x: x[0]):
-        hasher.update(k)
-        u = serialize_tensor(v)
-        hasher.update(u)
-    return hasher.hexdigest()
-
-
-def _get_collate_fn_fingerprint(collate_fn: pipes.Collate) -> str:
-    return fingerprint.Hasher.hash(collate_fn)
-
-
-def _get_dset_fingerprint(dataset: dstruct.SizedDataset | datasets.Dataset, max_samples: float = math.inf) -> str:
-    if isinstance(dataset, datasets.Dataset):
-        return dataset._fingerprint
-
-    hasher = fingerprint.Hasher()
-    hasher.update({"length": len(dataset)})
-
-    # select random row ids
-    if len(dataset) > max_samples:
-        rgn = np.random.RandomState(0)
-        ids = rgn.choice(len(dataset), size=int(max_samples), replace=False)
-    else:
-        ids = range(len(dataset))
-
-    # hash the rows
-    for i in ids:
-        hasher.update(dataset[i])
-
-    return hasher.hexdigest()

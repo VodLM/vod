@@ -10,7 +10,7 @@ import transformers
 from torch import nn
 from typing_extensions import Self, Type
 
-from raffle_ds_research.core.ml import public
+from raffle_ds_research.tools import interfaces
 
 
 def _resolve_import_path(path: str) -> Type:
@@ -46,7 +46,7 @@ AGGREGATOR_FNS = {
 }
 
 
-class TransformerEncoder(nn.Module, public.ProtocolEncoder):
+class TransformerEncoder(nn.Module, interfaces.ProtocolEncoder):
     """A transformer encoder."""
 
     def __init__(
@@ -80,6 +80,9 @@ class TransformerEncoder(nn.Module, public.ProtocolEncoder):
         )
         self._output_size = vector_size
 
+        # aggregator
+        self.agg_fn = AGGREGATOR_FNS[self.config.agg]
+
     def save(self, path: str | pathlib.Path) -> None:
         """Save the encoder."""
         state = {
@@ -97,13 +100,14 @@ class TransformerEncoder(nn.Module, public.ProtocolEncoder):
         encoder.load_state_dict(state["state"])
         return encoder
 
-    def forward(self, data: public.TokenizedField) -> torch.Tensor:
+    def forward(self, data: interfaces.TokenizedField) -> torch.Tensor:
         """Embed/encode a tokenized field into a vector."""
-        outputs = self.model(data.input_ids, data.attention_mask)
-        agg_fn = AGGREGATOR_FNS[self.config.agg]
-        hidden_state = agg_fn(outputs.last_hidden_state, data.attention_mask)
+        input_ids = data.input_ids
+        attention_mask = data.attention_mask
+        outputs = self.model(input_ids, attention_mask)
+        hidden_state = self.agg_fn(outputs.last_hidden_state, attention_mask)
         return self.projection(hidden_state)
 
-    def get_output_shape(self, field: Optional[public.TokenizedField] = None) -> tuple[int, ...]:  # noqa: ARG002
+    def get_output_shape(self, field: Optional[interfaces.TokenizedField] = None) -> tuple[int, ...]:  # noqa: ARG002
         """Get the output shape of the encoder. Set `-1` for unknown dimensions."""
         return (self._output_size,)

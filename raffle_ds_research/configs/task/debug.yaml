@@ -2,18 +2,21 @@
 
 defaults:
   - override /model/encoder: bert-tiny
-  - override /trainer/callbacks:
-      - rich_progress_bar
-  - override /trainer/logger:
-      - csv
   - _self_
 
 seed: 1
 
-
 benchmark_search:
   faiss:
     factory: Flat
+
+trainer:
+  max_steps: 1000
+  period: 300
+  val_check_interval: 5
+  limit_val_batches: 10
+  parameters:
+    bm25: -1
 
 dataset:
   subset_size: 1_000
@@ -27,15 +30,14 @@ schedule:
   benchmark_on_init: false
 
 batch_size:
-  per_device: 4
-  per_device_eval: 8
+  per_device: 2
+  per_device_eval: 4
   per_device_predict: 512
 
 resources:
   num_workers: 1
   num_proc: 4
 
-
 collates:
   train:
-    in_batch_negatives: true
+    in_batch_negatives: false

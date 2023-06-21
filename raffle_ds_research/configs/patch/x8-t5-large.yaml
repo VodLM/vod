@@ -26,6 +26,6 @@ collates:
     max_pos_sections: 8
     prefetch_n_sections: 128
 
-trainer:
+fabric:
   precision: bf16-mixed
   accelerator: gpu

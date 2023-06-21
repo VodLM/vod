@@ -1,22 +1,28 @@
 from __future__ import annotations
 
 import pathlib
-from typing import Any, Optional
+from typing import Any, Iterable, Optional
 
-import lightning.pytorch as pl
 import loguru
 import rich.console
 import transformers
+from lightning.fabric.loggers import Logger as FabricLogger
 from rich import terminal_theme
 
 from raffle_ds_research.tools import pipes
 from raffle_ds_research.utils.pretty import print_metric_groups
 
 
-def log(metrics: dict[str, Any], trainer: pl.Trainer, console: bool = False, header: Optional[str] = None) -> None:
+def log(
+    metrics: dict[str, Any],
+    loggers: Iterable[FabricLogger],
+    step: Optional[int] = None,
+    console: bool = False,
+    header: Optional[str] = None,
+) -> None:
     """Log metrics to the trainer loggers and optionally to the console."""
-    for logger in trainer.loggers:
-        logger.log_metrics(metrics, step=trainer.global_step)
+    for logger in loggers:
+        logger.log_metrics(metrics, step=step)
 
     if console:
         print_metric_groups(metrics, header=header)

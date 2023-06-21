@@ -5,13 +5,13 @@ import functools
 import pathlib
 from typing import Any, Callable, Literal, TypeVar
 
-import lightning as L  # noqa: N812
+import lightning as L
 import loguru
 import transformers
 
 from raffle_ds_research.core import config as core_config
+from raffle_ds_research.core import ml
 from raffle_ds_research.core.mechanics import dataset_factory
-from raffle_ds_research.core.ml import Ranker
 from raffle_ds_research.core.workflows.utils import support
 from raffle_ds_research.tools import dstruct, pipes, predict_tools
 
@@ -33,8 +33,8 @@ class PrecomputedDsetVectors:
 def compute_vectors(
     factories: dict[K, dataset_factory.DatasetFactory],
     *,
-    ranker: Ranker,
-    trainer: L.Trainer,
+    ranker: ml.Ranker,
+    fabric: L.Fabric,
     cache_dir: pathlib.Path,
     dataset_config: core_config.MultiDatasetFactoryConfig,
     collate_config: core_config.BaseCollateConfig,
@@ -44,7 +44,7 @@ def compute_vectors(
     predict_fn: Callable[..., dstruct.TensorStoreFactory] = functools.partial(
         compute_dataset_vectors,
         ranker=ranker,
-        trainer=trainer,
+        fabric=fabric,
         collate_config=collate_config,
         dataloader_config=dataloader_config,
         tokenizer=dataset_config.tokenizer,
@@ -66,8 +66,8 @@ def compute_vectors(
 def compute_dataset_vectors(
     factory: dataset_factory.DatasetFactory | dstruct.SizedDataset[dict[str, Any]],
     *,
-    ranker: Ranker,
-    trainer: L.Trainer,
+    ranker: ml.Ranker,
+    fabric: L.Fabric,
     tokenizer: transformers.PreTrainedTokenizerBase,
     collate_config: core_config.BaseCollateConfig,
     dataloader_config: core_config.DataLoaderConfig,
@@ -76,9 +76,8 @@ def compute_dataset_vectors(
     validate_store: int = 1_000,
 ) -> dstruct.TensorStoreFactory:
     """Compute the vectors for a given dataset and field."""
-    model_output_key = {"question": "hq", "section": "hd"}[field]
     collate_fn = init_predict_collate_fn(collate_config, field=field, tokenizer=tokenizer)
-    barrier_fn = functools.partial(support._barrier_fn, trainer=trainer)
+    barrier_fn = functools.partial(support._barrier_fn, fabric=fabric)
 
     # construct the dataset
     if isinstance(factory, dataset_factory.DatasetFactory):
@@ -93,31 +92,33 @@ def compute_dataset_vectors(
         dataset=dataset,  # type: ignore
         cache_dir=cache_dir,
         model=ranker,
-        model_output_key=model_output_key,
         collate_fn=collate_fn,
+        model_output_key={"question": "hq", "section": "hd"}[field],
     )
 
     # check if the store already exists, validate and read it if it does.
     # if the validation fails, delete the store and recompute the vectors.
     if predict_fn.exists():
         loguru.logger.info(f"{locator} - Found pre-computed vectors.")
-        if predict_fn.validate_store(validate_store, raise_exc=False):
+        is_valid = predict_fn.validate_store(validate_store, raise_exc=False)
+        barrier_fn(f"{locator} - Validated existing vector store.")
+        if is_valid:
             loguru.logger.debug(f"{locator} - loading `{predict_fn.store_path}`")
             return predict_fn.read()
-        if trainer.is_global_zero:
+        if fabric.is_global_zero:
             loguru.logger.warning(f"{locator} - Invalid store. Deleting it..")
             predict_fn.rm()
 
     # create the store
     barrier_fn(f"{locator} - Checked existing vector store.")
-    if trainer.is_global_zero:
+    if fabric.is_global_zero:
         loguru.logger.info(f"{locator} - Instantiating vector store at `{predict_fn.store_path}`")
         predict_fn.instantiate()
 
     # compute the vectors
     barrier_fn(f"{locator} - About to compute vectors.")
     return predict_fn(
-        trainer=trainer,
+        fabric=fabric,
         loader_kwargs=dataloader_config,
         validate_store=validate_store,
         open_mode="a",
