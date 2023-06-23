@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import collections
 import dataclasses
 import functools
 import pathlib
+import time
 import typing
 
 import lightning as L
+import numpy as np
 import rich
 import torch
 import transformers
@@ -57,6 +60,8 @@ def index_and_train(
 ) -> support.TrainerState:
     """Index the sections and train the ranker."""
     barrier_fn = functools.partial(support._barrier_fn, fabric=fabric)
+
+    # Gather datasets and their corresponding vectors
     task = _make_retrieval_task(
         train_factories=train_factories,
         val_factories=val_factories,
@@ -65,8 +70,14 @@ def index_and_train(
     if fabric.is_global_zero:
         rich.print(task)
 
-    barrier_fn("Init search engines..")
+    # parameters
     parameters = trainer_state.get_parameters()
+
+    # free GPU resources
+    if support.is_engine_enabled(parameters, "faiss"):
+        ranker.to("cpu")
+
+    barrier_fn("Init search engines..")
     with search_engine.build_search_engine(
         sections=task.sections.data,
         vectors=task.sections.vectors,
@@ -111,6 +122,7 @@ def index_and_train(
 
         # train the ranker
         logger.debug("Training ranker..")
+        ranker = fabric.to_device(ranker)  # type: ignore
         trainer_state = _training_loop(
             ranker=ranker,
             optimizer=optimizer,
@@ -135,19 +147,20 @@ def _training_loop(  # noqa: C901
     scheduler: typing.Optional[torch.optim.lr_scheduler._LRScheduler] = None,
 ) -> support.TrainerState:
     if not fabric_wrappers.is_wrapped(ranker):
-        raise ValueError("Ranker must be wrapped by lightning fabric.")
+        raise RuntimeError("Ranker must be wrapped by lightning `Fabric`.")
     if not fabric_wrappers.is_wrapped(optimizer):
-        raise ValueError("Optimizer must be wrapped by lightning fabric.")
+        raise RuntimeError("Optimizer must be wrapped by lightning `Fabric`.")
     optimizer.zero_grad()
     ranker.train()
     train_iter = iter(train_dl)
 
     # infer the number of training and valid steps
-    n_train_steps = trainer_state.accumulate_grad_batches * (trainer_state.period_max_steps - trainer_state.step)
-    if trainer_state.limit_val_batches is None:
+    n_train_steps = trainer_state.period_max_steps - trainer_state.step
+    if trainer_state.n_max_eval is None:
         n_val_steps = len(val_dl)
     else:
-        n_val_steps = min(len(val_dl), max(1, trainer_state.limit_val_batches // fabric.world_size))
+        eff_eval_bs = fabric.world_size * val_dl.batch_size  # type: ignore
+        n_val_steps = min(len(val_dl), max(1, -(-trainer_state.n_max_eval // eff_eval_bs)))
 
     with BatchProgressBar(disable=not fabric.is_global_zero) as pbar:
         train_pbar = pbar.add_task(
@@ -155,46 +168,55 @@ def _training_loop(  # noqa: C901
             total=n_train_steps,
             info=_pbar_info(trainer_state),
         )
+        eval_metrics = None
         for local_step in range(n_train_steps):
-            # sample a batch
-            try:
-                batch = next(train_iter)
-            except StopIteration:
-                trainer_state = dataclasses.replace(trainer_state, epoch=trainer_state.epoch + 1)
-                train_iter = iter(train_dl)
-                batch = next(train_iter)
+            batch, trainer_state = _sample_batch(trainer_state, train_iter=train_iter, train_dl=train_dl)
 
-            # forward pass
+            # Forward pass
             is_accumulating = local_step % trainer_state.accumulate_grad_batches != 0
             with fabric.no_backward_sync(ranker, enabled=is_accumulating):  # type: ignore
-                output = ranker.training_step(batch)
-                loss = output["loss"]
+                step_metrics = ranker.training_step(batch)
+                loss = step_metrics["loss"]
                 fabric.backward(loss / trainer_state.accumulate_grad_batches)
 
-            # logging
+            # Log the training metrics
             if trainer_state.step % trainer_state.log_interval == 0:
                 fabric.log_dict(
-                    metrics=output,
+                    metrics={
+                        **{f"train/{k.replace('.', '/')}": v for k, v in step_metrics.items()},
+                        **{f"parameter/{k}": v for k, v in _extract_learning_rates(optimizer).items()},
+                    },
                     step=trainer_state.step,
                 )
 
-            # optimization step
+            # Optimization & eval step
             if not is_accumulating:
-                # clip the gradients
-                if trainer_state.gradient_clip_val:
+                # Clip the gradients
+                if trainer_state.gradient_clip_val is not None:
+                    rich.print(f"Clipping gradients at `{trainer_state.gradient_clip_val}`")
                     fabric.clip_gradients(ranker, optimizer, max_norm=trainer_state.gradient_clip_val)
 
-                # run an optimization step, reset the gradients and update the learning rate
+                # Run an optimization step, reset the gradients and update the learning rate
                 optimizer.step()
                 optimizer.zero_grad()
                 if scheduler is not None:
                     scheduler.step()
-                trainer_state = dataclasses.replace(trainer_state, step=trainer_state.step + 1)
-                pbar.update(train_pbar, advance=1, taskinfo=_pbar_info(trainer_state, output))
 
-                # validation
+                # Update the trainer state and the progress bar
+                trainer_state = dataclasses.replace(trainer_state, step=trainer_state.step + 1)
+                pbar.update(
+                    train_pbar,
+                    advance=1,
+                    info=_pbar_info(
+                        trainer_state,
+                        train_metrics=step_metrics,
+                        eval_metrics=eval_metrics,
+                    ),
+                )
+
+                # Validation
                 if trainer_state.step % trainer_state.val_check_interval == 0:
-                    _validation_loop(
+                    eval_metrics = _validation_loop(
                         ranker=ranker,
                         fabric=fabric,
                         trainer_state=trainer_state,
@@ -202,9 +224,23 @@ def _training_loop(  # noqa: C901
                         n_steps=n_val_steps,
                         pbar=pbar,
                     )
-                    ranker.train()
 
+    optimizer.zero_grad()
     return trainer_state
+
+
+def _sample_batch(
+    trainer_state: support.TrainerState,
+    train_iter: typing.Iterator[dict[str, torch.Tensor]],
+    train_dl: torch_data.DataLoader,
+) -> tuple[dict[str, torch.Tensor], support.TrainerState]:
+    try:
+        batch = next(train_iter)
+    except StopIteration:
+        trainer_state = dataclasses.replace(trainer_state, epoch=trainer_state.epoch + 1)
+        train_iter = iter(train_dl)
+        batch = next(train_iter)
+    return batch, trainer_state
 
 
 @torch.no_grad()
@@ -215,29 +251,96 @@ def _validation_loop(
     val_dl: torch_data.DataLoader,
     n_steps: int,
     pbar: progress.Progress,
-) -> None:
+) -> dict[str, float | torch.Tensor]:
     ranker.eval()
     val_pbar = pbar.add_task("Validation", total=n_steps, info=f"n_steps={n_steps}")
+    metrics = collections.defaultdict(list)
     for batch in val_dl:
         output = ranker.validation_step(batch)
-        fabric.log_dict(
-            metrics=output,
-            step=trainer_state.step,
-        )
         pbar.update(val_pbar, advance=1, taskinfo=_pbar_info(trainer_state, output))
+        for k, v in output.items():
+            metrics[k].append(_format_metric(v))
         if trainer_state.step >= n_steps:
             break
 
+    # aggregate metrics
+    metrics = {k: np.mean(v) for k, v in metrics.items()}
+
+    # log metrics
+    fabric.log_dict(
+        metrics={f"val/{k.replace('.', '/')}": v for k, v in metrics.items()},
+        step=trainer_state.step,
+    )
+
     pbar.remove_task(val_pbar)
+    ranker.train()
+    return dict(metrics)
+
+
+def _format_metric(v: typing.Any) -> typing.Any:  # noqa: ANN401
+    if isinstance(v, torch.Tensor):
+        return v.detach().mean().cpu()
+
+    return v
+
+
+class Chrono:
+    """A simple chronometer."""
+
+    _laps: list[tuple[float, float]]
+    _start_time: typing.Optional[float]
+
+    def __init__(self) -> None:
+        self._laps = []
+        _start_time = None
+
+    def reset(self) -> "Chrono":
+        """Reset the chrono."""
+        self._laps = []
+        self._start_time = None
+        return self
+
+    def start(self) -> "Chrono":
+        """Start the chrono."""
+        self._start_time = time.perf_counter()
+        return self
+
+    def stop(self) -> "Chrono":
+        """Stop the chrono."""
+        if self._start_time is None:
+            raise RuntimeError("Chrono is not running")
+        curr_time = time.perf_counter()
+        self._laps.append((self._start_time, curr_time))
+        self._start_time = None
+        return self
+
+    def get_total_time(self) -> float:
+        """Return the total time elapsed since the chrono was started."""
+        return sum(end - start for start, end in self._laps)
+
+    def get_avg_time(self) -> float:
+        """Return the average time elapsed since the chrono was started."""
+        return self.get_total_time() / len(self._laps)
+
+
+def _extract_learning_rates(optimizer: torch.optim.Optimizer) -> dict[str, float]:
+    return {f"lr_{i}": param_group["lr"] for i, param_group in enumerate(optimizer.param_groups)}
 
 
 def _pbar_info(
     state: support.TrainerState,
-    outputs: typing.Optional[dict[str, typing.Any]] = None,
+    train_metrics: typing.Optional[dict[str, typing.Any]] = None,
+    eval_metrics: typing.Optional[dict[str, typing.Any]] = None,
 ) -> str:
     desc = f"step={1+state.step}/{state.period_max_steps}/{state.max_steps} • epoch={1+state.epoch}"
-    if outputs is not None:
-        desc = f"[yellow bold]loss={outputs['loss']:.3f}[/yellow bold] • " + desc
+    if train_metrics or eval_metrics:
+        suppl = []
+        if train_metrics is not None:
+            suppl += [f"train/loss={train_metrics['loss']:.3f}"]
+        if eval_metrics is not None:
+            suppl += [f"val/loss={eval_metrics['loss']:.3f}"]
+
+        desc = f"[bold yellow]{', '.join(suppl)}[/bold yellow] • {desc}"
 
     return desc
 

@@ -11,7 +11,7 @@ from loguru import logger
 from omegaconf import DictConfig
 
 from raffle_ds_research.core.ml.gradients import Gradients
-from raffle_ds_research.core.ml.monitor import Monitor
+from raffle_ds_research.core.ml.monitor import RetrievalMonitor
 from raffle_ds_research.tools import interfaces
 from raffle_ds_research.tools.pipes import fingerprint_torch_module
 
@@ -40,7 +40,7 @@ class Ranker(torch.nn.Module):
         gradients: Gradients,
         optimizer: Optional[dict | DictConfig | functools.partial] = None,
         scheduler: Optional[dict | DictConfig | functools.partial] = None,
-        monitor: Optional[Monitor] = None,
+        monitor: Optional[RetrievalMonitor] = None,
         compile: bool = False,
     ):
         super().__init__()
@@ -89,7 +89,7 @@ class Ranker(torch.nn.Module):
         original_shape = input_ids.shape
         input_ids = input_ids.view(-1, original_shape[-1])
         attention_mask = attention_mask.view(-1, original_shape[-1])
-        inputs = interfaces.TokenizedField(input_ids=input_ids, attention_mask=attention_mask, field=field)
+        inputs = {"input_ids": input_ids, "attention_mask": attention_mask, "field": field}
         embedding = self.encoder(inputs)
         embedding = embedding.view(*original_shape[:-1], -1)
         return embedding
@@ -120,9 +120,9 @@ class Ranker(torch.nn.Module):
     def _step(self, batch: dict[str, Any], *, split: str, **kwargs: Any) -> dict[str, Any]:  # noqa: ARG002
         output = self.forward(batch)
         output = self.gradients({**batch, **output})
-        output.update(_compute_input_stats(batch, prefix=f"{split}/"))
+        output.update(_compute_input_stats(batch))
         if self.monitor is not None:
-            output.update(self.monitor.forward(output, split=split))
+            output.update(self.monitor(output))
 
         # filter the output and append diagnostics
         output = self._filter_output(output)  # type: ignore
@@ -150,7 +150,7 @@ class Ranker(torch.nn.Module):
         return {key: value for key, value in output.items() if _filter_fn(key, value)}
 
 
-def _compute_input_stats(batch: dict, prefix: str = "") -> dict[str, float]:
+def _compute_input_stats(batch: dict) -> dict[str, float]:
     output = {}
     keys = {
         "question.input_ids": "question/input_ids",
@@ -161,9 +161,9 @@ def _compute_input_stats(batch: dict, prefix: str = "") -> dict[str, float]:
             value = batch[key]
             if isinstance(value, torch.Tensor):
                 shp = value.shape
-                output[f"{prefix}{log_key}_length"] = float(shp[-1])
+                output[f"{log_key}_length"] = float(shp[-1])
                 if len(shp) > 2:  # noqa: PLR2004
-                    output[f"{prefix}{log_key}_n"] = float(shp[-2])
+                    output[f"{log_key}_n"] = float(shp[-2])
         except KeyError:
             logger.warning(f"Key {key} not found in batch")
     return output

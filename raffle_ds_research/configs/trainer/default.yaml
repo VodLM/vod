@@ -4,7 +4,8 @@ val_check_interval: 500
 period: 3000
 gradient_clip_val: 1.0
 benchmark_on_init: false
-limit_val_batches: null
+n_max_eval: null
+n_max_benchmark: null
 parameters:
   faiss: 1.0
   bm25: 1.0

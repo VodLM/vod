@@ -8,6 +8,9 @@ work_dir: ${hydra:runtime.cwd}
 # path to folder with data
 cache_dir: ${sys.raffle_path}/ds-research-cache/
 
+# cache to local nvme
+nvme: ${os_expanduser:"~/nvme/"}
+
 # info
 hostname: ${hostname:}
 username: ${whoami:}

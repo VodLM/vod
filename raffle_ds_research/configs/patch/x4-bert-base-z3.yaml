@@ -1,0 +1,24 @@
+# @package _global_
+
+# This config is for 4xA100 GPUs (40GB)
+
+defaults:
+  - x4-bert-base
+  - override /fabric/strategy: deepspeed_3
+  - _self_
+
+model:
+  compile: false
+
+
+collates:
+  train:
+    n_sections: 128
+    max_pos_sections: 32
+    prefetch_n_sections: 256
+
+# collates:
+#   train:
+#     n_sections: 256
+#     max_pos_sections: 64
+#     prefetch_n_sections: 512

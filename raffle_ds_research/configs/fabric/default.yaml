@@ -1,8 +1,10 @@
 defaults:
   - strategy: single_device
+  - loggers:
+      - csv
   - _self_
 
-_target_: lightning.fabric.Fabric
+_target_: raffle_ds_research.cli.utils.misc.init_fabric
 accelerator: auto
 devices: ${resources.n_devices}
 precision: 32

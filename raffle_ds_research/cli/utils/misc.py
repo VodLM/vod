@@ -7,11 +7,13 @@ from typing import Any, TypeVar
 
 import datasets
 import faiss
+import lightning as L
 import loguru
 import omegaconf
 import torch
 import transformers
 import yaml
+from lightning.fabric.loggers.logger import Logger as FabricLogger
 
 from raffle_ds_research.core.ml import Ranker
 from raffle_ds_research.utils.config import config_to_flat_dict
@@ -57,16 +59,18 @@ def _get_ranker_meta_data(ranker: Ranker) -> dict[str, Any]:
     return {
         "n_trainable_params": sum(p.numel() for p in ranker.parameters() if p.requires_grad),
         "n_total_params": sum(p.numel() for p in ranker.parameters()),
+        "output_shape": ranker.encoder.get_output_shape(),  # type: ignore
         "flash_sdp_enabled": torch.backends.cuda.flash_sdp_enabled(),
         "mem_efficient_sdp_enabled": torch.backends.cuda.mem_efficient_sdp_enabled(),
         "math_sdp_enabled": torch.backends.cuda.math_sdp_enabled(),
     }
 
 
-def log_config(config: dict[str, Any] | omegaconf.DictConfig, exp_dir: Path) -> None:
+def log_config(config: dict[str, Any] | omegaconf.DictConfig, exp_dir: Path, extras: dict[str, Any]) -> None:
     """Log the config as hyperparameters and save it locally."""
     config_path = Path(exp_dir, "config.yaml")
-    all_data = omegaconf.OmegaConf.to_container(config, resolve=True)
+    all_data: dict[str, Any] = omegaconf.OmegaConf.to_container(config, resolve=True)  # type: ignore
+    all_data.update(extras)
     with config_path.open("w") as f:
         yaml.dump(all_data, f)
 
@@ -83,3 +87,18 @@ def log_config(config: dict[str, Any] | omegaconf.DictConfig, exp_dir: Path) -> 
             loguru.logger.debug("Could not log config to wandb")
     except ImportError:
         ...
+
+
+def init_fabric(
+    *args,  # noqa: ANN002
+    loggers: omegaconf.DictConfig | list[FabricLogger] | dict[str, FabricLogger],
+    **kwargs,  # noqa: ANN003
+) -> L.Fabric:
+    """Initialize a fabric with the given `omegaconf`-defined loggers."""
+    if isinstance(loggers, omegaconf.DictConfig):
+        loggers = omegaconf.OmegaConf.to_container(loggers, resolve=True)  # type: ignore
+
+    if isinstance(loggers, dict):
+        loggers = list(loggers.values())
+
+    return L.Fabric(*args, loggers=loggers, **kwargs)  # type: ignore

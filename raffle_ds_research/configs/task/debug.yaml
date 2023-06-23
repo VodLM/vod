@@ -14,7 +14,7 @@ trainer:
   max_steps: 1000
   period: 300
   val_check_interval: 5
-  limit_val_batches: 10
+  n_max_eval: 100
   parameters:
     bm25: -1
 

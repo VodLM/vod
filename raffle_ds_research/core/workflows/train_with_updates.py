@@ -3,16 +3,20 @@ from __future__ import annotations
 import dataclasses
 import functools
 import pathlib
-from typing import Iterable
+from typing import Iterable, Protocol
 
-import lightning as L  # noqa: N812
+import lightning as L
 import numpy as np
 import omegaconf
+import rich
+import torch
+from lightning.fabric import strategies as fabric_strategies
 from loguru import logger
 
 from raffle_ds_research.core import config as core_config
 from raffle_ds_research.core.mechanics import dataset_factory
 from raffle_ds_research.core.ml import Ranker
+from raffle_ds_research.core.ml.encoder import TransformerEncoder
 from raffle_ds_research.core.workflows import evaluation, precompute, training
 from raffle_ds_research.core.workflows.utils import logging, support
 from raffle_ds_research.tools import caching
@@ -23,7 +27,6 @@ def train_with_index_updates(  # noqa: C901, PLR0915
     *,
     fabric: L.Fabric,
     ranker: Ranker,
-    # optimizer: torch.optim.Optimizer,
     config: core_config.TrainWithIndexUpdatesConfigs | omegaconf.DictConfig,
 ) -> Ranker:
     """Train a ranking model while periodically updating the index."""
@@ -37,9 +40,21 @@ def train_with_index_updates(  # noqa: C901, PLR0915
     if len(update_steps) == 0:
         raise ValueError("No index update steps were defined.")
 
-    # setting up model and scheduler
+    # check the DeepSpeed config
+    deepspeed_enabled = isinstance(fabric.strategy, fabric_strategies.DeepSpeedStrategy)  # type: ignore
+    if deepspeed_enabled:
+        if config.trainer.gradient_clip_val is not None:
+            fabric.strategy.config["gradient_clipping"] = config.trainer.gradient_clip_val  # type: ignore
+        if fabric.is_global_zero:
+            rich.print(fabric.strategy.config)  # type: ignore
+        if fabric.strategy.config["activation_checkpointing"]["cpu_checkpointing"] and isinstance(
+            ranker.encoder, TransformerEncoder
+        ):
+            # activate checkpointing using `transformers` API
+            ranker.encoder.backbone.gradient_checkpointing_enable()
+
+    # setting up model and optimizer
     optimizer = ranker.get_optimizer()
-    scheduler = ranker.get_scheduler(optimizer)
     ranker, optimizer = fabric.setup(ranker, optimizer)
 
     # define the trainer State
@@ -51,9 +66,10 @@ def train_with_index_updates(  # noqa: C901, PLR0915
         max_steps=config.trainer.max_steps,
         log_interval=config.trainer.log_interval,
         val_check_interval=config.trainer.val_check_interval,
-        limit_val_batches=config.trainer.limit_val_batches,
+        n_max_eval=config.trainer.n_max_eval,
         accumulate_grad_batches=_infer_accumulate_grad_batches(fabric, config.batch_size),
-        gradient_clip_val=config.trainer.gradient_clip_val,
+        # gradient clipping here is disabled when using DeepSpeed (handled automatically)
+        gradient_clip_val=None if deepspeed_enabled else config.trainer.gradient_clip_val,
         parameters=config.trainer.parameters,
     )
 
@@ -61,19 +77,11 @@ def train_with_index_updates(  # noqa: C901, PLR0915
     update_steps = update_steps + [None]
     barrier("Training starting..")
     for pidx, (start_step, end_step) in enumerate(zip(update_steps[:-1], update_steps[1:])):
-        # update the max step for this period
         state = dataclasses.replace(state, period=pidx, period_max_steps=end_step)
 
-        # fetch the parameters for this period
+        # fetch the parameters for this period and log thems
         parameters = state.get_parameters()
-        logging.log(
-            {
-                "trainer/period": float(state.period + 1),
-                **{f"parameter/{k}": v for k, v in parameters.items()},
-            },
-            loggers=fabric.loggers,
-            step=state.step,
-        )
+        _log_parameters(fabric=fabric, state=state, parameters=parameters)
         logger.info(f"Starting period {state.period + 1}/{len(update_steps) - 1} (step {start_step} -> {end_step})")
 
         # wrap everything in a temporary directory to avoid filling up the disk.
@@ -111,42 +119,37 @@ def train_with_index_updates(  # noqa: C901, PLR0915
 
             # benchmark the ranker on each dataset separately
             barrier("running benchmarks..")
-            if fabric.is_global_zero and state.period > 0 or config.trainer.benchmark_on_init:
-                logger.info(f"Running benchmarks ... (period={1+state.period})")
-                for j, dset in enumerate(config.dataset.benchmark):
-                    bench_loc = f"{dset.name}:{dset.split_alias}"
-                    logger.info(f"{1+j}/{len(config.dataset.benchmark)} - Benchmarking `{bench_loc}` ...")
-                    logfile = pathlib.Path("benchmarks", f"{bench_loc}-{state.period}-{state.step}.jsonl")
-                    logfile.parent.mkdir(parents=True, exist_ok=True)
-                    with logfile.open("w") as sink:
-                        metrics = evaluation.benchmark(
-                            factory=factories[dset],
-                            vectors=vectors[dset],
-                            metrics=config.dataset.metrics,
-                            search_config=config.search.benchmark,
-                            collate_config=config.collates.benchmark,
-                            dataloader_config=config.dataloaders.eval,
-                            cache_dir=cache_dir,
-                            parameters=parameters,
-                            serve_on_gpu=True,
-                            logsink=sink,
-                        )
-                    if metrics is not None:
-                        header = f"{dset.name}:{dset.split_alias} - Period {state.period + 1}"
-                        logging.log(
-                            {f"{dset.name}/{dset.split_alias}/{k}": v for k, v in metrics.items()},
-                            loggers=fabric.loggers,
-                            header=header,
-                            step=state.step,
-                        )
-                        print_metric_groups(
-                            {
-                                f"{dset.name}/{dset.split_alias}/{k}": v
-                                for k, v in metrics.items()
-                                if "diagnostics" not in k
-                            },
-                            header=header,
-                        )
+            if state.period > 0 or config.trainer.benchmark_on_init:
+                barrier("running benchmarks..")
+                if support.is_engine_enabled(parameters, "faiss"):
+                    ranker.to("cpu")  # <-- free GPU memory
+                if fabric.is_global_zero:
+                    logger.info(f"Running benchmarks ... (period={1+state.period})")
+                    for j, dset in enumerate(config.dataset.benchmark):
+                        bench_loc = f"{dset.name}:{dset.split_alias}"
+                        logger.info(f"{1+j}/{len(config.dataset.benchmark)} - Benchmarking `{bench_loc}` ...")
+                        logfile = pathlib.Path("benchmarks", f"{bench_loc}-{state.period}-{state.step}.jsonl")
+                        logfile.parent.mkdir(parents=True, exist_ok=True)
+
+                        # run the benchmark and log the results
+                        with logfile.open("w") as sink:
+                            metrics = evaluation.benchmark(
+                                factory=factories[dset],
+                                vectors=vectors[dset],
+                                metrics=config.dataset.metrics,
+                                search_config=config.search.benchmark,
+                                collate_config=config.collates.benchmark,
+                                dataloader_config=config.dataloaders.eval,
+                                cache_dir=cache_dir,
+                                parameters=parameters,
+                                serve_on_gpu=True,
+                                logsink=sink,
+                                n_max=config.trainer.n_max_benchmark,
+                            )
+                        if metrics is not None:
+                            header = f"{dset.name}:{dset.split_alias} - Period {state.period + 1}"
+                            _log_print_metrics(fabric=fabric, state=state, dset=dset, metrics=metrics, header=header)
+                barrier("Completed benchmarks.")
 
             if end_step is None:
                 # If there is no defined `end_step`, we reached the end of the training
@@ -158,7 +161,7 @@ def train_with_index_updates(  # noqa: C901, PLR0915
             state = training.index_and_train(
                 ranker=ranker,
                 optimizer=optimizer,
-                scheduler=scheduler,
+                scheduler=_get_lr_scheduler(ranker, optimizer),
                 fabric=fabric,
                 vectors=vectors,  # type: ignore
                 train_factories=_get_dset_factories(config.dataset.get("train"), config=config.dataset),
@@ -177,6 +180,59 @@ def train_with_index_updates(  # noqa: C901, PLR0915
             barrier("Period completed.")
 
     return ranker
+
+
+class _OptimizerWrapper(Protocol):
+    @property
+    def optimizer(self) -> torch.optim.Optimizer:
+        ...
+
+
+def _get_lr_scheduler(
+    ranker: Ranker,
+    optimizer: torch.optim.Optimizer | _OptimizerWrapper,
+) -> None | torch.optim.lr_scheduler._LRScheduler:
+    """Get the learning rate scheduler from the optimizer, unwrap it if necessary."""
+    while True:
+        if isinstance(optimizer, torch.optim.Optimizer):
+            break
+        try:
+            optimizer = optimizer.optimizer
+        except AttributeError as exc:
+            raise AttributeError(f"Could not find optimizer in `{optimizer}`") from exc
+
+    return ranker.get_scheduler(optimizer)
+
+
+def _log_print_metrics(
+    *,
+    fabric: L.Fabric,
+    state: support.TrainerState,
+    dset: core_config.NamedDset,
+    metrics: dict[str, float],
+    header: str,
+) -> None:
+    logging.log(
+        {f"{dset.name}/{dset.split_alias}/{k}": v for k, v in metrics.items()},
+        loggers=fabric.loggers,
+        header=header,
+        step=state.step,
+    )
+    print_metric_groups(
+        {f"{dset.name}/{dset.split_alias}/{k}": v for k, v in metrics.items() if "diagnostics" not in k},
+        header=header,
+    )
+
+
+def _log_parameters(*, fabric: L.Fabric, state: support.TrainerState, parameters: dict[str, float]) -> None:
+    logging.log(
+        {
+            "trainer/period": float(state.period + 1),
+            **{f"parameter/{k}": v for k, v in parameters.items()},
+        },
+        loggers=fabric.loggers,
+        step=state.step,
+    )
 
 
 def _infer_accumulate_grad_batches(fabric: L.Fabric, config: core_config.BatchSizeConfig) -> int:

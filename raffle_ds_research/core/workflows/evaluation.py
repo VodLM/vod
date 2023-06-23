@@ -11,13 +11,13 @@ import numpy as np
 import torch
 from lightning.pytorch import utilities as pl_utils
 from loguru import logger
-from rich.progress import track
 
 from raffle_ds_research.core import config as core_config
 from raffle_ds_research.core.mechanics import dataset_factory, search_engine
 from raffle_ds_research.core.ml.monitor import RetrievalMetricCollection
 from raffle_ds_research.core.workflows.precompute import PrecomputedDsetVectors
 from raffle_ds_research.core.workflows.utils import support
+from raffle_ds_research.tools.utils.progress import BatchProgressBar
 from raffle_ds_research.utils.config import flatten_dict
 
 _DEFAULT_OUTPUT_KEYS = ["faiss", "bm25", "score"]
@@ -38,6 +38,7 @@ def benchmark(
     output_keys: Optional[list[str]] = None,
     serve_on_gpu: bool = True,
     logsink: Optional[typing.TextIO] = None,
+    n_max: Optional[int] = None,
 ) -> dict[str, float]:
     """Run benchmarks on a retrieval task."""
     with search_engine.build_search_engine(
@@ -76,32 +77,40 @@ def benchmark(
         cfg = {"compute_on_cpu": True, "dist_sync_on_step": True, "sync_on_compute": False}
         monitors = {key: RetrievalMetricCollection(metrics=metrics, **cfg) for key in output_keys}
         diagnostics = collections.defaultdict(list)
-        for batch in track(
-            dataloader,
-            description=f"Benchmarking `{factory.config.name}:{factory.config.split}`",
-            total=len(dataloader),
-        ):
-            # log the batch
-            if logsink is not None:
-                logsink.write(_safe_json_dumps(batch) + os.linesep)
+        with BatchProgressBar() as pbar:
+            ntotal = len(dataloader) if n_max is None else max(1, -(-n_max // dataloader.batch_size))  # type: ignore
+            ptask = pbar.add_task(
+                "Benchmarking",
+                total=ntotal,
+                info=f"{factory.config.name}:{factory.config.split}",
+            )
+            for i, batch in enumerate(dataloader):
+                if i >= ntotal:
+                    break
 
-            # gather diagnostics
-            diagnostics["n_sections"].append(batch["section.score"].shape[-1])
-            for k, v in batch.items():
-                if k.startswith("diagnostics."):
-                    diagnostics[k.replace("diagnostics.", "")].append(v)
+                # log the batch
+                if logsink is not None:
+                    logsink.write(_safe_json_dumps(batch) + os.linesep)
 
-            # compute and collect the metrics
-            target = batch["section.label"]
-            for key, monitor in monitors.items():
-                preds = batch.get(f"section.{key}", None)
-                if preds is None:
-                    continue
-                monitor.update(preds, target)
+                # gather diagnostics
+                diagnostics["n_sections"].append(batch["section.score"].shape[-1])
+                for k, v in batch.items():
+                    if k.startswith("diagnostics."):
+                        diagnostics[k.replace("diagnostics.", "")].append(v)
+
+                # compute and collect the metrics
+                target = batch["section.label"]
+                for key, monitor in monitors.items():
+                    preds = batch.get(f"section.{key}", None)
+                    if preds is None:
+                        continue
+                    monitor.update(preds, target)
+
+                pbar.update(ptask, advance=1)
 
         # aggregate the metrics and the diagnostics
         metrics = {key: monitor.compute() for key, monitor in monitors.items()}
-        metrics["diagnostics/"] = {k: np.mean(v) for k, v in diagnostics.items()}
+        metrics["diagnostics"] = {k: np.mean(v) for k, v in diagnostics.items()}
         return flatten_dict(metrics, sep="/")
 
 

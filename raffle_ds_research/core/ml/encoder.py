@@ -62,21 +62,21 @@ class TransformerEncoder(nn.Module, interfaces.ProtocolEncoder):
             model_name=model_name, vector_size=vector_size, cls_name=cls_name, agg=agg
         )
         cls = getattr(transformers, cls_name)
-        self.model = cls.from_pretrained(model_name, cache_dir=cache_dir)
-        if self.model.config.hidden_size is None:
+        self.backbone = cls.from_pretrained(model_name, cache_dir=cache_dir)
+        if self.backbone.config.hidden_size is None:
             raise ValueError("`hidden_size` could not be inferred from the model config.")
 
         # delete the projection layer to avoid `none` grads
-        if hasattr(self.model, "pooler"):
-            self.model.pooler = None
+        if hasattr(self.backbone, "pooler"):
+            self.backbone.pooler = None
 
         # make the projection layer
         if vector_size is None:
-            vector_size = int(self.model.config.hidden_size)
+            vector_size = int(self.backbone.config.hidden_size)
 
         self.projection = nn.Sequential(
             torch.nn.Tanh(),
-            nn.Linear(self.model.config.hidden_size, vector_size),
+            nn.Linear(self.backbone.config.hidden_size, vector_size),
         )
         self._output_size = vector_size
 
@@ -100,11 +100,11 @@ class TransformerEncoder(nn.Module, interfaces.ProtocolEncoder):
         encoder.load_state_dict(state["state"])
         return encoder
 
-    def forward(self, data: interfaces.TokenizedField) -> torch.Tensor:
+    def forward(self, data: dict[str, torch.Tensor]) -> torch.Tensor:
         """Embed/encode a tokenized field into a vector."""
-        input_ids = data.input_ids
-        attention_mask = data.attention_mask
-        outputs = self.model(input_ids, attention_mask)
+        input_ids = data["input_ids"]
+        attention_mask = data["attention_mask"]
+        outputs = self.backbone(input_ids, attention_mask)
         hidden_state = self.agg_fn(outputs.last_hidden_state, attention_mask)
         return self.projection(hidden_state)
 

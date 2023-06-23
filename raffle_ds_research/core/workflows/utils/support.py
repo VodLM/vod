@@ -236,7 +236,7 @@ class TrainerState:
     log_interval: int = 100
     accumulate_grad_batches: int = 1
     gradient_clip_val: Optional[float] = None
-    limit_val_batches: Optional[int] = None
+    n_max_eval: Optional[int] = None
 
     def get_parameters(self) -> dict[str, float]:
         """Return the parameters for a given step."""

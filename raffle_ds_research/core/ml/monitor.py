@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import abc
-import copy
 import math
 from abc import ABC
 from typing import Any, Iterable, Optional, Tuple
@@ -12,145 +11,16 @@ import hydra
 import omegaconf
 import torch
 import torchmetrics
-from torch import nn
 from torchmetrics import Metric, MetricCollection
 
-SPLIT_NAMES = ["train", "val", "test"]
-MetricsBySplits = dict[str, dict[str, Metric]]
 
-
-def _safe_split(split: str) -> str:
-    """Return a safe split name for a torch.nn.ModuleDict to avoid conflicts with the parameter name `train`."""
-    return f"_{split}"
-
-
-class Monitor(nn.Module):
-    """A Monitor is an object that monitors the training process by computing and collecting metrics."""
-
-    _splits = list[str]
-    metrics: torch.nn.ModuleDict
-    _log_on_step: dict[str, bool]
-
-    def __init__(
-        self,
-        metrics: MetricCollection | dict[str, MetricCollection],
-        splits: list[str] = None,
-        log_on_step: bool | dict[str, bool] = False,
-    ):
-        super().__init__()
-        if splits is None:
-            splits = copy.copy(SPLIT_NAMES)
-
-        if isinstance(log_on_step, omegaconf.DictConfig):
-            log_on_step = omegaconf.OmegaConf.to_object(log_on_step)
-
-        if isinstance(log_on_step, dict):
-            if set(log_on_step.keys()) != set(splits):
-                raise ValueError(f"Expected log_on_step to have keys {splits}, but got {list(log_on_step.keys())}")
-        else:
-            log_on_step = {split: log_on_step for split in splits}
-
-        if isinstance(metrics, omegaconf.DictConfig):
-            metrics = hydra.utils.instantiate(metrics)
-
-        if isinstance(metrics, dict):
-            if set(metrics.keys()) != set(splits):
-                raise ValueError(f"Expected metrics to have keys {splits}, but got {list(metrics.keys())}")
-        else:
-            metrics = {split: copy.deepcopy(metrics) for split in splits}
-
-        self._log_on_step = log_on_step
-        self._splits = splits
-        self.metrics = torch.nn.ModuleDict({_safe_split(split): metric for split, metric in metrics.items()})
-
-    def on_step(self, split: str) -> bool:
-        """Return True if the metrics should be computed and logged on step."""
-        if split not in self._log_on_step.keys():
-            raise TypeError(f"Unknown split type: {type(split)}. Expected one of {self._log_on_step.keys()}.")
-        return self._log_on_step[split]
-
-    def forward(self, data: dict, split: str) -> dict[str, Any]:
-        """Compute the metrics."""
-        metric = self.metrics[_safe_split(split)]
-        args = self._make_args(data)
-        return metric.forward(*args)
-
-    def reset(self, split: Optional[str | list[str]] = None) -> "Monitor":
-        """Reset the metrics."""
-        splits = self._get_splits_arg(split)
-        for split in splits:
-            self.metrics[_safe_split(split)].reset()
-
-        return self
-
-    def _get_splits_arg(self, split: str) -> list[str]:
-        if split is None:
-            splits = self._splits
-        elif isinstance(split, str):
-            splits = [split]
-        elif isinstance(split, list):
-            splits = split
-        else:
-            raise TypeError(f"Unknown split type: {type(split)}")
-
-        if not set(splits).issubset(self._splits):
-            raise ValueError(f"Unknown split: {split}. Expected one of {self._splits}.")
-
-        return splits
-
-    def update_from_retrieval_batch(self, batch: dict[str, Any], field: str = "section") -> None:
-        """Update the metrics given a raw `retrieval` batch."""
-        for key in self._splits:
-            targets: torch.Tensor = batch[f"{field}.label"]
-            try:
-                scores: torch.Tensor = batch[f"{field}.{key}"]
-            except KeyError:
-                continue
-            # set the retrieval to -inf when the score is undefined
-            scores = scores.masked_fill(torch.isnan(scores), -math.inf)
-            args = self._make_args({"_logits": scores, "_targets": targets})
-            self.metrics[_safe_split(key)].update(*args)
-
-    @torch.no_grad()
-    def update(self, data: dict, split: str) -> None:
-        """Update the metrics."""
-        args = self._make_args(data)
-        self.metrics[_safe_split(split)].update(*args)
-
-    @torch.no_grad()
-    def compute(self, split: Optional[str] = None, prefix: str = "") -> dict[str, torch.Tensor]:
-        """Compute the metrics. Wrap with try/except to avoid raising exception when there are no metrics to compute."""
-        if split is None:
-            metrics = {}
-            for split_ in self._splits:
-                metrics.update(self.compute(split=split_, prefix=prefix))
-            return metrics
-
-        if isinstance(self.metrics[_safe_split(split)], MetricCollection):
-            metrics = {}
-            for key, metric in self.metrics[_safe_split(split)].items():
-                try:
-                    metrics[key] = metric.compute()
-                except ValueError:
-                    ...
-        else:
-            metrics = self.metrics[_safe_split(split)].compute()
-
-        metrics = {f"{prefix}{split}/{key}": value for key, value in metrics.items()}
-        return metrics
-
-    @staticmethod
-    def _make_args(data: dict) -> Tuple[torch.Tensor, torch.Tensor]:
-        preds: torch.Tensor = data["_logits"]
-        targets: torch.Tensor = data["_targets"]
-        return preds, targets
-
-
+@torch.jit.script
 def _rank_labels(*, labels: torch.Tensor, scores: torch.Tensor) -> torch.Tensor:
     sort_ids = torch.argsort(scores, dim=-1, descending=True)
     return torch.gather(labels, dim=-1, index=sort_ids)
 
 
+@torch.jit.script
 def _mask_inputs(preds: torch.Tensor, target: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
     mask = preds.isnan()
     preds = preds.masked_fill(mask, -math.inf)
@@ -304,3 +174,31 @@ class RetrievalMetricCollection(MetricCollection):
 
         metrics = {clean_name(name): retrieval_metric_factory(name=name, **kwargs) for name in metrics}
         super().__init__(metrics=metrics)
+
+
+class RetrievalMonitor(RetrievalMetricCollection):
+    """Compute retrieval metrics from a batch of data."""
+
+    def __init__(self, metrics: Iterable[str] | omegaconf.DictConfig, **kwargs: Any):
+        if isinstance(metrics, omegaconf.DictConfig):
+            metrics = hydra.utils.instantiate(metrics)
+
+        super().__init__(metrics, **kwargs)
+
+    @torch.no_grad()
+    def forward(self, data: dict) -> dict[str, Any]:
+        """Compute the metrics."""
+        args = self._make_args(data)
+        return super().forward(*args)
+
+    @torch.no_grad()
+    def update(self, data: dict) -> None:
+        """Update the metrics."""
+        args = self._make_args(data)
+        super().update(*args)
+
+    @staticmethod
+    def _make_args(data: dict) -> Tuple[torch.Tensor, torch.Tensor]:
+        preds: torch.Tensor = data["_logits"]
+        targets: torch.Tensor = data["_targets"]
+        return preds, targets

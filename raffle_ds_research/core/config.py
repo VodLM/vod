@@ -234,7 +234,8 @@ class TrainerConfig(pydantic.BaseModel):
     period: Union[int, list[int]]
     benchmark_on_init: bool = True
     parameters: dict[str, BaseSchedule] = {}
-    limit_val_batches: Optional[int] = None
+    n_max_eval: Optional[int] = None
+    n_max_benchmark: Optional[int] = None
 
     # validators
     _validate_update_freq = pydantic.validator("period", allow_reuse=True, pre=True)(as_pyobj_validator)

@@ -9,18 +9,12 @@ defaults:
   # use the KL divergence from the model to the binary targets
   - override /model/optimizer: adam-cpu
   # use the CPU version of Adam (required by DeepSpeed ZeRO-2)s
+  - override /fabric/loggers:
+    - wandb
   - _self_
 
 
 seed: 1
-
-# dataset:
-#   train:
-#     - frank.A.en-pos:train
-#   validation:
-#     - frank.A.en-pos:val
-#   benchmark:
-#     - frank.B.en-pos:val
 
 dataset:
   train:
@@ -39,7 +33,7 @@ dataset:
 model:
   compile: true
   optimizer:
-    lr: 1e-4
+    lr: 1e-5
     weight_decay: 1e-3
     eps: 1e-8
   gradients:
@@ -58,8 +52,9 @@ batch_size:
 
 trainer:
   max_steps: 200_000
-  limit_val_batches: null
   val_check_interval: 500
+  n_max_eval: 1_000
+  n_max_benchmark: null
   period: 50_000
   benchmark_on_init: false
   parameters:
