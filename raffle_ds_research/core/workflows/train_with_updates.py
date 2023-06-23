@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-import dataclasses
 import functools
 import pathlib
-from typing import Iterable, Protocol
+from typing import Iterable, Optional, TypeVar
 
 import lightning as L
 import numpy as np
 import omegaconf
 import rich
-import torch
 from lightning.fabric import strategies as fabric_strategies
 from loguru import logger
 
@@ -18,9 +16,11 @@ from raffle_ds_research.core.mechanics import dataset_factory
 from raffle_ds_research.core.ml import Ranker
 from raffle_ds_research.core.ml.encoder import TransformerEncoder
 from raffle_ds_research.core.workflows import evaluation, precompute, training
-from raffle_ds_research.core.workflows.utils import logging, support
+from raffle_ds_research.core.workflows.utils import io, logging, support
 from raffle_ds_research.tools import caching
 from raffle_ds_research.utils.pretty import print_metric_groups
+
+K = TypeVar("K")
 
 
 def train_with_index_updates(  # noqa: C901, PLR0915
@@ -28,6 +28,7 @@ def train_with_index_updates(  # noqa: C901, PLR0915
     fabric: L.Fabric,
     ranker: Ranker,
     config: core_config.TrainWithIndexUpdatesConfigs | omegaconf.DictConfig,
+    load_from: Optional[str] = None,  # todo
 ) -> Ranker:
     """Train a ranking model while periodically updating the index."""
     barrier = functools.partial(support._barrier_fn, fabric=fabric)
@@ -40,29 +41,19 @@ def train_with_index_updates(  # noqa: C901, PLR0915
     if len(update_steps) == 0:
         raise ValueError("No index update steps were defined.")
 
-    # check the DeepSpeed config
-    deepspeed_enabled = isinstance(fabric.strategy, fabric_strategies.DeepSpeedStrategy)  # type: ignore
-    if deepspeed_enabled:
-        if config.trainer.gradient_clip_val is not None:
-            fabric.strategy.config["gradient_clipping"] = config.trainer.gradient_clip_val  # type: ignore
-        if fabric.is_global_zero:
-            rich.print(fabric.strategy.config)  # type: ignore
-        if fabric.strategy.config["activation_checkpointing"]["cpu_checkpointing"] and isinstance(
-            ranker.encoder, TransformerEncoder
-        ):
-            # activate checkpointing using `transformers` API
-            ranker.encoder.backbone.gradient_checkpointing_enable()
+    # check and adapt the DeepSpeed config
+    deepspeed_enabled = _setup_deepspeed(fabric=fabric, ranker=ranker, config=config.trainer)
 
-    # setting up model and optimizer
+    # setting up the optimizer
     optimizer = ranker.get_optimizer()
-    ranker, optimizer = fabric.setup(ranker, optimizer)
+    scheduler = ranker.get_scheduler(support.unwrap_optimizer(optimizer))
 
     # define the trainer State
     state = support.TrainerState(
         step=0,
         period=0,
         epoch=0,
-        period_max_steps=-1,
+        period_max_steps=None,
         max_steps=config.trainer.max_steps,
         log_interval=config.trainer.log_interval,
         val_check_interval=config.trainer.val_check_interval,
@@ -73,11 +64,33 @@ def train_with_index_updates(  # noqa: C901, PLR0915
         parameters=config.trainer.parameters,
     )
 
+    # load training state
+    if load_from is not None:
+        logger.info(f"Loading training state from `{load_from}`")
+        io.load_training_state(
+            checkpoint_path=load_from,
+            fabric=fabric,
+            model=ranker,
+            optimizer=optimizer,
+            scheduler=None,
+            trainer_state=state,
+        )
+        rich.print(state)
+
+    # setup Fabric model&optimizer
+    ranker, optimizer = fabric.setup(ranker, optimizer)
+
     # Train the model for each period
     update_steps = update_steps + [None]
     barrier("Training starting..")
     for pidx, (start_step, end_step) in enumerate(zip(update_steps[:-1], update_steps[1:])):
-        state = dataclasses.replace(state, period=pidx, period_max_steps=end_step)
+        if end_step is not None and state.step > end_step:
+            logger.info(f"Skipping period {pidx + 1}/{len(update_steps) - 1} (step {start_step} -> {end_step})")
+            continue
+
+        # Update the Trainer state
+        state.period = pidx
+        state.period_max_steps = end_step
 
         # fetch the parameters for this period and log thems
         parameters = state.get_parameters()
@@ -118,37 +131,18 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                 vectors = {dset: None for dset in factories}
 
             # benchmark the ranker on each dataset separately
-            barrier("running benchmarks..")
             if state.period > 0 or config.trainer.benchmark_on_init:
                 barrier("running benchmarks..")
-                if support.is_engine_enabled(parameters, "faiss"):
-                    ranker.to("cpu")  # <-- free GPU memory
-                if fabric.is_global_zero:
-                    logger.info(f"Running benchmarks ... (period={1+state.period})")
-                    for j, dset in enumerate(config.dataset.benchmark):
-                        bench_loc = f"{dset.name}:{dset.split_alias}"
-                        logger.info(f"{1+j}/{len(config.dataset.benchmark)} - Benchmarking `{bench_loc}` ...")
-                        logfile = pathlib.Path("benchmarks", f"{bench_loc}-{state.period}-{state.step}.jsonl")
-                        logfile.parent.mkdir(parents=True, exist_ok=True)
-
-                        # run the benchmark and log the results
-                        with logfile.open("w") as sink:
-                            metrics = evaluation.benchmark(
-                                factory=factories[dset],
-                                vectors=vectors[dset],
-                                metrics=config.dataset.metrics,
-                                search_config=config.search.benchmark,
-                                collate_config=config.collates.benchmark,
-                                dataloader_config=config.dataloaders.eval,
-                                cache_dir=cache_dir,
-                                parameters=parameters,
-                                serve_on_gpu=True,
-                                logsink=sink,
-                                n_max=config.trainer.n_max_benchmark,
-                            )
-                        if metrics is not None:
-                            header = f"{dset.name}:{dset.split_alias} - Period {state.period + 1}"
-                            _log_print_metrics(fabric=fabric, state=state, dset=dset, metrics=metrics, header=header)
+                _run_benchmarks(
+                    fabric=fabric,
+                    ranker=ranker,
+                    config=config,
+                    state=state,
+                    parameters=parameters,
+                    cache_dir=cache_dir,
+                    factories=factories,
+                    vectors=vectors,
+                )
                 barrier("Completed benchmarks.")
 
             if end_step is None:
@@ -161,7 +155,7 @@ def train_with_index_updates(  # noqa: C901, PLR0915
             state = training.index_and_train(
                 ranker=ranker,
                 optimizer=optimizer,
-                scheduler=_get_lr_scheduler(ranker, optimizer),
+                scheduler=scheduler,
                 fabric=fabric,
                 vectors=vectors,  # type: ignore
                 train_factories=_get_dset_factories(config.dataset.get("train"), config=config.dataset),
@@ -175,33 +169,75 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                 cache_dir=cache_dir,
                 serve_on_gpu=False,
                 trainer_state=state,
+                checkpoint_path=config.trainer.checkpoint_path,
             )
             logger.success(f"Completed training period {1+state.period}")
             barrier("Period completed.")
 
+        # update the scheduler for the next period
+        scheduler = ranker.get_scheduler(support.unwrap_optimizer(optimizer))
+
     return ranker
 
 
-class _OptimizerWrapper(Protocol):
-    @property
-    def optimizer(self) -> torch.optim.Optimizer:
-        ...
-
-
-def _get_lr_scheduler(
+def _setup_deepspeed(
+    fabric: L.Fabric,
     ranker: Ranker,
-    optimizer: torch.optim.Optimizer | _OptimizerWrapper,
-) -> None | torch.optim.lr_scheduler._LRScheduler:
-    """Get the learning rate scheduler from the optimizer, unwrap it if necessary."""
-    while True:
-        if isinstance(optimizer, torch.optim.Optimizer):
-            break
-        try:
-            optimizer = optimizer.optimizer
-        except AttributeError as exc:
-            raise AttributeError(f"Could not find optimizer in `{optimizer}`") from exc
+    config: core_config.TrainerConfig,
+) -> bool:
+    deepspeed_enabled = isinstance(fabric.strategy, fabric_strategies.DeepSpeedStrategy)  # type: ignore
+    if deepspeed_enabled:
+        if config.gradient_clip_val is not None:
+            fabric.strategy.config["gradient_clipping"] = config.gradient_clip_val  # type: ignore
+        if fabric.is_global_zero:
+            rich.print(fabric.strategy.config)  # type: ignore
+        if fabric.strategy.config["activation_checkpointing"]["cpu_checkpointing"] and isinstance(  # type: ignore
+            ranker.encoder, TransformerEncoder
+        ):
+            # activate checkpointing using `transformers` API -- experimental!
+            ranker.encoder.backbone.gradient_checkpointing_enable()
+    return deepspeed_enabled
 
-    return ranker.get_scheduler(optimizer)
+
+def _run_benchmarks(
+    *,
+    fabric: L.Fabric,
+    ranker: Ranker,
+    config: core_config.TrainWithIndexUpdatesConfigs,
+    state: support.TrainerState,
+    parameters: dict[str, float],
+    cache_dir: pathlib.Path,
+    factories: dict[K, dataset_factory.DatasetFactory],
+    vectors: dict[K, None | precompute.PrecomputedDsetVectors],
+) -> None:
+    if support.is_engine_enabled(parameters, "faiss"):
+        ranker.to("cpu")  # <-- free GPU memory
+    if fabric.is_global_zero:
+        logger.info(f"Running benchmarks ... (period={1+state.period})")
+        for j, dset in enumerate(config.dataset.benchmark):
+            bench_loc = f"{dset.name}:{dset.split_alias}"
+            logger.info(f"{1+j}/{len(config.dataset.benchmark)} - Benchmarking `{bench_loc}` ...")
+            logfile = pathlib.Path("benchmarks", f"{bench_loc}-{state.period}-{state.step}.jsonl")
+            logfile.parent.mkdir(parents=True, exist_ok=True)
+
+            # run the benchmark and log the results
+            with logfile.open("w") as sink:
+                metrics = evaluation.benchmark(
+                    factory=factories[dset],
+                    vectors=vectors[dset],
+                    metrics=config.dataset.metrics,
+                    search_config=config.search.benchmark,
+                    collate_config=config.collates.benchmark,
+                    dataloader_config=config.dataloaders.eval,
+                    cache_dir=cache_dir,
+                    parameters=parameters,
+                    serve_on_gpu=True,
+                    logsink=sink,
+                    n_max=config.trainer.n_max_benchmark,
+                )
+            if metrics is not None:
+                header = f"{dset.name}:{dset.split_alias} - Period {state.period + 1}"
+                _log_print_metrics(fabric=fabric, state=state, dset=dset, metrics=metrics, header=header)
 
 
 def _log_print_metrics(

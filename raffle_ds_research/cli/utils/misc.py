@@ -16,6 +16,7 @@ import yaml
 from lightning.fabric.loggers.logger import Logger as FabricLogger
 
 from raffle_ds_research.core.ml import Ranker
+from raffle_ds_research.tools import interfaces
 from raffle_ds_research.utils.config import config_to_flat_dict
 
 T = TypeVar("T")
@@ -49,7 +50,7 @@ def set_training_context() -> None:
         faiss.omp_set_num_threads(int(omp_num_threads))
 
     datasets.utils.logging.set_verbosity_error()
-    transformers.utils.logging.set_verbosity_error()
+    transformers.utils.logging.set_verbosity_error()  # type: ignore
     torch.set_float32_matmul_precision("medium")
 
     # torch.multiprocessing.set_sharing_strategy("file_system")
@@ -59,10 +60,11 @@ def _get_ranker_meta_data(ranker: Ranker) -> dict[str, Any]:
     return {
         "n_trainable_params": sum(p.numel() for p in ranker.parameters() if p.requires_grad),
         "n_total_params": sum(p.numel() for p in ranker.parameters()),
-        "output_shape": ranker.encoder.get_output_shape(),  # type: ignore
-        "flash_sdp_enabled": torch.backends.cuda.flash_sdp_enabled(),
-        "mem_efficient_sdp_enabled": torch.backends.cuda.mem_efficient_sdp_enabled(),
-        "math_sdp_enabled": torch.backends.cuda.math_sdp_enabled(),
+        "output_shape_question": list(ranker.encoder.get_output_shape(interfaces.FieldType.QUESTION)),
+        "output_shape_section": list(ranker.encoder.get_output_shape(interfaces.FieldType.SECTION)),
+        "flash_sdp_enabled": torch.backends.cuda.flash_sdp_enabled(),  # type: ignore
+        "mem_efficient_sdp_enabled": torch.backends.cuda.mem_efficient_sdp_enabled(),  # type: ignore
+        "math_sdp_enabled": torch.backends.cuda.math_sdp_enabled(),  # type: ignore
     }
 
 

@@ -1,1 +1,1 @@
-from .ml import ProtocolEncoder, TokenizedField
+from .ml import FieldType, ProtocolEncoder, TokenizedField

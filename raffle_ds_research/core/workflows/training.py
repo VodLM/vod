@@ -23,7 +23,7 @@ from raffle_ds_research.core.mechanics import search_engine
 from raffle_ds_research.core.mechanics.dataloader_sampler import DataloaderSampler
 from raffle_ds_research.core.ml.ranker import Ranker
 from raffle_ds_research.core.workflows.precompute import PrecomputedDsetVectors
-from raffle_ds_research.core.workflows.utils import support
+from raffle_ds_research.core.workflows.utils import io, support
 from raffle_ds_research.tools import dstruct
 from raffle_ds_research.tools.utils.progress import BatchProgressBar
 
@@ -57,6 +57,7 @@ def index_and_train(
     dl_sampler: typing.Optional[DataloaderSampler] = None,
     cache_dir: pathlib.Path,
     serve_on_gpu: bool = False,
+    checkpoint_path: typing.Optional[str] = None,
 ) -> support.TrainerState:
     """Index the sections and train the ranker."""
     barrier_fn = functools.partial(support._barrier_fn, fabric=fabric)
@@ -131,6 +132,7 @@ def index_and_train(
             fabric=fabric,
             train_dl=train_dl,
             val_dl=val_dl,
+            checkpoint_path=checkpoint_path,
         )
 
     return trainer_state
@@ -145,6 +147,7 @@ def _training_loop(  # noqa: C901
     train_dl: torch_data.DataLoader,
     val_dl: torch_data.DataLoader,
     scheduler: typing.Optional[torch.optim.lr_scheduler._LRScheduler] = None,
+    checkpoint_path: typing.Optional[str] = None,
 ) -> support.TrainerState:
     if not fabric_wrappers.is_wrapped(ranker):
         raise RuntimeError("Ranker must be wrapped by lightning `Fabric`.")
@@ -155,6 +158,8 @@ def _training_loop(  # noqa: C901
     train_iter = iter(train_dl)
 
     # infer the number of training and valid steps
+    if trainer_state.period_max_steps is None:
+        raise ValueError("`trainer_state.period_max_steps` must be set.")
     n_train_steps = trainer_state.period_max_steps - trainer_state.step
     if trainer_state.n_max_eval is None:
         n_val_steps = len(val_dl)
@@ -170,7 +175,7 @@ def _training_loop(  # noqa: C901
         )
         eval_metrics = None
         for local_step in range(n_train_steps):
-            batch, trainer_state = _sample_batch(trainer_state, train_iter=train_iter, train_dl=train_dl)
+            batch = _sample_batch(trainer_state, train_iter=train_iter, train_dl=train_dl)
 
             # Forward pass
             is_accumulating = local_step % trainer_state.accumulate_grad_batches != 0
@@ -193,7 +198,6 @@ def _training_loop(  # noqa: C901
             if not is_accumulating:
                 # Clip the gradients
                 if trainer_state.gradient_clip_val is not None:
-                    rich.print(f"Clipping gradients at `{trainer_state.gradient_clip_val}`")
                     fabric.clip_gradients(ranker, optimizer, max_norm=trainer_state.gradient_clip_val)
 
                 # Run an optimization step, reset the gradients and update the learning rate
@@ -203,7 +207,7 @@ def _training_loop(  # noqa: C901
                     scheduler.step()
 
                 # Update the trainer state and the progress bar
-                trainer_state = dataclasses.replace(trainer_state, step=trainer_state.step + 1)
+                trainer_state.step += 1
                 pbar.update(
                     train_pbar,
                     advance=1,
@@ -224,6 +228,15 @@ def _training_loop(  # noqa: C901
                         n_steps=n_val_steps,
                         pbar=pbar,
                     )
+                    if checkpoint_path is not None:
+                        io.save_training_state(
+                            checkpoint_path=checkpoint_path,
+                            fabric=fabric,
+                            model=ranker,
+                            optimizer=support.unwrap_optimizer(optimizer),
+                            scheduler=scheduler,
+                            trainer_state=trainer_state,
+                        )
 
     optimizer.zero_grad()
     return trainer_state
@@ -233,14 +246,14 @@ def _sample_batch(
     trainer_state: support.TrainerState,
     train_iter: typing.Iterator[dict[str, torch.Tensor]],
     train_dl: torch_data.DataLoader,
-) -> tuple[dict[str, torch.Tensor], support.TrainerState]:
+) -> dict[str, torch.Tensor]:
     try:
         batch = next(train_iter)
     except StopIteration:
-        trainer_state = dataclasses.replace(trainer_state, epoch=trainer_state.epoch + 1)
+        trainer_state.epoch += 1
         train_iter = iter(train_dl)
         batch = next(train_iter)
-    return batch, trainer_state
+    return batch
 
 
 @torch.no_grad()
@@ -253,7 +266,7 @@ def _validation_loop(
     pbar: progress.Progress,
 ) -> dict[str, float | torch.Tensor]:
     ranker.eval()
-    val_pbar = pbar.add_task("Validation", total=n_steps, info=f"n_steps={n_steps}")
+    val_pbar = pbar.add_task("Validation", total=n_steps, info=f"{n_steps} steps")
     metrics = collections.defaultdict(list)
     for batch in val_dl:
         output = ranker.validation_step(batch)

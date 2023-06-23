@@ -236,6 +236,7 @@ class TrainerConfig(pydantic.BaseModel):
     parameters: dict[str, BaseSchedule] = {}
     n_max_eval: Optional[int] = None
     n_max_benchmark: Optional[int] = None
+    checkpoint_path: Optional[str] = None
 
     # validators
     _validate_update_freq = pydantic.validator("period", allow_reuse=True, pre=True)(as_pyobj_validator)

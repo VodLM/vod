@@ -39,6 +39,6 @@ class ProtocolEncoder(typing.Protocol):
         """Embed/encode a tokenized field into a vector."""
         ...
 
-    def get_output_shape(self, field: TokenizedField) -> tuple[int, ...]:
+    def get_output_shape(self, field: typing.Optional[FieldType] = None) -> tuple[int, ...]:
         """Get the output shape of the encoder. Set `-1` for unknown dimensions."""
         ...

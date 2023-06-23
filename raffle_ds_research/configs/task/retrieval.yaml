@@ -33,7 +33,7 @@ dataset:
 model:
   compile: true
   optimizer:
-    lr: 1e-5
+    lr: 8e-5
     weight_decay: 1e-3
     eps: 1e-8
   gradients:

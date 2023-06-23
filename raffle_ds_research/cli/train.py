@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import multiprocessing
 import os
+import pathlib
 import sys
 from pathlib import Path
 from typing import Optional
@@ -58,6 +59,14 @@ def _is_gloabl_zero() -> bool:
 @hydra.main(config_path="../configs/", config_name="main", version_base="1.3")
 def run(config: DictConfig) -> None:
     """Train a ranker for a retrieval task."""
+    if config.load_from is not None:
+        logger.info(f"Loading checkpoint from `{config.load_from}`")
+        cfg_path = pathlib.Path(config.load_from, "config.yaml")
+        config = omegaconf.OmegaConf.load(cfg_path)  # type: ignore
+        checkpoint_path = config.load_from
+    else:
+        checkpoint_path = None
+
     if _is_gloabl_zero():
         print_config(config)
 
@@ -88,6 +97,7 @@ def run(config: DictConfig) -> None:
         fabric=fabric,
         ranker=ranker,
         config=config,
+        load_from=checkpoint_path,
     )
 
 
@@ -121,3 +131,6 @@ def _customize_logger(fabric: L.Fabric) -> None:
     logger.configure(extra={"rank": 1 + fabric.global_rank, "world_size": fabric.world_size})  # Default values
     logger.remove()
     logger.add(sys.stderr, format=logger_format)
+
+
+# type: ignore

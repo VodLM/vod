@@ -51,8 +51,9 @@ def print_config(
     with open_dict(config):
         base_config = {}
         for field in copy(fields):
-            if isinstance(config.get(field), (bool, str, Number)):
-                base_config[field] = copy(config.get(field))
+            field_value = config.get(field)
+            if field_value is None or isinstance(field_value, (bool, str, Number)):
+                base_config[field] = copy(field_value)
                 fields.remove(field)
         config["__root__"] = base_config
     fields = ["__root__"] + fields

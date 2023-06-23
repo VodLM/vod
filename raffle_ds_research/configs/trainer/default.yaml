@@ -6,6 +6,7 @@ gradient_clip_val: 1.0
 benchmark_on_init: false
 n_max_eval: null
 n_max_benchmark: null
+checkpoint_path: state.ckpt
 parameters:
   faiss: 1.0
   bm25: 1.0

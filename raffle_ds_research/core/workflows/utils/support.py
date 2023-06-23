@@ -7,11 +7,12 @@ import functools
 import os
 import pathlib
 import typing
-from typing import Any, Callable, Optional, TypeVar
+from typing import Any, Callable, Optional, Protocol, TypeVar
 
 import datasets
-import lightning as L  # noqa: N812
+import lightning as L
 import numpy as np
+import torch
 import transformers
 from loguru import logger
 from torch.utils import data as torch_data
@@ -222,14 +223,14 @@ def _barrier_fn(name: str, fabric: L.Fabric) -> None:
     logger.log("PASS", f"barrier:pass: `{name}`")
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=False)
 class TrainerState:
     """Holds the state of the trainer."""
 
     step: int
     epoch: int
     period: int
-    period_max_steps: int
+    period_max_steps: Optional[int]
     max_steps: int
     parameters: dict[str, BaseSchedule] = dataclasses.field(default_factory=dict)
     val_check_interval: int = 500
@@ -241,3 +242,22 @@ class TrainerState:
     def get_parameters(self) -> dict[str, float]:
         """Return the parameters for a given step."""
         return {k: v(self.step) for k, v in self.parameters.items()}
+
+
+class _OptimizerWrapper(Protocol):
+    @property
+    def optimizer(self) -> torch.optim.Optimizer:
+        ...
+
+
+def unwrap_optimizer(optimizer: torch.optim.Optimizer | _OptimizerWrapper) -> torch.optim.Optimizer:
+    """Unwrap the optimizer if it is wrapped."""
+    while True:
+        if isinstance(optimizer, torch.optim.Optimizer) and not type(optimizer).__name__.startswith("Fabric"):
+            break
+        try:
+            optimizer = optimizer.optimizer
+        except AttributeError as exc:
+            raise AttributeError(f"Could not find optimizer in `{optimizer}`") from exc
+
+    return optimizer
