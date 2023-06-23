@@ -109,3 +109,4 @@ def register_omgeaconf_resolvers() -> None:  # noqa: C901
     OmegaConf.register_new_resolver("is_cuda_available", torch.cuda.is_available)
     OmegaConf.register_new_resolver("null_cls", lambda *_: None)
     OmegaConf.register_new_resolver("join_path", _join_path)
+    OmegaConf.register_new_resolver("abs_path", lambda x: pathlib.Path(x).absolute().as_posix())

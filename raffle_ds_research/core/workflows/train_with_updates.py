@@ -64,7 +64,10 @@ def train_with_index_updates(  # noqa: C901, PLR0915
         parameters=config.trainer.parameters,
     )
 
-    # load training state
+    # setup Fabric model&optimizer
+    ranker, optimizer = fabric.setup(ranker, optimizer)
+
+    # load training state - currently failing with DeepSpeed
     if load_from is not None:
         logger.info(f"Loading training state from `{load_from}`")
         io.load_training_state(
@@ -76,9 +79,6 @@ def train_with_index_updates(  # noqa: C901, PLR0915
             trainer_state=state,
         )
         rich.print(state)
-
-    # setup Fabric model&optimizer
-    ranker, optimizer = fabric.setup(ranker, optimizer)
 
     # Train the model for each period
     update_steps = update_steps + [None]

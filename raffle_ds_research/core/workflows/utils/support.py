@@ -14,6 +14,7 @@ import lightning as L
 import numpy as np
 import torch
 import transformers
+from lightning.fabric import wrappers as fabric_wrappers
 from loguru import logger
 from torch.utils import data as torch_data
 from typing_extensions import Self, Type
@@ -261,3 +262,6 @@ def unwrap_optimizer(optimizer: torch.optim.Optimizer | _OptimizerWrapper) -> to
             raise AttributeError(f"Could not find optimizer in `{optimizer}`") from exc
 
     return optimizer
+
+
+unwrap_fabric_object = fabric_wrappers._unwrap_objects

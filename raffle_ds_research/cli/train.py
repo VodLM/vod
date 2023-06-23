@@ -61,9 +61,9 @@ def run(config: DictConfig) -> None:
     """Train a ranker for a retrieval task."""
     if config.load_from is not None:
         logger.info(f"Loading checkpoint from `{config.load_from}`")
+        checkpoint_path = config.load_from
         cfg_path = pathlib.Path(config.load_from, "config.yaml")
         config = omegaconf.OmegaConf.load(cfg_path)  # type: ignore
-        checkpoint_path = config.load_from
     else:
         checkpoint_path = None
 

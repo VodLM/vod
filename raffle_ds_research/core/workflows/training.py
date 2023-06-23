@@ -149,23 +149,13 @@ def _training_loop(  # noqa: C901
     scheduler: typing.Optional[torch.optim.lr_scheduler._LRScheduler] = None,
     checkpoint_path: typing.Optional[str] = None,
 ) -> support.TrainerState:
-    if not fabric_wrappers.is_wrapped(ranker):
-        raise RuntimeError("Ranker must be wrapped by lightning `Fabric`.")
-    if not fabric_wrappers.is_wrapped(optimizer):
-        raise RuntimeError("Optimizer must be wrapped by lightning `Fabric`.")
+    _check_ranker_and_optimizer(ranker, optimizer)
     optimizer.zero_grad()
     ranker.train()
     train_iter = iter(train_dl)
 
     # infer the number of training and valid steps
-    if trainer_state.period_max_steps is None:
-        raise ValueError("`trainer_state.period_max_steps` must be set.")
-    n_train_steps = trainer_state.period_max_steps - trainer_state.step
-    if trainer_state.n_max_eval is None:
-        n_val_steps = len(val_dl)
-    else:
-        eff_eval_bs = fabric.world_size * val_dl.batch_size  # type: ignore
-        n_val_steps = min(len(val_dl), max(1, -(-trainer_state.n_max_eval // eff_eval_bs)))
+    n_train_steps, n_val_steps = _infer_num_steps(trainer_state, fabric, val_dl)
 
     with BatchProgressBar(disable=not fabric.is_global_zero) as pbar:
         train_pbar = pbar.add_task(
@@ -233,13 +223,36 @@ def _training_loop(  # noqa: C901
                             checkpoint_path=checkpoint_path,
                             fabric=fabric,
                             model=ranker,
-                            optimizer=support.unwrap_optimizer(optimizer),
+                            optimizer=optimizer,
                             scheduler=scheduler,
                             trainer_state=trainer_state,
                         )
 
     optimizer.zero_grad()
     return trainer_state
+
+
+def _check_ranker_and_optimizer(ranker: Ranker, optimizer: torch.optim.Optimizer) -> None:
+    if not fabric_wrappers.is_wrapped(ranker):
+        raise RuntimeError("Ranker must be wrapped by lightning `Fabric`.")
+    if not fabric_wrappers.is_wrapped(optimizer):
+        raise RuntimeError("Optimizer must be wrapped by lightning `Fabric`.")
+
+
+def _infer_num_steps(
+    trainer_state: support.TrainerState,
+    fabric: L.Fabric,
+    val_dl: torch_data.DataLoader,
+) -> tuple[int, int]:
+    if trainer_state.period_max_steps is None:
+        raise ValueError("`trainer_state.period_max_steps` must be set.")
+    n_train_steps = trainer_state.period_max_steps - trainer_state.step
+    if trainer_state.n_max_eval is None:
+        n_val_steps = len(val_dl)
+    else:
+        eff_eval_bs = fabric.world_size * val_dl.batch_size  # type: ignore
+        n_val_steps = min(len(val_dl), max(1, -(-trainer_state.n_max_eval // eff_eval_bs)))
+    return n_train_steps, n_val_steps
 
 
 def _sample_batch(
