@@ -25,5 +25,5 @@ search:
 
 trainer:
   max_steps: 100_000
-  period: 10_000
-  val_check_interval: 250
+  period: 20_000
+  val_check_interval: 500

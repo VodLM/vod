@@ -2,3 +2,4 @@ _target_: raffle_ds_research.core.ml.gradients.KlDivGradients
 eps: null
 self_supervision_weight: 0.0
 bm25_guidance_weight: 0.0
+section_chunk_size: null

@@ -8,13 +8,14 @@ defaults:
   # Strategy
   - override /fabric/strategy: ddp
 
-
 resources:
   num_workers: 2
   num_proc: 16
   omp_threads: ${int_div:${n_cpus:},2}
 
 model:
+  gradients:
+    section_chunk_size: null
   compile_encoder: true
   compile_kwargs:
     dynamic: false

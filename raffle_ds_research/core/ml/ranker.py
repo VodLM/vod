@@ -126,24 +126,6 @@ class Ranker(torch.nn.Module):
 
         raise ValueError(f"Unknown mode {mode}.")
 
-    def forward_backward(
-        self,
-        batch: dict,
-        loss_scaler: Optional[float] = None,
-        backward_fn: Optional[Callable[[torch.Tensor], None]] = None,
-        filter_output: bool = True,
-        **kwargs: Any,
-    ) -> dict[str, torch.Tensor]:
-        """Run a forward pass with a backward pass."""
-        grad_output = self.gradients.forward_backward(
-            batch,
-            fwd_fn=self.__call__,
-            backward_fn=backward_fn,
-            loss_scaler=loss_scaler,
-            **kwargs,
-        )
-        return self._process_output(batch, grad_output, filter_output=filter_output)
-
     def evaluate(
         self,
         batch: dict[str, Any],
@@ -172,6 +154,24 @@ class Ranker(torch.nn.Module):
             output = _filter_model_output(output)  # type: ignore
         output.update({k: v for k, v in batch.items() if k.startswith("diagnostics.")})
         return output
+
+    def forward_backward(
+        self,
+        batch: dict,
+        loss_scaler: Optional[float] = None,
+        backward_fn: Optional[Callable[[torch.Tensor], None]] = None,
+        filter_output: bool = True,
+        **kwargs: Any,
+    ) -> dict[str, torch.Tensor]:
+        """Run a forward pass with a backward pass."""
+        grad_output = self.gradients.forward_backward(
+            batch,
+            fwd_fn=self.__call__,
+            backward_fn=backward_fn,
+            loss_scaler=loss_scaler,
+            **kwargs,
+        )
+        return self._process_output(batch, grad_output, filter_output=filter_output)
 
 
 def _filter_model_output(output: dict[str, Any]) -> dict[str, Any]:

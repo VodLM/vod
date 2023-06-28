@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import lightning as L
 import torch
 from lightning.fabric import wrappers as fabric_wrappers

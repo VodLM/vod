@@ -241,6 +241,7 @@ class TrainerConfig(pydantic.BaseModel):
 
     # validators
     _validate_update_freq = pydantic.validator("period", allow_reuse=True, pre=True)(as_pyobj_validator)
+    _validate_pbark_keys = pydantic.validator("pbar_keys", allow_reuse=True, pre=True)(as_pyobj_validator)
 
     @pydantic.validator("parameters", pre=True)
     def _validate_parameters(cls, x: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
