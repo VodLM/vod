@@ -1,0 +1,15 @@
+# @package _global_
+
+dataset:
+  train:
+    - frank.A.en:train
+    - squad.en:train
+    - msmarco.en:train
+  validation:
+    - frank.A.en:val
+    - squad.en:val
+    - msmarco.en:val
+  benchmark:
+    - frank.A.en:val
+    - frank.B.en:val
+    - msmarco.en:val

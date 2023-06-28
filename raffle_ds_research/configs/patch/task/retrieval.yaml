@@ -1,18 +1,18 @@
 # @package _global_
 
 defaults:
-  # - override /dl_sampler: promote_trusted_sources
   # boost `ai_trainer` and `production` questions
+  # - override /dl_sampler: promote_trusted_sources
+  # HF model name
   - override /model/encoder: bert-base
-  # model name
+  # Gradients
   - override /model/gradients: kl_div
+  # model optimizer
+  - override /model/optimizer: adamw
   # use the KL divergence from the model to the binary targets
-  - override /model/optimizer: adam-cpu
-  # use the CPU version of Adam (required by DeepSpeed ZeRO-2)s
   - override /fabric/loggers:
-    - wandb
+      - wandb
   - _self_
-
 
 seed: 1
 
@@ -31,9 +31,8 @@ dataset:
     - msmarco.en:val
 
 model:
-  compile: true
   optimizer:
-    lr: 8e-5
+    lr: 1e-4
     weight_decay: 1e-3
     eps: 1e-8
   gradients:
@@ -52,24 +51,23 @@ batch_size:
 
 trainer:
   max_steps: 200_000
+  period: 20_000
   val_check_interval: 500
   n_max_eval: 1_000
   n_max_benchmark: null
-  period: 50_000
   benchmark_on_init: false
   parameters:
     faiss:
       mode: linear
       start: 0
       value: 1
-      period: 100_000
+      period: ${int_mul:3,${trainer.period}}
 
     bm25:
       mode: linear
       start: 1
-      value: 0.1
-      period: 100_000
-
+      value: 0.3
+      period: ${int_mul:3,${trainer.period}}
 
 collates:
   # Defines the configurations for `dataset_builder.HfBuilder._collate_config`
@@ -82,7 +80,6 @@ collates:
   benchmark:
     prefetch_n_sections: 300
     do_sample: false
-
 
 benchmark_search:
   faiss:

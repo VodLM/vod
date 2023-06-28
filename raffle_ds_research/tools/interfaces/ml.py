@@ -35,7 +35,12 @@ class TokenizedField(pydantic.BaseModel):
 class ProtocolEncoder(typing.Protocol):
     """Protocol for ML models encoding tokenized text into vectors."""
 
-    def __call__(self, data: TokenizedField) -> torch.Tensor:
+    def __call__(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+        field: typing.Optional[FieldType] = None,
+    ) -> torch.Tensor:
         """Embed/encode a tokenized field into a vector."""
         ...
 

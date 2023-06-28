@@ -8,13 +8,17 @@ class ProcessingSpeedColumn(progress.ProgressColumn):
 
     def render(self, task: progress.Task) -> text.Text:
         """Show data transfer speed."""
-        speed = task.finished_speed or task.speed
+        speed = task.fields.get("speed", None)
+        if speed is not None and speed < 0:
+            return text.Text("", style="progress.data.speed")
         if speed is None:
-            return text.Text("?", style="progress.data.speed")
+            speed = task.finished_speed or task.speed
+            if speed is None:
+                return text.Text("?", style="progress.data.speed")
         return text.Text(f"{speed:.2f} batch/s", style="progress.data.speed")
 
 
-class BatchProgressBar(progress.Progress):
+class IterProgressBar(progress.Progress):
     """Progress bar for batch processing."""
 
     def __init__(self, **kwarg: Any):

@@ -78,7 +78,14 @@ class Bm25Client(search_server.SearchClient):
             warnings.warn("This index supports labels, but no label is provided.", stacklevel=2)
 
         queries = self._make_queries(text, top_k=top_k, labels=label)
+
+        # Search with retries
         responses = self._client.msearch(searches=queries)
+        while "error" in responses:
+            logger.warning("Error in response: {}", responses["error"])
+            time.sleep(0.2)
+
+        # Unpack the responses
         indices, scores = [], []
         for response in responses["responses"]:
             # process the indices

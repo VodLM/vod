@@ -1,3 +1,4 @@
+libs/
 faiss-index-benchmark/
 setup-vm-env.sh
 cache/

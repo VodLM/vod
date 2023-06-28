@@ -40,4 +40,12 @@ resources:
 
 collates:
   train:
+    n_sections: 128
+    max_pos_sections: 32
+    prefetch_n_sections: 256
     in_batch_negatives: false
+
+  eval:
+    n_sections: 128
+    max_pos_sections: 32
+    prefetch_n_sections: 256

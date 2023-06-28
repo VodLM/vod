@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import copy
 import functools
-from typing import Any, Iterable, Optional, Union
+from typing import Any, Callable, Optional, Union
 
-import loguru
 import torch
 from datasets.fingerprint import Hasher, hashregister
 from hydra.utils import instantiate
@@ -14,11 +14,6 @@ from raffle_ds_research.core.ml.gradients import Gradients
 from raffle_ds_research.core.ml.monitor import RetrievalMonitor
 from raffle_ds_research.tools import interfaces
 from raffle_ds_research.tools.pipes import fingerprint_torch_module
-
-
-def _only_trainable(parameters: Iterable[torch.nn.Parameter]) -> Iterable[torch.nn.Parameter]:
-    """Filter out parameters that do not require gradients."""
-    return (p for p in parameters if p.requires_grad)
 
 
 def _maybe_instantiate(conf_or_obj: Union[Any, DictConfig], **kwargs: Any) -> object:
@@ -41,7 +36,8 @@ class Ranker(torch.nn.Module):
         optimizer: Optional[dict | DictConfig | functools.partial] = None,
         scheduler: Optional[dict | DictConfig | functools.partial] = None,
         monitor: Optional[RetrievalMonitor] = None,
-        compile: bool = False,
+        compile_encoder: bool = False,
+        compile_kwargs: Optional[dict] = None,
     ):
         super().__init__()
         if isinstance(optimizer, (dict, DictConfig)):
@@ -57,14 +53,16 @@ class Ranker(torch.nn.Module):
         self.scheduler_cls: functools.partial = scheduler  # type: ignore
         self.gradients = gradients
         self.monitor = monitor
-        self.encoder = encoder
 
-        # setup the encoder
-        if compile:
-            loguru.logger.info("Compiling the encoder...")
-            self.encoder = torch.compile(self.encoder)  # type: ignore
-            # loguru.logger.info("Compiling the gradients...")
-            # self.gradients = torch.compile(self.gradients)
+        # compile the encoder
+        if compile_encoder:
+            logger.info("Compiling the encoder..")
+            encoder = torch.compile(
+                encoder,
+                **(compile_kwargs or {}),
+            )  # type: ignore
+
+        self.encoder = encoder
 
     def get_output_shape(self, model_output_key: Optional[str] = None) -> tuple[int, ...]:  # noqa: ARG002
         """Dimension of the model output."""
@@ -83,14 +81,13 @@ class Ranker(torch.nn.Module):
 
         return self.scheduler_cls(optimizer)
 
-    def _forward_field(self, batch: dict, field: str) -> torch.Tensor:
+    def _forward_field(self, batch: dict, field: Optional[interfaces.FieldType] = None) -> torch.Tensor:
         input_ids = batch["input_ids"]
         attention_mask = batch["attention_mask"]
         original_shape = input_ids.shape
         input_ids = input_ids.view(-1, original_shape[-1])
         attention_mask = attention_mask.view(-1, original_shape[-1])
-        inputs = {"input_ids": input_ids, "attention_mask": attention_mask, "field": field}
-        embedding = self.encoder(inputs)
+        embedding = self.encoder(input_ids, attention_mask, field=field)
         embedding = embedding.view(*original_shape[:-1], -1)
         return embedding
 
@@ -102,7 +99,7 @@ class Ranker(torch.nn.Module):
             return None
         return {key_to: batch[key_from] for key_from, key_to in keys_map.items()}
 
-    def forward(self, batch: dict, **kwargs: Any) -> dict[str, torch.Tensor]:
+    def encode(self, batch: dict, **kwargs: Any) -> dict[str, torch.Tensor]:
         """Computes the embeddings for the query and the document."""
         mapping = {"question": "hq", "section": "hd"}
         output = {}
@@ -110,63 +107,78 @@ class Ranker(torch.nn.Module):
             fields = self._fetch_fields(batch, field)
             if fields is None:
                 continue
-            output[key] = self._forward_field(fields, field)
+            output[key] = self._forward_field(fields, interfaces.FieldType(field))
         if len(output) == 0:
             raise ValueError(
                 f"No fields to process. " f"Batch keys = {batch.keys()}. Expected fields = {mapping.keys()}."
             )
+
         return output
 
-    def _step(self, batch: dict[str, Any], *, split: str, **kwargs: Any) -> dict[str, Any]:  # noqa: ARG002
-        output = self.forward(batch)
-        output = self.gradients({**batch, **output})
-        output.update(_compute_input_stats(batch))
+    def forward(self, batch: dict, *, mode: str = "encode", **kwargs: Any) -> dict[str, torch.Tensor]:
+        """Forward pass."""
+        if mode == "encode":
+            return self.encode(batch, **kwargs)
+        if mode == "evaluate":
+            return self.evaluate(batch, **kwargs)
+        if mode == "forward_backward":
+            return self.forward_backward(batch, **kwargs)
+
+        raise ValueError(f"Unknown mode {mode}.")
+
+    def forward_backward(
+        self,
+        batch: dict,
+        loss_scaler: Optional[float] = None,
+        backward_fn: Optional[Callable[[torch.Tensor], None]] = None,
+        filter_output: bool = True,
+        **kwargs: Any,
+    ) -> dict[str, torch.Tensor]:
+        """Run a forward pass with a backward pass."""
+        grad_output = self.gradients.forward_backward(
+            batch,
+            fwd_fn=self.__call__,
+            backward_fn=backward_fn,
+            loss_scaler=loss_scaler,
+            **kwargs,
+        )
+        return self._process_output(batch, grad_output, filter_output=filter_output)
+
+    def evaluate(
+        self,
+        batch: dict[str, Any],
+        *,
+        filter_output: bool = True,
+        **kwargs: Any,
+    ) -> dict[str, Any]:  # noqa: ARG002
+        """Run a forward pass and return the output."""
+        fwd_output = self.forward(batch)
+        grad_output = self.gradients({**batch, **fwd_output})
+        return self._process_output(batch, grad_output, filter_output=filter_output)
+
+    def _process_output(
+        self,
+        batch: dict[str, torch.Tensor],
+        grad_output: dict[str, torch.Tensor],
+        filter_output: bool = True,
+    ) -> dict[str, torch.Tensor]:
+        output = copy.copy(grad_output)
         if self.monitor is not None:
-            output.update(self.monitor(output))
+            with torch.no_grad():
+                output.update(self.monitor(output))
 
         # filter the output and append diagnostics
-        output = self._filter_output(output)  # type: ignore
+        if filter_output:
+            output = _filter_model_output(output)  # type: ignore
         output.update({k: v for k, v in batch.items() if k.startswith("diagnostics.")})
-
         return output
 
-    def training_step(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
-        """Implements the lightning training step."""
-        return self._step(*args, split="train", **kwargs)
 
-    def validation_step(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
-        """Implements the lightning validation step."""
-        return self._step(*args, split="val", **kwargs)
+def _filter_model_output(output: dict[str, Any]) -> dict[str, Any]:
+    def _filter_fn(key: str, _: torch.Tensor) -> bool:
+        return not str(key).startswith("_")
 
-    def test_step(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
-        """Implements the lightning test step."""
-        return self._step(*args, split="test", **kwargs)
-
-    @staticmethod
-    def _filter_output(output: dict[str, Any]) -> dict[str, Any]:
-        def _filter_fn(key: str, _: torch.Tensor) -> bool:
-            return not str(key).startswith("_")
-
-        return {key: value for key, value in output.items() if _filter_fn(key, value)}
-
-
-def _compute_input_stats(batch: dict) -> dict[str, float]:
-    output = {}
-    keys = {
-        "question.input_ids": "question/input_ids",
-        "section.input_ids": "section/input_ids",
-    }
-    for key, log_key in keys.items():
-        try:
-            value = batch[key]
-            if isinstance(value, torch.Tensor):
-                shp = value.shape
-                output[f"{log_key}_length"] = float(shp[-1])
-                if len(shp) > 2:  # noqa: PLR2004
-                    output[f"{log_key}_n"] = float(shp[-2])
-        except KeyError:
-            logger.warning(f"Key {key} not found in batch")
-    return output
+    return {key: value for key, value in output.items() if _filter_fn(key, value)}
 
 
 @hashregister(Ranker)

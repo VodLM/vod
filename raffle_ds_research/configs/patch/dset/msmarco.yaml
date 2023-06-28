@@ -1,0 +1,9 @@
+# @package _global_
+
+dataset:
+  train:
+    - msmarco.en:train
+  validation:
+    - msmarco.en:val
+  benchmark:
+    - msmarco.en:val

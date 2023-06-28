@@ -15,7 +15,6 @@ defaults:
   - override hydra/job_logging: colorlog
 
 seed: ${global_seed:}
-compile: false
 model_name: ${model.encoder.model_name}
 exp_version: "v2.2"
 exp_suffix: ""

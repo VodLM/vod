@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import numbers
 import os
+import warnings
 from pathlib import Path
 from typing import Any, TypeVar
 
@@ -14,6 +15,7 @@ import torch
 import transformers
 import yaml
 from lightning.fabric.loggers.logger import Logger as FabricLogger
+from lightning.pytorch.loggers import WandbLogger
 
 from raffle_ds_research.core.ml import Ranker
 from raffle_ds_research.tools import interfaces
@@ -53,6 +55,11 @@ def set_training_context() -> None:
     transformers.utils.logging.set_verbosity_error()  # type: ignore
     torch.set_float32_matmul_precision("medium")
 
+    try:
+        torch._dynamo.config.log_level = os.environ.get("DYNAMO_LOG_LEVEL", "INFO")  # type: ignore
+    except AttributeError:
+        warnings.warn("Could not set torch._dynamo.config.log_level", stacklevel=2)
+
     # torch.multiprocessing.set_sharing_strategy("file_system")
 
 
@@ -68,7 +75,12 @@ def _get_ranker_meta_data(ranker: Ranker) -> dict[str, Any]:
     }
 
 
-def log_config(config: dict[str, Any] | omegaconf.DictConfig, exp_dir: Path, extras: dict[str, Any]) -> None:
+def log_config(
+    config: dict[str, Any] | omegaconf.DictConfig,
+    exp_dir: Path,
+    extras: dict[str, Any],
+    fabric: L.Fabric,
+) -> None:
     """Log the config as hyperparameters and save it locally."""
     config_path = Path(exp_dir, "config.yaml")
     all_data: dict[str, Any] = omegaconf.OmegaConf.to_container(config, resolve=True)  # type: ignore
@@ -76,19 +88,11 @@ def log_config(config: dict[str, Any] | omegaconf.DictConfig, exp_dir: Path, ext
     with config_path.open("w") as f:
         yaml.dump(all_data, f)
 
-    # log he config to wandb
-    try:
-        # pylint: disable=import-outside-toplevel
-        import wandb
-
-        try:
+    for logger in fabric.loggers:
+        if isinstance(logger, WandbLogger):
             flat_config = config_to_flat_dict(all_data, sep="/")
             flat_config = {k: _cast_hps(v) for k, v in flat_config.items()}
-            wandb.config.update(flat_config)
-        except wandb.errors.Error:
-            loguru.logger.debug("Could not log config to wandb")
-    except ImportError:
-        ...
+            logger.experiment.config.update(flat_config)
 
 
 def init_fabric(

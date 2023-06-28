@@ -1,0 +1,20 @@
+# @package _global_
+
+dataset:
+  train:
+    - frank.A.en-pos:train
+  validation:
+    - frank.A.en-pos:val
+  benchmark:
+    - frank.B.en-pos:val
+
+benchmark_search:
+  faiss:
+    factory: IVFauto,Flat
+    nprobe: 32
+
+search:
+  faiss:
+    factory: IVFauto,Flat
+    metric: inner_product
+    nprobe: 32

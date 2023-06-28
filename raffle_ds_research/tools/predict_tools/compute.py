@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import warnings
 from asyncio import Future
 from typing import Any, List, Optional, Union
 
@@ -17,7 +16,7 @@ from typing_extensions import TypeAlias
 
 from raffle_ds_research.tools import dstruct, pipes
 from raffle_ds_research.tools.utils import loader_config
-from raffle_ds_research.tools.utils.progress import BatchProgressBar
+from raffle_ds_research.tools.utils.progress import IterProgressBar
 
 from .wrappers import PREDICT_IDX_COL_NAME, CollateWithIndices, DatasetWithIndices
 
@@ -50,7 +49,6 @@ class DataLoaderForPredictKwargs(loader_config.DataLoaderConfig):
         return DataLoaderForPredictKwargs(**config)  # type: ignore
 
 
-@torch.no_grad()
 def compute_and_store_predictions(
     fabric: L.Fabric,
     dataset: dstruct.SizedDataset,
@@ -61,10 +59,8 @@ def compute_and_store_predictions(
     model_output_key: Optional[str] = None,
 ) -> ts.TensorStore:
     """Compute predictions for a dataset and store them in a tensorstore."""
-    model.eval()
     if not fabric_wrappers.is_wrapped(model):
-        warnings.warn("Model is not wrapped in a `Fabric`. Setting up model..`", stacklevel=2)
-        model = fabric.setup_module(model)
+        raise ValueError("The model must be wrapped with `lightning.fabric.wrappers`.")
 
     # wrap the dataset and collate_fn to include the indices
     dset_with_ids: dstruct.SizedDataset[dict] = DatasetWithIndices[dict](dataset)
@@ -79,9 +75,11 @@ def compute_and_store_predictions(
     )
 
     # process the dataset and store the predictions in the tensorstore
+    model.eval()
     return _predict_loop(fabric=fabric, dataloader=loader, store=store, model=model, model_output_key=model_output_key)
 
 
+@torch.no_grad()
 def _predict_loop(
     *,
     fabric: L.Fabric,
@@ -92,7 +90,7 @@ def _predict_loop(
 ) -> ts.TensorStore:
     """Run predictions and store the output in a `TensorStore`."""
     dataloader_ = fabric.setup_dataloaders(dataloader)
-    with BatchProgressBar(disable=not fabric.is_global_zero) as pbar:
+    with IterProgressBar(disable=not fabric.is_global_zero) as pbar:
         task = pbar.add_task(
             "Computing vectors",
             total=len(dataloader_),

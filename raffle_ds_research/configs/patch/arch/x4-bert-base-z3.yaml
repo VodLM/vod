@@ -7,10 +7,6 @@ defaults:
   - override /fabric/strategy: deepspeed_3
   - _self_
 
-model:
-  compile: false
-
-
 collates:
   train:
     n_sections: 128

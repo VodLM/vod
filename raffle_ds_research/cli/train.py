@@ -5,13 +5,11 @@ import os
 import pathlib
 import sys
 from pathlib import Path
-from typing import Optional
 
 import hydra
 import lightning as L
 import loguru
 import omegaconf
-import torch
 from hydra.utils import instantiate
 from loguru import logger
 from omegaconf import DictConfig
@@ -29,26 +27,6 @@ from raffle_ds_research.tools.utils.config import register_omgeaconf_resolvers  
 from raffle_ds_research.tools.utils.pretty import print_config  # noqa: E402
 
 register_omgeaconf_resolvers()
-
-
-def _instantiate_ranker(
-    model_config: omegaconf.DictConfig,
-    seed: Optional[int] = None,
-    fabric: Optional[L.Fabric] = None,
-    compile: bool = False,
-) -> Ranker:
-    """Initialize a ranking model from a config."""
-    if seed is not None:
-        logger.info(f"Setting seed={seed}")
-        if fabric is None:
-            L.seed_everything(seed)
-        else:
-            fabric.seed_everything(seed)
-    ranker: Ranker = instantiate(model_config)
-    if compile:
-        return torch.compile(ranker)
-
-    return ranker
 
 
 def _is_gloabl_zero() -> bool:
@@ -84,12 +62,19 @@ def run(config: DictConfig) -> None:
 
     # Init the model
     logger.info(f"Instantiating model <{config.model._target_}>")
-    ranker = _instantiate_ranker(model_config=config.model, seed=config.seed, compile=config.compile, fabric=fabric)
+    if config.seed is not None:
+        fabric.seed_everything(config.seed)
+        ranker: Ranker = instantiate(config.model)
 
     # Log config & setup logger
     _customize_logger(fabric=fabric)
     if fabric.is_global_zero:
-        cli_utils.log_config(config=config, exp_dir=exp_dir, extras={"meta": _get_ranker_meta_data(ranker)})
+        cli_utils.log_config(
+            config=config,
+            exp_dir=exp_dir,
+            extras={"meta": _get_ranker_meta_data(ranker)},
+            fabric=fabric,
+        )
 
     # Train the model
     logger.info(f"Training the ranker with seed={config.seed}")

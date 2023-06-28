@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib
 import pathlib
 from typing import Literal, Optional
 
@@ -11,11 +10,6 @@ from torch import nn
 from typing_extensions import Self, Type
 
 from raffle_ds_research.tools import interfaces
-
-
-def _resolve_import_path(path: str) -> Type:
-    modpath, clsname = path.rsplit(".", 1)
-    return getattr(importlib.import_module(modpath), clsname)
 
 
 class TransformerEncoderConfig(pydantic.BaseModel):
@@ -100,10 +94,13 @@ class TransformerEncoder(nn.Module, interfaces.ProtocolEncoder):
         encoder.load_state_dict(state["state"])
         return encoder
 
-    def forward(self, data: dict[str, torch.Tensor]) -> torch.Tensor:
+    def forward(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+        field: Optional[interfaces.FieldType] = None,  # noqa: ARG002
+    ) -> torch.Tensor:
         """Embed/encode a tokenized field into a vector."""
-        input_ids = data["input_ids"]
-        attention_mask = data["attention_mask"]
         outputs = self.backbone(input_ids, attention_mask)
         hidden_state = self.agg_fn(outputs.last_hidden_state, attention_mask)
         return self.projection(hidden_state)

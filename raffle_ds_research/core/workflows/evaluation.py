@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import collections
 import json
-import os
 import pathlib
-import typing
 from typing import Any, Iterable, Optional
 
 import numpy as np
@@ -17,7 +15,7 @@ from raffle_ds_research.core.mechanics import dataset_factory, search_engine
 from raffle_ds_research.core.ml.monitor import RetrievalMetricCollection
 from raffle_ds_research.core.workflows.precompute import PrecomputedDsetVectors
 from raffle_ds_research.core.workflows.utils import support
-from raffle_ds_research.tools.utils.progress import BatchProgressBar
+from raffle_ds_research.tools.utils.progress import IterProgressBar
 from raffle_ds_research.utils.config import flatten_dict
 
 _DEFAULT_OUTPUT_KEYS = ["faiss", "bm25", "score"]
@@ -37,7 +35,7 @@ def benchmark(
     parameters: Optional[dict[str, float]] = None,
     output_keys: Optional[list[str]] = None,
     serve_on_gpu: bool = True,
-    logsink: Optional[typing.TextIO] = None,
+    logdir: Optional[pathlib.Path] = None,
     n_max: Optional[int] = None,
 ) -> dict[str, float]:
     """Run benchmarks on a retrieval task."""
@@ -77,7 +75,7 @@ def benchmark(
         cfg = {"compute_on_cpu": True, "dist_sync_on_step": True, "sync_on_compute": False}
         monitors = {key: RetrievalMetricCollection(metrics=metrics, **cfg) for key in output_keys}
         diagnostics = collections.defaultdict(list)
-        with BatchProgressBar() as pbar:
+        with IterProgressBar() as pbar:
             ntotal = len(dataloader) if n_max is None else max(1, -(-n_max // dataloader.batch_size))  # type: ignore
             ptask = pbar.add_task(
                 "Benchmarking",
@@ -89,8 +87,10 @@ def benchmark(
                     break
 
                 # log the batch
-                if logsink is not None:
-                    logsink.write(_safe_json_dumps(batch) + os.linesep)
+                if logdir is not None:
+                    logfile = pathlib.Path(logdir, f"batch_{i:05d}.json")
+                    with logfile.open("w") as f:
+                        f.write(_safe_json_dumps(batch, indent=2))
 
                 # gather diagnostics
                 diagnostics["n_sections"].append(batch["section.score"].shape[-1])
@@ -124,6 +124,6 @@ def _safe_json_cast(value: Any) -> str | int | list | dict:  # noqa: ANN401
     return value
 
 
-def _safe_json_dumps(batch: dict[str, Any]) -> str:
+def _safe_json_dumps(batch: dict[str, Any], **kwargs) -> str:  # noqa: ANN003
     """Cast a value to a JSON-safe type and serialize it."""
-    return json.dumps({k: _safe_json_cast(v) for k, v in batch.items()})
+    return json.dumps({k: _safe_json_cast(v) for k, v in batch.items()}, **kwargs)

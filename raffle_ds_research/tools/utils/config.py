@@ -37,13 +37,14 @@ def init_hydra_config(
         )
 
 
-def register_omgeaconf_resolvers() -> None:  # noqa: C901
+def register_omgeaconf_resolvers() -> None:  # noqa: C901, PLR0915
     """Register OmegaConf resolvers. Resolvers a dynamically computed values that can be used in the config."""
     N_GPUS = torch.cuda.device_count()  # noqa: N806
     GIT_HASH = git_revision_hash()  # noqa: N806
     GIT_HASH_SHORT = git_revision_short_hash()  # noqa: N806
     GIT_BRANCH_NAME = git_branch_name()  # noqa: N806
     SEED = randint(0, 100_000)  # noqa: N806, S311
+    N_CPUS = os.cpu_count()  # noqa: N806
 
     def _default_trainer_accelerator(*args: Any, **kwargs: Any) -> str:
         if N_GPUS == 0:
@@ -110,3 +111,4 @@ def register_omgeaconf_resolvers() -> None:  # noqa: C901
     OmegaConf.register_new_resolver("null_cls", lambda *_: None)
     OmegaConf.register_new_resolver("join_path", _join_path)
     OmegaConf.register_new_resolver("abs_path", lambda x: pathlib.Path(x).absolute().as_posix())
+    OmegaConf.register_new_resolver("n_cpus", lambda *_: N_CPUS)

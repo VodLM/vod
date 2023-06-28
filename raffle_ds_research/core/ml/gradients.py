@@ -3,8 +3,9 @@ from __future__ import annotations
 
 import abc
 import math
-from typing import Optional
+from typing import Any, Callable, Iterable, Optional
 
+import torch
 import torch.nn
 from pydantic.fields import Field
 from pydantic.main import BaseModel
@@ -19,8 +20,29 @@ class Gradients(torch.nn.Module):
         """Compute the gradients/loss."""
         raise NotImplementedError
 
+    def forward_backward(
+        self,
+        batch: dict[str, torch.Tensor],
+        fwd_fn: Callable[[dict], dict],
+        backward_fn: Optional[Callable[[torch.Tensor], None]] = None,
+        loss_scaler: Optional[float] = None,
+        **kwargs: Any,
+    ) -> dict[str, torch.Tensor]:
+        """Run a forward pass with a backward pass."""
+        fwd_output = fwd_fn(batch, **kwargs)
+        grad_output = self({**batch, **fwd_output})
+        loss = grad_output["loss"]
+        if loss_scaler is not None:
+            loss *= loss_scaler
+        if backward_fn is None:
+            loss.backward()
+        else:
+            backward_fn(loss)
 
-class SupervisedGradientsInputs(BaseModel):
+        return grad_output
+
+
+class GradientInputs(BaseModel):
     """collection of inputs for the supervised gradients model."""
 
     class Config:
@@ -55,13 +77,13 @@ class SupervisedGradientsInputs(BaseModel):
 class SelfSupervisedGradients(Gradients):
     """Compute the gradients for the `self-supervised` method."""
 
-    def forward(self, intermediate_results: dict) -> dict:
+    def forward(self, inputs: dict) -> dict:
         """Parse the inputs and compute the loss."""
-        data = SupervisedGradientsInputs(**intermediate_results)
+        data = GradientInputs(**inputs)
 
         # compute the scores for each pair of (question, section)
         # Note: we can add negative samples across batch here.
-        scores = torch.einsum("bh,bdh->bd", data.hq, data.hd)
+        scores = _compute_retriever_logprobs(data)
 
         # Compute the targets, they are defined as labelled sections
         #  which are assigned with the max. model score.
@@ -97,129 +119,179 @@ class KlDivGradients(Gradients):
         self.bm25_guidance_weight = bm25_guidance_weight
         self.self_supervision_weight = self_supervision_weight
 
-    def forward(self, intermediate_results: dict) -> dict:
+    def forward(
+        self,
+        inputs: dict,
+        _model_logprobs: Optional[torch.Tensor] = None,
+        _n_positive: Optional[torch.Tensor] = None,
+    ) -> dict:
         """Parse the inputs and compute the loss."""
-        data = SupervisedGradientsInputs(**intermediate_results)
+        data = GradientInputs(**inputs)
 
         # 1. Compute the KL divergence between the model and the data
         # Determine the masked sections
         is_padding = data.scores.isinf() & (data.scores < 0)
 
-        # Define the logits of the model `q_model(z)`
-        # set -inf wherever:
-        #   - the section is masked (padding)
-        if data.hd.dim() == 2:  # noqa: PLR2004
-            model_scores = torch.einsum("bh, dh -> bd", data.hq, data.hd)
-        elif data.hd.dim() == 3:  # noqa: PLR2004
-            model_scores = torch.einsum("bh, bdh -> bd", data.hq, data.hd)
-        else:
-            raise ValueError(f"Invalid dimension for `hd`: {data.hd.shape}")
-        model_scores.masked_fill_(is_padding, -torch.inf)
-        model_logits = model_scores.log_softmax(dim=-1)
+        # 2. compute the probabilities for each pair of (question, section) assigned by the model
+        retriever_logprobs = _compute_retriever_logprobs(data, is_padding)
 
-        # Define the logits target distribution `p_data(z)`
-        # set -log(eps) wherever:
-        #   - the section is labelled as negative
-        #   - except when all the sections for a given are negative
-        is_negative_section = data.targets < 1
-        q_with_positives = ~is_negative_section.all(dim=-1)
-        if not q_with_positives.all():
-            raise ValueError(
-                f"Some questions do not have any positive section. prop={q_with_positives.float().mean():.2%}"
-            )
-        where_zero_prob = is_negative_section | ~q_with_positives[:, None]
-        data_logits = torch.where(
-            where_zero_prob,
-            self.log_eps,  # set -log(eps) ~ -inf
-            torch.zeros_like(model_logits),  # log(1) = 0
-        )
-        # set -inf wherever:
-        #   - the section is masked (padding)
-        data_logits.masked_fill_(is_padding, -torch.inf)
-        data_logits = data_logits.log_softmax(dim=-1)
+        # 3. compute the reference probabilities for each pair of (question, section)
+        data_targets = _compute_data_targets(data, is_padding)
 
-        # Compute the loss `KL( p_data(z) || p_model(z) )`
-        # Exclude:
-        #   - the sections which are masked (padding)
-        #   - the questions where there are no positive
-        mask = (data_logits.isinf() & (data_logits < 0)) | is_padding | ~q_with_positives[:, None]
-        kl_div_terms = torch.where(mask, 0, -data_logits.exp() * (model_logits - data_logits))
-        kl_div = kl_div_terms.sum(dim=-1)
-        kl_div_loss = (q_with_positives * kl_div).sum() / q_with_positives.sum()
+        # 4.1 compute the number of positives
+        if _n_positive is None:
+            _n_positive = data_targets.sum(dim=1)
+            if (data_targets.sum(dim=1) == 0).any():
+                raise ValueError("The batch contains a question without positive section.")
 
-        # 2. Compute the self-supervision loss
-        is_multi_targets = ((data.targets > 0).sum(dim=-1) > 1).float()
-        ref_scores_where_positives = torch.where(data.targets, data.scores, -torch.inf)
-        model_scores_where_positives = torch.where(data.targets, model_scores, -torch.inf)
-        self_supervised_target = ref_scores_where_positives.argmax(dim=-1)
-        self_supervised_loss = torch.nn.functional.cross_entropy(
-            model_scores_where_positives,
-            self_supervised_target,
-            reduction="none",
-        )
-        self_supervised_loss = (is_multi_targets * self_supervised_loss).sum() / is_multi_targets.sum()
+        # 4.2 compute the model probabilities
+        model_probs = retriever_logprobs.exp().detach() if _model_logprobs is None else _model_logprobs.exp().detach()
 
-        # 3. Compute the KL divergences between the model and the sampling distributions
+        # 5. Compute the loss: KL divergences between the model and the sampling distributions
+        w = 1 / _n_positive[:, None] * (model_probs - data_targets)
+        loss = torch.sum(w.detach() * retriever_logprobs, dim=-1).mean()
+
+        # 6. Compute the KL divergences between the model and the sampling distributions
         # KL ( p_ref(z) | p_model(z)) for `p_ref` = score, bm25, faiss
         kls = {
-            key: _compute_kld(ref_scores, model_logits)
-            for key, ref_scores in {"score": data.scores, "bm25": data.bm25, "faiss": data.faiss}.items()
+            key: _compute_kld(retriever_logprobs, ref_scores)
+            for key, ref_scores in {
+                "score": data.scores,
+                "bm25": data.bm25,
+                "faiss": data.faiss,
+                "data": torch.where(data_targets > 0, 0.0, -math.inf),
+            }.items()
             if ref_scores is not None
         }
 
-        # 4. Add the bm25 guidance loss
-        kl_bm25 = kls.get("bm25", None)
-        if self.bm25_guidance_weight > 0 and kl_bm25 is None:
-            raise ValueError(f"bm25_guidance_weight={self.bm25_guidance_weight} but no bm25 scores are provided.")
-        kl_bm25 = kl_bm25.mean() if kl_bm25 is not None else 0.0
-
-        # 5. compute the final loss
-        loss = kl_div_loss
-        if self.bm25_guidance_weight > 0:
-            loss += self.bm25_guidance_weight * kl_bm25
-        if self.self_supervision_weight > 0:
-            loss += self.self_supervision_weight * self_supervised_loss
-
         return {
             "loss": loss,
-            "kl_div_loss": kl_div_loss,
-            "self_supervised_loss": self_supervised_loss,
-            **_make_evaluation_data(
-                targets=data.targets,
-                model_logits=model_logits,
-            ),
+            "_targets": data_targets,
+            "_logits": retriever_logprobs,
+            "_n_positive": _n_positive,
             **{f"kl_{k}": kl.mean().detach() for k, kl in kls.items()},
         }
 
+    # def forward_backward(
+    #     self,
+    #     batch: dict[str, torch.Tensor],
+    #     fwd_fn: Callable[[dict], dict],
+    #     backward_fn: Callable[[torch.Tensor], None] | None = None,
+    #     loss_scaler: float | None = None,
+    #     **kwargs: Any,
+    # ) -> dict[str, torch.Tensor]:
+    #     with torch.no_grad():
+    #         fwd_out = fwd_fn(batch)
 
+
+def _compute_retriever_logprobs(data: GradientInputs, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    """Compute the log-probabilities for each pair of (question, section) assigned by the model."""
+    if data.hd.dim() == 2:  # noqa: PLR2004
+        retriever_logprobs = torch.einsum("bh, dh -> bd", data.hq, data.hd)
+    elif data.hd.dim() == 3:  # noqa: PLR2004
+        retriever_logprobs = torch.einsum("bh, bdh -> bd", data.hq, data.hd)
+    else:
+        raise ValueError(f"Invalid dimension for `hd`: {data.hd.shape}")
+    if mask is not None:
+        retriever_logprobs.masked_fill_(mask, -torch.inf)
+
+    return retriever_logprobs.log_softmax(dim=-1)
+
+
+@torch.no_grad()
+def _compute_data_targets(data: GradientInputs, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    """Compute the reference probabilities for each pair of (question, section)."""
+    data_targets = data.targets.float()
+    if mask is not None:
+        data_targets.masked_fill_(mask, 0.0)
+
+    return data_targets
+
+
+@torch.jit.script  # type: ignore
+def _masked_logprobs(logits: torch.Tensor, is_defined: torch.Tensor) -> torch.Tensor:
+    logits = logits.masked_fill(~is_defined, -math.inf)
+    logits = logits.log_softmax(dim=-1)
+    return logits
+
+
+@torch.jit.script  # type: ignore
 def _compute_kld(
     p_logits: torch.Tensor,
     q_logits: torch.Tensor,
 ) -> torch.Tensor:
-    # compute the KL divergence between the model and the data
-
-    def _logprobs(logits: torch.Tensor, is_defined: torch.Tensor) -> torch.Tensor:
-        logits = logits.masked_fill(~is_defined, -math.inf)
-        logits = logits.log_softmax(dim=-1)
-        return logits
-
-    # compute the log-probabilities
-    is_defined = p_logits.isfinite()
-    p_logpropbs = _logprobs(p_logits, is_defined)
-    q_logprobs = _logprobs(q_logits, is_defined)
+    """Compute the KL divergence between the model and the data."""
+    p_is_defined = p_logits.isfinite()
+    q_is_defined = q_logits.isfinite()
+    p_logpropbs = _masked_logprobs(p_logits, p_is_defined)
+    q_logprobs = _masked_logprobs(q_logits, p_is_defined)
 
     # compute the KL
-    kl_div_terms = -q_logprobs.exp() * (p_logpropbs - q_logprobs)
-    kl_div_terms.masked_fill_(~is_defined, 0)
+    kl_div_terms = q_logprobs.exp() * (q_logprobs - p_logpropbs)
+    kl_div_terms.masked_fill_(~p_is_defined | ~q_is_defined, 0)
     return kl_div_terms.sum(dim=-1)
 
 
-@torch.no_grad()
-def _make_evaluation_data(
-    targets: torch.Tensor,
-    model_logits: torch.Tensor,
-) -> dict[str, torch.Tensor]:
-    return {
-        "_targets": targets > 0,
-        "_logits": model_logits,
-    }
+# def _forward_backward_step(
+#     *,
+#     fabric: L.Fabric,
+#     ranker: Ranker,
+#     batch: dict[str, torch.Tensor],
+#     loss_scaler: typing.Optional[float] = None,
+#     **kwargs,  # noqa: ANN003
+# ) -> dict[str, float]:
+#     step_metrics = ranker.evaluate(batch, **kwargs)
+#     loss = step_metrics["loss"]
+#     if loss_scaler is not None:
+#         loss *= loss_scaler
+#     fabric.backward(loss)
+#     return step_metrics
+
+
+# def _chunked_forward_backward_step(
+#     *,
+#     fabric: L.Fabric,
+#     ranker: Ranker,
+#     batch: dict[str, torch.Tensor],
+#     loss_scaler: typing.Optional[float] = None,
+#     chunk_size: int = 8,
+# ) -> dict[str, float]:
+#     pipes.pprint_batch(batch, header="Chunked Training Step")
+
+#     # Forward pass without greadients
+#     with torch.no_grad():
+#         full_outputs = ranker.training_step(batch, filter_output=False)
+#         rich.print(full_outputs)
+#         batch["section.precomputed_logprobs"] = full_outputs["_logits"].log_softmax(dim=-1)
+
+#     section_input_ids = batch["section.input_ids"]
+#     {2: True, 3: False}[section_input_ids.ndim]
+#     # TODO: implement flattened version
+
+#     # compute the gradients by chunks
+#     for batch_chunk in _iter_chunks(batch, chunk_size=chunk_size):
+#         pipes.pprint_batch(batch_chunk, header="Chunk")
+#         _forward_backward_step(
+#             fabric=fabric,
+#             ranker=ranker,
+#             batch=batch_chunk,
+#             loss_scaler=loss_scaler,
+#         )
+
+#     return full_outputs
+
+
+def _iter_chunks(
+    batch: dict[str, torch.Tensor],
+    chunk_size: int = 8,
+    prefix: str = "section.",
+) -> Iterable[dict[str, torch.Tensor]]:
+    section_input_ids = batch[f"{prefix}input_ids"]
+    n_doc = section_input_ids.shape[1]
+    doc_keys = [k for k in batch if k.startswith(prefix)]
+    other_keys = [k for k in batch if not k.startswith(prefix)]
+    for i in range(0, n_doc, chunk_size):
+        yield {
+            **{k: batch[k][:, i : i + chunk_size].contiguous() for k in doc_keys},
+            **{k: batch[k] for k in other_keys},
+        }

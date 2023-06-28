@@ -7,6 +7,7 @@ benchmark_on_init: false
 n_max_eval: null
 n_max_benchmark: null
 checkpoint_path: ${abs_path:state.ckpt}
+pbar_keys: ['loss', 'hitrate_3']
 parameters:
   faiss: 1.0
   bm25: 1.0

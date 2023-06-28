@@ -7,4 +7,3 @@ defaults:
   - _self_
 
 _target_: raffle_ds_research.core.ml.Ranker
-compile: false

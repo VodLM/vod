@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import functools
+import os
 import pathlib
-from typing import Iterable, Optional, TypeVar
+from typing import Any, Iterable, Optional, TypeVar
 
 import lightning as L
 import numpy as np
 import omegaconf
 import rich
+import torch
 from lightning.fabric import strategies as fabric_strategies
 from loguru import logger
 
@@ -17,7 +19,7 @@ from raffle_ds_research.core.ml import Ranker
 from raffle_ds_research.core.ml.encoder import TransformerEncoder
 from raffle_ds_research.core.workflows import evaluation, precompute, training
 from raffle_ds_research.core.workflows.utils import io, logging, support
-from raffle_ds_research.tools import caching
+from raffle_ds_research.tools import caching, pipes
 from raffle_ds_research.utils.pretty import print_metric_groups
 
 K = TypeVar("K")
@@ -37,18 +39,18 @@ def train_with_index_updates(  # noqa: C901, PLR0915
 
     # Define the index update steps and the `PeriodicStoppingCallback` callback.
     update_steps = _infer_update_steps(config.trainer.max_steps, config.trainer.period)
-    logger.info(f"Index will be updated at steps: {_pretty_steps(update_steps)}")
+    logger.info(f"The search index will be updated at steps: {_pretty_steps(update_steps)}")
     if len(update_steps) == 0:
         raise ValueError("No index update steps were defined.")
 
-    # check and adapt the DeepSpeed config
+    # Check and adapt the DeepSpeed config
     deepspeed_enabled = _setup_deepspeed(fabric=fabric, ranker=ranker, config=config.trainer)
 
-    # setting up the optimizer
+    # Setting up the optimizer
     optimizer = ranker.get_optimizer()
     scheduler = ranker.get_scheduler(support.unwrap_optimizer(optimizer))
 
-    # define the trainer State
+    # Define the trainer State
     state = support.TrainerState(
         step=0,
         period=0,
@@ -64,10 +66,6 @@ def train_with_index_updates(  # noqa: C901, PLR0915
         parameters=config.trainer.parameters,
     )
 
-    # setup Fabric model&optimizer
-    ranker, optimizer = fabric.setup(ranker, optimizer)
-
-    # load training state - currently failing with DeepSpeed
     if load_from is not None:
         logger.info(f"Loading training state from `{load_from}`")
         io.load_training_state(
@@ -79,6 +77,9 @@ def train_with_index_updates(  # noqa: C901, PLR0915
             trainer_state=state,
         )
         rich.print(state)
+
+    # Setup Fabric model & optimizer
+    ranker, optimizer = fabric.setup(ranker, optimizer)
 
     # Train the model for each period
     update_steps = update_steps + [None]
@@ -103,7 +104,7 @@ def train_with_index_updates(  # noqa: C901, PLR0915
         with caching.CacheManager(
             pathlib.Path(config.sys.cache_dir, f"train-with-updates-{state.period}"),
             delete_existing=False,
-            persist=state.period == 0,  # keep the cache during the first period
+            persist=state.period == 0,  # keep the cache for the first period
         ) as cache_dir:
             factories = _get_dset_factories(config.dataset.get("all"), config=config.dataset)
 
@@ -135,7 +136,6 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                 barrier("running benchmarks..")
                 _run_benchmarks(
                     fabric=fabric,
-                    ranker=ranker,
                     config=config,
                     state=state,
                     parameters=parameters,
@@ -148,6 +148,8 @@ def train_with_index_updates(  # noqa: C901, PLR0915
             if end_step is None:
                 # If there is no defined `end_step`, we reached the end of the training
                 continue
+
+            support._test_model_backward(fabric=fabric, ranker=ranker, header="Main loop :: before period")
 
             # training for the current period.
             # We use a `StopAtTrainer` to stop the training at the end of the current period (max `end_step`).
@@ -170,11 +172,15 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                 serve_on_gpu=False,
                 trainer_state=state,
                 checkpoint_path=config.trainer.checkpoint_path,
+                on_first_batch_fn=functools.partial(
+                    _on_first_batch_fn, torch_compile=os.environ.get("CHECK_DYNAMO", "0") == "1"
+                ),
+                pbar_keys=config.trainer.pbar_keys,
             )
             logger.success(f"Completed training period {1+state.period}")
             barrier("Period completed.")
 
-        # update the scheduler for the next period
+        # Reset the scheduler for the next period
         scheduler = ranker.get_scheduler(support.unwrap_optimizer(optimizer))
 
     return ranker
@@ -199,10 +205,22 @@ def _setup_deepspeed(
     return deepspeed_enabled
 
 
+def _on_first_batch_fn(
+    fabric: L.Fabric,
+    batch: dict[str, Any],
+    ranker: Ranker,
+    torch_compile: bool = False,
+) -> None:
+    if fabric.is_global_zero:
+        pipes.pprint_batch(batch, header="Training batch")
+
+    if torch_compile:
+        torch._dynamo.explain(ranker.training_step, batch)
+
+
 def _run_benchmarks(
     *,
     fabric: L.Fabric,
-    ranker: Ranker,
     config: core_config.TrainWithIndexUpdatesConfigs,
     state: support.TrainerState,
     parameters: dict[str, float],
@@ -210,34 +228,34 @@ def _run_benchmarks(
     factories: dict[K, dataset_factory.DatasetFactory],
     vectors: dict[K, None | precompute.PrecomputedDsetVectors],
 ) -> None:
-    if support.is_engine_enabled(parameters, "faiss"):
-        ranker.to("cpu")  # <-- free GPU memory
+    # if support.is_engine_enabled(parameters, "faiss"):
+    # ranker.to("cpu")  # <-- free GPU memory # see: https://github.com/Lightning-AI/lightning/issues/17937
     if fabric.is_global_zero:
         logger.info(f"Running benchmarks ... (period={1+state.period})")
         for j, dset in enumerate(config.dataset.benchmark):
             bench_loc = f"{dset.name}:{dset.split_alias}"
             logger.info(f"{1+j}/{len(config.dataset.benchmark)} - Benchmarking `{bench_loc}` ...")
-            logfile = pathlib.Path("benchmarks", f"{bench_loc}-{state.period}-{state.step}.jsonl")
-            logfile.parent.mkdir(parents=True, exist_ok=True)
+            logdir = pathlib.Path("benchmarks", f"{bench_loc}-{state.period}-{state.step}")
+            logdir.mkdir(parents=True, exist_ok=True)
 
             # run the benchmark and log the results
-            with logfile.open("w") as sink:
-                metrics = evaluation.benchmark(
-                    factory=factories[dset],
-                    vectors=vectors[dset],
-                    metrics=config.dataset.metrics,
-                    search_config=config.search.benchmark,
-                    collate_config=config.collates.benchmark,
-                    dataloader_config=config.dataloaders.eval,
-                    cache_dir=cache_dir,
-                    parameters=parameters,
-                    serve_on_gpu=True,
-                    logsink=sink,
-                    n_max=config.trainer.n_max_benchmark,
-                )
+            metrics = evaluation.benchmark(
+                factory=factories[dset],
+                vectors=vectors[dset],
+                metrics=config.dataset.metrics,
+                search_config=config.search.benchmark,
+                collate_config=config.collates.benchmark,
+                dataloader_config=config.dataloaders.eval,
+                cache_dir=cache_dir,
+                parameters=parameters,
+                serve_on_gpu=True,
+                logdir=logdir,
+                n_max=config.trainer.n_max_benchmark,
+            )
             if metrics is not None:
                 header = f"{dset.name}:{dset.split_alias} - Period {state.period + 1}"
                 _log_print_metrics(fabric=fabric, state=state, dset=dset, metrics=metrics, header=header)
+            logger.info(f"{1+j}/{len(config.dataset.benchmark)} - saved to `{logdir.absolute()}`")
 
 
 def _log_print_metrics(
@@ -263,7 +281,7 @@ def _log_print_metrics(
 def _log_parameters(*, fabric: L.Fabric, state: support.TrainerState, parameters: dict[str, float]) -> None:
     logging.log(
         {
-            "trainer/period": float(state.period + 1),
+            "trainer/period": float(state.period),
             **{f"parameter/{k}": v for k, v in parameters.items()},
         },
         loggers=fabric.loggers,
