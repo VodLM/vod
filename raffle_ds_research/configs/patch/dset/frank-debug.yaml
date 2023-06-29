@@ -3,10 +3,13 @@
 dataset:
   train:
     - frank.A.en-pos:train
+    - frank.A.da-pos:train
   validation:
     - frank.A.en-pos:val
+    - frank.A.da-pos:val
   benchmark:
     - frank.B.en-pos:val
+    - frank.B.da-pos:val
 
 benchmark_search:
   faiss:

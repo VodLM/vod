@@ -96,13 +96,19 @@ def _download_and_parse_frank(
 ) -> HfFrankPart:
     fs = init_gcloud_filesystem()
     if only_positive_sections:
-        path = f"raffle-datasets-1/datasets/frank/{language}/translated_da_frank_V{version}{split.value}/"
+        if language == "da":
+            path = f"raffle-datasets-1/datasets/frank/{language}/da_frank_V{version}{split.value}/"
+        else:
+            path = f"raffle-datasets-1/datasets/frank/{language}/translated_da_frank_V{version}{split.value}/"
         loguru.logger.debug(f"Reading Frank from {path} using {fs}")
         if not fs.exists(path):
             raise FileNotFoundError(f"Path {path} does not exist on storage {fs}.")
         return _pase_frank_dir(path, split, language=language, fs=fs)  # type: ignore
 
-    path = f"raffle-datasets-1/datasets/frank/{language}/translated_da_frank_V{version}{split.value}/kb_indexes/"
+    if language == "da":
+        path = f"raffle-datasets-1/datasets/frank/{language}/da_frank_V{version}{split.value}/kb_indexes/"
+    else:
+        path = f"raffle-datasets-1/datasets/frank/{language}/translated_da_frank_V{version}{split.value}/kb_indexes/"
     loguru.logger.debug(f"Reading Frank from {path} using {fs}")
     if not fs.exists(path):
         raise FileNotFoundError(f"Path {path} does not exist on storage {fs}.")

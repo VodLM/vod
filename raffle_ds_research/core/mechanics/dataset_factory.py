@@ -59,7 +59,7 @@ class DatasetFactory:
         section_prep = pipes.Partial(
             pipes.template_pipe,
             template=self.config.templates["section"],
-            input_keys=["title", "content"],
+            input_keys=["title", "content", "language", "kb_id"],
             output_key="text",
         )
 
@@ -92,7 +92,7 @@ class DatasetFactory:
         qa_prep = pipes.Partial(
             pipes.template_pipe,
             template=self.config.templates["question"],
-            input_keys=["text"],
+            input_keys=["text", "language", "kb_id"],
             output_key="text",
         )
 

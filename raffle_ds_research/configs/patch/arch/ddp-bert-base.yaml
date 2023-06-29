@@ -23,14 +23,14 @@ model:
 
 batch_size:
   effective: 32
-  per_device: 8
+  per_device: 4
   per_device_eval: 16
   per_device_predict: 1024
 
 collates:
   train:
-    n_sections: 40
-    max_pos_sections: 10
+    n_sections: 48
+    max_pos_sections: 12
     prefetch_n_sections: 64
 
 fabric:

@@ -10,6 +10,7 @@ import numpy as np
 import omegaconf
 import rich
 import torch
+import transformers
 from lightning.fabric import strategies as fabric_strategies
 from loguru import logger
 
@@ -173,7 +174,9 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                 trainer_state=state,
                 checkpoint_path=config.trainer.checkpoint_path,
                 on_first_batch_fn=functools.partial(
-                    _on_first_batch_fn, torch_compile=os.environ.get("CHECK_DYNAMO", "0") == "1"
+                    _on_first_batch_fn,
+                    torch_compile=os.environ.get("CHECK_DYNAMO", "0") == "1",
+                    tokenizer=config.dataset.tokenizer,
                 ),
                 pbar_keys=config.trainer.pbar_keys,
             )
@@ -209,10 +212,16 @@ def _on_first_batch_fn(
     fabric: L.Fabric,
     batch: dict[str, Any],
     ranker: Ranker,
+    *,
+    tokenizer: transformers.PreTrainedTokenizerBase,
     torch_compile: bool = False,
 ) -> None:
     if fabric.is_global_zero:
         pipes.pprint_batch(batch, header="Training batch")
+        try:
+            pipes.pprint_retrieval_batch(batch, tokenizer=tokenizer)
+        except Exception as ex:
+            logger.warning(f"Failed to print retrieval batch: {ex}")
 
     if torch_compile:
         torch._dynamo.explain(ranker.training_step, batch)

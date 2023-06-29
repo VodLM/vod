@@ -1,6 +1,6 @@
 defaults:
   - tokenizer: default
-  - templates: ${infer_model_type:${model/encoder}}
+  - templates: default
   - _self_
 
 _target_: raffle_ds_research.core.config.MultiDatasetFactoryConfig

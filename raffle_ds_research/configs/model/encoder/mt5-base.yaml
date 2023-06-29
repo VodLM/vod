@@ -1,0 +1,6 @@
+defaults:
+  - bert-base
+  - _self_
+model_name: google/mt5-base
+cls_name: T5EncoderModel
+agg: mean

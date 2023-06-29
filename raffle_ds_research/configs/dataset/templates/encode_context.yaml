@@ -1,0 +1,2 @@
+question: "[Lang={{ language }}|kb={{ kb_id }}] Q: {{ text }}"
+section: "[Lang={{ language }}|kb={{ kb_id }}] {% if title %}Title: {{ title }}| {% endif %}D: {{ content }}"

@@ -1,6 +1,7 @@
 # @package _global_
 
 defaults:
+  - override /dataset/templates: encode_context
   - override /model/encoder: bert-tiny
   - _self_
 
@@ -38,16 +39,12 @@ resources:
   num_workers: 1
   num_proc: 4
 
-model:
-  gradients:
-    section_chunk_size: 32
-
 collates:
   train:
     n_sections: 128
     max_pos_sections: 32
     prefetch_n_sections: 256
-    in_batch_negatives: true
+    in_batch_negatives: false
 
   eval:
     n_sections: 128
