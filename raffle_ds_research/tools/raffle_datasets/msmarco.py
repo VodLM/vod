@@ -25,7 +25,7 @@ from raffle_ds_research.tools.raffle_datasets.base import (
     init_gcloud_filesystem,
 )
 
-MS_MARCO_KB_IDs = {"en": 100_000}
+MS_MARCO_KB_ID = 100_000
 
 
 class MsmarcoRetrievalDataset(RetrievalDataset):
@@ -71,8 +71,7 @@ def _safe_decode(x: str | bytes) -> str:
 
 
 def _gen_queries(*, qrels: dict[int, Iterable[int]], language: str, queries_table: dict[int, str]) -> Iterable[dict]:
-    kb_id = MS_MARCO_KB_IDs[language]
-    meta = {"language": language, "kb_id": kb_id}
+    meta = {"language": language, "kb_id": MS_MARCO_KB_ID}
     for qid, pids in qrels.items():
         yield MsmarcoQqueryModel(
             id=qid,
@@ -165,8 +164,7 @@ def _download_and_parse_sections(language: str = "en", local_path: Optional[str]
     )
 
     def iter_sections() -> Iterable[dict]:
-        kb_id = MS_MARCO_KB_IDs[language]
-        meta = {"language": language, "kb_id": kb_id}
+        meta = {"language": language, "kb_id": MS_MARCO_KB_ID}
         with fs.open(str(base_path)) as f:
             for line in track(f.readlines(), description=f"Processing `{base_path.name}`"):
                 data = json.loads(line)

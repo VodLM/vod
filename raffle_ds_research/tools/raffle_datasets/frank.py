@@ -163,10 +163,10 @@ def _pase_frank_dir(local_frank_path: str, split: str, language: str, *, fs: fss
     sections = datasets.Dataset.from_generator(gen_sections)
 
     # build `answer2section`
-    answer2section: dict[int, list[int]] = collections.defaultdict(list)
+    answer2section: dict[int, set[int]] = collections.defaultdict(set)
     for section in _iter_examples_from_json(sections_path, fs=fs):
         section_id = int(section["answer_id"])
-        answer2section[section_id].append(int(section["id"]))
+        answer2section[section_id].add(int(section["id"]))
 
     # generate QA splits
     qa_splits = {}

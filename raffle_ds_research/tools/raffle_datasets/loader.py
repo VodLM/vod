@@ -12,7 +12,7 @@ from typing_extensions import Self, Type
 from raffle_ds_research.tools.raffle_datasets.base import RetrievalDataset
 from raffle_ds_research.tools.raffle_datasets.frank import load_frank
 from raffle_ds_research.tools.raffle_datasets.msmarco import load_msmarco
-from raffle_ds_research.tools.raffle_datasets.squad import load_squad
+from raffle_ds_research.tools.raffle_datasets.raffle_squad import load_raffle_squad
 
 
 class DatasetConfigOptions(pydantic.BaseModel):
@@ -37,7 +37,7 @@ class DatasetLoaderConfig(pydantic.BaseModel):
     options: DatasetConfigOptions
 
     @pydantic.validator("options", pre=True)
-    def _parse_options(cls: Type[Self], options: list[str]) -> DatasetConfigOptions:
+    def _parse_options(cls: Type[Self], options: list[str]) -> DatasetConfigOptions:  # type: ignore
         return DatasetConfigOptions.from_list(options)
 
     @classmethod
@@ -85,7 +85,7 @@ class RetrievalDatasetLoader:
         loader = {
             "frank": load_frank,
             "msmarco": load_msmarco,
-            "squad": load_squad,
+            "squad": load_raffle_squad,
         }[self.config.name]
 
         return loader(

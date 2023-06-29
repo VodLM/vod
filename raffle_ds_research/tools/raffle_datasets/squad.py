@@ -10,7 +10,7 @@ import pydantic
 from raffle_ds_research.tools.pipes.utils.misc import pack_examples
 from raffle_ds_research.tools.raffle_datasets import RetrievalDataset
 
-SQUAD_KB_ID = {"en": 200_000}
+SQUAD_KB_ID = 200_000
 
 
 def _add_row_idx(_: dict, idx: int) -> dict[str, int]:
@@ -32,7 +32,7 @@ class AppendQaExtras:
 
     def __call__(self, row: dict[str, Any]) -> dict[str, Any]:
         """Append the extras to the QA row."""
-        row["kb_id"] = SQUAD_KB_ID[self.language]
+        row["kb_id"] = SQUAD_KB_ID
         row["language"] = self.language
         row_id = row["context"]
         row["section_ids"] = [self.lookup[row_id]]
@@ -93,7 +93,7 @@ def load_squad(
                     "content": row["context"],
                     "language": language,
                     "id": section_id,
-                    "kb_id": SQUAD_KB_ID[language],
+                    "kb_id": SQUAD_KB_ID,
                 }
                 sections.append(section)
                 section_id += 1

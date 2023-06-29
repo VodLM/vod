@@ -7,21 +7,34 @@ defaults:
 dataset:
   train:
     - frank.A.en-pos:train
-    - frank.A.da-pos:train
-    - frank.A.de-pos:train
     - squad.en:train
+    - squad.en:val
+    - frank.A.da-pos:train
+    - squad.da:train
+    - squad.da:val
+    - frank.A.de-pos:train
+    - squad.de:train
+    - squad.de:val
+    - frank.A.fr-pos:train
+    - squad.fr:train
+    - squad.fr:val
+    - frank.A.is-pos:train
+    - squad.is:train
+    - squad.is:val
   validation:
     - frank.A.en-pos:val
     - frank.A.da-pos:val
     - frank.A.de-pos:val
-    - squad.en:val
+    - frank.A.fr-pos:val
+    - frank.A.is-pos:val
   benchmark:
     - frank.A.en:val
     - frank.A.da:val
-    - frank.A.de:val
     - frank.B.en:val
     - frank.B.da:val
     - frank.B.de:val
+    - frank.B.fr:val
+    - frank.B.is:val
 
 benchmark_search:
   faiss:
@@ -38,3 +51,4 @@ trainer:
   max_steps: 100_000
   period: 20_000
   val_check_interval: 500
+  n_max_eval: 5_000
