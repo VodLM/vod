@@ -32,11 +32,11 @@ class Gradients:
         backward_kwargs: Optional[dict] = None,
         no_backward_sync: bool = False,
         fwd_kwargs: None | dict = None,
+        **kwargs: Any,
     ) -> dict[str, torch.Tensor]:
         """Run a forward pass with a backward pass."""
         fwd_kwargs = fwd_kwargs or {}
-        fwd_output = fwd_fn(batch, **fwd_kwargs) if fwd_fn is not None else {}
-        grad_output = self({**batch, **fwd_output}, **fwd_kwargs)
+        grad_output = fwd_fn(batch, **fwd_kwargs) if fwd_fn is not None else {}
 
         # compute the loss
         loss = grad_output["loss"]
@@ -170,7 +170,7 @@ class KlDivGradients(Gradients):
         if data.pre_n_positive is None:
             _n_positive = data_targets.sum(dim=1)
             if (data_targets.sum(dim=1) == 0).any():
-                raise ValueError("The batch contains a question without positive section.")
+                raise ValueError("This batch contains a question without positive section.")
         else:
             _n_positive = data.pre_n_positive
 
@@ -211,6 +211,7 @@ class KlDivGradients(Gradients):
         fwd_fn: Callable[[dict], dict],
         fabric: None | L.Fabric = None,
         loss_scaler: float | None = None,
+        no_backward_sync: bool = False,
         **kwargs: Any,
     ) -> dict[str, torch.Tensor]:
         """Forward and backward pass with gradient accumulation."""
@@ -220,6 +221,7 @@ class KlDivGradients(Gradients):
                 fwd_fn=fwd_fn,
                 fabric=fabric,
                 loss_scaler=loss_scaler,
+                no_backward_sync=no_backward_sync,
                 fwd_kwargs={**kwargs, "compute_metrics": True, "mode": "evaluate"},
             )
 
@@ -229,26 +231,30 @@ class KlDivGradients(Gradients):
 
         # Evaluate the number of sections per question
         if section_input_ids.ndim == 3:  # noqa: PLR2004
-            n_sections = section_input_ids.shape[1]
+            n_sections_per_q = section_input_ids.shape[1]
             eff_chunk_size = self.section_chunk_size
+            n_chunks = n_sections_per_q // eff_chunk_size
         elif section_input_ids.ndim == 2:  # noqa: PLR2004
-            n_sections = section_input_ids.shape[0]
+            n_sections_per_q = section_input_ids.shape[0] // question_input_ids.shape[0]
             eff_chunk_size = self.section_chunk_size * question_input_ids.shape[0]
+            n_chunks = section_input_ids.shape[0] // eff_chunk_size
         else:
             raise ValueError(f"Invalid section_input_ids shape: `{section_input_ids.shape}`")
 
         # Skip chunk-processing if the number of sections is smaller than the chunk size
-        if n_sections <= self.section_chunk_size:
+        if n_sections_per_q <= self.section_chunk_size:
             return super().forward_backward(
                 batch,
                 fwd_fn=fwd_fn,
                 fabric=fabric,
                 loss_scaler=loss_scaler,
+                no_backward_sync=no_backward_sync,
                 fwd_kwargs={**kwargs, "compute_metrics": True, "mode": "evaluate"},
             )
 
         # Run a forward pass using all sections, pre-compute the retriever log_probs and
         with torch.no_grad():
+            # TODO: eval mode?
             full_output = fwd_fn(
                 batch,
                 **{**kwargs, "compute_metrics": True, "mode": "evaluate", "filter_output": False},
@@ -273,29 +279,28 @@ class KlDivGradients(Gradients):
                     "section.faiss",
                     "section.pre_targets",
                     "section.pre_logits",
-                    "hd",
                 ],
             )
         ):
-            is_last_chunk = j == n_sections // eff_chunk_size
             # Encode the chunk of sections along with the questions
             # NB: the algoerithm could be made more efficient by pre-computing the question encodings
             #     and only computing the section encodings for each chunk. Nevertheless, this requires retaining
             #     the gradient graph, and this one would grow with the number of chunks. This is why we recompute
             #     the question encodings for each chunk.
             batch_chunk = {**question_batch, **section_chunk}
+            is_last_chunk = j == n_chunks - 1
             super().forward_backward(
                 batch_chunk,
                 fwd_fn=fwd_fn,
                 fabric=fabric,
                 loss_scaler=loss_scaler,
-                no_backward_sync=not is_last_chunk,
-                fwd_kwargs={**kwargs, "compute_metrics": False},
+                no_backward_sync=no_backward_sync or not is_last_chunk,
+                fwd_kwargs={**kwargs, "compute_metrics": False, "mode": "evaluate", "filter_output": False},
+                skip_diagnostics=True,
             )
 
-        # Filter the output
-        full_output = {k: v for k, v in full_output.items() if not k.startswith("_")}
-        return full_output
+        # Filter the output & return
+        return {k: v for k, v in full_output.items() if not k.startswith("_")}
 
 
 def _iter_chunks(
@@ -310,7 +315,7 @@ def _iter_chunks(
     constants = {k: batch[k] for k in pass_through}
     batch = {k: v for k, v in batch.items() if k not in pass_through}
 
-    # infer the number of documents
+    # Infer the number of documents
     ref_input_ids = batch[ref_key]
     if ref_input_ids.ndim == 3:  # noqa: PLR2004
         n_doc = ref_input_ids.shape[1]
@@ -321,7 +326,7 @@ def _iter_chunks(
     else:
         raise ValueError(f"Invalid `{ref_input_ids}` shape: `{ref_input_ids.shape}`")
 
-    # iterate over the chunks
+    # Iterate over and yield the chunks
     for i in range(0, n_doc, chunk_size):
         chunk = copy.copy(constants)
         for key, value in batch.items():

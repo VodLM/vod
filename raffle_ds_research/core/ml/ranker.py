@@ -9,6 +9,7 @@ from datasets.fingerprint import Hasher, hashregister
 from hydra.utils import instantiate
 from loguru import logger
 from omegaconf import DictConfig
+from transformers import pytorch_utils, trainer_pt_utils  # type: ignore
 
 from raffle_ds_research.core.ml.gradients import Gradients
 from raffle_ds_research.core.ml.monitor import RetrievalMonitor
@@ -70,9 +71,35 @@ class Ranker(torch.nn.Module):
 
     def get_optimizer(self, module: Optional[torch.nn.Module] = None) -> torch.optim.Optimizer:
         """Configure the optimizer and the learning rate scheduler."""
-        if module is None:
-            module = self
-        return self.optimizer_cls(module.parameters())
+        opt_model = module or self
+
+        # Fetch the weight decay from the optimizer
+        if isinstance(self.optimizer_cls, functools.partial):
+            weight_decay = self.optimizer_cls.keywords.get("weight_decay", None)
+        else:
+            weight_decay = None
+
+        # If no weight_decay is provided, instantiate the optimizer directly
+        if weight_decay is None:
+            return self.optimizer_cls(opt_model.parameters())
+
+        # Instantiate the optimizer à la HuggingFace
+        # https://github.com/huggingface/transformers/blob/fe861e578f50dc9c06de33cd361d2f625017e624/src/transformers/trainer.py#L1075C15-L1075C15
+        decay_parameters = trainer_pt_utils.get_parameter_names(opt_model, pytorch_utils.ALL_LAYERNORM_LAYERS)
+        decay_parameters = [name for name in decay_parameters if "bias" not in name]
+        optimizer_grouped_parameters = [
+            {
+                "params": [p for n, p in opt_model.named_parameters() if (n in decay_parameters and p.requires_grad)],
+                "weight_decay": weight_decay,
+            },
+            {
+                "params": [
+                    p for n, p in opt_model.named_parameters() if (n not in decay_parameters and p.requires_grad)
+                ],
+                "weight_decay": 0.0,
+            },
+        ]
+        return self.optimizer_cls(optimizer_grouped_parameters)
 
     def get_scheduler(self, optimizer: torch.optim.Optimizer) -> None | torch.optim.lr_scheduler._LRScheduler:
         """Init the learning rate scheduler."""
@@ -132,7 +159,7 @@ class Ranker(torch.nn.Module):
         compute_metrics: bool = True,
         **kwargs: Any,
     ) -> dict[str, Any]:  # noqa: ARG002
-        """Run a forward pass and return the output."""
+        """Run a forward pass, compute the gradients, compute & return the metrics."""
         fwd_output = self.forward(batch)
         grad_output = self.gradients({**batch, **fwd_output})
         if compute_metrics:

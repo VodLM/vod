@@ -19,6 +19,7 @@ class TransformerEncoderConfig(pydantic.BaseModel):
     vector_size: Optional[int] = None
     cls_name: str = "AutoModel"
     agg: Literal["mean", "max", "cls"] = "mean"
+    model_config: Optional[dict] = None
 
 
 def _mean_agg(x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:  # noqa: ARG001
@@ -46,6 +47,7 @@ class TransformerEncoder(nn.Module, interfaces.ProtocolEncoder):
     def __init__(
         self,
         model_name: str,
+        model_config: Optional[dict] = None,
         vector_size: Optional[int] = None,
         cls_name: str = "AutoModel",
         agg: Literal["mean", "max", "cls"] = "mean",
@@ -53,10 +55,14 @@ class TransformerEncoder(nn.Module, interfaces.ProtocolEncoder):
     ):
         super().__init__()
         self.config = TransformerEncoderConfig(
-            model_name=model_name, vector_size=vector_size, cls_name=cls_name, agg=agg
+            model_name=model_name,
+            model_config=model_config,
+            vector_size=vector_size,
+            cls_name=cls_name,
+            agg=agg,
         )
         cls = getattr(transformers, cls_name)
-        self.backbone = cls.from_pretrained(model_name, cache_dir=cache_dir)
+        self.backbone = cls.from_pretrained(model_name, cache_dir=cache_dir, **(model_config or {}))
         if self.backbone.config.hidden_size is None:
             raise ValueError("`hidden_size` could not be inferred from the model config.")
 

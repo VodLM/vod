@@ -2,5 +2,7 @@ defaults:
   - bert-base
   - _self_
 model_name: t5-base
+model_config:
+  dropout_rate: 0.1
 cls_name: T5EncoderModel
 agg: mean

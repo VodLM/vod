@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import functools
 import numbers
 from numbers import Number
@@ -273,7 +274,7 @@ def _safe_yaml(section: str) -> str:
     return section
 
 
-def pprint_retrieval_batch(
+def pprint_retrieval_batch(  # noqa: C901
     batch: dict[str, Any],
     idx: Optional[list[int]] = None,  # noqa: ARG
     *,
@@ -302,12 +303,33 @@ def pprint_retrieval_batch(
     question_keys = [f"question.{key}" for key in question_keys]
     section_keys = ["id", "answer_id", "kb_id", "score", "label", "language", "group_hash"]
     section_keys = [f"section.{key}" for key in section_keys]
+    need_expansion = [
+        "section.input_ids",
+        "section.attention_mask",
+        "section.token_type_ids",
+        "section.idx",
+        "section.id",
+        "section.answer_id",
+        "section.kb_id",
+        "section.group_hash",
+    ]
 
-    # get the data
+    # Fetch the questions
+    batch = copy.copy(batch)  # noqa: F821
     question_input_ids = batch["question.input_ids"]
+
+    # Fetch and expand section attributes if needed
+    if batch["section.input_ids"].ndim == 2:  # noqa: PLR2004
+        for k, v in batch.items():
+            if k in need_expansion:
+                batch[k] = v[None, :].expand(len(question_input_ids), *(-1 for _ in v.shape))
+    elif batch["section.input_ids"].ndim == 3:  # noqa: PLR2004
+        ...
+    else:
+        raise ValueError(
+            f"Section input ids should be a 2D or 3D tensor. Found shape: `{batch['section.input_ids'].shape}`"
+        )
     section_input_ids = batch["section.input_ids"]
-    if section_input_ids.ndim == 1:
-        section_input_ids = section_input_ids[None, :].expand(len(question_input_ids), -1)
 
     for i, q_ids in enumerate(question_input_ids):
         question = tokenizer.decode(q_ids, **kwargs)

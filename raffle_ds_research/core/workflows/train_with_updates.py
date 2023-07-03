@@ -218,10 +218,11 @@ def _on_first_batch_fn(
 ) -> None:
     if fabric.is_global_zero:
         pipes.pprint_batch(batch, header="Training batch")
-        try:
-            pipes.pprint_retrieval_batch(batch, tokenizer=tokenizer)
-        except Exception as ex:
-            logger.warning(f"Failed to print retrieval batch: {ex}")
+        pipes.pprint_retrieval_batch(batch, tokenizer=tokenizer)
+        # try:
+        #    pipes.pprint_retrieval_batch(batch, tokenizer=tokenizer)
+        # except Exception as ex:
+        #     logger.warning(f"Failed to print retrieval batch: {ex}")
 
     if torch_compile:
         torch._dynamo.explain(ranker.training_step, batch)
