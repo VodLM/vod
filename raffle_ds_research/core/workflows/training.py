@@ -60,7 +60,7 @@ def index_and_train(
     serve_on_gpu: bool = False,
     checkpoint_path: typing.Optional[str] = None,
     on_first_batch_fn: typing.Optional[typing.Callable[[L.Fabric, dict[str, torch.Tensor], Ranker], None]] = None,
-    pbar_keys: typing.Optional[typing.Iterable[str]] = None,
+    pbar_keys: typing.Optional[list[str]] = None,
 ) -> support.TrainerState:
     """Index the sections and train the ranker."""
     barrier_fn = functools.partial(support._barrier_fn, fabric=fabric)
@@ -162,7 +162,8 @@ def _training_loop(  # noqa: C901
     optimizer.zero_grad()
     ranker.train()
 
-    rich.print(trainer_state)
+    if fabric.is_global_zero:
+        rich.print(trainer_state)
 
     # infer the number of training and valid steps
     n_train_steps, n_val_steps = _infer_num_steps(trainer_state, fabric, val_dl)
@@ -187,13 +188,13 @@ def _training_loop(  # noqa: C901
 
                 # Forward pass
                 is_accumulating = (1 + local_step) % trainer_state.accumulate_grad_batches != 0
-                with fabric.no_backward_sync(ranker, enabled=is_accumulating):  # type: ignore
-                    step_metrics = ranker(
-                        batch=batch,
-                        mode="forward_backward",
-                        backward_fn=fabric.backward,
-                        loss_scaler=1 / trainer_state.accumulate_grad_batches,
-                    )
+                step_metrics = ranker.gradients.forward_backward(
+                    batch=batch,
+                    fwd_fn=ranker,
+                    fabric=fabric,
+                    loss_scaler=1 / trainer_state.accumulate_grad_batches,
+                    no_backward_sync=is_accumulating,
+                )
 
                 # Log the training metrics
                 if trainer_state.step % trainer_state.log_interval == 0:

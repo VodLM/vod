@@ -258,8 +258,11 @@ def _run_benchmarks(
                 cache_dir=cache_dir,
                 parameters=parameters,
                 serve_on_gpu=True,
-                logdir=logdir,
                 n_max=config.trainer.n_max_benchmark,
+                to_disk_config=evaluation.ToDiskConfig(
+                    logdir=logdir,
+                    tokenizer=config.dataset.tokenizer,
+                ),
             )
             if metrics is not None:
                 header = f"{dset.name}:{dset.split_alias} - Period {state.period + 1}"

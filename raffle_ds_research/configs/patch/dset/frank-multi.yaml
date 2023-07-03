@@ -6,18 +6,23 @@ defaults:
 
 dataset:
   train:
+    # English
     - frank.A.en-pos:train
     - squad.en:train
     - squad.en:val
+    # Danish
     - frank.A.da-pos:train
     - squad.da:train
     - squad.da:val
+    # German
     - frank.A.de-pos:train
     - squad.de:train
     - squad.de:val
+    # French
     - frank.A.fr-pos:train
     - squad.fr:train
     - squad.fr:val
+    # Icelandic
     - frank.A.is-pos:train
     - squad.is:train
     - squad.is:val
@@ -28,13 +33,16 @@ dataset:
     - frank.A.fr-pos:val
     - frank.A.is-pos:val
   benchmark:
+    # Frank A
     - frank.A.en:val
     - frank.A.da:val
+    # Frank B
     - frank.B.en:val
     - frank.B.da:val
     - frank.B.de:val
     - frank.B.fr:val
     - frank.B.is:val
+
 
 benchmark_search:
   faiss:
@@ -48,7 +56,8 @@ search:
     nprobe: 32
 
 trainer:
-  max_steps: 100_000
+  max_steps: 200_000
   period: 20_000
   val_check_interval: 500
+  log_interval: 20
   n_max_eval: 5_000

@@ -33,7 +33,18 @@ class DatasetLoaderConfig(pydantic.BaseModel):
 
     name: str
     subset_name: Optional[str]
-    language: Literal["en", "da", "fr", "de", "es", "it", "pt", "sv", "fi", "nl", "ru", "ar", "tr", "zh", "ja", "ko"]
+    language: Literal[  # Supported languages
+        "da",
+        "de",
+        "en",
+        "fi",
+        "fr",
+        "is",
+        "it",
+        "nl",
+        "pl",
+        "sv",
+    ]
     options: DatasetConfigOptions
 
     @pydantic.validator("options", pre=True)

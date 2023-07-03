@@ -184,23 +184,34 @@ class RetrievalCollate(pipes.Collate):
                 padding="max_length",
             )
 
+        # get question/section attributes
+        attributes = self._get_attributes(
+            batch,
+            flat_sections_content,
+            sections_shape=sections.indices.shape,
+        )
+
+        # Debugging: proportion of in-domain sections (same group hash)
+        q_group_hash = attributes["question.group_hash"][:, None]
+        s_group_hash = attributes["section.group_hash"]
+        if s_group_hash.ndim == 1:
+            s_group_hash = s_group_hash[None, :]
+        in_domain_prop = (q_group_hash == s_group_hash).float().mean(dim=-1).mean().item()
+        diagnostics["diagnostics.in_domain_prop"] = in_domain_prop
+
         # build the batch
         diagnostics["diagnostics.collate_time"] = time.perf_counter() - start_time
         batch = {
             **tokenized_question,
             **tokenized_sections,
             **_sampled_sections_to_dict(sections, prefix="section.", as_torch=True),
-            **self._get_extras(
-                batch,
-                flat_sections_content,
-                sections_shape=sections.indices.shape,
-            ),
+            **attributes,
             **diagnostics,
         }
 
         return batch
 
-    def _get_extras(
+    def _get_attributes(
         self,
         batch: dict[str, Any],
         flat_sections_content: dict[str, Any],

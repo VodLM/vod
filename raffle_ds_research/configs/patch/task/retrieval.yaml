@@ -61,13 +61,13 @@ trainer:
       mode: linear
       start: 0
       value: 1
-      period: ${int_mul:5,${trainer.period}}
+      period: ${trainer.max_steps}
 
     bm25:
       mode: linear
       start: 1
-      value: 0.1
-      period: ${int_mul:5,${trainer.period}}
+      value: 0.5 # TODO: tune this
+      period: ${trainer.max_steps}
 
 collates:
   # Defines the configurations for `dataset_builder.HfBuilder._collate_config`

@@ -11,13 +11,19 @@ benchmark_search:
   faiss:
     factory: Flat
 
+model:
+  gradients:
+    section_chunk_size: 4
+
 trainer:
   max_steps: 1000
   period: 300
   val_check_interval: 5
   n_max_eval: 100
+  n_max_benchmark: 100
+  benchmark_on_init: false
   parameters:
-    bm25: -1
+    faiss: -1
 
 dataset:
   subset_size: 1_000
@@ -26,9 +32,6 @@ dataset:
   validation: frank.A.en-pos:val
   benchmark:
     - frank.A.en-pos:val
-
-schedule:
-  benchmark_on_init: false
 
 batch_size:
   per_device: 2

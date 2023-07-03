@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import collections
+import dataclasses
 import json
 import pathlib
 from typing import Any, Iterable, Optional
 
 import numpy as np
 import torch
+import transformers
 from lightning.pytorch import utilities as pl_utils
 from loguru import logger
 
@@ -19,6 +21,14 @@ from raffle_ds_research.tools.utils.progress import IterProgressBar
 from raffle_ds_research.utils.config import flatten_dict
 
 _DEFAULT_OUTPUT_KEYS = ["faiss", "bm25", "score"]
+
+
+@dataclasses.dataclass(frozen=True)
+class ToDiskConfig:
+    """Configuration saving benchmark outputs to disk."""
+
+    logdir: pathlib.Path
+    tokenizer: transformers.PreTrainedTokenizer | transformers.PreTrainedTokenizerFast
 
 
 @torch.no_grad()
@@ -35,8 +45,8 @@ def benchmark(
     parameters: Optional[dict[str, float]] = None,
     output_keys: Optional[list[str]] = None,
     serve_on_gpu: bool = True,
-    logdir: Optional[pathlib.Path] = None,
     n_max: Optional[int] = None,
+    to_disk_config: Optional[ToDiskConfig] = None,
 ) -> dict[str, float]:
     """Run benchmarks on a retrieval task."""
     with search_engine.build_search_engine(
@@ -87,10 +97,10 @@ def benchmark(
                     break
 
                 # log the batch
-                if logdir is not None:
-                    logfile = pathlib.Path(logdir, f"batch_{i:05d}.json")
+                if to_disk_config is not None:
+                    logfile = pathlib.Path(to_disk_config.logdir, f"batch_{i:05d}.json")
                     with logfile.open("w") as f:
-                        f.write(_safe_json_dumps(batch, indent=2))
+                        f.write(_safe_json_dumps_batch(batch, tokenizer=to_disk_config.tokenizer, indent=2))
 
                 # gather diagnostics
                 diagnostics["n_sections"].append(batch["section.score"].shape[-1])
@@ -114,16 +124,54 @@ def benchmark(
         return flatten_dict(metrics, sep="/")
 
 
-def _safe_json_cast(value: Any) -> str | int | list | dict:  # noqa: ANN401
+def _safe_json_dumps_batch(
+    batch: dict[str, Any],
+    *,
+    tokenizer: transformers.PreTrainedTokenizer | transformers.PreTrainedTokenizerFast,
+    **kwargs,  # noqa: ANN003
+) -> str:
+    """Cast a value to a JSON-safe type and serialize it."""
+    try:
+        return json.dumps(
+            {
+                k: _safe_json_cast(
+                    v,
+                    key=k,
+                    tokenizer=tokenizer,
+                )
+                for k, v in batch.items()
+                if not k.endswith(".attention_mask")
+            },
+            **kwargs,
+        )
+    except Exception as e:
+        logger.error(f"Failed to serialize batch: {e}")
+        return json.dumps({"error": str(e)})
+
+
+def _safe_json_cast(
+    value: Any,  # noqa: ANN401
+    key: str,
+    tokenizer: transformers.PreTrainedTokenizer | transformers.PreTrainedTokenizerFast,
+) -> str | int | list | dict:  # noqa: ANN401
     """Cast a value to a JSON-safe type."""
+    if key.endswith(".input_ids"):
+        if not isinstance(value, (torch.Tensor, np.ndarray)):
+            raise TypeError(f"Expected a tensor, got {type(value)}")
+        if isinstance(value, torch.Tensor):
+            value = value.cpu().detach().numpy()
+        if value.ndim == 3:  # noqa: PLR2004
+            return [tokenizer.batch_decode(v, skip_special_tokens=True) for v in value]
+        if value.ndim == 2:  # noqa: PLR2004
+            return tokenizer.batch_decode(value, skip_special_tokens=True)
+        if value.ndim == 1:
+            return tokenizer.decode(value, skip_special_tokens=True)
+
+        raise ValueError(f"Expected a tensor of rank 1, 2 or 3, got {value.ndim}")
+
     if isinstance(value, torch.Tensor):
         return value.cpu().detach().numpy().tolist()
     if isinstance(value, np.ndarray):
         return value.tolist()
 
     return value
-
-
-def _safe_json_dumps(batch: dict[str, Any], **kwargs) -> str:  # noqa: ANN003
-    """Cast a value to a JSON-safe type and serialize it."""
-    return json.dumps({k: _safe_json_cast(v) for k, v in batch.items()}, **kwargs)

@@ -1,6 +1,7 @@
 _target_: raffle_ds_research.core.config.TrainerConfig
 max_steps: 1_000_000
 val_check_interval: 500
+log_interval: 10
 period: 3000
 gradient_clip_val: 1.0
 benchmark_on_init: false

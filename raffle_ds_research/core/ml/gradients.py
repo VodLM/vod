@@ -6,17 +6,20 @@ import copy
 import math
 from typing import Any, Callable, Iterable, Optional
 
+import lightning as L
 import pydantic
 import torch
 import torch.nn
 from torch.distributions import Categorical
 
+from raffle_ds_research.tools import pipes
 
-class Gradients(torch.nn.Module):
-    """Base class for the gradients layer.s."""
+
+class Gradients:
+    """Base class for the gradients layer. The gradients layer is a pure function."""
 
     @abc.abstractmethod
-    def forward(self, intermediate_results: dict) -> dict:
+    def __call__(self, intermediate_results: dict) -> dict:
         """Compute the gradients/loss."""
         raise NotImplementedError
 
@@ -24,14 +27,16 @@ class Gradients(torch.nn.Module):
         self,
         batch: dict[str, torch.Tensor],
         fwd_fn: None | Callable[[dict], dict],
-        backward_fn: Optional[Callable[[torch.Tensor], None]] = None,
+        fabric: None | L.Fabric = None,
         loss_scaler: Optional[float] = None,
         backward_kwargs: Optional[dict] = None,
-        **kwargs: Any,
+        no_backward_sync: bool = False,
+        fwd_kwargs: None | dict = None,
     ) -> dict[str, torch.Tensor]:
         """Run a forward pass with a backward pass."""
-        fwd_output = fwd_fn(batch, **kwargs) if fwd_fn is not None else {}
-        grad_output = self({**batch, **fwd_output}, **kwargs)
+        fwd_kwargs = fwd_kwargs or {}
+        fwd_output = fwd_fn(batch, **fwd_kwargs) if fwd_fn is not None else {}
+        grad_output = self({**batch, **fwd_output}, **fwd_kwargs)
 
         # compute the loss
         loss = grad_output["loss"]
@@ -40,10 +45,11 @@ class Gradients(torch.nn.Module):
 
         # backward pass
         backward_kwargs = backward_kwargs or {}
-        if backward_fn is None:
+        if fabric is None:
             loss.backward(**backward_kwargs)
         else:
-            backward_fn(loss, **backward_kwargs)
+            with fabric.no_backward_sync(fwd_fn, enabled=no_backward_sync):  # type: ignore
+                fabric.backward(loss, **backward_kwargs)
 
         return grad_output
 
@@ -91,6 +97,10 @@ class GradientInputs(pydantic.BaseModel):
         description="Precomputed total number of positive documents.",
         alias="section.pre_n_positive",
     )
+
+    def pprint(self, **kwargs: Any) -> None:
+        """Pretty print the inputs."""
+        pipes.pprint_batch({k: v for k, v in self.dict().items() if v is not None}, **kwargs)
 
 
 class SelfSupervisedGradients(Gradients):
@@ -140,7 +150,7 @@ class KlDivGradients(Gradients):
         self.self_supervision_weight = self_supervision_weight
         self.section_chunk_size = section_chunk_size
 
-    def forward(
+    def __call__(
         self, inputs: dict[str, torch.Tensor], skip_diagnostics: bool = False, **kwargs: Any
     ) -> dict[str, torch.Tensor]:
         """Parse the inputs and compute the loss."""
@@ -199,7 +209,7 @@ class KlDivGradients(Gradients):
         self,
         batch: dict[str, torch.Tensor],
         fwd_fn: Callable[[dict], dict],
-        backward_fn: Callable[[torch.Tensor], None] | None = None,
+        fabric: None | L.Fabric = None,
         loss_scaler: float | None = None,
         **kwargs: Any,
     ) -> dict[str, torch.Tensor]:
@@ -208,9 +218,9 @@ class KlDivGradients(Gradients):
             return super().forward_backward(
                 batch,
                 fwd_fn=fwd_fn,
-                backward_fn=backward_fn,
+                fabric=fabric,
                 loss_scaler=loss_scaler,
-                **kwargs,
+                fwd_kwargs={**kwargs, "compute_metrics": True, "mode": "evaluate"},
             )
 
         # Gather the section/question attributes
@@ -232,62 +242,59 @@ class KlDivGradients(Gradients):
             return super().forward_backward(
                 batch,
                 fwd_fn=fwd_fn,
-                backward_fn=backward_fn,
+                fabric=fabric,
                 loss_scaler=loss_scaler,
-                **kwargs,
+                fwd_kwargs={**kwargs, "compute_metrics": True, "mode": "evaluate"},
             )
-        # Encode the questions and sections - without gradients
-        with torch.no_grad():
-            encodings = fwd_fn(batch, **kwargs)
 
-        # Run a forward pass using all sections, pre-compute the retriever log_probs
+        # Run a forward pass using all sections, pre-compute the retriever log_probs and
         with torch.no_grad():
-            full_output = self({**batch, **encodings})
+            full_output = fwd_fn(
+                batch,
+                **{**kwargs, "compute_metrics": True, "mode": "evaluate", "filter_output": False},
+            )
             precomputed = {f"section.pre{k}": full_output[k] for k in full_output if k.startswith("_")}
 
         # Compute the forward/backward pass for each chunk of sections
         batch_sections = {**{k: v for k, v in batch.items() if k.startswith("section.")}, **precomputed}
         question_batch = {k: v for k, v in batch.items() if k.startswith("question.")}
-        for section_chunk in _iter_chunks(
-            batch_sections,
-            chunk_size=eff_chunk_size,
-            ref_key="section.input_ids",
-            pass_through=[  # don't chunk these
-                "section.pre_n_positive",
-            ],
-            always_batched=[  # always consider these as batched
-                "section.label",
-                "section.score",
-                "section.bm25",
-                "section.faiss",
-                "section.pre_targets",
-                "section.pre_logits",
-                "hd",
-            ],
+        for j, section_chunk in enumerate(
+            _iter_chunks(
+                batch_sections,
+                chunk_size=eff_chunk_size,
+                ref_key="section.input_ids",
+                pass_through=[  # don't chunk these
+                    "section.pre_n_positive",
+                ],
+                always_batched=[  # always consider these as batched
+                    "section.label",
+                    "section.score",
+                    "section.bm25",
+                    "section.faiss",
+                    "section.pre_targets",
+                    "section.pre_logits",
+                    "hd",
+                ],
+            )
         ):
-            # Encode the chunk of sections with the questions
+            is_last_chunk = j == n_sections // eff_chunk_size
+            # Encode the chunk of sections along with the questions
             # NB: the algoerithm could be made more efficient by pre-computing the question encodings
             #     and only computing the section encodings for each chunk. Nevertheless, this requires retaining
             #     the gradient graph, and this one would grow with the number of chunks. This is why we recompute
             #     the question encodings for each chunk.
             batch_chunk = {**question_batch, **section_chunk}
-            chunk_encodings = fwd_fn(batch_chunk, **kwargs)
-
-            # Evaluate the gradients and backard for the chunk
-            section_chunk_batch = {
-                **batch_chunk,
-                **chunk_encodings,
-            }
-
             super().forward_backward(
-                section_chunk_batch,
-                fwd_fn=None,
-                backward_fn=backward_fn,
+                batch_chunk,
+                fwd_fn=fwd_fn,
+                fabric=fabric,
                 loss_scaler=loss_scaler,
-                skip_diagnostics=True,
-                **kwargs,
+                no_backward_sync=not is_last_chunk,
+                fwd_kwargs={**kwargs, "compute_metrics": False},
             )
 
+        # Filter the output
+        full_output = {k: v for k, v in full_output.items() if not k.startswith("_")}
         return full_output
 
 

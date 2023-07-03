@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import copy
 import functools
-from typing import Any, Callable, Optional, Union
+from typing import Any, Optional, Union
 
 import torch
 from datasets.fingerprint import Hasher, hashregister
@@ -121,8 +121,6 @@ class Ranker(torch.nn.Module):
             return self.encode(batch, **kwargs)
         if mode == "evaluate":
             return self.evaluate(batch, **kwargs)
-        if mode == "forward_backward":
-            return self.forward_backward(batch, **kwargs)
 
         raise ValueError(f"Unknown mode {mode}.")
 
@@ -131,14 +129,17 @@ class Ranker(torch.nn.Module):
         batch: dict[str, Any],
         *,
         filter_output: bool = True,
+        compute_metrics: bool = True,
         **kwargs: Any,
     ) -> dict[str, Any]:  # noqa: ARG002
         """Run a forward pass and return the output."""
         fwd_output = self.forward(batch)
         grad_output = self.gradients({**batch, **fwd_output})
-        return self._process_output(batch, grad_output, filter_output=filter_output)
+        if compute_metrics:
+            return self._compute_metrics(batch, grad_output, filter_output=filter_output)
+        return grad_output
 
-    def _process_output(
+    def _compute_metrics(
         self,
         batch: dict[str, torch.Tensor],
         grad_output: dict[str, torch.Tensor],
@@ -154,24 +155,6 @@ class Ranker(torch.nn.Module):
             output = _filter_model_output(output)  # type: ignore
         output.update({k: v for k, v in batch.items() if k.startswith("diagnostics.")})
         return output
-
-    def forward_backward(
-        self,
-        batch: dict,
-        loss_scaler: Optional[float] = None,
-        backward_fn: Optional[Callable[[torch.Tensor], None]] = None,
-        filter_output: bool = True,
-        **kwargs: Any,
-    ) -> dict[str, torch.Tensor]:
-        """Run a forward pass with a backward pass."""
-        grad_output = self.gradients.forward_backward(
-            batch,
-            fwd_fn=self.__call__,
-            backward_fn=backward_fn,
-            loss_scaler=loss_scaler,
-            **kwargs,
-        )
-        return self._process_output(batch, grad_output, filter_output=filter_output)
 
 
 def _filter_model_output(output: dict[str, Any]) -> dict[str, Any]:

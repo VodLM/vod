@@ -143,6 +143,8 @@ def load_raffle_squad(
     cache_dir: Optional[Union[str, pathlib.Path]] = None,
     keep_in_memory: Optional[bool] = None,
     invalidate_cache: bool = False,
+    subset_name: Optional[str] = None,  # noqa: ARG001
+    only_positive_sections: Optional[bool] = None,  # noqa: ARG001
 ) -> RaffleSquad:
     """Load the Frank dataset."""
     if cache_dir is None:

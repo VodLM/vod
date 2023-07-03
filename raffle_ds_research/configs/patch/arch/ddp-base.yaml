@@ -14,8 +14,12 @@ resources:
   omp_threads: ${int_div:${n_cpus:},2}
 
 model:
+  optimizer:
+      lr: 1e-4
+      weight_decay: 0
+      eps: 1e-8
   gradients:
-    section_chunk_size: null
+    section_chunk_size: 24
   compile_encoder: true
   compile_kwargs:
     dynamic: false
@@ -23,15 +27,15 @@ model:
 
 batch_size:
   effective: 32
-  per_device: 4
-  per_device_eval: 16
+  per_device: 8
+  per_device_eval: 8
   per_device_predict: 1024
 
 collates:
   train:
-    n_sections: 48
-    max_pos_sections: 12
-    prefetch_n_sections: 64
+    n_sections: 96
+    max_pos_sections: 24
+    prefetch_n_sections: 128
 
 fabric:
   precision: bf16-mixed
