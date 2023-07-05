@@ -4,6 +4,7 @@ import pathlib
 from typing import Literal, Optional
 
 import pydantic
+import rich
 import torch
 import transformers
 from torch import nn
@@ -41,6 +42,25 @@ AGGREGATOR_FNS = {
 }
 
 
+def _translate_config(model_name: str, config: None | dict) -> dict:
+    """Translate the config to a format that transformers can understand."""
+    if config is None:
+        return {}
+
+    config = config.copy()
+    if "bert" in model_name and "dropout" in config:
+        dropout_prob = config.pop("dropout")
+        config["hidden_dropout_prob"] = dropout_prob
+        config["attention_probs_dropout_prob"] = dropout_prob
+        return config
+
+    if "t5" in model_name and "dropout" in config:
+        dropout_prob = config.pop("dropout")
+        config["dropout_rate"] = dropout_prob
+
+    return config
+
+
 class TransformerEncoder(nn.Module, interfaces.ProtocolEncoder):
     """A transformer encoder."""
 
@@ -62,7 +82,13 @@ class TransformerEncoder(nn.Module, interfaces.ProtocolEncoder):
             agg=agg,
         )
         cls = getattr(transformers, cls_name)
-        self.backbone = cls.from_pretrained(model_name, cache_dir=cache_dir, **(model_config or {}))
+        cfg = _translate_config(model_name, model_config)
+        rich.print(cfg)
+        self.backbone = cls.from_pretrained(
+            model_name,
+            cache_dir=cache_dir,
+            **cfg,
+        )
         if self.backbone.config.hidden_size is None:
             raise ValueError("`hidden_size` could not be inferred from the model config.")
 

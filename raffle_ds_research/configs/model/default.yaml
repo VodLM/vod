@@ -2,7 +2,7 @@ defaults:
   - encoder: bert-tiny
   - gradients: kl_div
   - optimizer: adamw # todo: lion
-  - scheduler: cycle
+  - scheduler: linear
   - monitor: retrieval
   - _self_
 

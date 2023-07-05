@@ -1,5 +1,6 @@
 _target_: raffle_ds_research.core.ml.TransformerEncoder
 cls_name: BertModel
 model_name: bert-base-uncased
+model_config: {}
 vector_size: null
 agg: cls

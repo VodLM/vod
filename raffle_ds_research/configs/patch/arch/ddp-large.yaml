@@ -1,12 +1,14 @@
 # @package _global_
 
-# This config is for 4xA100 GPUs (40GB)
+# This config is for >=4xA100 GPUs (40GB)
 
 defaults:
   - ddp-base
   # HF transformer model name
   - override /model/encoder: bert-large
 
-model:
-  gradients:
-    section_chunk_size: 6
+batch_size:
+  effective: 32
+  per_device: 4
+  per_device_eval: 8
+  per_device_predict: 512

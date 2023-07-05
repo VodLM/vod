@@ -1,0 +1,4 @@
+defaults:
+  - t5-base
+  - _self_
+model_name: google/umt5-small

@@ -5,7 +5,9 @@
 defaults:
   # HF transformer model name
   - override /model/encoder: bert-base
-  # Strategy
+  # LR scheduler
+  - override /model/scheduler: linear
+  # Fabric Strategy
   - override /fabric/strategy: ddp
 
 resources:
@@ -16,13 +18,13 @@ resources:
 model:
   encoder:
     model_config:
-      dropout_rate: 0 # default: 0.1
+      dropout: 0 # default: 0.1 - doesn't work well with gradient
   optimizer:
-    lr: 1e-4
+    lr: 3e-5
     weight_decay: 1e-3
     eps: 1e-8
   gradients:
-    section_chunk_size: 24
+    section_chunk_size: null
   compile_encoder: true
   compile_kwargs:
     dynamic: false
@@ -31,14 +33,15 @@ model:
 batch_size:
   effective: 32
   per_device: 8
-  per_device_eval: 8
+  per_device_eval: 16
   per_device_predict: 1024
 
 collates:
   train:
-    n_sections: 96
-    max_pos_sections: 24
+    n_sections: 24
+    max_pos_sections: 8
     prefetch_n_sections: 128
+    do_sample: true
 
 fabric:
   precision: bf16-mixed
