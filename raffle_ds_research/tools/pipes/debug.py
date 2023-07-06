@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import copy
 import functools
+import math
 import numbers
+import pathlib
 from numbers import Number
 from typing import Any, Iterable, Optional
 
@@ -282,6 +284,7 @@ def pprint_retrieval_batch(  # noqa: C901
     header: str = "Supervised retrieval batch",
     max_sections: Optional[int] = 10,
     console: Optional[rich.console.Console] = None,
+    output_file: Optional[str | pathlib.Path] = None,
     **kwargs: Any,
 ) -> dict:
     """Pretty print a batch of data for supervised retrieval."""
@@ -340,7 +343,16 @@ def pprint_retrieval_batch(  # noqa: C901
         question_data_str = yaml.dump(question_data, sort_keys=False)
         question_node = rich.syntax.Syntax(question_data_str, "yaml", indent_guides=False, word_wrap=True)
         question_tree = rich.tree.Tree(question_node, guide_style="dim")
-        for j in range(len(section_input_ids[i])):
+
+        # sort the questions by positive label (first), then higher score (second)
+        _indices_i = range(len(batch["section.label"][i]))
+        _labels_i = [float(x) for x in batch["section.label"][i]]
+        _scores_i = [-math.inf if math.isnan(x) else x for x in batch["section.score"][i]]
+        section_sort_ids = [
+            i for i, _, _ in sorted(zip(_indices_i, _labels_i, _scores_i), key=lambda x: (x[1], x[2]), reverse=True)
+        ]
+
+        for j in section_sort_ids:
             section = tokenizer.decode(section_input_ids[i][j], **kwargs)
             section_data = {
                 **{str(key): _format(batch[key][i][j]) for key in section_keys if key in batch},  # type: ignore
@@ -355,6 +367,10 @@ def pprint_retrieval_batch(  # noqa: C901
                 break
 
         tree.add(question_tree)
+
+    if output_file is not None:
+        with pathlib.Path(output_file).open("w") as f:
+            rich.print(tree, file=f)
 
     console.print(tree)
 

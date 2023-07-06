@@ -7,6 +7,7 @@ import functools
 import os
 import pathlib
 import typing
+from multiprocessing.managers import DictProxy
 from typing import Any, Callable, Optional, Protocol, TypeVar
 
 import datasets
@@ -49,7 +50,7 @@ def none_ok(func: Callable[..., T]) -> Callable[..., Optional[T]]:
 maybe_as_lazy_array = none_ok(dstruct.as_lazy_array)
 
 
-def is_engine_enabled(parameters: Optional[dict[str, float]], engine: str) -> bool:
+def is_engine_enabled(parameters: Optional[dict | DictProxy], engine: str) -> bool:
     """Check if an engine is enabled."""
     if parameters is None:
         return True
@@ -100,7 +101,7 @@ def instantiate_retrieval_dataloader(
     search_client: index_tools.MultiSearchClient,
     collate_config: core_config.RetrievalCollateConfig,
     dataloader_config: core_config.DataLoaderConfig,
-    parameters: Optional[dict[str, float]],
+    parameters: Optional[dict | DictProxy],
     cache_dir: pathlib.Path,
     barrier_fn: Callable[[str], None],
     rank: int = 0,

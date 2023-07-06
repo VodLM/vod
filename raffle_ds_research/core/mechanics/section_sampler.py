@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import copy
 import dataclasses
+import warnings
 from typing import Optional
 
 import numpy as np
-import rich
 
 from raffle_ds_research.core.mechanics.utils import fill_nans_with_min, numpy_gumbel_like, numpy_log_softmax
 from raffle_ds_research.tools import c_tools, index_tools
@@ -30,6 +30,7 @@ def sample_sections(
     do_sample: bool = False,
     other_scores: Optional[dict[str, np.ndarray]] = None,
     lookup_positive_scores: bool = True,
+    max_support_size: Optional[int] = None,
 ) -> SampledSections:
     """Sample the positive and negative sections.
 
@@ -62,7 +63,11 @@ def sample_sections(
         positive_logits += numpy_gumbel_like(positive_logits)
 
     # gather the negative sections and apply perturbations
-    negative_logits = numpy_log_softmax(candidates.scores)
+    candidate_scores = np.copy(candidates.scores)
+    if max_support_size is not None:
+        # Limit the support size (truncated retriever)
+        candidate_scores[..., max_support_size:] = -np.inf
+    negative_logits = numpy_log_softmax(candidate_scores)
     if do_sample:
         negative_logits += numpy_gumbel_like(negative_logits)
 
@@ -105,15 +110,6 @@ def sample_sections(
     )
 
     if (concatenated.labels.sum(axis=1) == 0).any():
-        rich.print(
-            {
-                "positive_indices": positives.indices,
-                "positive_logits": positive_logits,
-                "negative_indices": candidates.indices,
-                "negative_logits": negative_logits,
-            }
-        )
-        rich.print(output)
-        raise ValueError("No positive sections were sampled.")
+        warnings.warn("No positive sections were sampled.", stacklevel=2)
 
     return output

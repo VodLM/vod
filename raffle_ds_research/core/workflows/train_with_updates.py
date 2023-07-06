@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import functools
-import os
 import pathlib
 from typing import Any, Iterable, Optional, TypeVar
 
@@ -9,7 +8,6 @@ import lightning as L
 import numpy as np
 import omegaconf
 import rich
-import torch
 import transformers
 from lightning.fabric import strategies as fabric_strategies
 from loguru import logger
@@ -96,7 +94,6 @@ def train_with_index_updates(  # noqa: C901, PLR0915
 
         # fetch the parameters for this period and log thems
         parameters = state.get_parameters()
-        _log_parameters(fabric=fabric, state=state, parameters=parameters)
         logger.info(f"Starting period {state.period + 1}/{len(update_steps) - 1} (step {start_step} -> {end_step})")
 
         # wrap everything in a temporary directory to avoid filling up the disk.
@@ -150,8 +147,6 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                 # If there is no defined `end_step`, we reached the end of the training
                 continue
 
-            support._test_model_backward(fabric=fabric, ranker=ranker, header="Main loop :: before period")
-
             # training for the current period.
             # We use a `StopAtTrainer` to stop the training at the end of the current period (max `end_step`).
             logger.info(f"Starting training period {1+state.period}")
@@ -175,8 +170,8 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                 checkpoint_path=config.trainer.checkpoint_path,
                 on_first_batch_fn=functools.partial(
                     _on_first_batch_fn,
-                    torch_compile=os.environ.get("CHECK_DYNAMO", "0") == "1",
                     tokenizer=config.dataset.tokenizer,
+                    output_file=pathlib.Path(f"{state.step}-training-batch.txt"),
                 ),
                 pbar_keys=config.trainer.pbar_keys,
             )
@@ -211,21 +206,22 @@ def _setup_deepspeed(
 def _on_first_batch_fn(
     fabric: L.Fabric,
     batch: dict[str, Any],
-    ranker: Ranker,
+    ranker: Ranker,  # noqa: ARG001
     *,
     tokenizer: transformers.PreTrainedTokenizerBase,
-    torch_compile: bool = False,
+    output_file: Optional[pathlib.Path] = None,
 ) -> None:
     if fabric.is_global_zero:
         pipes.pprint_batch(batch, header="Training batch")
-        pipes.pprint_retrieval_batch(batch, tokenizer=tokenizer)
-        # try:
-        #    pipes.pprint_retrieval_batch(batch, tokenizer=tokenizer)
-        # except Exception as ex:
-        #     logger.warning(f"Failed to print retrieval batch: {ex}")
+        pipes.pprint_retrieval_batch(batch, tokenizer=tokenizer, skip_special_tokens=True, output_file=output_file)
+        if output_file is not None:
+            try:
+                import wandb
 
-    if torch_compile:
-        torch._dynamo.explain(ranker.training_step, batch)
+                # log th output file to wandb
+                wandb.log({"data/retrieval-batch": wandb.Html(open(output_file).read())})
+            except Exception as exc:
+                logger.debug(f"Failed to log to wandb: {exc}")
 
 
 def _run_benchmarks(
@@ -288,17 +284,6 @@ def _log_print_metrics(
     print_metric_groups(
         {f"{dset.name}/{dset.split_alias}/{k}": v for k, v in metrics.items() if "diagnostics" not in k},
         header=header,
-    )
-
-
-def _log_parameters(*, fabric: L.Fabric, state: support.TrainerState, parameters: dict[str, float]) -> None:
-    logging.log(
-        {
-            "trainer/period": float(state.period),
-            **{f"parameter/{k}": v for k, v in parameters.items()},
-        },
-        loggers=fabric.loggers,
-        step=state.step,
     )
 
 

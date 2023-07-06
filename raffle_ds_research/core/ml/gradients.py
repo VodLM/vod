@@ -4,6 +4,7 @@ from __future__ import annotations
 import abc
 import copy
 import math
+import warnings
 from typing import Any, Callable, Iterable, Optional
 
 import lightning as L
@@ -169,8 +170,11 @@ class KlDivGradients(Gradients):
         # 4.1 compute the number of positives
         if data.pre_n_positive is None:
             _n_positive = data_targets.sum(dim=1)
-            if (data_targets.sum(dim=1) == 0).any():
-                raise ValueError("This batch contains a question without positive section.")
+            if (_n_positive == 0).any():
+                warnings.warn("This batch contains a question without positive section.", stacklevel=2)
+
+            _n_positive = torch.where(_n_positive == 0, (~is_padding).float().sum(dim=1), _n_positive)
+            ...
         else:
             _n_positive = data.pre_n_positive
 
@@ -179,7 +183,13 @@ class KlDivGradients(Gradients):
 
         # 5. Compute the loss: KL divergences between the model and the sampling distributions
         w = 1 / _n_positive[:, None] * (model_probs - data_targets)
-        loss = torch.sum(w.detach() * retriever_logprobs, dim=-1).mean()
+        loss = torch.sum(w.detach() * retriever_logprobs, dim=-1)
+        per_sample_mask = _n_positive > 0
+        if per_sample_mask.any():
+            loss = torch.where(per_sample_mask, loss, torch.zeros_like(loss))
+            loss = loss.sum() / per_sample_mask.sum()
+        else:
+            loss = torch.full_like(loss, fill_value=math.nan).sum()
 
         # 6. Compute the KL divergences between the model and the sampling distributions
         # KL ( p_ref(z) | p_model(z)) for `p_ref` = score, bm25, faiss

@@ -13,7 +13,7 @@ benchmark_search:
 
 model:
   gradients:
-    section_chunk_size: 4
+    section_chunk_size: null
 
 trainer:
   max_steps: 1000
@@ -24,9 +24,14 @@ trainer:
   benchmark_on_init: false
   parameters:
     faiss: -1
+    bm25:
+      mode: linear
+      start: 0.5
+      value: 0.2
+      period: 100
 
 dataset:
-  subset_size: 1_000
+  subset_size: null
   filter_unused_sections: false
   train: frank.A.en-pos:train
   validation: frank.A.en-pos:val
@@ -34,8 +39,9 @@ dataset:
     - frank.A.en-pos:val
 
 batch_size:
+  effective: 16
   per_device: 2
-  per_device_eval: 4
+  per_device_eval: 2
   per_device_predict: 512
 
 resources:
@@ -44,9 +50,10 @@ resources:
 
 collates:
   train:
-    n_sections: 128
-    max_pos_sections: 32
-    prefetch_n_sections: 256
+    n_sections: 5
+    max_pos_sections: 2
+    prefetch_n_sections: 32
+    do_sample: true
     in_batch_negatives: true
 
   eval:

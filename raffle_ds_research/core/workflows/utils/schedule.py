@@ -39,6 +39,18 @@ class LinearSchedule(BaseSchedule):
         return self.start + (self.value - self.start) * (step - self.offset) / self.period
 
 
+class StepSchedule(BaseSchedule):
+    """Defines a step schedule."""
+
+    mode: str = "step"
+
+    def __call__(self, step: float) -> float:
+        """Return the value of the parameter at the given step."""
+        if step < self.period:
+            return self.start
+        return self.value
+
+
 class ConstantSchedule(BaseSchedule):
     """Defines a constant schedule."""
 
@@ -58,4 +70,6 @@ def schedule_factory(*, mode: Literal["constant", "linear"], **kwargs: Any) -> B
         return ConstantSchedule(**kwargs)
     if mode == "linear":
         return LinearSchedule(**kwargs)
+    if mode == "step":
+        return StepSchedule(**kwargs)
     raise ValueError(f"Invalid mode: {mode}")

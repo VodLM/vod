@@ -3,9 +3,11 @@ from __future__ import annotations
 import collections
 import dataclasses
 import functools
+import multiprocessing as mp
 import pathlib
 import time
 import typing
+from multiprocessing.managers import DictProxy
 
 import lightning as L
 import numpy as np
@@ -75,7 +77,8 @@ def index_and_train(
         rich.print(task)
 
     # parameters
-    parameters = trainer_state.get_parameters()
+    parameters = mp.Manager().dict()
+    parameters.update(trainer_state.get_parameters())
 
     support._test_model_backward(fabric=fabric, ranker=ranker, header="Train and index :: before moving to CPU")
 
@@ -139,6 +142,7 @@ def index_and_train(
             checkpoint_path=checkpoint_path,
             on_first_batch_fn=on_first_batch_fn,
             pbar_keys=pbar_keys,
+            parameters=parameters,
         )
         barrier_fn(f"Completed period {1+trainer_state.period}")
 
@@ -157,6 +161,7 @@ def _training_loop(  # noqa: C901
     checkpoint_path: typing.Optional[str] = None,
     on_first_batch_fn: typing.Optional[typing.Callable[[L.Fabric, dict[str, torch.Tensor], Ranker], None]] = None,
     pbar_keys: typing.Optional[typing.List[str]] = None,
+    parameters: typing.Optional[DictProxy] = None,
 ) -> support.TrainerState:
     _check_ranker_and_optimizer(ranker, optimizer)
     optimizer.zero_grad()
@@ -223,6 +228,12 @@ def _training_loop(  # noqa: C901
                     if chrono is not None:
                         chrono.stop()
                     trainer_state.step += 1
+
+                    # Update the parameters
+                    if parameters is not None:
+                        parameters.update(trainer_state.get_parameters())
+
+                    # Update the progress bar
                     pbar.update(
                         train_pbar,
                         advance=1,

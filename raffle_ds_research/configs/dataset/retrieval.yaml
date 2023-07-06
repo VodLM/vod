@@ -19,5 +19,7 @@ metrics: [ "ndcg", "mrr@10","hitrate@01", "hitrate@03", "hitrate@20", "hitrate@1
 # dataset factory config
 subset_size: null
 filter_unused_sections: false
+min_section_tokens: null
+
 prep_map_kwargs:
   num_proc: ${resources.num_proc}

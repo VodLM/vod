@@ -1,19 +1,40 @@
 from __future__ import annotations
 
+import functools
 import hashlib
 import pickle
+import string
 from typing import Any, Callable, Optional
 
 import datasets
 import numpy as np
 import pydantic
 import typing_extensions
+from loguru import logger
 from typing_extensions import Self, Type, TypeVar
 
 from raffle_ds_research.core import config as core_config
 from raffle_ds_research.tools import pipes, raffle_datasets
 
 T = typing_extensions.TypeVar("T")
+
+
+def _tokenize(text: str) -> list[str]:
+    text = text.translate(str.maketrans(" ", " ", string.punctuation))
+    return text.split()
+
+
+def _filter_row_by_min_tokens(
+    row: dict[str, Any],
+    idx: Optional[int] = None,  # noqa: ARG001
+    *,
+    min_tokens: int,
+    key: str,
+    **kwargs: Any,
+) -> bool:
+    text = row[key]
+    tokens = _tokenize(text)
+    return len(tokens) >= min_tokens
 
 
 class DatasetFactory:
@@ -66,6 +87,22 @@ class DatasetFactory:
         # load the raw dataset and validate
         dset = self.loader()
         _validate_sections(dset.sections)
+
+        # Filter the sections
+        if self.config.min_section_tokens is not None:
+            n_sections = len(dset.sections)
+            dset.sections = dset.sections.filter(
+                functools.partial(
+                    _filter_row_by_min_tokens,
+                    min_tokens=self.config.min_section_tokens,
+                    key="content",
+                ),
+                **self._prep_map_kwargs(
+                    batched=False,
+                    desc=f"{locator}: Filtering sections",
+                ),
+            )
+            logger.debug(f"Filtered {n_sections - len(dset.sections)} sections.")
 
         # preprocess the sections
         sections = dset.sections.map(

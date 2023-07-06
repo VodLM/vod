@@ -9,6 +9,6 @@ defaults:
 
 batch_size:
   effective: 32
-  per_device: 4
-  per_device_eval: 8
+  per_device: 2
+  per_device_eval: 4
   per_device_predict: 512

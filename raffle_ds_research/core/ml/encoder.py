@@ -4,7 +4,6 @@ import pathlib
 from typing import Literal, Optional
 
 import pydantic
-import rich
 import torch
 import transformers
 from torch import nn
@@ -83,7 +82,6 @@ class TransformerEncoder(nn.Module, interfaces.ProtocolEncoder):
         )
         cls = getattr(transformers, cls_name)
         cfg = _translate_config(model_name, model_config)
-        rich.print(cfg)
         self.backbone = cls.from_pretrained(
             model_name,
             cache_dir=cache_dir,

@@ -106,6 +106,7 @@ class BaseDatasetFactoryConfig(pydantic.BaseModel):
     prep_map_kwargs: dict[str, Any] = {}
     subset_size: Optional[int] = None
     filter_unused_sections: bool = True
+    min_section_tokens: Optional[int] = None
     group_hash_key: str = "group_hash"
     group_keys: list[str] = ["kb_id", "language"]
 

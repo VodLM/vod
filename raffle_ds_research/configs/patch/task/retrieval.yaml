@@ -58,23 +58,24 @@ trainer:
   benchmark_on_init: false
   pbar_keys: ['kl_data', 'hitrate_3']
   parameters:
-    bm25: 0.2
+    bm25: 1.0
     faiss:
       mode: linear
       start: 0
       value: 1
-      period: ${trainer.max_steps}
+      period: ${trainer.period}
+      offset: ${trainer.period}
 
 collates:
   # Defines the configurations for `dataset_builder.HfBuilder._collate_config`
   train:
     n_sections: 48
     max_pos_sections: 8
-    prefetch_n_sections: 128
+    prefetch_n_sections: 64
     do_sample: false
     in_batch_negatives: true
   benchmark:
-    prefetch_n_sections: 300
+    prefetch_n_sections: 500
     do_sample: false
 
 benchmark_search:

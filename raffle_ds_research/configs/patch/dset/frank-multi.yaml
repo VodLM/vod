@@ -7,31 +7,31 @@ defaults:
 dataset:
   train:
     # English
-    - frank.A.en-pos:train
+    - frank.A.en:train
     - squad.en:train
     - squad.en:val
     # Danish
-    - frank.A.da-pos:train
+    - frank.A.da:train
     - squad.da:train
     - squad.da:val
     # German
-    - frank.A.de-pos:train
+    - frank.A.de:train
     - squad.de:train
     - squad.de:val
     # French
-    - frank.A.fr-pos:train
+    - frank.A.fr:train
     - squad.fr:train
     - squad.fr:val
     # Icelandic
-    - frank.A.is-pos:train
+    - frank.A.is:train
     - squad.is:train
     - squad.is:val
   validation:
-    - frank.A.en-pos:val
-    - frank.A.da-pos:val
-    - frank.A.de-pos:val
-    - frank.A.fr-pos:val
-    - frank.A.is-pos:val
+    - frank.A.en:val
+    - frank.A.da:val
+    - frank.A.de:val
+    - frank.A.fr:val
+    - frank.A.is:val
   benchmark:
     # Frank A
     - frank.A.en:val
@@ -51,13 +51,13 @@ benchmark_search:
 
 search:
   faiss:
-    factory: IVFauto,Flat
+    factory: OPQ32,IVFauto,PQ32x8
     metric: inner_product
     nprobe: 32
 
 trainer:
   max_steps: 200_000
-  period: 20_000
+  period: 10_000
   val_check_interval: 500
   log_interval: 20
   n_max_eval: 5_000

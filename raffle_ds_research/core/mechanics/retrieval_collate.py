@@ -6,6 +6,7 @@ import math
 import pathlib
 import time
 import warnings
+from multiprocessing.managers import DictProxy
 from typing import Any, Optional, TypeVar
 
 import numpy as np
@@ -54,7 +55,7 @@ class RetrievalCollate(pipes.Collate):
         search_client: index_tools.MultiSearchClient,
         sections: dstruct.SizedDataset[dict[str, Any]],
         config: core_config.RetrievalCollateConfig,
-        parameters: Optional[dict[str, Any]] = None,
+        parameters: Optional[dict | DictProxy] = None,
         target_lookup: index_tools.LookupIndexbyGroup | pathlib.Path,
     ):
         self.tokenizer = tokenizer
@@ -77,7 +78,7 @@ class RetrievalCollate(pipes.Collate):
 
         # validate the parameters
         client_names = set(self.search_client.clients.keys())
-        missing_clients = client_names - self.parameters.keys()
+        missing_clients = client_names - set(self.parameters.keys())
         if len(missing_clients):
             logger.warning(
                 f"Missing weights for clients: `{missing_clients}`. "
@@ -120,7 +121,7 @@ class RetrievalCollate(pipes.Collate):
             search_results,
             weights=self.parameters,
             fill_nan_scores=True,  # <-- replace NaNs for each client with the minimum score of that client
-            fill_nan_scores_offset=-1,  # <-- offset to use when replacing NaNs with minimum scores
+            fill_nan_scores_offset=-1,  # <-- offset to use when replacing NaNs with minimum scores + this offset
         )
 
         # post-filtering sections based on the group hash
@@ -142,6 +143,7 @@ class RetrievalCollate(pipes.Collate):
                 max_pos_sections=self.config.max_pos_sections,
                 do_sample=self.config.do_sample,
                 other_scores=client_scores,
+                max_support_size=self.config.prefetch_n_sections,  # <-- limit the max candidate pool size
             )
 
         # flatten sections (in-batch negative)
@@ -207,6 +209,7 @@ class RetrievalCollate(pipes.Collate):
             **_sampled_sections_to_dict(sections, prefix="section.", as_torch=True),
             **attributes,
             **diagnostics,
+            **{f"diagnostics.parameters.{k}": v for k, v in self.parameters.items()},
         }
 
         return batch
@@ -343,6 +346,7 @@ def weighted_merge_search_results(
     weights: dict[str, float],
     fill_nan_scores: bool = False,
     fill_nan_scores_offset: float = -1,
+    top_k: Optional[int] = None,
 ) -> tuple[index_tools.RetrievalBatch, dict[str, np.ndarray]]:
     """Merge the candidate samples from multiple clients."""
     ordered_keys = list(candidates.keys())
@@ -357,6 +361,9 @@ def weighted_merge_search_results(
         raise ValueError("No candidates to merge")
 
     candidate_samples = index_tools.merge_retrieval_batches([candidates[key] for key in ordered_keys])
+    if top_k is not None:
+        candidate_samples.indices[..., :top_k]
+        candidate_samples.scores[..., :top_k]
 
     if fill_nan_scores:
         # replace nan scores with the minimum score
