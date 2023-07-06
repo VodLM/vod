@@ -149,7 +149,7 @@ def index_and_train(
     return trainer_state
 
 
-def _training_loop(  # noqa: C901
+def _training_loop(  # noqa: C901, PLR0915
     *,
     ranker: Ranker,
     optimizer: torch.optim.Optimizer,

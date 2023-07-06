@@ -1,0 +1,12 @@
+on_init: false
+n_max_eval: 1_000
+tune_parameters: true
+n_tuning_steps: 1_000
+metrics:
+  - "ndcg"
+  - "mrr@10"
+  - "hitrate@01"
+  - "hitrate@03"
+  - "hitrate@20"
+  - "hitrate@100"
+  - "recall@50"

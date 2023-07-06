@@ -10,7 +10,7 @@ import hydra
 import omegaconf
 import pydantic
 import transformers
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
 from typing_extensions import Self, Type
 
 from raffle_ds_research.core.mechanics.dataloader_sampler import DataloaderSampler, dl_sampler_factory
@@ -129,9 +129,6 @@ class MultiDatasetFactoryConfig(BaseDatasetFactoryConfig):
     validation: list[NamedDset]
     benchmark: list[NamedDset]
 
-    # benchmark metrics
-    metrics: list[str] = ["ndcg", "mrr", "hitrate@01", "hitrate@03", "hitrate@10", "hitrate@30"]
-
     # validators
     _validate_train = pydantic.validator("train", allow_reuse=True, pre=True)(
         functools.partial(parse_named_dsets, default_splits=["train"])
@@ -142,7 +139,6 @@ class MultiDatasetFactoryConfig(BaseDatasetFactoryConfig):
     _validate_benchmark = pydantic.validator("benchmark", allow_reuse=True, pre=True)(
         functools.partial(parse_named_dsets, default_splits=["test"])
     )
-    _validate_metrics = pydantic.validator("metrics", allow_reuse=True, pre=True)(as_pyobj_validator)
 
     @classmethod
     def parse(cls: Type[Self], obj: dict | omegaconf.DictConfig | Self) -> Self:
@@ -225,6 +221,37 @@ class RetrievalCollateConfig(BaseCollateConfig):
     group_id_keys: KeyMap = KeyMap(query="group_hash", section="group_hash")  #  group hash (kb_id, lang, etc.)
 
 
+class BenchmarkConfig(pydantic.BaseModel):
+    """Configures the batch size for the train, eval, and predict stages."""
+
+    on_init: bool = False
+    n_max_eval: Optional[int] = None
+    tune_parameters: bool = True
+    n_tuning_steps: int = 1_000
+    metrics: list[str] = ["ndcg", "mrr", "hitrate@01", "hitrate@03", "hitrate@10", "hitrate@30"]
+    search: dict[str, Any] = {}
+
+    # Validators
+    _validate_metrics = pydantic.validator("metrics", allow_reuse=True, pre=True)(as_pyobj_validator)
+
+    @pydantic.validator("search", pre=True)
+    def _validate_searchs(cls, v: None | dict[str, Any]) -> dict[str, Any]:
+        if v is None:
+            return {}
+        if isinstance(v, omegaconf.DictConfig):
+            return omegaconf.OmegaConf.to_container(v)  # type: ignore
+
+        return v
+
+    @classmethod
+    def parse(cls: Type[Self], obj: dict | Self) -> Self:
+        """Parse a benchmark config."""
+        if isinstance(obj, cls):
+            return obj
+
+        return cls(**obj)  # type: ignore
+
+
 class TrainerConfig(pydantic.BaseModel):
     """Configures a group of indexes (e.g., bm25, faiss)."""
 
@@ -233,10 +260,8 @@ class TrainerConfig(pydantic.BaseModel):
     log_interval: int = 100
     gradient_clip_val: Optional[float] = None
     period: Union[int, list[int]]
-    benchmark_on_init: bool = True
     parameters: dict[str, BaseSchedule] = {}
     n_max_eval: Optional[int] = None
-    n_max_benchmark: Optional[int] = None
     checkpoint_path: Optional[str] = None
     pbar_keys: list[str] = ["loss", "hitrate_3"]
 
@@ -296,6 +321,7 @@ class DataLoaderConfigs:
 
     train: DataLoaderConfig
     eval: DataLoaderConfig
+    benchmark: DataLoaderConfig
     predict: DataLoaderConfig
 
     @classmethod
@@ -304,6 +330,7 @@ class DataLoaderConfigs:
         return cls(
             train=DataLoaderConfig(**config.train),
             eval=DataLoaderConfig(**config.eval),
+            benchmark=DataLoaderConfig(**config.benchmark),
             predict=DataLoaderConfig(**config.predict),
         )
 
@@ -345,22 +372,6 @@ class SysConfig:
 
 
 @dataclasses.dataclass
-class SearchConfigs:
-    """Models the search engines for the training and benchmark steps."""
-
-    training: SearchConfig
-    benchmark: SearchConfig
-
-    @classmethod
-    def parse(cls: Type[Self], config: DictConfig) -> Self:
-        """Parse an omegaconf config into a CollateConfigs instance."""
-        return cls(
-            training=SearchConfig(**config.training),
-            benchmark=SearchConfig(**config.benchmark),
-        )
-
-
-@dataclasses.dataclass
 class TrainWithIndexUpdatesConfigs:
     """Models the configuration for a workflow that trains a model and periodically indexes the data."""
 
@@ -368,36 +379,23 @@ class TrainWithIndexUpdatesConfigs:
     dataloaders: DataLoaderConfigs
     collates: CollateConfigs
     trainer: TrainerConfig
+    benchmark: BenchmarkConfig
+    search: SearchConfig
     batch_size: BatchSizeConfig
-    search: SearchConfigs
     sys: SysConfig
-    benchmark_search_overrides: Optional[dict] = None
     dl_sampler: Optional[DataloaderSampler] = None
 
     @classmethod
     def parse(cls: Type[Self], config: DictConfig) -> Self:
         """Parse an omegaconf config into a TrainWithIndexConfigs instance."""
-        dataset = MultiDatasetFactoryConfig.parse(config.dataset)
-        trainer_config = TrainerConfig.parse(config.trainer)
-        dataloaders = DataLoaderConfigs.parse(config.dataloaders)
-        collates = CollateConfigs.parse(config.collates)
-        sys_config = SysConfig.parse(config.sys)
-
-        # parse the search configs. if benchmark_search is not specified, use the training search.
-        training_search = SearchConfig.parse(config.search)
-        if config.benchmark_search is None:
-            benchmark_search = training_search
-        else:
-            merged_config = OmegaConf.merge(config.search, config.benchmark_search)
-            benchmark_search = SearchConfig.parse(merged_config)  # type: ignore
-
         return cls(
-            dataset=dataset,
-            trainer=trainer_config,
+            dataset=MultiDatasetFactoryConfig.parse(config.dataset),
+            trainer=TrainerConfig.parse(config.trainer),
+            benchmark=BenchmarkConfig.parse(config.benchmark),
             batch_size=BatchSizeConfig.parse(config.batch_size),
-            dataloaders=dataloaders,
-            collates=collates,
-            search=SearchConfigs(training=training_search, benchmark=benchmark_search),
-            sys=sys_config,
+            dataloaders=DataLoaderConfigs.parse(config.dataloaders),
+            collates=CollateConfigs.parse(config.collates),
+            search=SearchConfig.parse(config.search),
+            sys=SysConfig.parse(config.sys),
             dl_sampler=dl_sampler_factory(config.dl_sampler) if config.dl_sampler is not None else None,
         )

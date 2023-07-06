@@ -16,7 +16,7 @@ from raffle_ds_research.core import config as core_config
 from raffle_ds_research.core.mechanics import dataset_factory
 from raffle_ds_research.core.ml import Ranker
 from raffle_ds_research.core.ml.encoder import TransformerEncoder
-from raffle_ds_research.core.workflows import evaluation, precompute, training
+from raffle_ds_research.core.workflows import evaluation, precompute, training, tuning
 from raffle_ds_research.core.workflows.utils import io, logging, support
 from raffle_ds_research.tools import caching, pipes
 from raffle_ds_research.utils.pretty import print_metric_groups
@@ -129,14 +129,36 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                 logger.info("Faiss engine is disabled. Skipping vector pre-computation.")
                 vectors = {dset: None for dset in factories}
 
-            # benchmark the ranker on each dataset separately
-            if state.period > 0 or config.trainer.benchmark_on_init:
-                barrier("running benchmarks..")
+            # Tune the parameters and benchmark the ranker on each dataset separately
+            if state.period > 0 or config.benchmark.on_init:
+                if config.benchmark.tune_parameters and (
+                    parameters.get("faiss", -1) > 0 and support.is_engine_enabled(parameters, "bm25")
+                ):
+                    barrier("Tuning retrieval parameters..")
+                    bench_params = tuning.tune_parameters(
+                        parameters=dict(parameters),
+                        tune=["bm25"],
+                        fabric=fabric,
+                        factories=_get_dset_factories(config.dataset.get("validation"), config=config.dataset),
+                        vectors=vectors,
+                        search_config=config.search,
+                        collate_config=config.collates.train,
+                        dataloader_config=_patch_mum_worker(config.dataloaders.benchmark, fabric=fabric),
+                        cache_dir=cache_dir,
+                        serve_on_gpu=True,
+                        n_tuning_steps=config.benchmark.n_tuning_steps,
+                        tokenizer=config.dataset.tokenizer,
+                    )
+                    logger.info(f"Tuned parameters: {parameters}")
+                else:
+                    bench_params = parameters
+
+                barrier("Running benchmarks..")
                 _run_benchmarks(
                     fabric=fabric,
                     config=config,
                     state=state,
-                    parameters=parameters,
+                    parameters=bench_params,
                     cache_dir=cache_dir,
                     factories=factories,
                     vectors=vectors,
@@ -159,7 +181,7 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                 train_factories=_get_dset_factories(config.dataset.get("train"), config=config.dataset),
                 val_factories=_get_dset_factories(config.dataset.get("validation"), config=config.dataset),
                 tokenizer=config.dataset.tokenizer,
-                search_config=config.search.training,
+                search_config=config.search,
                 collate_config=config.collates.train,
                 train_dataloader_config=config.dataloaders.train,
                 eval_dataloader_config=config.dataloaders.eval,
@@ -219,7 +241,7 @@ def _on_first_batch_fn(
                 import wandb
 
                 # log th output file to wandb
-                wandb.log({"data/retrieval-batch": wandb.Html(open(output_file).read())})
+                wandb.log({"data/retrieval-batch": wandb.Html(open(output_file).read())})  # noqa: SIM115
             except Exception as exc:
                 logger.debug(f"Failed to log to wandb: {exc}")
 
@@ -244,18 +266,21 @@ def _run_benchmarks(
             logdir = pathlib.Path("benchmarks", f"{bench_loc}-{state.period}-{state.step}")
             logdir.mkdir(parents=True, exist_ok=True)
 
-            # run the benchmark and log the results
+            # Create the search config
+            search_config = config.search.copy(update=config.benchmark.search)
+
+            # Run the benchmark and log the results
             metrics = evaluation.benchmark(
                 factory=factories[dset],
                 vectors=vectors[dset],
-                metrics=config.dataset.metrics,
-                search_config=config.search.benchmark,
+                metrics=config.benchmark.metrics,
+                search_config=search_config,
                 collate_config=config.collates.benchmark,
-                dataloader_config=config.dataloaders.eval,
+                dataloader_config=_patch_mum_worker(config.dataloaders.benchmark, fabric=fabric),
                 cache_dir=cache_dir,
                 parameters=parameters,
                 serve_on_gpu=True,
-                n_max=config.trainer.n_max_benchmark,
+                n_max=config.benchmark.n_max_eval,
                 to_disk_config=evaluation.ToDiskConfig(
                     logdir=logdir,
                     tokenizer=config.dataset.tokenizer,
@@ -265,6 +290,17 @@ def _run_benchmarks(
                 header = f"{dset.name}:{dset.split_alias} - Period {state.period + 1}"
                 _log_print_metrics(fabric=fabric, state=state, dset=dset, metrics=metrics, header=header)
             logger.info(f"{1+j}/{len(config.dataset.benchmark)} - saved to `{logdir.absolute()}`")
+
+
+def _patch_mum_worker(
+    dl_config: core_config.DataLoaderConfig,
+    fabric: L.Fabric,
+) -> core_config.DataLoaderConfig:
+    return dl_config.copy(
+        update={
+            "num_workers": fabric.world_size * dl_config.num_workers,
+        }
+    )
 
 
 def _log_print_metrics(

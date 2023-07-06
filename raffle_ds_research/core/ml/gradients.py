@@ -63,8 +63,8 @@ class GradientInputs(pydantic.BaseModel):
 
         arbitrary_types_allowed = True
 
-    hq: torch.Tensor
-    hd: torch.Tensor
+    hq: Optional[torch.Tensor] = None
+    hd: Optional[torch.Tensor] = None
     targets: torch.Tensor = pydantic.Field(
         ...,
         description="Retrieval labels.",
@@ -152,7 +152,11 @@ class KlDivGradients(Gradients):
         self.section_chunk_size = section_chunk_size
 
     def __call__(
-        self, inputs: dict[str, torch.Tensor], skip_diagnostics: bool = False, **kwargs: Any
+        self,
+        inputs: dict[str, torch.Tensor],
+        skip_diagnostics: bool = False,
+        retriever_logprobs: Optional[torch.Tensor] = None,
+        **kwargs: Any,
     ) -> dict[str, torch.Tensor]:
         """Parse the inputs and compute the loss."""
         data = GradientInputs(**inputs)
@@ -162,7 +166,10 @@ class KlDivGradients(Gradients):
         is_padding = data.scores.isinf() & (data.scores < 0)
 
         # 2. compute the probabilities for each pair of (question, section) assigned by the model
-        retriever_logprobs = _compute_retriever_logprobs(data, is_padding)
+        if retriever_logprobs is None:
+            retriever_logprobs = _compute_retriever_logprobs(data, is_padding)
+        else:
+            retriever_logprobs = retriever_logprobs.masked_fill(is_padding, -torch.inf)
 
         # 3. compute the reference probabilities for each pair of (question, section)
         data_targets = _compute_data_targets(data, is_padding)
@@ -264,7 +271,6 @@ class KlDivGradients(Gradients):
 
         # Run a forward pass using all sections, pre-compute the retriever log_probs and
         with torch.no_grad():
-            # TODO: eval mode?
             full_output = fwd_fn(
                 batch,
                 **{**kwargs, "compute_metrics": True, "mode": "evaluate", "filter_output": False},

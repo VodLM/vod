@@ -54,9 +54,7 @@ trainer:
   period: 20_000
   val_check_interval: 500
   n_max_eval: 1_000
-  n_max_benchmark: null
-  benchmark_on_init: false
-  pbar_keys: ['kl_data', 'hitrate_3']
+  pbar_keys: ["kl_data", "hitrate_3"]
   parameters:
     bm25: 1.0
     faiss:
@@ -65,6 +63,12 @@ trainer:
       value: 1
       period: ${trainer.period}
       offset: ${trainer.period}
+
+benchmark:
+  n_max_eval: 1_000
+  on_init: false
+  tune_parameters: true
+  n_tuning_steps: 1_000
 
 collates:
   # Defines the configurations for `dataset_builder.HfBuilder._collate_config`
@@ -77,11 +81,6 @@ collates:
   benchmark:
     prefetch_n_sections: 500
     do_sample: false
-
-benchmark_search:
-  faiss:
-    factory: IVFauto,Flat
-    nprobe: 64
 
 search:
   faiss:

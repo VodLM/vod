@@ -4,9 +4,7 @@ val_check_interval: 500
 log_interval: 10
 period: 3000
 gradient_clip_val: 1.0
-benchmark_on_init: false
 n_max_eval: null
-n_max_benchmark: null
 checkpoint_path: ${abs_path:state.ckpt}
 pbar_keys: ['loss']
 parameters:

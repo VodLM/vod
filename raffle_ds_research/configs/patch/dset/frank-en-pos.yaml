@@ -11,10 +11,6 @@ dataset:
     - frank.A.en:val
     - frank.B.en:val
 
-benchmark_search:
-  faiss:
-    factory: IVFauto,Flat
-    nprobe: 64
 
 search:
   faiss:

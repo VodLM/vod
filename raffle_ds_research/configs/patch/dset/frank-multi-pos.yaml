@@ -43,11 +43,11 @@ dataset:
     - frank.B.fr:val
     - frank.B.is:val
 
-
-benchmark_search:
-  faiss:
-    factory: IVFauto,Flat
-    nprobe: 64
+benchmark:
+  search:
+    faiss:
+      factory: IVFauto,Flat
+      nprobe: 64
 
 search:
   faiss:
@@ -57,7 +57,7 @@ search:
 
 trainer:
   max_steps: 200_000
-  period: 20_000
+  period: 10_000
   val_check_interval: 500
   log_interval: 20
   n_max_eval: 5_000

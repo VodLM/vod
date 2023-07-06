@@ -60,7 +60,7 @@ def benchmark(
     ) as master:
         search_client = master.get_client()
 
-        # instantiate the dataloader
+        # Instantiate the dataloader
         dataloader = support.instantiate_retrieval_dataloader(
             questions=support.DsetWithVectors.cast(
                 data=factory.get_qa_split(),
@@ -80,47 +80,54 @@ def benchmark(
             rank=0,
         )
 
-        # run the evaluation
+        # Run the evaluation
         output_keys = output_keys or _DEFAULT_OUTPUT_KEYS
         cfg = {"compute_on_cpu": True, "dist_sync_on_step": True, "sync_on_compute": False}
         monitors = {key: RetrievalMetricCollection(metrics=metrics, **cfg) for key in output_keys}
         diagnostics = collections.defaultdict(list)
-        with IterProgressBar() as pbar:
-            ntotal = len(dataloader) if n_max is None else max(1, -(-n_max // dataloader.batch_size))  # type: ignore
-            ptask = pbar.add_task(
-                "Benchmarking",
-                total=ntotal,
-                info=f"{factory.config.name}:{factory.config.split}",
-            )
-            for i, batch in enumerate(dataloader):
-                if i >= ntotal:
-                    break
 
-                # log the batch
-                if to_disk_config is not None:
-                    logfile = pathlib.Path(to_disk_config.logdir, f"batch_{i:05d}.json")
-                    with logfile.open("w") as f:
-                        f.write(_safe_json_dumps_batch(batch, tokenizer=to_disk_config.tokenizer, indent=2))
+        try:
+            with IterProgressBar() as pbar:
+                if n_max is None:  # noqa: SIM108
+                    ntotal = len(dataloader)
+                else:
+                    ntotal = max(1, -(-n_max // dataloader.batch_size))  # type: ignore
+                ptask = pbar.add_task(
+                    "Benchmarking",
+                    total=ntotal,
+                    info=f"{factory.config.name}:{factory.config.split}",
+                )
+                for i, batch in enumerate(dataloader):
+                    if i >= ntotal:
+                        break
 
-                # gather diagnostics
-                diagnostics["n_sections"].append(batch["section.score"].shape[-1])
-                for k, v in batch.items():
-                    if k.startswith("diagnostics."):
-                        diagnostics[k.replace("diagnostics.", "")].append(v)
+                    # Log the batch to disk
+                    if to_disk_config is not None:
+                        logfile = pathlib.Path(to_disk_config.logdir, f"batch_{i:05d}.json")
+                        with logfile.open("w") as f:
+                            f.write(_safe_json_dumps_batch(batch, tokenizer=to_disk_config.tokenizer, indent=2))
 
-                # compute and collect the metrics
-                target = batch["section.label"]
-                for key, monitor in monitors.items():
-                    preds = batch.get(f"section.{key}", None)
-                    if preds is None:
-                        continue
-                    monitor.update(preds, target)
+                    # Gather the diagnostics
+                    diagnostics["n_sections"].append(batch["section.score"].shape[-1])
+                    for k, v in batch.items():
+                        if k.startswith("diagnostics."):
+                            diagnostics[k.replace("diagnostics.", "")].append(v)
 
-                pbar.update(ptask, advance=1)
+                    # Compute and collect the metrics
+                    target = batch["section.label"]
+                    for key, monitor in monitors.items():
+                        preds = batch.get(f"section.{key}", None)
+                        if preds is None:
+                            continue
+                        monitor.update(preds, target)
+
+                    pbar.update(ptask, advance=1)
+        except KeyboardInterrupt:
+            logger.warning("Evaluation interrupted (KeyboardInterrupt).")
 
         # aggregate the metrics and the diagnostics
         metrics = {key: monitor.compute() for key, monitor in monitors.items()}
-        metrics["diagnostics"] = {k: np.mean(v) for k, v in diagnostics.items()}
+        metrics["diagnostics"] = {k: np.mean(v) for k, v in diagnostics.items()}  # type: ignore
         return flatten_dict(metrics, sep="/")
 
 

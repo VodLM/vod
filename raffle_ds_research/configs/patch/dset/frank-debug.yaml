@@ -11,10 +11,11 @@ dataset:
     - frank.B.en-pos:val
     - frank.B.da-pos:val
 
-benchmark_search:
-  faiss:
-    factory: IVFauto,Flat
-    nprobe: 32
+benchmark:
+  search:
+    faiss:
+      factory: Flat
+      nprobe: 32
 
 search:
   faiss:

@@ -4,6 +4,7 @@ defaults:
   - search: default
   - model: default
   - trainer: default
+  - benchmark: default
   - resources: default
   - batch_size: default
   - fabric: default
@@ -22,8 +23,6 @@ exp_name: retrieval
 run_name: ${fmt_mn:${model_name}}--${rdn_name:}-${exp_version}${exp_suffix}
 load_from: null
 
-benchmark_search: {} # <- overrides for the search object at benchmark time
-
 dataloaders:
   # Defines the configurations for `torch.utils.data.Dataloader`
   train:
@@ -33,6 +32,11 @@ dataloaders:
     shuffle: True
   eval:
     batch_size: ${batch_size.per_device_eval}
+    num_workers: ${resources.num_workers}
+    pin_memory: True
+    shuffle: True
+  benchmark:
+    batch_size: 100
     num_workers: ${resources.num_workers}
     pin_memory: True
     shuffle: True

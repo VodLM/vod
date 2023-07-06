@@ -8,6 +8,7 @@ import faiss
 import numpy as np
 import omegaconf
 import pydantic
+import torch
 from loguru import logger
 
 from raffle_ds_research.tools import dstruct, pipes
@@ -115,10 +116,12 @@ def build_search_client(
 
 def build_bm25_master(
     sections: dstruct.SizedDataset[dict[str, Any]],
-    config: Bm25FactoryConfig,
+    config: Bm25FactoryConfig | dict,
     skip_setup: bool = False,
 ) -> bm25_tools.Bm25Master:
     """Build a bm25 index."""
+    if isinstance(config, dict):
+        config = Bm25FactoryConfig(**config)
     index_fingerprint = f"{pipes.fingerprint(sections)}-{config.fingerprint()}"
     logger.info(
         f"Init. bm25 index `{index_fingerprint}`, "
@@ -144,13 +147,17 @@ def build_bm25_master(
 def build_faiss_index(
     vectors: dstruct.SizedDataset[np.ndarray],
     *,
-    config: FaissFactoryConfig,
+    config: FaissFactoryConfig | dict,
     cache_dir: str | pathlib.Path,
     skip_setup: bool = False,
     barrier_fn: None | Callable[[str], None] = None,
     serve_on_gpu: bool = False,
 ) -> search_server.SearchMaster:
     """Build a faiss index."""
+    if isinstance(config, dict):
+        config = FaissFactoryConfig(**config)
+    if not torch.cuda.is_available():
+        serve_on_gpu = False
     index_fingerprint = f"{pipes.fingerprint(vectors)}-{config.fingerprint()}"
     logger.info(
         f"Init. faiss index `{index_fingerprint}`, "

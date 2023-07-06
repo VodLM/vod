@@ -17,5 +17,7 @@ dataset:
 trainer:
   val_check_interval: 10
   period: 100
-  benchmark_on_init: false
   n_max_eval: 500
+
+benchmark:
+  on_init: false
