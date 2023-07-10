@@ -151,8 +151,6 @@ class RetrievalCollate(pipes.Collate):
                 other_scores=client_scores,
                 max_support_size=max_support_size,  # <-- limit the max candidate pool size (deactivated when no sampl.)
             )
-            rich.print("=== merged search results ===")
-            rich.print(candidate_samples)
 
         # Flatten sections (in-batch negative)
         if self.config.in_batch_negatives:
