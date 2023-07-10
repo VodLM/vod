@@ -201,7 +201,6 @@ def _make_local_sync_path(
     )
 
 
-@pydantic.validate_arguments(config={"arbitrary_types_allowed": True})
 def load_frank(  # noqa: C901
     language: str = "en",
     subset_name: Union[str, FrankSplitName] = "A",

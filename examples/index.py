@@ -132,7 +132,7 @@ def run() -> None:  # noqa: PLR0915
     with index_tools.FaissMaster(faiss_path, args.nprobe) as faiss_master:
         sections_content = (r["content"] for r in sections)
         sections_label = (r["kb_id"] for r in sections)
-        with index_tools.Bm25Master(sections_content, labels=sections_label, input_size=len(sections)) as bm25_master:
+        with index_tools.Bm25Master(sections_content, groups=sections_label, input_size=len(sections)) as bm25_master:
             faiss_client = faiss_master.get_client()
             bm25_client = bm25_master.get_client()
 

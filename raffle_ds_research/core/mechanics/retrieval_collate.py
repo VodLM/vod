@@ -10,7 +10,6 @@ from multiprocessing.managers import DictProxy
 from typing import Any, Optional, TypeVar
 
 import numpy as np
-import rich
 import torch
 import transformers
 from loguru import logger
@@ -279,7 +278,7 @@ class RetrievalCollate(pipes.Collate):
             self.search_client.async_search(
                 text=query_text,
                 vector=query_vectors,
-                label=query_group_ids,
+                group=query_group_ids,
                 top_k=top_k,
             )
         )

@@ -18,9 +18,11 @@ bm25:
       properties:
         body: # section content
           type: text
-        label: # group hash
+        group: # group hash
           type: long
-        __idx__: # index of the section in the dataset
+        section_id: # local section id
+          type: long
+        __row_idx__: # index of the section in the dataset
           type: unsigned_long
           # Prevents the inverted index and doc values from being created
           # enabled: false

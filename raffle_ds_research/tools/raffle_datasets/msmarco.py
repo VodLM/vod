@@ -173,15 +173,14 @@ def _download_and_parse_sections(language: str = "en", local_path: Optional[str]
     return datasets.Dataset.from_generator(iter_sections)
 
 
-@pydantic.validate_arguments(config={"arbitrary_types_allowed": True})
 def load_msmarco(
     language: str = "en",
     subset_name: Optional[str] = None,
-    cache_dir: Optional[pydantic.typing.PathLike] = None,
+    cache_dir: Optional[str | pathlib.Path] = None,
     keep_in_memory: Optional[bool] = None,
     only_positive_sections: bool = False,
     invalidate_cache: bool = False,
-    local_source_path: Optional[pydantic.typing.PathLike] = None,
+    local_source_path: Optional[str | pathlib.Path] = None,
     kb_id: Optional[int] = None,  # noqa: ARG001
 ) -> MsmarcoRetrievalDataset:
     """Load the MSMARCO dataset."""

@@ -38,7 +38,8 @@ class SearchClient(abc.ABC):
         *,
         text: list[str],
         vector: Optional[rtypes.Ts] = None,
-        label: Optional[list[str | int]] = None,
+        group: Optional[list[str | int]] = None,
+        section_ids: Optional[list[list[str | int]]] = None,
         top_k: int = 3,
     ) -> rtypes.RetrievalBatch[rtypes.Ts]:
         """Search the server given a batch of text and/or vectors."""
@@ -49,14 +50,16 @@ class SearchClient(abc.ABC):
         *,
         text: list[str],
         vector: Optional[rtypes.Ts] = None,
-        label: Optional[list[str | int]] = None,
+        group: Optional[list[str | int]] = None,
+        section_ids: Optional[list[list[str | int]]] = None,
         top_k: int = 3,
     ) -> rtypes.RetrievalBatch[rtypes.Ts]:
         """Search the server given a batch of text and/or vectors."""
         return self.search(
             text=text,
             vector=vector,
-            label=label,
+            group=group,
+            section_ids=section_ids,
             top_k=top_k,
         )
 

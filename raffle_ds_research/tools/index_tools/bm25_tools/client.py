@@ -12,6 +12,7 @@ from typing import Any, Iterable, Optional
 import datasets
 import elasticsearch as es
 import numpy as np
+import rich
 import rich.progress
 from elasticsearch import helpers as es_helpers
 from loguru import logger
@@ -22,9 +23,12 @@ from raffle_ds_research.tools.index_tools import search_server
 es_logger = logging.getLogger("elastic_transport")
 es_logger.setLevel(logging.WARNING)
 
-IDX_KEY = "__idx__"
+ROW_IDX_KEY = "__row_idx__"
 BODY_KEY: str = "body"
-LABEL_KEY: str = "label"
+GROUP_KEY: str = "group"
+SECTION_ID_KEY: str = "section_id"
+TERMS_BOOST = 10_000  # Set this value high enough to make sure we can identify the terms that have been boosted.
+EPS = 1e-5
 
 
 class Bm25Client(search_server.SearchClient):
@@ -34,11 +38,16 @@ class Bm25Client(search_server.SearchClient):
     _client: es.Elasticsearch
     _index_name: str
 
-    def __init__(self, url: str, index_name: str, supports_label: bool = False):
+    def __init__(
+        self,
+        url: str,
+        index_name: str,
+        supports_groups: bool = False,
+    ):
         self.url = url
         self._client = es.Elasticsearch(url)
         self._index_name = index_name
-        self.supports_label = supports_label
+        self.supports_groups = supports_groups
 
     def ping(self) -> bool:
         """Ping the server."""
@@ -69,15 +78,25 @@ class Bm25Client(search_server.SearchClient):
         *,
         text: list[str],
         vector: Optional[rtypes.Ts] = None,  # noqa: ARG
-        label: Optional[list[str | int]] = None,
+        group: Optional[list[str | int]] = None,
+        section_ids: Optional[list[list[str | int]]] = None,
         top_k: int = 3,
     ) -> rtypes.RetrievalBatch[np.ndarray]:
         """Search elasticsearch for the batch of text queries using `msearch`. NB: `vector` is not used here."""
         start_time = time.time()
-        if self.supports_label and label is None:
-            warnings.warn("This index supports labels, but no label is provided.", stacklevel=2)
+        if self.supports_groups and group is None:
+            warnings.warn("This index supports group, but no label is provided.", stacklevel=2)
 
-        queries = self._make_queries(text, top_k=top_k, labels=label)
+        if section_ids is not None and group is None:
+            raise ValueError("`section_ids` is only supported when group is provided.")
+
+        queries = self._make_queries(
+            text,
+            top_k=top_k,
+            groups=group,
+            section_ids=section_ids,
+            terms_boost_value=TERMS_BOOST,
+        )
 
         # Search with retries
         responses = self._client.msearch(searches=queries)
@@ -86,56 +105,120 @@ class Bm25Client(search_server.SearchClient):
             time.sleep(0.2)
 
         # Unpack the responses
+        # TODO: efficient implementation
         indices, scores = [], []
         for response in responses["responses"]:
             # process the indices
             try:
                 hits = response["hits"]["hits"]
             except KeyError:
-                import rich
-
                 rich.print(response)
                 raise
-            indices_ = (hit["_source"][IDX_KEY] for hit in hits[:top_k])
+
+            # process the indices
+            indices_ = (hit["_source"][ROW_IDX_KEY] for hit in hits[:top_k])
             indices_ = np.fromiter(indices_, dtype=np.int64)
             indices_ = np.pad(indices_, (0, top_k - len(indices_)), constant_values=-1)
 
-            # process the scores
-            indices.append(indices_)
+            # process the scores and the labels
             scores_ = (hit["_score"] for hit in hits[:top_k])
             scores_ = np.fromiter(scores_, dtype=np.float32)
             scores_ = np.pad(scores_, (0, top_k - len(scores_)), constant_values=-np.inf)
+
+            indices.append(indices_)
             scores.append(scores_)
 
+        # Stack the results
+        indices = np.stack(indices)
+        scores = np.stack(scores)
+        if section_ids is not None:
+            # process the labels (super hacky)
+            labels = (scores >= TERMS_BOOST).astype(np.int64)
+            labels[indices < 0] = -1  # Pad with -1
+            scores[labels > 0] -= TERMS_BOOST  # Re-adjust the scores
+            scores = np.where(scores < EPS, np.nan, scores)  # set the scores to NaN for documents with score zero
+        else:
+            labels = None
+
         return rtypes.RetrievalBatch(
-            indices=np.stack(indices),
-            scores=np.stack(scores),
+            indices=indices,
+            scores=scores,
+            labels=labels,
             meta={"time": time.time() - start_time},
         )
 
-    def _make_queries(self, texts: list[str], *, top_k: int, labels: Optional[list[str | int]] = None) -> list:
-        if labels is None:
-            labels = []
+    def _make_queries(
+        self,
+        texts: list[str],
+        *,
+        top_k: int,
+        groups: Optional[list[str | int]] = None,
+        section_ids: Optional[list[list[str | int]]] = None,
+        terms_boost_value: float = 1.0,
+    ) -> list:
+        if groups is None:
+            groups = []
+        if section_ids is None:
+            section_ids = []
 
-        def _make_search_body(text: str, label: Optional[str | int] = None) -> dict[str, Any]:
-            body = {"should": {"match": {BODY_KEY: text}}}
-            if label is not None:
-                body["filter"] = {"term": {LABEL_KEY: label}}  # type: ignore
+        def _make_search_body(
+            text: str,
+            group: Optional[str | int] = None,
+            section_ids: Optional[list[str | int]] = None,
+            terms_boost_value: float = 1.0,
+        ) -> dict[str, Any]:
+            body = {
+                "should": [
+                    {"match": {BODY_KEY: text}},
+                ]
+            }
+            if group is not None:
+                body["filter"] = {"term": {GROUP_KEY: group}}  # type: ignore
+            if section_ids is not None:
+                body["should"].append(
+                    {"terms": {SECTION_ID_KEY: section_ids, "boost": terms_boost_value}},  # type: ignore
+                )
             return {"query": {"bool": body}}
 
         return [
             part
-            for text, label in itertools.zip_longest(texts, labels)
+            for text, group, ids in itertools.zip_longest(texts, groups, section_ids)
             for part in [
                 {"index": self._index_name},
                 {
                     "from": 0,
                     "size": top_k,
-                    "fields": [IDX_KEY],
-                    **_make_search_body(text, label=label),
+                    "fields": [ROW_IDX_KEY],
+                    **_make_search_body(
+                        text,
+                        group=group,
+                        section_ids=ids,
+                        terms_boost_value=terms_boost_value,
+                    ),
                 },
             ]
         ]
+
+
+def _yield_input_data(
+    texts: Iterable[str],
+    groups: Optional[Iterable[str | int]] = None,
+    section_ids: Optional[Iterable[str | int]] = None,
+) -> Iterable[dict[str, Any]]:
+    """Yield the input data for indexing."""
+    for row_idx, (text, group, section_id) in enumerate(
+        itertools.zip_longest(
+            texts,
+            groups or [],
+            section_ids or [],
+        ),
+    ):
+        yield {
+            ROW_IDX_KEY: row_idx,
+            BODY_KEY: text,
+            GROUP_KEY: group,
+            SECTION_ID_KEY: section_id,
+        }
 
 
 class Bm25Master(search_server.SearchMaster[Bm25Client]):
@@ -147,7 +230,8 @@ class Bm25Master(search_server.SearchMaster[Bm25Client]):
         self,
         texts: Iterable[str],
         *,
-        labels: Optional[Iterable[str | int]] = None,
+        groups: Optional[Iterable[str | int]] = None,
+        section_ids: Optional[Iterable[str | int]] = None,
         host: str = "http://localhost",
         port: int = 9200,  # hardcoded for now
         index_name: Optional[str] = None,
@@ -163,7 +247,8 @@ class Bm25Master(search_server.SearchMaster[Bm25Client]):
         self._port = port
         self._proc_kwargs = proc_kwargs
         self._input_texts = texts
-        self._input_labels = labels
+        self._input_groups = groups
+        self._input_section_ids = section_ids
         self._es_body = es_body
         if index_name is None:
             index_name = f"auto-{uuid.uuid4().hex}"
@@ -176,20 +261,19 @@ class Bm25Master(search_server.SearchMaster[Bm25Client]):
         self._input_data_size = input_size
 
     @property
-    def supports_label(self) -> bool:
+    def supports_groups(self) -> bool:
         """Whether the index supports labels."""
-        return self._input_labels is not None
+        return self._input_groups is not None
 
     def _on_init(self) -> None:
-        if self._input_labels is None:
-            stream = ({IDX_KEY: i, BODY_KEY: text} for i, text in enumerate(self._input_texts))
-        else:
-            stream = (
-                {IDX_KEY: i, BODY_KEY: text, LABEL_KEY: label}
-                for i, (text, label) in enumerate(itertools.zip_longest(self._input_texts, self._input_labels))
-            )
         stream = rich.progress.track(
-            stream, description=f"Building ES index {self._index_name}", total=self._input_data_size
+            _yield_input_data(
+                texts=self._input_texts,
+                groups=self._input_groups,
+                section_ids=self._input_section_ids,
+            ),
+            description=f"Building ES index {self._index_name}",
+            total=self._input_data_size,
         )
         maybe_ingest_data(
             stream,
@@ -221,7 +305,7 @@ class Bm25Master(search_server.SearchMaster[Bm25Client]):
 
     def get_client(self) -> Bm25Client:
         """Get a client to the search server."""
-        return Bm25Client(self.url, index_name=self._index_name, supports_label=self.supports_label)
+        return Bm25Client(self.url, index_name=self._index_name, supports_groups=self.supports_groups)
 
 
 def maybe_ingest_data(

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import json
+import pathlib
 import warnings
 from typing import Any, Optional
 
 import datasets
-import pydantic
 
 from raffle_ds_research.tools.pipes.utils.misc import pack_examples
 from raffle_ds_research.tools.raffle_datasets import RetrievalDataset
@@ -45,12 +45,11 @@ def _register_append_qa_extras(hasher: datasets.fingerprint.Hasher, value: Appen
     return hasher.hash(data)
 
 
-@pydantic.validate_arguments(config={"arbitrary_types_allowed": True})
 def load_squad(
     language: str = "en",
     subset_name: Optional[str] = None,
     invalidate_cache: Optional[bool] = None,
-    cache_dir: Optional[pydantic.typing.PathLike] = None,
+    cache_dir: Optional[str | pathlib.Path] = None,
     keep_in_memory: Optional[bool] = None,
     only_positive_sections: Optional[bool] = None,
     kb_id: Optional[int] = None,  # noqa: ARG

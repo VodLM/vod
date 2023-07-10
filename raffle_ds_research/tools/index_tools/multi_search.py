@@ -31,7 +31,8 @@ class MultiSearchClient(search_server.SearchClient):
         *,
         text: list[str],
         vector: Optional[np.ndarray] = None,
-        label: Optional[list[str | int]] = None,
+        group: Optional[list[str | int]] = None,
+        section_ids: Optional[list[list[str | int]]] = None,
         top_k: int = 3,
     ) -> dict[str, rtypes.RetrievalBatch[np.ndarray]]:
         """Search the server given a batch of text and/or vectors."""
@@ -39,7 +40,8 @@ class MultiSearchClient(search_server.SearchClient):
             name: client.search(
                 vector=vector,
                 text=text,
-                label=label,
+                group=group,
+                section_ids=section_ids,
                 top_k=top_k,
             )
             for name, client in self.clients.items()
@@ -50,7 +52,7 @@ class MultiSearchClient(search_server.SearchClient):
         *,
         text: list[str],
         vector: Optional[rtypes.Ts] = None,
-        label: Optional[list[str | int]] = None,
+        group: Optional[list[str | int]] = None,
         top_k: int = 3,
     ) -> dict[str, rtypes.RetrievalBatch[np.ndarray]]:
         """Search the server given a batch of text and/or vectors."""
@@ -69,7 +71,7 @@ class MultiSearchClient(search_server.SearchClient):
                     "client": self.clients[name],
                     "vector": vector,
                     "text": text,
-                    "label": label,
+                    "group": group,
                     "top_k": top_k,
                 },
             )

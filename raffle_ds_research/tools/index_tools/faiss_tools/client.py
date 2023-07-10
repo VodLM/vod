@@ -73,7 +73,8 @@ class FaissClient(search_server.SearchClient):
         *,
         vector: rtypes.Ts,
         text: Optional[list[str]] = None,  # noqa: ARG
-        label: Optional[list[str | int]] = None,  # noqa: ARG
+        group: Optional[list[str | int]] = None,  # noqa: ARG
+        section_ids: Optional[list[list[str | int]]] = None,  # noqa: ARG
         top_k: int = 3,
         timeout: float = 120,
     ) -> rtypes.RetrievalBatch[rtypes.Ts]:

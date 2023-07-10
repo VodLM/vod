@@ -137,7 +137,6 @@ def _make_local_sync_path(cache_dir: str | pathlib.Path, language: str) -> tuple
     )
 
 
-@pydantic.validate_arguments(config={"arbitrary_types_allowed": True})
 def load_raffle_squad(
     language: str = "en",
     cache_dir: Optional[Union[str, pathlib.Path]] = None,

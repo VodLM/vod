@@ -56,6 +56,7 @@ class Bm25FactoryConfig(pydantic.BaseModel):
 
     text_key: str = "text"
     group_key: Optional[str] = "group_hash"
+    section_id_key: Optional[str] = "id"
     host: str = "http://localhost"
     port: int = 9200
     persistent: bool = True
@@ -129,10 +130,12 @@ def build_bm25_master(
         f"group_key: `{config.group_key}`"
     )
     texts = (row[config.text_key] for row in iter(sections))
-    labels = (row[config.group_key] for row in iter(sections)) if config.group_key else None
+    groups = (row[config.group_key] for row in iter(sections)) if config.group_key else None
+    sections_ids = (row[config.section_id_key] for row in iter(sections)) if config.section_id_key else None
     return bm25_tools.Bm25Master(
         texts=texts,
-        labels=labels,
+        groups=groups,
+        section_ids=sections_ids,
         host=config.host,
         port=config.port,
         index_name=f"research-{index_fingerprint}",
