@@ -14,23 +14,24 @@ def numpy_gumbel_like(x: np.ndarray, eps: float = 1e-20) -> np.ndarray:
 
 def numpy_log_softmax(x: np.ndarray, axis: int = -1) -> np.ndarray:
     """https://github.com/scipy/scipy/blob/c1ed5ece8ffbf05356a22a8106affcd11bd3aee0/scipy/special/_logsumexp.py#L228."""
-    x_max = np.amax(x, axis=axis, keepdims=True)
+    is_nan = np.isnan(x)
+    x_safe = np.where(is_nan, -np.inf, x)
+    x_max = np.amax(x_safe, axis=axis, keepdims=True)
 
     if x_max.ndim > 0:
-        x_max[~np.isfinite(x_max)] = 0
-    elif not np.isfinite(x_max):
+        x_max[np.isinf(x_max) | np.isnan(x_max)] = 0
+    elif np.isinf(x_max) | np.isnan(x_max):
         x_max = 0
 
-    tmp = x - x_max
-    exp_tmp = np.exp(tmp)
+    x_minus_max = x - x_max
+    exp_x_minus_max = np.exp(x_minus_max)
 
     # suppress warnings about log of zero
-    with np.errstate(divide="ignore"):
-        s = np.sum(exp_tmp, axis=axis, keepdims=True)
-        out = np.log(s)
+    sum_exp_x = np.sum(exp_x_minus_max, axis=axis, keepdims=True)
+    lse_x = np.log(sum_exp_x)
 
-    out = tmp - out
-    return out
+    lse_x = exp_x_minus_max - lse_x
+    return np.where(is_nan, np.nan, lse_x)
 
 
 def fill_nans_with_min(values: np.ndarray, offset_min_value: None | float = -1, axis: int = -1) -> np.ndarray:

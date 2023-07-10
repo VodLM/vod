@@ -53,6 +53,7 @@ def load_squad(
     cache_dir: Optional[pydantic.typing.PathLike] = None,
     keep_in_memory: Optional[bool] = None,
     only_positive_sections: Optional[bool] = None,
+    kb_id: Optional[int] = None,  # noqa: ARG
     prep_num_proc: int = 4,
 ) -> SquadRetrievalDataset:
     """Load the Squad dataset."""

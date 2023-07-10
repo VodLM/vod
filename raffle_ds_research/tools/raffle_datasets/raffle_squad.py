@@ -145,6 +145,7 @@ def load_raffle_squad(
     invalidate_cache: bool = False,
     subset_name: Optional[str] = None,  # noqa: ARG001
     only_positive_sections: Optional[bool] = None,  # noqa: ARG001
+    kb_id: Optional[int] = None,  # noqa: ARG001
 ) -> RaffleSquad:
     """Load the Frank dataset."""
     if cache_dir is None:

@@ -19,13 +19,19 @@ class DatasetConfigOptions(pydantic.BaseModel):
     """Extra options for a dataset."""
 
     only_positive_sections: bool = False
+    kb_id: Optional[int] = None
 
     @classmethod
     def from_list(cls: Type[Self], options: list[str]) -> Self:
         """Parse a list of options."""
-        return cls(
-            only_positive_sections="pos" in options,
-        )
+        re_pattern = re.compile(r"kb(?P<kb_id>\d+)")
+        matched_kb_id = None
+        for option in options:
+            match = re_pattern.match(option)
+            if match is not None:
+                matched_kb_id = int(match.group("kb_id"))
+                break
+        return cls(only_positive_sections="pos" in options, kb_id=matched_kb_id)
 
 
 class DatasetLoaderConfig(pydantic.BaseModel):
@@ -106,6 +112,7 @@ class RetrievalDatasetLoader:
             cache_dir=self.cache_dir,
             invalidate_cache=self.invalidate_cache,
             keep_in_memory=self.keep_in_memory,
+            kb_id=self.config.options.kb_id,
         )
 
 

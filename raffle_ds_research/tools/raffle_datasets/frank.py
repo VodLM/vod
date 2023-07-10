@@ -202,7 +202,7 @@ def _make_local_sync_path(
 
 
 @pydantic.validate_arguments(config={"arbitrary_types_allowed": True})
-def load_frank(
+def load_frank(  # noqa: C901
     language: str = "en",
     subset_name: Union[str, FrankSplitName] = "A",
     version: int = 0,
@@ -210,6 +210,7 @@ def load_frank(
     keep_in_memory: Optional[bool] = None,
     only_positive_sections: bool = False,
     invalidate_cache: bool = False,
+    kb_id: Optional[int] = None,
 ) -> HfFrankPart:
     """Load the Frank dataset."""
     if cache_dir is None:
@@ -238,8 +239,23 @@ def load_frank(
         frank_split.qa_splits.save_to_disk(str(qa_splits_path))
         frank_split.sections.save_to_disk(str(sections_paths))
 
-    return HfFrankPart(
+    dset = HfFrankPart(
         split=subset_name,
         qa_splits=datasets.DatasetDict.load_from_disk(str(qa_splits_path), keep_in_memory=keep_in_memory),
         sections=datasets.Dataset.load_from_disk(str(sections_paths), keep_in_memory=keep_in_memory),
     )
+
+    if kb_id is not None:
+        dset.qa_splits = dset.qa_splits.filter(functools.partial(_filter_by_kbid, kb_id=kb_id), num_proc=4)
+        for split, d in dset.qa_splits.items():
+            if len(d) == 0:
+                raise ValueError(f"Split {split} is empty after filtering by kb_id={kb_id}")
+        dset.sections = dset.sections.filter(functools.partial(_filter_by_kbid, kb_id=kb_id), num_proc=4)
+        if len(dset.sections) == 0:
+            raise ValueError(f"Sections is empty after filtering by kb_id={kb_id}")
+
+    return dset
+
+
+def _filter_by_kbid(row: dict, idx: Optional[int] = None, *, kb_id: int) -> bool:  # noqa: ARG001
+    return int(kb_id) == int(row["kb_id"])

@@ -117,5 +117,9 @@ def _customize_logger(fabric: L.Fabric) -> None:
     logger.remove()
     logger.add(sys.stderr, format=logger_format)
 
-
-# type: ignore
+    if not fabric.is_global_zero:
+        # change the log level to avoid spamming the console
+        logger.configure(
+            handlers=[{"sink": sys.stderr, "level": "WARNING", "format": logger_format}],
+            extra={"rank": 1 + fabric.global_rank, "world_size": fabric.world_size},
+        )

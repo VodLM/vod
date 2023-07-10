@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pathlib
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 import elasticsearch
 import numpy as np
@@ -25,8 +25,28 @@ class SearchConfig(pydantic.BaseModel):
 
     text_key: str = "text"
     group_key: str = "group_hash"
-    faiss: index_tools.FaissFactoryConfig
-    bm25: index_tools.Bm25FactoryConfig
+    faiss: Optional[index_tools.FaissFactoryConfig] = None
+    bm25: Optional[index_tools.Bm25FactoryConfig] = None
+
+    @pydantic.validator("faiss", pre=True)
+    def _validate_faiss(cls, v: dict | None) -> dict | None:
+        if v is None:
+            return None
+
+        if isinstance(v, (dict, omegaconf.DictConfig)):
+            return index_tools.FaissFactoryConfig(**v).dict()
+
+        return v
+
+    @pydantic.validator("bm25", pre=True)
+    def _validate_bm25(cls, v: dict | None) -> dict | None:
+        if v is None:
+            return None
+
+        if isinstance(v, (dict, omegaconf.DictConfig)):
+            return index_tools.Bm25FactoryConfig(**v).dict()
+
+        return v
 
     @classmethod
     def parse(cls: Type[Self], obj: dict | omegaconf.DictConfig) -> Self:
@@ -39,7 +59,7 @@ def build_search_engine(
     sections: None | dstruct.SizedDataset[dict[str, Any]],
     vectors: None | dstruct.SizedDataset[np.ndarray],
     config: SearchConfig,
-    cache_dir: pathlib.Path,
+    cache_dir: str | pathlib.Path,
     faiss_enabled: bool = True,
     bm25_enabled: bool = True,
     skip_setup: bool = False,
@@ -88,8 +108,7 @@ def build_search_engine(
 @pl_utils.rank_zero_only
 def _close_all_es_indices(es_url: str = "http://localhost:9200") -> None:
     """Close all `elasticsearch` indices."""
-    logger.info(f"Closing all ES indices on `{es_url}`")
-
+    logger.warning(f"Closing all ES indices on `{es_url}`")
     try:
         es = elasticsearch.Elasticsearch(es_url)
         for index_name in es.indices.get(index="*"):

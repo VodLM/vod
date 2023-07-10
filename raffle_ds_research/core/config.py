@@ -32,6 +32,75 @@ _DEFAULT_SPLITS = ["train", "validation"]
 _N_VALID_SAMPLES = 3
 
 
+FRANK_A_KBIDS = [
+    4,
+    9,
+    10,
+    14,
+    20,
+    26,
+    29,
+    30,
+    32,
+    76,
+    96,
+    105,
+    109,
+    130,
+    156,
+    173,
+    188,
+    195,
+    230,
+    242,
+    294,
+    331,
+    332,
+    541,
+    598,
+    1061,
+    1130,
+    1148,
+    1242,
+    1264,
+    1486,
+    1599,
+    1663,
+    1665,
+]  # noqa: E501
+FRANK_B_KBIDS = [
+    2,
+    6,
+    7,
+    11,
+    12,
+    15,
+    24,
+    25,
+    33,
+    35,
+    37,
+    80,
+    81,
+    121,
+    148,
+    194,
+    198,
+    269,
+    294,
+    334,
+    425,
+    554,
+    596,
+    723,
+    790,
+    792,
+    1284,
+    1584,
+    1589,
+]  # noqa: E501
+
+
 class NamedDset(pydantic.BaseModel):
     """A dataset name with splits."""
 
@@ -88,7 +157,21 @@ def parse_named_dsets(names: str | list[str], default_splits: Optional[list[str]
             name = part
             splits = default_splits
         for split in splits:
-            outputs.append(NamedDset(name=name, split=split))
+            # TEMPORARY HACK
+            if "frank.A" in name:
+                frank_split = "A"
+            elif "frank.B" in name:
+                frank_split = "B"
+            else:
+                frank_split = None
+
+            if frank_split is not None and name.endswith("-kb*"):
+                kbids = {"A": FRANK_A_KBIDS, "B": FRANK_B_KBIDS}[frank_split]
+                for kbid in kbids:
+                    kb_name = name.replace("-kb*", f"-kb{kbid}")
+                    outputs.append(NamedDset(name=kb_name, split=split))
+            else:
+                outputs.append(NamedDset(name=name, split=split))
     return outputs
 
 
@@ -105,7 +188,7 @@ class BaseDatasetFactoryConfig(pydantic.BaseModel):
     templates: dict[str, str] = DEFAULT_TEMPLATES
     prep_map_kwargs: dict[str, Any] = {}
     subset_size: Optional[int] = None
-    filter_unused_sections: bool = True
+    filter_unused_sections: bool = False
     min_section_tokens: Optional[int] = None
     group_hash_key: str = "group_hash"
     group_keys: list[str] = ["kb_id", "language"]
@@ -228,6 +311,7 @@ class BenchmarkConfig(pydantic.BaseModel):
     n_max_eval: Optional[int] = None
     tune_parameters: bool = True
     n_tuning_steps: int = 1_000
+    parameters: dict[str, float] = {}
     metrics: list[str] = ["ndcg", "mrr", "hitrate@01", "hitrate@03", "hitrate@10", "hitrate@30"]
     search: dict[str, Any] = {}
 

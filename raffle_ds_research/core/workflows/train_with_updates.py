@@ -92,9 +92,10 @@ def train_with_index_updates(  # noqa: C901, PLR0915
         state.period = pidx
         state.period_max_steps = end_step
 
-        # fetch the parameters for this period and log thems
-        parameters = state.get_parameters()
-        logger.info(f"Starting period {state.period + 1}/{len(update_steps) - 1} (step {start_step} -> {end_step})")
+        # fetch the parameters for this period
+        train_parameters = state.get_parameters()
+        bench_parameters = config.benchmark.parameters
+        run_benchmarks = state.period > 0 or config.benchmark.on_init
 
         # wrap everything in a temporary directory to avoid filling up the disk.
         # The temporary directory will be deleted at the end of each period except the first one
@@ -104,20 +105,32 @@ def train_with_index_updates(  # noqa: C901, PLR0915
             delete_existing=False,
             persist=state.period == 0,  # keep the cache for the first period
         ) as cache_dir:
-            factories = _get_dset_factories(config.dataset.get("all"), config=config.dataset)
+            all_dset_factories = _get_dset_factories(config.dataset.get("all"), config=config.dataset)
 
             # pre-process all datasets on global zero, this is done implicitely when loading a dataset
             if fabric.is_global_zero:
-                for key, factory in factories.items():
+                for key, factory in all_dset_factories.items():
                     logger.debug(f"Pre-processing `{key}` ...")
                     factory.get_qa_split()
                     factory.get_sections()
             barrier("Pre-processing done.")
 
             # pre-compute the vectors for each dataset, this is deactivated when faiss is not in use
-            if support.is_engine_enabled(parameters, "faiss"):
+            if support.is_engine_enabled(train_parameters, "faiss") or (
+                run_benchmarks and support.is_engine_enabled(bench_parameters, "faiss")
+            ):
+                # Select the factories to process
+                # if run_benchmarks:
+                #     compute_factories = all_dset_factories
+                # else:
+                #     compute_factories = {
+                #         **_get_dset_factories(config.dataset.get("train"), config=config.dataset),
+                #         **_get_dset_factories(config.dataset.get("validation"), config=config.dataset),
+                #     }
+
+                # Compute the vectors
                 vectors = precompute.compute_vectors(
-                    factories,
+                    all_dset_factories,
                     ranker=ranker,
                     fabric=fabric,
                     cache_dir=cache_dir,
@@ -127,16 +140,16 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                 )
             else:
                 logger.info("Faiss engine is disabled. Skipping vector pre-computation.")
-                vectors = {dset: None for dset in factories}
+                vectors = {dset: None for dset in all_dset_factories}
 
             # Tune the parameters and benchmark the ranker on each dataset separately
-            if state.period > 0 or config.benchmark.on_init:
+            if run_benchmarks:
                 if config.benchmark.tune_parameters and (
-                    parameters.get("faiss", -1) > 0 and support.is_engine_enabled(parameters, "bm25")
+                    bench_parameters.get("faiss", -1) > 0 and support.is_engine_enabled(bench_parameters, "bm25")
                 ):
                     barrier("Tuning retrieval parameters..")
-                    bench_params = tuning.tune_parameters(
-                        parameters=dict(parameters),
+                    bench_parameters = tuning.tune_parameters(
+                        parameters=bench_parameters,
                         tune=["bm25"],
                         fabric=fabric,
                         factories=_get_dset_factories(config.dataset.get("validation"), config=config.dataset),
@@ -149,18 +162,16 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                         n_tuning_steps=config.benchmark.n_tuning_steps,
                         tokenizer=config.dataset.tokenizer,
                     )
-                    logger.info(f"Tuned parameters: {parameters}")
-                else:
-                    bench_params = parameters
+                    logger.info(f"Tuned parameters: {bench_parameters}")
 
                 barrier("Running benchmarks..")
                 _run_benchmarks(
                     fabric=fabric,
                     config=config,
                     state=state,
-                    parameters=bench_params,
+                    parameters=bench_parameters,
                     cache_dir=cache_dir,
-                    factories=factories,
+                    factories=all_dset_factories,
                     vectors=vectors,
                 )
                 barrier("Completed benchmarks.")

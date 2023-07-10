@@ -14,7 +14,7 @@ model:
 benchmark:
   n_max_eval: 100
   on_init: true
-  tune_parameters: true
+  tune_parameters: false # <- TODO!
   n_tuning_steps: 100
   search:
     faiss:
@@ -29,7 +29,7 @@ trainer:
     bm25: 1.0
     faiss:
       mode: linear
-      start: 0.1s
+      start: 0.1
       value: 1
       period: ${trainer.period}
       offset: ${trainer.period}
@@ -40,7 +40,7 @@ dataset:
   train: frank.A.en-pos:train
   validation: frank.A.en-pos:val
   benchmark:
-    - frank.A.en-pos:val
+    - frank.A.en-kb*:val
 
 batch_size:
   effective: 16

@@ -119,7 +119,9 @@ class DatasetFactory:
         )
 
         if self.config.filter_unused_sections:
+            n_sections = len(dset.sections)
             sections = _filter_unused_sections(sections, self.get_qa_split())
+            logger.debug(f"Filtered {n_sections - len(sections)} unused sections.")
 
         return sections
 
@@ -199,7 +201,7 @@ class _LazySectionLookupFilter:
 def _filter_unused_sections(sections: datasets.Dataset, qa_split: datasets.Dataset) -> datasets.Dataset:
     """Filter out sections that are not used in the QA split."""
     filter_op = _LazySectionLookupFilter(qa_split)
-    return sections.filter(filter_op)
+    return sections.filter(filter_op, desc="Filtering unused sections")
 
 
 M = TypeVar("M", bound=pydantic.BaseModel)
@@ -211,8 +213,6 @@ def _cast_pydantic_model(config: dict | pydantic.BaseModel | M, model: Type[M]) 
 
     if isinstance(config, pydantic.BaseModel):
         config = config.dict()
-    else:
-        raise TypeError(f"Expected config of type {model}, got {type(config)}")
 
     return model(**config)
 
