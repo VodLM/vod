@@ -108,7 +108,7 @@ def build_search_engine(
 @pl_utils.rank_zero_only
 def _close_all_es_indices(es_url: str = "http://localhost:9200") -> None:
     """Close all `elasticsearch` indices."""
-    logger.warning(f"Closing all ES indices on `{es_url}`")
+    logger.warning(f"Closing all ES indices at `{es_url}`")
     try:
         es = elasticsearch.Elasticsearch(es_url)
         for index_name in es.indices.get(index="*"):

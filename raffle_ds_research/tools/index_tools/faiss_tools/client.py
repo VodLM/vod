@@ -115,6 +115,7 @@ class FaissClient(search_server.SearchClient):
             return rtypes.RetrievalBatch(
                 indices=indices,
                 scores=scores,
+                labels=None,
                 meta={"time": time.time() - start_time},
             )
         except Exception as exc:

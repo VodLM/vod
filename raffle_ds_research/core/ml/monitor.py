@@ -111,14 +111,14 @@ class LightningAveragedMetric(AveragedMetric):
         """Update the metric."""
         preds, target = _mask_inputs(preds, target)
         batch_size = preds[..., 0].numel()
-        batch_avg = self._metric_fn(preds=preds, target=target, k=self.top_k)
+        batch_avg = self._metric_fn(preds=preds, target=target, top_k=self.top_k)
         # `metric_fn` returns the mean over the batch,
         # so we need to multiply by the batch size to get the sum
         batch_avg = batch_avg.repeat(batch_size)
         self._update(batch_avg)
 
     @abc.abstractmethod
-    def _metric_fn(self, preds: torch.Tensor, target: torch.Tensor, k: Optional[int]) -> torch.Tensor:
+    def _metric_fn(self, preds: torch.Tensor, target: torch.Tensor, top_k: Optional[int]) -> torch.Tensor:
         """Compute the metric given the predictions and the targets."""
         ...
 
@@ -126,22 +126,22 @@ class LightningAveragedMetric(AveragedMetric):
 class NormalizedDCG(LightningAveragedMetric):
     """Normalized Discounted Cumulative Gain (NDCG)."""
 
-    def _metric_fn(self, preds: torch.Tensor, target: torch.Tensor, k: Optional[int]) -> torch.Tensor:
-        return torchmetrics.functional.retrieval_normalized_dcg(preds=preds, target=target, k=k)
+    def _metric_fn(self, preds: torch.Tensor, target: torch.Tensor, top_k: Optional[int]) -> torch.Tensor:
+        return torchmetrics.functional.retrieval_normalized_dcg(preds=preds, target=target, top_k=top_k)
 
 
 class Recall(LightningAveragedMetric):
     """Recall metric."""
 
-    def _metric_fn(self, preds: torch.Tensor, target: torch.Tensor, k: Optional[int]) -> torch.Tensor:
-        return torchmetrics.functional.retrieval_recall(preds=preds, target=target, k=k)
+    def _metric_fn(self, preds: torch.Tensor, target: torch.Tensor, top_k: Optional[int]) -> torch.Tensor:
+        return torchmetrics.functional.retrieval_recall(preds=preds, target=target, top_k=top_k)
 
 
 class Precision(LightningAveragedMetric):
     """Precision metric."""
 
-    def _metric_fn(self, preds: torch.Tensor, target: torch.Tensor, k: Optional[int]) -> torch.Tensor:
-        return torchmetrics.functional.retrieval_precision(preds=preds, target=target, k=k)
+    def _metric_fn(self, preds: torch.Tensor, target: torch.Tensor, top_k: Optional[int]) -> torch.Tensor:
+        return torchmetrics.functional.retrieval_precision(preds=preds, target=target, top_k=top_k)
 
 
 def retrieval_metric_factory(name: str, **kwargs: Any) -> Metric:

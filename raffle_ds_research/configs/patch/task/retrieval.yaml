@@ -78,10 +78,11 @@ collates:
   train:
     n_sections: 48
     max_pos_sections: 8
-    prefetch_n_sections: 64
+    prefetch_n_sections: 100
     do_sample: false
     in_batch_negatives: true
   benchmark:
+    n_sections: null
     prefetch_n_sections: 512
     do_sample: false
     post_filter: ensure_match

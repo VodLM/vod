@@ -106,6 +106,11 @@ class Bm25Client(search_server.SearchClient):
 
         # Unpack the responses
         # TODO: efficient implementation
+
+        # compute the max length of the hits
+        max_hits = max(len(response["hits"]["hits"]) for response in responses["responses"])
+
+        # process the responses
         indices, scores = [], []
         for response in responses["responses"]:
             # process the indices
@@ -116,14 +121,14 @@ class Bm25Client(search_server.SearchClient):
                 raise
 
             # process the indices
-            indices_ = (hit["_source"][ROW_IDX_KEY] for hit in hits[:top_k])
+            indices_ = (hit["_source"][ROW_IDX_KEY] for hit in hits[:max_hits])
             indices_ = np.fromiter(indices_, dtype=np.int64)
-            indices_ = np.pad(indices_, (0, top_k - len(indices_)), constant_values=-1)
+            indices_ = np.pad(indices_, (0, max_hits - len(indices_)), constant_values=-1)
 
             # process the scores and the labels
-            scores_ = (hit["_score"] for hit in hits[:top_k])
+            scores_ = (hit["_score"] for hit in hits[:max_hits])
             scores_ = np.fromiter(scores_, dtype=np.float32)
-            scores_ = np.pad(scores_, (0, top_k - len(scores_)), constant_values=-np.inf)
+            scores_ = np.pad(scores_, (0, max_hits - len(scores_)), constant_values=-np.inf)
 
             indices.append(indices_)
             scores.append(scores_)
@@ -167,17 +172,17 @@ class Bm25Client(search_server.SearchClient):
             section_ids: Optional[list[str | int]] = None,
             terms_boost_value: float = 1.0,
         ) -> dict[str, Any]:
-            body = {
-                "should": [
+            body = {"should": []}
+            if len(text):
+                body["should"].append(
                     {"match": {BODY_KEY: text}},
-                ]
-            }
-            if group is not None:
-                body["filter"] = {"term": {GROUP_KEY: group}}  # type: ignore
+                )
             if section_ids is not None:
                 body["should"].append(
                     {"terms": {SECTION_ID_KEY: section_ids, "boost": terms_boost_value}},  # type: ignore
                 )
+            if group is not None:
+                body["filter"] = {"term": {GROUP_KEY: group}}  # type: ignore
             return {"query": {"bool": body}}
 
         return [
@@ -188,7 +193,7 @@ class Bm25Client(search_server.SearchClient):
                 {
                     "from": 0,
                     "size": top_k,
-                    "fields": [ROW_IDX_KEY],
+                    "_source": [ROW_IDX_KEY],
                     **_make_search_body(
                         text,
                         group=group,

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import re
+import time
 import warnings
+from typing import Any
 
 import numpy as np
 
@@ -61,3 +63,17 @@ def exact_match(q: str, d: str) -> bool:
 
     rich.print({"q": q, "d": d})
     return q in d
+
+
+class BlockTimer:
+    """A context manager for timing code blocks."""
+
+    def __init__(self, name: str, output: dict[str, Any]) -> None:
+        self.name = name
+        self.output = output
+
+    def __enter__(self) -> None:
+        self.start = time.perf_counter()
+
+    def __exit__(self, *args: Any) -> None:
+        self.output[self.name] = time.perf_counter() - self.start

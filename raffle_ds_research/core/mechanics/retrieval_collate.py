@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import functools
 import math
-import pathlib
 import time
 import warnings
 from multiprocessing.managers import DictProxy
@@ -15,9 +14,10 @@ import transformers
 from loguru import logger
 
 from raffle_ds_research.core import config as core_config
+from raffle_ds_research.core.mechanics import fast
 from raffle_ds_research.core.mechanics.post_filtering import PostFilter, post_filter_factory
-from raffle_ds_research.core.mechanics.section_sampler import SampledSections, sample_sections
-from raffle_ds_research.core.mechanics.utils import fill_nans_with_min
+from raffle_ds_research.core.mechanics.section_sampler import sample_sections
+from raffle_ds_research.core.mechanics.utils import BlockTimer
 from raffle_ds_research.tools import c_tools, dstruct, index_tools, pipes
 from raffle_ds_research.tools.pipes.utils.misc import pack_examples
 
@@ -30,34 +30,34 @@ class RetrievalCollate(pipes.Collate):
     """Collate function for retrieval tasks. This function is used to convert a list of examples into a batch.
 
     Steps:
-        1. search
-        2. merge
-        3. post-filter
-        4. Gather the positive `section_ids`
-        5. sample the sections given the positive ones and the pool of candidates'
-        6. fetch the content of each section from the huggingface `datasets.Dataset`
-        7. tokenize the sections & questions
-        8. return the batch (`torch.Tensor`)
+        1. search & merge
+        2. post-filter
+        3. sample the sections
+        4. fetch the content of each section from the huggingface `datasets.Dataset`
+        5. tokenize the sections & questions
+        6. cast & return the batch (`torch.Tensor`)
     """
 
-    tokenizer: transformers.PreTrainedTokenizer | transformers.PreTrainedTokenizerFast
+    tokenizer: transformers.PreTrainedTokenizerBase
     search_client: index_tools.MultiSearchClient
     post_filter: Optional[PostFilter]
     sections: dstruct.SizedDataset[dict[str, Any]]
     config: core_config.RetrievalCollateConfig
-    _target_lookup: Optional[index_tools.LookupIndexbyGroup]
-    _target_lookup_path: Optional[pathlib.Path]
 
     def __init__(
         self,
         *,
-        tokenizer: transformers.PreTrainedTokenizer | transformers.PreTrainedTokenizerFast,
+        tokenizer: transformers.PreTrainedTokenizerBase,
         search_client: index_tools.MultiSearchClient,
         sections: dstruct.SizedDataset[dict[str, Any]],
         config: core_config.RetrievalCollateConfig,
         parameters: Optional[dict | DictProxy] = None,
-        target_lookup: index_tools.LookupIndexbyGroup | pathlib.Path,
     ):
+        if "bm25" not in search_client.clients:
+            raise ValueError(
+                "The `bm25` client is required to lookup positive sections. "
+                "Please add it to the `search_client` argument"
+            )
         self.tokenizer = tokenizer
         self.search_client = search_client
         self.sections = sections
@@ -88,76 +88,45 @@ class RetrievalCollate(pipes.Collate):
             for client in missing_clients:
                 self.parameters[client] = 1.0
 
-        # Lookup table for the positive sections
-        if isinstance(target_lookup, index_tools.LookupIndexbyGroup):
-            self._target_lookup = target_lookup
-            self._target_lookup_path = None
-        elif isinstance(target_lookup, pathlib.Path):
-            self._target_lookup_path = target_lookup
-            self._target_lookup = None
-        else:
-            raise TypeError(f"Invalid type for `target_lookup`: {type(target_lookup)}")
-
-    @property
-    def target_lookup(self) -> index_tools.LookupIndexbyGroup:
-        """Lazy loading of the target lookup table."""
-        if self._target_lookup is None:
-            if self._target_lookup_path is None:
-                raise ValueError("Both `target_lookup` and `target_lookup_path` are `None`")
-            self._target_lookup = index_tools.LookupIndexbyGroup.load(self._target_lookup_path)
-        return self._target_lookup
-
     def __call__(self, examples: list[dict[str, Any]], **kwargs: Any) -> dict[str, Any]:
         """Collate function for retrieval tasks. This function is used to convert a list of examples into a batch."""
         start_time = time.perf_counter()
         batch = pack_examples(examples)
 
         # Search within each client
-        search_results = self.search(batch, top_k=self.config.prefetch_n_sections)
-        diagnostics = {f"diagnostics.{key}_time": s.meta.get("time", None) for key, s in search_results.items()}
-
-        # Merge the search results from the different clients
-        candidate_samples, client_scores = weighted_merge_search_results(
-            search_results,
-            weights=self.parameters,
-            fill_nan_scores=True,  # <-- replace NaNs for each client with the minimum score of that client
-            fill_nan_scores_offset=-5,  # <-- offset to use when replacing NaNs with minimum scores + this offset
-        )
+        search_results, raw_scores = self.search(batch, top_k=self.config.prefetch_n_sections)
+        diagnostics = {f"diagnostics.{key}": s for key, s in search_results.meta.items()}
 
         # Post-filtering sections based on the group hash
         if self.post_filter is not None:
-            n_not_inf = (~np.isinf(candidate_samples.scores)).sum()
-            candidate_samples = self.post_filter(candidate_samples, query=batch)
-            n_not_inf_after = (~np.isinf(candidate_samples.scores)).sum()
-            prop_filtered = (n_not_inf - n_not_inf_after) / candidate_samples.scores.size
-            diagnostics["diagnostics.post_filtered"] = prop_filtered
-
-        # Fetch the positive `section_ids`
-        with BlockTimer(name="diagnostics.target_lookup_time", output=diagnostics):
-            kb_ids = batch[self.config.group_id_keys.query]
-            query_section_ids = batch[self.config.section_id_keys.query]
-            positive_samples: index_tools.RetrievalBatch = self.target_lookup.search(query_section_ids, kb_ids)
+            search_results, raw_scores = _post_filter(
+                search_results,
+                raw_scores,
+                batch=batch,
+                diagnostics=diagnostics,
+                post_filter=self.post_filter,
+            )
 
         # Sample the sections given the positive ones and the pool of candidates
         with BlockTimer(name="diagnostics.sample_sections_time", output=diagnostics):
-            max_support_size = self.config.prefetch_n_sections if self.config.n_sections is not None else None
-            sections: SampledSections = sample_sections(
-                candidates=candidate_samples,
-                positives=positive_samples,
-                n_sections=self.config.n_sections,
-                max_pos_sections=self.config.max_pos_sections,
-                do_sample=self.config.do_sample,
-                other_scores=client_scores,
-                max_support_size=max_support_size,  # <-- limit the max candidate pool size (deactivated when no sampl.)
-            )
+            if self.config.n_sections is None:
+                sections, sampled_raw = search_results, raw_scores
+            else:
+                sections, sampled_raw = sample_sections(
+                    search_results=search_results,
+                    raw_scores=raw_scores,
+                    n_sections=self.config.n_sections,
+                    max_pos_sections=self.config.max_pos_sections,
+                    temperature=float(self.config.do_sample),
+                    max_support_size=self.config.prefetch_n_sections,  # <-- limit the candidate pool size
+                )
 
         # Flatten sections (in-batch negative)
         if self.config.in_batch_negatives:
-            sections = gather_in_batch_negatives(
+            sections, sampled_raw = gather_in_batch_negatives(
                 sections,
-                candidates=candidate_samples,
-                positives=positive_samples,
-                client_scores=client_scores,
+                search_results=search_results,
+                raw_scores=raw_scores,
                 world_size=len(self.sections),
                 padding=True,  # <-- padding is required for `torch.compile()` to compile a single graph.
                 fill_score_offset=self.config.in_batch_neg_offset,
@@ -211,7 +180,7 @@ class RetrievalCollate(pipes.Collate):
         batch = {
             **tokenized_question,
             **tokenized_sections,
-            **_sampled_sections_to_dict(sections, prefix="section.", as_torch=True),
+            **_sampled_sections_to_dict(sections, sampled_raw, prefix="section.", as_torch=True),
             **attributes,
             **diagnostics,
             **{f"diagnostics.parameters.{k}": v for k, v in self.parameters.items()},
@@ -256,8 +225,7 @@ class RetrievalCollate(pipes.Collate):
         self,
         batch: dict[str, Any],
         top_k: int,
-        **kwargs: Any,
-    ) -> dict[str, index_tools.RetrievalBatch]:
+    ) -> tuple[index_tools.RetrievalBatch, dict[str, np.ndarray]]:
         """Search the batch of queries and return the top `top_k` results."""
         # Get the query ids
         query_group_ids = batch[self.config.group_id_keys.query]
@@ -274,30 +242,144 @@ class RetrievalCollate(pipes.Collate):
             query_vectors = None
 
         # Async search the query text using `search_client.async_search`
-        return asyncio.run(
-            self.search_client.async_search(
-                text=query_text,
-                vector=query_vectors,
-                group=query_group_ids,
-                top_k=top_k,
-            )
+        return _multi_search(
+            text=query_text,
+            vector=query_vectors,
+            group=query_group_ids,
+            query_section_ids=batch[self.config.section_id_keys.query],
+            top_k=top_k,
+            clients=self.search_client.clients,
+            weights=dict(self.parameters),
         )
 
 
+def _multi_search(
+    *,
+    text: list[str],
+    vector: Optional[np.ndarray] = None,
+    group: Optional[list[str]] = None,
+    query_section_ids: list[list[str | int]],
+    top_k: int,
+    clients: dict[str, index_tools.SearchClient],
+    weights: dict[str, float],
+) -> tuple[index_tools.RetrievalBatch, dict[str, np.ndarray]]:
+    """Query a multisearch egine."""
+    if "bm25" not in clients:
+        raise ValueError("The BM25 client must be specified to lookup the positive sections.")
+
+    # Create the search payloads - another payload is prepended to look up the positive sections
+    lookup_payload = {
+        "client": clients["bm25"],
+        "vector": vector,
+        "text": [""] * len(text),
+        "group": group,
+        "section_ids": query_section_ids,
+        "top_k": top_k,
+    }
+    client_names = list(clients.keys())
+    payloads = [
+        {
+            "client": clients[name],
+            "vector": vector,
+            "text": text,
+            "group": group,
+            "top_k": top_k,
+        }
+        for name in client_names
+    ]
+
+    # Run the searches asynchronously
+    meta = {}
+    with BlockTimer(name="search_time", output=meta):
+        search_results = asyncio.run(_execute_search([lookup_payload] + payloads))
+
+    # Unpack the results
+    search_results = dict(zip(["lookup"] + client_names, search_results))
+    search_results["lookup"].scores.fill(0.0)  # Discard the scores for the lookup
+
+    # Retrieve the meta data
+    for name, result in search_results.items():
+        for key, value in result.meta.items():
+            meta[f"{name}_{key}"] = value
+
+    # normalize the scores
+    fast.normalize_scores_(search_results, offset=1.0)
+
+    # Combine the results and add meta data
+    combined_results, raw_scores = fast.merge_search_results(
+        search_results=search_results,
+        weights={"lookup": 0.0, **weights},
+    )
+    combined_results.meta = meta
+    raw_scores.pop("lookup")
+
+    # Set -inf to the mask section (index -1)
+    is_masked = combined_results.indices < 0
+    combined_results.scores[is_masked] = -np.inf
+    for scores in raw_scores.values():
+        scores[is_masked] = -np.inf
+
+    return combined_results, raw_scores
+
+
+async def _execute_search(payloads: list[dict[str, Any]]) -> list[index_tools.RetrievalBatch]:
+    def search_fn(args: dict[str, Any]) -> index_tools.RetrievalBatch[np.ndarray]:
+        client = args.pop("client")
+        return client.search(**args)
+
+    loop = asyncio.get_event_loop()
+    futures = [
+        loop.run_in_executor(
+            None,
+            search_fn,
+            payload,
+        )
+        for payload in payloads
+    ]
+    return await asyncio.gather(*futures)
+
+
+def _post_filter(
+    search_results: index_tools.RetrievalBatch,
+    raw_scores: dict[str, np.ndarray],
+    *,
+    post_filter: PostFilter,
+    batch: dict[str, Any],
+    diagnostics: dict[str, Any],
+) -> tuple[index_tools.RetrievalBatch, dict[str, np.ndarray]]:
+    n_not_inf = (~np.isinf(search_results.scores)).sum()
+    all_scores = {"main": search_results.scores, **raw_scores}
+    all_scores = post_filter(search_results.indices, all_scores, query=batch)
+    search_results.scores = all_scores.pop("main")  # TODO : make new
+    n_not_inf_after = (~np.isinf(search_results.scores)).sum()
+    prop_filtered = (n_not_inf - n_not_inf_after) / search_results.scores.size
+    diagnostics["diagnostics.post_filtered"] = prop_filtered
+    return search_results, all_scores
+
+
 def _sampled_sections_to_dict(
-    sections: SampledSections, prefix: str = "", as_torch: bool = False
+    sections: index_tools.RetrievalBatch,
+    raw_scores: Optional[dict[str, np.ndarray]] = None,
+    prefix: str = "",
+    as_torch: bool = False,
 ) -> dict[str, np.ndarray | torch.Tensor]:
     """Convert the sampled sections to a dictionary."""
-    output = {f"{prefix}idx": sections.indices, f"{prefix}score": sections.scores, f"{prefix}label": sections.labels}
+    if sections.labels is None:
+        raise ValueError("The sections must have labels.")
+    output = {
+        f"{prefix}idx": sections.indices,
+        f"{prefix}score": sections.scores,
+        f"{prefix}label": sections.labels > 0,
+    }
 
-    if sections.other_scores is not None:
-        output.update({f"{prefix}{k}": v for k, v in sections.other_scores.items()})
+    if raw_scores is not None:
+        output.update({f"{prefix}{k}": v for k, v in raw_scores.items()})
 
     if as_torch:
         output = {k: torch.from_numpy(v) for k, v in output.items()}
         output[f"{prefix}label"] = output[f"{prefix}label"].to(torch.bool)
 
-    return output
+    return output  # type: ignore
 
 
 def _as_tensor(
@@ -321,119 +403,14 @@ def _as_tensor(
     return x
 
 
-def _ensure_match(
-    *,
-    batch: dict[str, Any],
-    candidate_samples: index_tools.RetrievalBatch,
-    features: dstruct.SizedDataset[dict[str, Any]],
-    features_keys: list[str],
-) -> index_tools.RetrievalBatch:
-    """Filter the candidates sections based on the `config.ensure_match` keys."""
-    batch_features = {key: np.asarray(batch[key]) for key in features_keys}
-    section_indices = candidate_samples.indices.flatten().tolist()
-    section_features = features[section_indices]
-
-    keep_mask = None
-    for key, batch_features_key in batch_features.items():
-        section_features_key = section_features[key]
-        section_features_key = np.asarray(section_features_key).reshape(batch_features_key.shape[0], -1)
-        keep_mask_key = batch_features_key[:, None] == section_features_key
-        keep_mask = keep_mask_key if keep_mask is None else keep_mask & keep_mask_key
-    if keep_mask is None:
-        raise ValueError("No features to match")
-
-    candidate_samples.scores = np.where(keep_mask, candidate_samples.scores, -math.inf)
-    return candidate_samples
-
-
-def weighted_merge_search_results(
-    candidates: dict[str, index_tools.RetrievalBatch],
-    weights: dict[str, float],
-    fill_nan_scores: bool = False,
-    fill_nan_scores_offset: float = -1,
-    top_k: Optional[int] = None,
-) -> tuple[index_tools.RetrievalBatch, dict[str, np.ndarray]]:
-    """Merge the candidate samples from multiple clients."""
-    ordered_keys = list(candidates.keys())
-    weights = {key: weights[key] for key in candidates}
-    if len(candidates) == 1:
-        key = ordered_keys[0]
-        candidate = candidates[key]
-        candidate_scores = candidate.scores
-        candidate.scores = candidate_scores * weights[key]
-        return candidate, {key: candidate_scores}
-    if len(candidates) == 0:
-        raise ValueError("No candidates to merge")
-
-    candidate_samples = index_tools.merge_retrieval_batches([candidates[key] for key in ordered_keys])
-    if top_k is not None:
-        candidate_samples.indices[..., :top_k]
-        candidate_samples.scores[..., :top_k]
-
-    if fill_nan_scores:
-        # replace nan scores with the minimum score
-        candidate_samples.scores = fill_nans_with_min(
-            values=candidate_samples.scores,
-            offset_min_value=fill_nan_scores_offset,
-            axis=1,
-        )
-
-    # Aggregate the scores
-    aggregated_scores = np.full_like(candidate_samples.scores[..., 0], np.nan)
-    client_scores = {}
-    for i, key in enumerate(ordered_keys):
-        weight = weights[key]
-        client_scores[key] = candidate_samples.scores[..., i]
-        weighted_client_scores_i = weight * client_scores[key]
-        aggregated_scores = np.where(
-            np.isnan(aggregated_scores),
-            weighted_client_scores_i,
-            aggregated_scores + np.where(np.isnan(weighted_client_scores_i), 0, weighted_client_scores_i),
-        )
-
-    # Replace the negative indices with -inf
-    aggregated_scores = np.where(candidate_samples.indices < 0, -np.inf, aggregated_scores)
-    candidate_samples.scores = aggregated_scores
-    return candidate_samples, client_scores
-
-
-def _sort_sections(
-    candidate_samples: index_tools.RetrievalBatch,
-    client_scores: dict[str, np.ndarray],
-) -> tuple[index_tools.RetrievalBatch, dict[str, np.ndarray]]:
-    sort_ids = np.argsort(candidate_samples.scores, axis=-1)
-    sort_ids = np.flip(sort_ids, axis=-1)
-    candidate_samples.indices = np.take_along_axis(candidate_samples.indices, sort_ids, axis=-1)
-    candidate_samples.scores = np.take_along_axis(candidate_samples.scores, sort_ids, axis=-1)
-    for k, v in client_scores.items():
-        client_scores[k] = np.take_along_axis(v, sort_ids, axis=-1)
-
-    return candidate_samples, client_scores
-
-
-class BlockTimer:
-    """A context manager for timing code blocks."""
-
-    def __init__(self, name: str, output: dict[str, Any]) -> None:
-        self.name = name
-        self.output = output
-
-    def __enter__(self) -> None:
-        self.start = time.perf_counter()
-
-    def __exit__(self, *args: Any) -> None:
-        self.output[self.name] = time.perf_counter() - self.start
-
-
 def gather_in_batch_negatives(
-    samples: SampledSections,
-    candidates: index_tools.RetrievalBatch,
-    positives: index_tools.RetrievalBatch,
-    client_scores: dict[str, np.ndarray],
+    samples: index_tools.RetrievalBatch,
+    search_results: index_tools.RetrievalBatch,
+    raw_scores: dict[str, np.ndarray],
     world_size: int,
     fill_score_offset: float = 0,
     padding: bool = True,
-) -> SampledSections:
+) -> tuple[index_tools.RetrievalBatch, dict[str, np.ndarray]]:
     """Merge all sections (positive and negative) as a flat batch."""
     unique_indices = np.unique(samples.indices)
     if padding:
@@ -449,35 +426,35 @@ def gather_in_batch_negatives(
     unique_indices_ = unique_indices[None, :].repeat(samples.indices.shape[0], axis=0)
 
     # Gather the scores from the `candidates` batch, set the NaNs to the minimum score
-    scores = c_tools.gather_by_index(unique_indices_, candidates.indices, candidates.scores)
+    scores = c_tools.gather_by_index(unique_indices_, search_results.indices, search_results.scores)
     scores = _fill_nan_scores(
         scores,
-        ref_scores=candidates.scores,
+        ref_scores=search_results.scores,
         fill_value_offset=fill_score_offset,
     )
 
     # Gather the labels from the `positives` batch, set NaNs to negatives
-    labels = c_tools.gather_by_index(unique_indices_, positives.indices, positives.indices >= 0)
-    labels = (~np.isnan(labels)) & (labels > 0)
+    labels = c_tools.gather_by_index(unique_indices_, search_results.indices, search_results.labels)
+    labels[np.isnan(labels)] = -1
 
     # Other scores (client scores)
-    if samples.other_scores is not None:
-        others = {}
-        for key in samples.other_scores:
-            others[key] = c_tools.gather_by_index(unique_indices_, candidates.indices, client_scores[key])
-            others[key] = _fill_nan_scores(
-                others[key],
-                ref_scores=candidates.scores,
-                fill_value_offset=fill_score_offset,
-            )
-    else:
-        others = None
+    flat_raw_scores = {}
+    for key in raw_scores:
+        flat_raw_scores[key] = c_tools.gather_by_index(unique_indices_, search_results.indices, raw_scores[key])
+        flat_raw_scores[key] = _fill_nan_scores(
+            flat_raw_scores[key],
+            ref_scores=search_results.scores,
+            fill_value_offset=fill_score_offset,
+        )
 
-    return SampledSections(
-        indices=unique_indices,
-        scores=scores,
-        labels=labels,
-        other_scores=others,
+    return (
+        index_tools.RetrievalBatch(
+            indices=unique_indices,
+            scores=scores,
+            labels=labels,
+            allow_unsafe=True,
+        ),
+        flat_raw_scores,
     )
 
 

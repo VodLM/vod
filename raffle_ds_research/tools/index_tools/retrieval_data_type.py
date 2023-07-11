@@ -111,26 +111,27 @@ class RetrievalData(ABC, Generic[Ts_co]):
         self,
         scores: Ts_co,
         indices: Ts_co,
-        labels: None | Ts_co,
+        labels: Optional[Ts_co] = None,
         meta: Optional[dict[str, Any]] = None,
+        allow_unsafe: bool = False,
     ):
         dim = len(indices.shape)
         # note: only check shapes up to the number of dimensions of the indices. This allows
         # for the scores to have more dimensions than the indices, e.g. for the case of
         # merging two batches.
-        if scores.shape[:dim] != indices.shape[:dim]:
+        if not allow_unsafe and scores.shape[:dim] != indices.shape[:dim]:
             raise ValueError(
                 f"The shapes of `scores` and `indices` must match up to the dimension of `indices`, "
                 f"but got {_array_repr(scores)} and {_array_repr(indices)}"
             )
         if labels is not None and (scores.shape[:dim] != labels.shape[:dim]):
             raise ValueError("The shapes of `scores` and `labels` must match up to the dimension of `indices`, ")
-        if len(indices.shape) != self._expected_dim:
+        if len(scores.shape) != self._expected_dim:
             raise ValueError(
-                f"Scores and indices must be {self._expected_dim}D, "
-                f"but got {_array_repr(scores)} and {_array_repr(indices)}"
+                f"Scores must be {self._expected_dim}D, " f"but got {_array_repr(scores)} and {_array_repr(indices)}"
             )
 
+        self.allow_unsafe = allow_unsafe
         self.scores = scores
         self.indices = indices
         self.labels = labels
@@ -307,6 +308,15 @@ class RetrievalBatch(RetrievalData[Ts_co]):
             )
 
         raise NotImplementedError(f"Sorting is not implemented for {type(self.scores)}")
+
+    def __mul__(self, value: float) -> RetrievalBatch[Ts_co]:
+        """Multiply scores by a value."""
+        return RetrievalBatch(
+            scores=self.scores * value,
+            indices=self.indices,
+            labels=self.labels,
+            meta=copy.copy(self.meta),
+        )
 
 
 def merge_retrieval_batches(batches: Iterable[RetrievalBatch]) -> RetrievalBatch:

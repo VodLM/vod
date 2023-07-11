@@ -5,7 +5,6 @@ import contextlib
 import dataclasses
 import functools
 import os
-import pathlib
 import typing
 from multiprocessing.managers import DictProxy
 from typing import Any, Callable, Optional, Protocol, TypeVar
@@ -30,7 +29,6 @@ from raffle_ds_research.core.workflows.utils import support
 from raffle_ds_research.core.workflows.utils.schedule import BaseSchedule
 from raffle_ds_research.tools import dstruct, index_tools, pipes
 from raffle_ds_research.tools.pipes.hashing import fingerprint_torch_module
-from raffle_ds_research.tools.utils.pretty import human_format_nb
 
 T = TypeVar("T")
 
@@ -102,42 +100,15 @@ def instantiate_retrieval_dataloader(
     collate_config: core_config.RetrievalCollateConfig,
     dataloader_config: core_config.DataLoaderConfig,
     parameters: Optional[dict | DictProxy],
-    cache_dir: pathlib.Path,
-    barrier_fn: Callable[[str], None],
-    rank: int = 0,
     dl_sampler: typing.Optional[DataloaderSampler] = None,
 ) -> torch_data.DataLoader[dict[str, Any]]:
     """Instantiate a dataloader for the retrieval task."""
-    lookup_args = {
-        "key": collate_config.section_id_keys.section,
-        "group_key": collate_config.group_id_keys.section,
-    }
-    fname = f"lookup-{pipes.fingerprint(sections.data)}-{pipes.fingerprint(lookup_args)}.pkl"
-    lookup_path = cache_dir / "lookups" / fname
-    if rank == 0 and not lookup_path.exists():
-        logger.debug(f"Building the section id lookup index at `{lookup_path}`")
-        target_lookup = index_tools.LookupIndexbyGroup(
-            sections.data,
-            num_proc=collate_config.prep_num_proc,
-            **lookup_args,
-        )
-        target_lookup.save(lookup_path)
-        del target_lookup
-
-    barrier_fn("Building lookup index")
-    if rank == 0:
-        logger.debug(f"Loading the section id lookup index at `{lookup_path}`")
-        target_lookup = index_tools.LookupIndexbyGroup.load(lookup_path)
-        target_lookup.validate(sections.data)
-        logger.debug(f"Lookup index built ({human_format_nb(target_lookup.memsize, base=1024)}B)")
-
     collate_fn = mechanics.RetrievalCollate(
         tokenizer=tokenizer,
         sections=sections.data,
         search_client=search_client,
         config=collate_config,
         parameters=parameters,
-        target_lookup=lookup_path,
     )
     dataset = _WithVectors(
         dataset=questions.data,

@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import abc
 import math
-from typing import Any
+from typing import Any, TypeVar
 
 import numpy as np
 
-from raffle_ds_research.tools import dstruct, index_tools
+from raffle_ds_research.tools import dstruct
+
+K = TypeVar("K")
 
 
 class PostFilter(abc.ABC):
@@ -15,10 +17,11 @@ class PostFilter(abc.ABC):
     @abc.abstractmethod
     def __call__(
         self,
-        results: index_tools.RetrievalBatch,
+        indices: np.ndarray,
+        scores: dict[K, np.ndarray],
         *,
         query: dict[str, Any],
-    ) -> index_tools.RetrievalBatch:
+    ) -> dict[K, np.ndarray]:
         """Filter the results."""
         raise NotImplementedError()
 
@@ -50,17 +53,17 @@ class EnsureMatch(PostFilter):
 
     def __call__(
         self,
-        results: index_tools.RetrievalBatch,
+        indices: np.ndarray,
+        scores: dict[K, np.ndarray],
         *,
         query: dict[str, Any],
-    ) -> index_tools.RetrievalBatch:
+    ) -> dict[K, np.ndarray]:
         """Filter the results."""
         batch_features = np.asarray(query[self._query_key], dtype=np.int64)
-        results_features = self._features[results.indices]
+        results_features = self._features[indices]
         keep_mask = batch_features[:, None] == results_features
         keep_mask |= (keep_mask.sum(axis=1) == 0)[:, None]  # <- don't filter out rows without match
-        results.scores = np.where(keep_mask, results.scores, -math.inf)
-        return results
+        return {key: np.where(keep_mask, s, -math.inf) for key, s in scores.items()}
 
 
 def post_filter_factory(

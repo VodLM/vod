@@ -110,9 +110,6 @@ def index_and_train(
             search_client=search_client,
             collate_config=collate_config,
             parameters=parameters,
-            cache_dir=cache_dir,
-            barrier_fn=barrier_fn,
-            rank=fabric.global_rank,
             dl_sampler=dl_sampler,
         )
 

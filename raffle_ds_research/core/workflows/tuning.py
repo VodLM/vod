@@ -128,9 +128,6 @@ def tune_parameters(
                 collate_config=collate_config,
                 dataloader_config=dataloader_config,
                 parameters=parameters,
-                cache_dir=cache_dir,
-                barrier_fn=logger.debug,
-                rank=0,
             )
 
             try:

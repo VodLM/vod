@@ -13,9 +13,12 @@ model:
 
 benchmark:
   n_max_eval: 100
-  on_init: true
+  on_init: false
   tune_parameters: false # <- TODO!
   n_tuning_steps: 100
+  parameters:
+    bm25: 1.0
+    faiss: 0.0
   search:
     faiss:
       factory: Flat
@@ -27,12 +30,7 @@ trainer:
   n_max_eval: 100
   parameters:
     bm25: 1.0
-    faiss:
-      mode: linear
-      start: 0.1
-      value: 1
-      period: ${trainer.period}
-      offset: ${trainer.period}
+    faiss: 0.0
 
 dataset:
   subset_size: null
@@ -40,7 +38,7 @@ dataset:
   train: frank.A.en-pos:train
   validation: frank.A.en-pos:val
   benchmark:
-    - frank.A.en-kb*:val
+    - frank.A.en-pos:val
 
 batch_size:
   effective: 16
@@ -56,11 +54,18 @@ collates:
   train:
     n_sections: 5
     max_pos_sections: 2
-    prefetch_n_sections: 32
-    do_sample: true
-    in_batch_negatives: true
+    prefetch_n_sections: 12
+    do_sample: false
+    in_batch_negatives: false
+    post_filter: ensure_match
 
-  eval:
-    n_sections: 128
-    max_pos_sections: 32
-    prefetch_n_sections: 256
+  benchmark:
+    n_sections: 64
+    max_pos_sections: 16
+    prefetch_n_sections: 128
+    do_sample: false
+    post_filter: ensure_match
+
+dataloaders:
+  benchmark:
+    batch_size: 3

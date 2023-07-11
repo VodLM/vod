@@ -17,7 +17,7 @@ defaults:
 
 seed: ${global_seed:}
 model_name: ${model.encoder.model_name}
-exp_version: "v2.2"
+exp_version: "v2.3"
 exp_suffix: ""
 exp_name: retrieval
 run_name: ${fmt_mn:${model_name}}--${rdn_name:}-${exp_version}${exp_suffix}
@@ -36,7 +36,7 @@ dataloaders:
     pin_memory: True
     shuffle: True
   benchmark:
-    batch_size: 100
+    batch_size: 16
     num_workers: ${resources.num_workers}
     pin_memory: True
     shuffle: True
