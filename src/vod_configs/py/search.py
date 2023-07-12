@@ -5,9 +5,17 @@ import omegaconf
 import pydantic
 import torch
 from loguru import logger
+from typing_extensions import Self, Type
 
 from src.vod_tools import pipes
 from src.vod_tools.misc.pretty import human_format_bytes
+
+try:
+    from faiss import GpuMultipleClonerOptions, GpuResources, StandardGpuResources  # type: ignore
+except ImportError:
+    GpuMultipleClonerOptions = None
+    GpuResources = None
+    StandardGpuResources = None
 
 FAISS_METRICS = {
     "l2": faiss.METRIC_L2,
@@ -45,9 +53,9 @@ class FaissGpuConfig(pydantic.BaseModel):
             return list(range(torch.cuda.device_count()))
         return v
 
-    def cloner_options(self) -> faiss.GpuMultipleClonerOptions:  # type: ignore
+    def cloner_options(self) -> GpuMultipleClonerOptions:  # type: ignore
         """Return a faiss.GpuMultipleClonerOptions."""
-        co = faiss.GpuMultipleClonerOptions()  # type: ignore
+        co = GpuMultipleClonerOptions()  # type: ignore
         co.useFloat16 = self.use_float16
         co.useFloat16CoarseQuantizer = False
         co.usePrecomputed = self.use_precomputed_tables
@@ -61,7 +69,7 @@ class FaissGpuConfig(pydantic.BaseModel):
 
         return co
 
-    def gpu_resources(self) -> list[faiss.GpuResources]:  # type: ignore
+    def gpu_resources(self) -> list[GpuResources]:  # type: ignore
         """Return a list of GPU resources."""
         if not self.devices:
             raise ValueError(f"devices must be set to use `resource_vectors()`. devices={self.devices}")
@@ -118,12 +126,12 @@ class Bm25FactoryConfig(pydantic.BaseModel):
 
 def _get_gpu_resources(
     devices: list[int], tempmem: int = -1, log_mem_allocation: bool = False
-) -> list[faiss.GpuResources]:  # type: ignore
+) -> list[GpuResources]:  # type: ignore
     """Return a list of GPU resources."""
     gpu_resources = []
     ngpu = torch.cuda.device_count() if devices is None else len(devices)
     for i in range(ngpu):
-        res = faiss.StandardGpuResources()  # type: ignore
+        res = StandardGpuResources()  # type: ignore
         res.setLogMemoryAllocations(log_mem_allocation)
         if tempmem is not None and tempmem > 0:
             logger.debug(f"Setting GPU:{i} temporary memory to {human_format_bytes(tempmem, 'MB')}")
@@ -132,3 +140,42 @@ def _get_gpu_resources(
         gpu_resources.append(res)
 
     return gpu_resources
+
+
+class SearchConfig(pydantic.BaseModel):
+    """Base configuration for search engines (e.g., bm25, faiss)."""
+
+    class Config:
+        """Pydantic configuration."""
+
+        extra = pydantic.Extra.forbid
+
+    text_key: str = "text"
+    group_key: str = "group_hash"
+    faiss: Optional[FaissFactoryConfig] = None
+    bm25: Optional[Bm25FactoryConfig] = None
+
+    @pydantic.validator("faiss", pre=True)
+    def _validate_faiss(cls, v: dict | None) -> dict | None:
+        if v is None:
+            return None
+
+        if isinstance(v, (dict, omegaconf.DictConfig)):
+            return FaissFactoryConfig(**v).dict()
+
+        return v
+
+    @pydantic.validator("bm25", pre=True)
+    def _validate_bm25(cls, v: dict | None) -> dict | None:
+        if v is None:
+            return None
+
+        if isinstance(v, (dict, omegaconf.DictConfig)):
+            return Bm25FactoryConfig(**v).dict()
+
+        return v
+
+    @classmethod
+    def parse(cls: Type[Self], obj: dict | omegaconf.DictConfig) -> Self:
+        """Parse a config object."""
+        return cls(**obj)  # type: ignore

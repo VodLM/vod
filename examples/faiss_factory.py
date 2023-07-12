@@ -15,11 +15,11 @@ import psutil
 import rich
 import torch
 from loguru import logger
-from raffle_ds_research.tools import arguantic, dstruct, index_tools
-from raffle_ds_research.tools.index_tools.faiss_tools.build_gpu import FaissGpuConfig
-from raffle_ds_research.tools.index_tools.index_factory import FaissFactoryConfig
 from rich.progress import track
 from rich.status import Status
+
+from src import vod_configs, vod_search
+from src.vod_tools import arguantic, dstruct
 
 
 class Args(arguantic.Arguantic):
@@ -80,12 +80,12 @@ def build_and_eval_index(args: Args) -> dict[str, Any]:
         if args.nthreads is not None:
             faiss.omp_set_num_threads(args.nthreads)
 
-        config = FaissFactoryConfig(
+        config = vod_configs.FaissFactoryConfig(
             factory=args.factory,
             nprobe=args.nprobe,
             metric=faiss.METRIC_INNER_PRODUCT,
             train_size=args.train_size,
-            gpu=FaissGpuConfig(
+            gpu=vod_configs.FaissGpuConfig(
                 use_precomputed_tables=bool(args.pre_tables),
                 use_float16=bool(args.use_float16),
             )
@@ -111,7 +111,7 @@ def build_and_eval_index(args: Args) -> dict[str, Any]:
         _pre_mem = _get_available_memory()
         t_0 = time.perf_counter()
         logger.info(f"Avaliable memory: {_pre_mem:.3f} GB")
-        with index_tools.build_faiss_index(
+        with vod_search.build_faiss_index(
             vectors=vectors,  # type: ignore
             config=config,
             cache_dir=cache_dir,

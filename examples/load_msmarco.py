@@ -3,7 +3,9 @@ from __future__ import annotations
 from typing import Optional
 
 import rich
-from raffle_ds_research.tools import arguantic, raffle_datasets
+
+from src import vod_datasets
+from src.vod_tools import arguantic
 
 
 class Args(arguantic.Arguantic):
@@ -17,7 +19,7 @@ class Args(arguantic.Arguantic):
 
 if __name__ == "__main__":
     args = Args.parse()
-    marco = raffle_datasets.load_msmarco(
+    marco = vod_datasets.load_msmarco(
         language=args.language,
         invalidate_cache=bool(args.invalidate_cache),
         local_source_path=args.local_source_path,

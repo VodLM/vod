@@ -22,8 +22,9 @@ import rich
 import rich.status
 import torch
 from loguru import logger
-from raffle_ds_research.tools import arguantic
 from rich.progress import track
+
+from src.vod_tools import arguantic
 
 
 def _get_memory_usage() -> float:

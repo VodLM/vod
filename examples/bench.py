@@ -6,12 +6,11 @@ import tempfile
 
 import numpy as np
 import rich
-from raffle_ds_research.core import config as core_config
-from raffle_ds_research.core.mechanics.dataset_factory import DatasetFactory
-from raffle_ds_research.core.mechanics.search_engine import build_search_engine
-from raffle_ds_research.tools import arguantic, index_tools
 from tqdm import tqdm
 from transformers import AutoTokenizer
+
+from src import vod_configs, vod_datasets, vod_search
+from src.vod_tools import arguantic
 
 
 class BenchFrank(arguantic.Arguantic):
@@ -43,7 +42,7 @@ def benchmark_frank(args: BenchFrank) -> dict:
     """Benchmark Frank using bm25."""
     rich.print(args)
 
-    factory = DatasetFactory.from_config(
+    factory = vod_datasets.DatasetFactory.from_config(
         {
             "name": args.dset,
             "split": args.split,
@@ -59,13 +58,13 @@ def benchmark_frank(args: BenchFrank) -> dict:
     benchmark = collections.defaultdict(list)
     with (
         tempfile.TemporaryDirectory() as tmpdir,
-        build_search_engine(
+        vod_search.build_multi_search_engine(
             sections=sections,
             vectors=None,
-            config=core_config.SearchConfig(
+            config=vod_configs.SearchConfig(
                 text_key=args.group_key,
                 group_key=args.group_key,
-                bm25=index_tools.Bm25FactoryConfig(
+                bm25=vod_configs.Bm25FactoryConfig(
                     text_key=args.text_key,
                     group_key=args.group_key,
                     section_id_key=args.section_id_key,

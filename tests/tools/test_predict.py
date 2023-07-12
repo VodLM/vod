@@ -11,7 +11,8 @@ import numpy as np
 import pytest
 import tensorstore
 import torch
-from raffle_ds_research.tools import predict_tools
+
+from src.vod_tools import predict
 
 T = TypeVar("T")
 
@@ -75,7 +76,7 @@ def test_predict(tmpdir: str | Path, data: VectorDataset, model_output_key: Opti
     """Test that the prediction works as expected."""
     model = Array(y=data.y, output_key=model_output_key)
     predict_fn = functools.partial(
-        predict_tools.predict,
+        predict.predict,
         data,
         fabric=L.Fabric(),
         cache_dir=tmpdir,

@@ -6,8 +6,10 @@ import faiss
 import numpy as np
 import torch
 from loguru import logger
-from raffle_ds_research.tools import dstruct
-from raffle_ds_research.tools.index_tools.faiss_tools import build_gpu, support
+
+from src import vod_configs
+from src.vod_search.faiss_tools import build_gpu, support
+from src.vod_tools import dstruct
 
 
 def build_faiss_index(
@@ -16,7 +18,7 @@ def build_faiss_index(
     factory_string: str,
     train_size: Optional[int] = None,
     faiss_metric: int = faiss.METRIC_INNER_PRODUCT,
-    gpu_config: Optional[build_gpu.FaissGpuConfig] = None,
+    gpu_config: Optional[vod_configs.FaissGpuConfig] = None,
 ) -> faiss.Index:
     """Build an index from a factory string."""
     vector_shape = vectors[0].shape

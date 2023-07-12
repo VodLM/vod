@@ -16,55 +16,58 @@ import torch
 import transformers
 from lightning.fabric import wrappers as fabric_wrappers
 from loguru import logger
-from raffle_ds_research.core import config as core_config
-from raffle_ds_research.core import mechanics
-from raffle_ds_research.core.mechanics import search_engine
-from raffle_ds_research.core.mechanics.dataloader_sampler import DataloaderSampler
-from raffle_ds_research.core.ml.ranker import Ranker
-from raffle_ds_research.core.workflows.precompute import PrecomputedDsetVectors
-from raffle_ds_research.core.workflows.utils import io, support
-from raffle_ds_research.tools import dstruct
-from raffle_ds_research.tools.pipes.hashing import fingerprint_torch_module
-from raffle_ds_research.tools.utils.progress import IterProgressBar
 from rich import progress
 from torch.utils import data as torch_data
 
+from src import vod_configs, vod_dataloaders, vod_datasets, vod_models, vod_search
+from src.vod_tools import dstruct, pipes
+from src.vod_tools.misc.progress import IterProgressBar
+from src.vod_workflows.utils import helpers, io
+
 K = typing.TypeVar("K")
+
+
+class OnFirstBatchCallback(typing.Protcol):
+    """A callback that is called on the first batch of the first epoch."""
+
+    def __call__(self, fabric: L.Fabric, batch: dict[str, torch.Tensor], ranker: vod_models.Ranker) -> None:
+        """Do some stuff."""
+        ...
 
 
 @dataclasses.dataclass(frozen=True)
 class RetrievalTask:
     """Holds the train and validation datasets."""
 
-    train_questions: support.DsetWithVectors
-    val_questions: support.DsetWithVectors
-    sections: support.DsetWithVectors
+    train_questions: helpers.DsetWithVectors
+    val_questions: helpers.DsetWithVectors
+    sections: helpers.DsetWithVectors
 
 
 def index_and_train(
     *,
-    ranker: Ranker,
+    ranker: vod_models.Ranker,
     optimizer: torch.optim.Optimizer,
     scheduler: typing.Optional[torch.optim.lr_scheduler._LRScheduler] = None,
-    trainer_state: support.TrainerState,
+    trainer_state: helpers.TrainerState,
     fabric: L.Fabric,
-    train_factories: dict[K, mechanics.DatasetFactory],
-    val_factories: dict[K, mechanics.DatasetFactory],
-    vectors: dict[K, None | PrecomputedDsetVectors],
+    train_factories: dict[K, vod_datasets.DatasetFactory],
+    val_factories: dict[K, vod_datasets.DatasetFactory],
+    vectors: dict[K, None | helpers.PrecomputedDsetVectors],
     tokenizer: transformers.PreTrainedTokenizer | transformers.PreTrainedTokenizerFast,
-    search_config: core_config.SearchConfig,
-    collate_config: core_config.RetrievalCollateConfig,
-    train_dataloader_config: core_config.DataLoaderConfig,
-    eval_dataloader_config: core_config.DataLoaderConfig,
-    dl_sampler: typing.Optional[DataloaderSampler] = None,
+    search_config: vod_configs.SearchConfig,
+    collate_config: vod_configs.RetrievalCollateConfig,
+    train_dataloader_config: vod_configs.DataLoaderConfig,
+    eval_dataloader_config: vod_configs.DataLoaderConfig,
+    dl_sampler: typing.Optional[vod_dataloaders.SamplerFactory] = None,
     cache_dir: pathlib.Path,
     serve_on_gpu: bool = False,
     checkpoint_path: typing.Optional[str] = None,
-    on_first_batch_fn: typing.Optional[typing.Callable[[L.Fabric, dict[str, torch.Tensor], Ranker], None]] = None,
+    on_first_batch_fn: typing.Optional[OnFirstBatchCallback] = None,
     pbar_keys: typing.Optional[list[str]] = None,
-) -> support.TrainerState:
+) -> helpers.TrainerState:
     """Index the sections and train the ranker."""
-    barrier_fn = functools.partial(support._barrier_fn, fabric=fabric)
+    barrier_fn = functools.partial(helpers._barrier_fn, fabric=fabric)
 
     # Gather datasets and their corresponding vectors
     task = _make_retrieval_task(
@@ -79,20 +82,20 @@ def index_and_train(
     parameters = mp.Manager().dict()
     parameters.update(trainer_state.get_parameters())
 
-    support._test_model_backward(fabric=fabric, ranker=ranker, header="Train and index :: before moving to CPU")
+    helpers._test_model_backward(fabric=fabric, ranker=ranker, header="Train and index :: before moving to CPU")
 
     # free GPU resources see: https://github.com/Lightning-AI/lightning/issues/17937
-    # if support.is_engine_enabled(parameters, "faiss"):
+    # if helpers.is_engine_enabled(parameters, "faiss"):
     #     ranker.to("cpu")
 
     barrier_fn("Init search engines..")
-    with search_engine.build_search_engine(
+    with vod_search.build_multi_search_engine(
         sections=task.sections.data,
         vectors=task.sections.vectors,
         config=search_config,
         cache_dir=cache_dir,
-        faiss_enabled=support.is_engine_enabled(parameters, "faiss"),
-        bm25_enabled=support.is_engine_enabled(parameters, "bm25"),
+        faiss_enabled=helpers.is_engine_enabled(parameters, "faiss"),
+        bm25_enabled=helpers.is_engine_enabled(parameters, "bm25"),
         skip_setup=not fabric.is_global_zero,
         barrier_fn=barrier_fn,
         serve_on_gpu=serve_on_gpu,
@@ -103,7 +106,7 @@ def index_and_train(
         # instantiate the dataloader
         logger.debug("Instantiating dataloader..")
         init_dataloader = functools.partial(
-            support.instantiate_retrieval_dataloader,
+            helpers.instantiate_retrieval_dataloader,
             sections=task.sections,
             tokenizer=tokenizer,
             search_client=search_client,
@@ -147,18 +150,18 @@ def index_and_train(
 
 def _training_loop(  # noqa: C901, PLR0915
     *,
-    ranker: Ranker,
+    ranker: vod_models.Ranker,
     optimizer: torch.optim.Optimizer,
-    trainer_state: support.TrainerState,
+    trainer_state: helpers.TrainerState,
     fabric: L.Fabric,
     train_dl: torch_data.DataLoader,
     val_dl: torch_data.DataLoader,
     scheduler: typing.Optional[torch.optim.lr_scheduler._LRScheduler] = None,
-    checkpoint_path: typing.Optional[str] = None,
-    on_first_batch_fn: typing.Optional[typing.Callable[[L.Fabric, dict[str, torch.Tensor], Ranker], None]] = None,
-    pbar_keys: typing.Optional[typing.List[str]] = None,
-    parameters: typing.Optional[DictProxy] = None,
-) -> support.TrainerState:
+    checkpoint_path: None | str = None,
+    on_first_batch_fn: None | OnFirstBatchCallback = None,
+    pbar_keys: None | typing.List[str] = None,
+    parameters: None | DictProxy = None,
+) -> helpers.TrainerState:
     _check_ranker_and_optimizer(ranker, optimizer)
     optimizer.zero_grad()
     ranker.train()
@@ -177,7 +180,7 @@ def _training_loop(  # noqa: C901, PLR0915
         eval_metrics = None
         chrono = None
         local_step = 0
-        support._test_model_backward(fabric=fabric, ranker=ranker)
+        helpers._test_model_backward(fabric=fabric, ranker=ranker)
         max_steps = trainer_state.period_max_steps or trainer_state.max_steps
         while trainer_state.step < max_steps:
             for batch in train_dl:
@@ -288,11 +291,11 @@ def _training_loop(  # noqa: C901, PLR0915
             fabric=fabric,
             model=ranker,
         )
-    logger.info(f"End of period. Model hash: `{fingerprint_torch_module(None, ranker)}`")
+    logger.info(f"End of period. Model hash: `{pipes.fingerprint_torch_module(None, ranker)}`")
     return trainer_state
 
 
-def _check_ranker_and_optimizer(ranker: Ranker, optimizer: torch.optim.Optimizer) -> None:
+def _check_ranker_and_optimizer(ranker: vod_models.Ranker, optimizer: torch.optim.Optimizer) -> None:
     if not fabric_wrappers.is_wrapped(ranker):
         raise RuntimeError("Ranker must be wrapped by lightning `Fabric`.")
     if not fabric_wrappers.is_wrapped(optimizer):
@@ -300,7 +303,7 @@ def _check_ranker_and_optimizer(ranker: Ranker, optimizer: torch.optim.Optimizer
 
 
 def _infer_num_steps(
-    trainer_state: support.TrainerState,
+    trainer_state: helpers.TrainerState,
     fabric: L.Fabric,
     val_dl: torch_data.DataLoader,
 ) -> tuple[int, int]:
@@ -316,9 +319,9 @@ def _infer_num_steps(
 
 @torch.no_grad()
 def _validation_loop(
-    ranker: Ranker,
+    ranker: vod_models.Ranker,
     fabric: L.Fabric,
-    trainer_state: support.TrainerState,
+    trainer_state: helpers.TrainerState,
     val_dl: torch_data.DataLoader,
     n_steps: int,
     pbar: progress.Progress,
@@ -406,7 +409,7 @@ def _extract_learning_rates(optimizer: torch.optim.Optimizer) -> dict[str, float
 
 
 def _pbar_info(
-    state: support.TrainerState,
+    state: helpers.TrainerState,
     train_metrics: typing.Optional[dict[str, typing.Any]] = None,
     eval_metrics: typing.Optional[dict[str, typing.Any]] = None,
     keys: typing.Optional[list[str]] = None,
@@ -435,9 +438,9 @@ def _pbar_info(
 
 
 def _make_retrieval_task(
-    train_factories: dict[K, mechanics.DatasetFactory],
-    val_factories: dict[K, mechanics.DatasetFactory],
-    vectors: dict[K, PrecomputedDsetVectors | None],
+    train_factories: dict[K, vod_datasets.DatasetFactory],
+    val_factories: dict[K, vod_datasets.DatasetFactory],
+    vectors: dict[K, helpers.PrecomputedDsetVectors | None],
 ) -> RetrievalTask:
     """Create the `RetrievalTask` from the training and validation factories."""
 
@@ -453,21 +456,21 @@ def _make_retrieval_task(
         raise ValueError(f"Unknown field: {field}")
 
     return RetrievalTask(
-        train_questions=support.concatenate_datasets(
+        train_questions=helpers.concatenate_datasets(
             [
-                support.DsetWithVectors.cast(data=factory.get_qa_split(), vectors=_vec(key, "question"))
+                helpers.DsetWithVectors.cast(data=factory.get_qa_split(), vectors=_vec(key, "question"))
                 for key, factory in train_factories.items()
             ]
         ),
-        val_questions=support.concatenate_datasets(
+        val_questions=helpers.concatenate_datasets(
             [
-                support.DsetWithVectors.cast(data=factory.get_qa_split(), vectors=_vec(key, "question"))
+                helpers.DsetWithVectors.cast(data=factory.get_qa_split(), vectors=_vec(key, "question"))
                 for key, factory in val_factories.items()
             ]
         ),
-        sections=support.concatenate_datasets(
+        sections=helpers.concatenate_datasets(
             [
-                support.DsetWithVectors.cast(data=factory.get_sections(), vectors=_vec(key, "section"))
+                helpers.DsetWithVectors.cast(data=factory.get_sections(), vectors=_vec(key, "section"))
                 for key, factory in {**train_factories, **val_factories}.items()
             ]
         ),

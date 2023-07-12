@@ -6,4 +6,4 @@ defaults:
   - monitor: retrieval
   - _self_
 
-_target_: raffle_ds_research.core.ml.Ranker
+_target_: src.vod_models.Ranker

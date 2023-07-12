@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import rich
-from raffle_ds_research.tools import arguantic, raffle_datasets
+
+from src.vod_tools import arguantic, vod_data
 
 
 class Args(arguantic.Arguantic):
@@ -13,7 +14,7 @@ class Args(arguantic.Arguantic):
 
 if __name__ == "__main__":
     args = Args.parse()
-    squad = raffle_datasets.load_squad(language=args.language)
+    squad = vod_data.load_squad(language=args.language)
     rich.print(squad)
 
     rich.print("==== train ====")

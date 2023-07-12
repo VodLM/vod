@@ -4,7 +4,7 @@ import lightning as L
 import torch
 from lightning.fabric import wrappers as fabric_wrappers
 
-from .support import TrainerState
+from .helpers import TrainerState
 
 
 def save_training_state(

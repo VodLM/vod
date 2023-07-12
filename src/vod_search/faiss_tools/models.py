@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import Optional
 
 import pydantic
-from raffle_ds_research.tools.index_tools.retrieval_data_type import RetrievalDataType
+
+from src.vod_search.retrieval_data_type import RetrievalDataType
 
 
 class FaissInitConfig(pydantic.BaseModel):

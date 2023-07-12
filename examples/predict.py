@@ -10,9 +10,10 @@ import rich
 import tensorstore as ts
 import torch
 import transformers
-from raffle_ds_research.tools import pipes, predict
-from raffle_ds_research.tools.utils.trainer import Trainer
 from transformers import BertModel
+
+from src.vod_tools import pipes, predict
+from src.vod_tools.misc.trainer import Trainer
 
 dotenv.load_dotenv(str(Path(__file__).parent / ".predict.env"))
 

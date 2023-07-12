@@ -4,7 +4,8 @@ from typing import Any, Iterable, Optional
 
 import torch
 import transformers
-from raffle_ds_research.tools.pipes.utils.misc import pack_examples
+
+from src.vod_tools.pipes.utils.misc import pack_examples
 
 _TOKENIZED_KEYS = ["input_ids", "attention_mask"]
 

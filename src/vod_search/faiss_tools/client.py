@@ -11,8 +11,9 @@ import numpy as np
 import requests
 import rich
 import torch
-from raffle_ds_research.tools.index_tools import io, search_server
-from raffle_ds_research.tools.index_tools import retrieval_data_type as rtypes
+
+from src.vod_search import io, search_server
+from src.vod_search import retrieval_data_type as rtypes
 
 # get the path to the server script
 server_run_path = Path(__file__).parent / "server.py"

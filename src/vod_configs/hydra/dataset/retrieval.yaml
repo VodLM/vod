@@ -3,7 +3,7 @@ defaults:
   - templates: default
   - _self_
 
-_target_: raffle_ds_research.core.config.MultiDatasetFactoryConfig
+_target_: src.vod_configs.MultiDatasetFactoryConfig
 
 # dataset groups
 train: frank.A.en-pos:train

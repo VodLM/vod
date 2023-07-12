@@ -12,10 +12,11 @@ import tensorstore as ts
 import torch
 from loguru import logger
 from omegaconf import DictConfig
-from raffle_ds_research.tools import dstruct, interfaces, pipes
-from raffle_ds_research.tools.utils import loader_config
 from rich.progress import track
 from torch.utils.data.dataloader import default_collate
+
+from src import vod_configs
+from src.vod_tools import dstruct, interfaces, pipes
 
 from .compute import LoaderKwargs, compute_and_store_predictions
 from .fingerprint import make_predict_fingerprint
@@ -225,7 +226,7 @@ def predict(
     model: torch.nn.Module | interfaces.ProtocolEncoder,
     collate_fn: pipes.Collate,
     model_output_key: Optional[str] = None,
-    loader_kwargs: Optional[dict[str, Any] | DictConfig | loader_config.DataLoaderConfig] = None,
+    loader_kwargs: Optional[dict[str, Any] | DictConfig | vod_configs.DataLoaderConfig] = None,
     ts_kwargs: Optional[dict[str, Any]] = None,
     validate_store: bool | int = True,
     open_mode: Optional[Literal["x", "r", "a"]] = None,

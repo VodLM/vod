@@ -4,8 +4,9 @@ import collections
 import sys
 
 import rich
-from raffle_ds_research.tools import arguantic, raffle_datasets
 from rich.progress import track
+
+from src.vod_tools import arguantic, vod_data
 
 
 class Args(arguantic.Arguantic):
@@ -94,7 +95,7 @@ FRANK_B_KBIDS = [
 if __name__ == "__main__":
     args = Args.parse()
 
-    frank = raffle_datasets.load_frank(
+    frank = vod_data.load_frank(
         language=args.language,
         subset_name=args.split,
         version=args.version,

@@ -11,14 +11,15 @@ import rich
 import transformers
 from lightning.fabric import strategies as fabric_strategies
 from loguru import logger
-from raffle_ds_research.core import config as core_config
-from raffle_ds_research.core.mechanics import dataset_factory
-from raffle_ds_research.core.ml import Ranker
-from raffle_ds_research.core.ml.encoder import TransformerEncoder
-from raffle_ds_research.core.workflows import evaluation, precompute, training, tuning
-from raffle_ds_research.core.workflows.utils import io, logging, support
-from raffle_ds_research.tools import caching, pipes
-from raffle_ds_research.utils.pretty import print_metric_groups
+
+from src import vod_configs, vod_datasets, vod_models
+from src.vod_tools import cache_manager, pipes
+from src.vod_tools.misc.pretty import print_metric_groups
+from src.vod_workflows.evaluation.evaluation import ToDiskConfig, benchmark
+from src.vod_workflows.support.precompute import compute_vectors
+from src.vod_workflows.support.tuning import tune_parameters
+from src.vod_workflows.training.training import index_and_train
+from src.vod_workflows.utils import helpers, io, logging
 
 K = TypeVar("K")
 
@@ -26,14 +27,14 @@ K = TypeVar("K")
 def train_with_index_updates(  # noqa: C901, PLR0915
     *,
     fabric: L.Fabric,
-    ranker: Ranker,
-    config: core_config.TrainWithIndexUpdatesConfigs | omegaconf.DictConfig,
+    ranker: vod_models.Ranker,
+    config: vod_configs.TrainWithIndexUpdatesConfigs | omegaconf.DictConfig,
     load_from: Optional[str] = None,  # todo
-) -> Ranker:
+) -> vod_models.Ranker:
     """Train a ranking model while periodically updating the index."""
-    barrier = functools.partial(support._barrier_fn, fabric=fabric)
+    barrier = functools.partial(helpers._barrier_fn, fabric=fabric)
     if isinstance(config, omegaconf.DictConfig):
-        config = core_config.TrainWithIndexUpdatesConfigs.parse(config)
+        config = vod_configs.TrainWithIndexUpdatesConfigs.parse(config)
 
     # Define the index update steps and the `PeriodicStoppingCallback` callback.
     update_steps = _infer_update_steps(config.trainer.max_steps, config.trainer.period)
@@ -46,10 +47,10 @@ def train_with_index_updates(  # noqa: C901, PLR0915
 
     # Setting up the optimizer
     optimizer = ranker.get_optimizer()
-    scheduler = ranker.get_scheduler(support.unwrap_optimizer(optimizer))
+    scheduler = ranker.get_scheduler(helpers.unwrap_optimizer(optimizer))
 
     # Define the trainer State
-    state = support.TrainerState(
+    state = helpers.TrainerState(
         step=0,
         period=0,
         epoch=0,
@@ -99,7 +100,7 @@ def train_with_index_updates(  # noqa: C901, PLR0915
         # wrap everything in a temporary directory to avoid filling up the disk.
         # The temporary directory will be deleted at the end of each period except the first one
         # as dataset vectors won't change when using the same seed/model.
-        with caching.CacheManager(
+        with cache_manager.CacheManager(
             pathlib.Path(config.sys.cache_dir, f"train-with-updates-{state.period}"),
             delete_existing=False,
             persist=state.period == 0,  # keep the cache for the first period
@@ -115,8 +116,8 @@ def train_with_index_updates(  # noqa: C901, PLR0915
             barrier("Pre-processing done.")
 
             # pre-compute the vectors for each dataset, this is deactivated when faiss is not in use
-            if support.is_engine_enabled(train_parameters, "faiss") or (
-                run_benchmarks and support.is_engine_enabled(bench_parameters, "faiss")
+            if helpers.is_engine_enabled(train_parameters, "faiss") or (
+                run_benchmarks and helpers.is_engine_enabled(bench_parameters, "faiss")
             ):
                 # Select the factories to process
                 # if run_benchmarks:
@@ -128,7 +129,7 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                 #     }
 
                 # Compute the vectors
-                vectors = precompute.compute_vectors(
+                vectors = compute_vectors(
                     all_dset_factories,
                     ranker=ranker,
                     fabric=fabric,
@@ -144,10 +145,10 @@ def train_with_index_updates(  # noqa: C901, PLR0915
             # Tune the parameters and benchmark the ranker on each dataset separately
             if run_benchmarks:
                 if config.benchmark.tune_parameters and (
-                    bench_parameters.get("faiss", -1) > 0 and support.is_engine_enabled(bench_parameters, "bm25")
+                    bench_parameters.get("faiss", -1) > 0 and helpers.is_engine_enabled(bench_parameters, "bm25")
                 ):
                     barrier("Tuning retrieval parameters..")
-                    bench_parameters = tuning.tune_parameters(
+                    bench_parameters = tune_parameters(
                         parameters=bench_parameters,
                         tune=["bm25"],
                         fabric=fabric,
@@ -182,7 +183,7 @@ def train_with_index_updates(  # noqa: C901, PLR0915
             # training for the current period.
             # We use a `StopAtTrainer` to stop the training at the end of the current period (max `end_step`).
             logger.info(f"Starting training period {1+state.period}")
-            state = training.index_and_train(
+            state = index_and_train(
                 ranker=ranker,
                 optimizer=optimizer,
                 scheduler=scheduler,
@@ -211,15 +212,15 @@ def train_with_index_updates(  # noqa: C901, PLR0915
             barrier("Period completed.")
 
         # Reset the scheduler for the next period
-        scheduler = ranker.get_scheduler(support.unwrap_optimizer(optimizer))
+        scheduler = ranker.get_scheduler(helpers.unwrap_optimizer(optimizer))
 
     return ranker
 
 
 def _setup_deepspeed(
     fabric: L.Fabric,
-    ranker: Ranker,
-    config: core_config.TrainerConfig,
+    ranker: vod_models.Ranker,
+    config: vod_configs.TrainerConfig,
 ) -> bool:
     deepspeed_enabled = isinstance(fabric.strategy, fabric_strategies.DeepSpeedStrategy)  # type: ignore
     if deepspeed_enabled:
@@ -228,7 +229,7 @@ def _setup_deepspeed(
         if fabric.is_global_zero:
             rich.print(fabric.strategy.config)  # type: ignore
         if fabric.strategy.config["activation_checkpointing"]["cpu_checkpointing"] and isinstance(  # type: ignore
-            ranker.encoder, TransformerEncoder
+            ranker.encoder, vod_models.TransformerEncoder
         ):
             # activate checkpointing using `transformers` API -- experimental!
             ranker.encoder.backbone.gradient_checkpointing_enable()
@@ -238,7 +239,7 @@ def _setup_deepspeed(
 def _on_first_batch_fn(
     fabric: L.Fabric,
     batch: dict[str, Any],
-    ranker: Ranker,  # noqa: ARG001
+    ranker: vod_models.Ranker,  # noqa: ARG001
     *,
     tokenizer: transformers.PreTrainedTokenizerBase,
     output_file: Optional[pathlib.Path] = None,
@@ -259,14 +260,14 @@ def _on_first_batch_fn(
 def _run_benchmarks(
     *,
     fabric: L.Fabric,
-    config: core_config.TrainWithIndexUpdatesConfigs,
-    state: support.TrainerState,
+    config: vod_configs.TrainWithIndexUpdatesConfigs,
+    state: helpers.TrainerState,
     parameters: dict[str, float],
     cache_dir: pathlib.Path,
-    factories: dict[K, dataset_factory.DatasetFactory],
-    vectors: dict[K, None | precompute.PrecomputedDsetVectors],
+    factories: dict[K, vod_datasets.DatasetFactory],
+    vectors: dict[K, None | helpers.PrecomputedDsetVectors],
 ) -> None:
-    # if support.is_engine_enabled(parameters, "faiss"):
+    # if helpers.is_engine_enabled(parameters, "faiss"):
     # ranker.to("cpu")  # <-- free GPU memory # see: https://github.com/Lightning-AI/lightning/issues/17937
     if fabric.is_global_zero:
         logger.info(f"Running benchmarks ... (period={1+state.period})")
@@ -280,7 +281,7 @@ def _run_benchmarks(
             search_config = config.search.copy(update=config.benchmark.search)
 
             # Run the benchmark and log the results
-            metrics = evaluation.benchmark(
+            metrics = benchmark(
                 factory=factories[dset],
                 vectors=vectors[dset],
                 metrics=config.benchmark.metrics,
@@ -291,7 +292,7 @@ def _run_benchmarks(
                 parameters=parameters,
                 serve_on_gpu=True,
                 n_max=config.benchmark.n_max_eval,
-                to_disk_config=evaluation.ToDiskConfig(
+                to_disk_config=ToDiskConfig(
                     logdir=logdir,
                     tokenizer=config.dataset.tokenizer,
                 ),
@@ -303,9 +304,9 @@ def _run_benchmarks(
 
 
 def _patch_mum_worker(
-    dl_config: core_config.DataLoaderConfig,
+    dl_config: vod_configs.DataLoaderConfig,
     fabric: L.Fabric,
-) -> core_config.DataLoaderConfig:
+) -> vod_configs.DataLoaderConfig:
     return dl_config.copy(
         update={
             "num_workers": fabric.world_size * dl_config.num_workers,
@@ -316,8 +317,8 @@ def _patch_mum_worker(
 def _log_print_metrics(
     *,
     fabric: L.Fabric,
-    state: support.TrainerState,
-    dset: core_config.NamedDset,
+    state: helpers.TrainerState,
+    dset: vod_configs.NamedDset,
     metrics: dict[str, float],
     header: str,
 ) -> None:
@@ -333,7 +334,7 @@ def _log_print_metrics(
     )
 
 
-def _infer_accumulate_grad_batches(fabric: L.Fabric, config: core_config.BatchSizeConfig) -> int:
+def _infer_accumulate_grad_batches(fabric: L.Fabric, config: vod_configs.BatchSizeConfig) -> int:
     step_batch_size = fabric.world_size * config.per_device
 
     # warn if the batch size per step is larger than the effective batch size
@@ -363,11 +364,11 @@ def _infer_accumulate_grad_batches(fabric: L.Fabric, config: core_config.BatchSi
 
 
 def _get_dset_factories(
-    dsets: Iterable[core_config.NamedDset],
-    config: core_config.MultiDatasetFactoryConfig,
-) -> dict[core_config.NamedDset, dataset_factory.DatasetFactory]:
+    dsets: Iterable[vod_configs.NamedDset],
+    config: vod_configs.MultiDatasetFactoryConfig,
+) -> dict[vod_configs.NamedDset, vod_datasets.DatasetFactory]:
     return {
-        dset_cfg: dataset_factory.DatasetFactory.from_config(
+        dset_cfg: vod_datasets.DatasetFactory.from_config(
             config.dataset_factory_config(dset_cfg),
         )
         for dset_cfg in dsets

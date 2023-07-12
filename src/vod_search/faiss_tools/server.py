@@ -11,16 +11,17 @@ import stackprinter
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from loguru import logger
-from raffle_ds_research.tools.index_tools import io
-from raffle_ds_research.tools.index_tools.faiss_tools import SearchFaissQuery
-from raffle_ds_research.tools.index_tools.faiss_tools.build_gpu import FaissGpuConfig
-from raffle_ds_research.tools.index_tools.faiss_tools.models import (
+
+from src.vod_search import io
+from src.vod_search.faiss_tools import SearchFaissQuery
+from src.vod_search.faiss_tools.build_gpu import FaissGpuConfig
+from src.vod_search.faiss_tools.models import (
     FaissSearchResponse,
     FastFaissSearchResponse,
     FastSearchFaissQuery,
 )
-from raffle_ds_research.tools.index_tools.retrieval_data_type import RetrievalDataType
-from raffle_ds_research.tools.utils.exceptions import dump_exceptions_to_file
+from src.vod_search.retrieval_data_type import RetrievalDataType
+from src.vod_tools.utils.exceptions import dump_exceptions_to_file
 
 
 def parse_args() -> argparse.Namespace:

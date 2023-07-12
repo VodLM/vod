@@ -15,7 +15,9 @@ import fsspec
 import loguru
 import pydantic
 import rich
-from raffle_ds_research.tools.raffle_datasets.base import (
+from rich.progress import track
+
+from .base import (
     DATASETS_CACHE_PATH,
     QueryModel,
     RetrievalDataset,
@@ -23,7 +25,6 @@ from raffle_ds_research.tools.raffle_datasets.base import (
     SilentHuggingfaceDecorator,
     init_gcloud_filesystem,
 )
-from rich.progress import track
 
 
 class FrankSplitName(enum.Enum):

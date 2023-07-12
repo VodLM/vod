@@ -13,10 +13,9 @@ from typing_extensions import Self, Type
 from vod_tools.misc.config import as_pyobj_validator
 from vod_tools.misc.schedule import BaseSchedule, schedule_factory
 
-from src.vod_dataloaders.search_engine import SearchConfig
-
 from .dataloaders import BaseCollateConfig, DataLoaderConfig, RetrievalCollateConfig, SamplerFactoryConfig
 from .datasets import BaseDatasetFactoryConfig, DatasetFactoryConfig, NamedDset, parse_named_dsets
+from .search import SearchConfig
 
 
 class BenchmarkConfig(pydantic.BaseModel):
@@ -255,7 +254,7 @@ def _parse_dl_sampler(
     config: DictConfig | ListConfig | None,
 ) -> Optional[SamplerFactoryConfig | list[SamplerFactoryConfig]]:
     """Parse an omegaconf config into a SamplerFactoryConfig instance."""
-    if config is None:
+    if config is None or len(config) == 0:
         return None
 
     if isinstance(config, (ListConfig, list, tuple, set)):

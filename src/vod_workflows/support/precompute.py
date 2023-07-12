@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import dataclasses
 import functools
 import pathlib
 from typing import Any, Callable, Literal, TypeVar
@@ -8,11 +7,10 @@ from typing import Any, Callable, Literal, TypeVar
 import lightning as L
 import loguru
 import transformers
-from raffle_ds_research.core import config as core_config
-from raffle_ds_research.core import ml
-from raffle_ds_research.core.mechanics import dataset_factory
-from raffle_ds_research.core.workflows.utils import support
-from raffle_ds_research.tools import dstruct, pipes, predict_tools
+
+from src import vod_configs, vod_datasets, vod_models
+from src.vod_tools import dstruct, pipes, predict
+from src.vod_workflows.utils import helpers
 
 K = TypeVar("K")
 
@@ -21,24 +19,16 @@ def _get_key(x: tuple) -> str:
     return str(x[0])
 
 
-@dataclasses.dataclass(frozen=True)
-class PrecomputedDsetVectors:
-    """Holds the vectors for a given dataset and field."""
-
-    questions: dstruct.TensorStoreFactory
-    sections: dstruct.TensorStoreFactory
-
-
 def compute_vectors(
-    factories: dict[K, dataset_factory.DatasetFactory],
+    factories: dict[K, vod_datasets.DatasetFactory],
     *,
-    ranker: ml.Ranker,
+    ranker: vod_models.Ranker,
     fabric: L.Fabric,
     cache_dir: pathlib.Path,
-    dataset_config: core_config.MultiDatasetFactoryConfig,
-    collate_config: core_config.BaseCollateConfig,
-    dataloader_config: core_config.DataLoaderConfig,
-) -> dict[K, PrecomputedDsetVectors]:
+    dataset_config: vod_configs.MultiDatasetFactoryConfig,
+    collate_config: vod_configs.BaseCollateConfig,
+    dataloader_config: vod_configs.DataLoaderConfig,
+) -> dict[K, helpers.PrecomputedDsetVectors]:
     """Compute the vectors for a collection of datasets."""
     predict_fn: Callable[..., dstruct.TensorStoreFactory] = functools.partial(
         compute_dataset_vectors,
@@ -59,27 +49,30 @@ def compute_vectors(
     }
 
     # format the output and return
-    return {key: PrecomputedDsetVectors(questions=question_vecs[key], sections=section_vecs[key]) for key in factories}
+    return {
+        key: helpers.PrecomputedDsetVectors(questions=question_vecs[key], sections=section_vecs[key])
+        for key in factories
+    }
 
 
 def compute_dataset_vectors(
-    factory: dataset_factory.DatasetFactory | dstruct.SizedDataset[dict[str, Any]],
+    factory: vod_datasets.DatasetFactory | dstruct.SizedDataset[dict[str, Any]],
     *,
-    ranker: ml.Ranker,
+    ranker: vod_models.Ranker,
     fabric: L.Fabric,
     tokenizer: transformers.PreTrainedTokenizerBase,
-    collate_config: core_config.BaseCollateConfig,
-    dataloader_config: core_config.DataLoaderConfig,
+    collate_config: vod_configs.BaseCollateConfig,
+    dataloader_config: vod_configs.DataLoaderConfig,
     cache_dir: pathlib.Path,
     field: Literal["question", "section"] = "question",
     validate_store: int = 1_000,
 ) -> dstruct.TensorStoreFactory:
     """Compute the vectors for a given dataset and field."""
     collate_fn = init_predict_collate_fn(collate_config, field=field, tokenizer=tokenizer)
-    barrier_fn = functools.partial(support._barrier_fn, fabric=fabric)
+    barrier_fn = functools.partial(helpers._barrier_fn, fabric=fabric)
 
     # construct the dataset
-    if isinstance(factory, dataset_factory.DatasetFactory):
+    if isinstance(factory, vod_datasets.DatasetFactory):
         dataset = factory(what=field)
         locator = f"{factory.name}:{factory.split}({field})"
     else:
@@ -87,7 +80,7 @@ def compute_dataset_vectors(
         locator = type(dataset).__name__
 
     # construct the `predict` function
-    predict_fn = predict_tools.Predict(
+    predict_fn = predict.Predict(
         dataset=dataset,  # type: ignore
         cache_dir=cache_dir,
         model=ranker,
@@ -125,7 +118,7 @@ def compute_dataset_vectors(
 
 
 def init_predict_collate_fn(
-    config: core_config.BaseCollateConfig,
+    config: vod_configs.BaseCollateConfig,
     *,
     field: str,
     tokenizer: transformers.PreTrainedTokenizerBase,

@@ -9,15 +9,12 @@ import lightning as L
 import torch
 import transformers
 from loguru import logger
-from raffle_ds_research.core import config as core_config
-from raffle_ds_research.core import mechanics
-from raffle_ds_research.core.mechanics import search_engine
-from raffle_ds_research.core.ml import gradients
-from raffle_ds_research.core.workflows.precompute import PrecomputedDsetVectors
-from raffle_ds_research.core.workflows.utils import support
-from raffle_ds_research.tools import dstruct
-from raffle_ds_research.tools.utils.progress import IterProgressBar
 from torch import nn
+
+from src import vod_configs, vod_datasets, vod_gradients, vod_search
+from src.vod_tools import dstruct
+from src.vod_tools.misc.progress import IterProgressBar
+from src.vod_workflows.utils import helpers
 
 _DEFAULT_TUNE_LIST = ["bm25"]
 
@@ -41,7 +38,7 @@ class HybridRanker(nn.Module):
         require_grads: list[str],
     ) -> None:
         super().__init__()
-        self.grad_fn = gradients.KlDivGradients()
+        self.grad_fn = vod_gradients.KlDivGradients()
         self.params = nn.ParameterDict(
             {k: nn.Parameter(torch.tensor(v), requires_grad=k in require_grads) for k, v in parameters.items()}
         )
@@ -82,11 +79,11 @@ def tune_parameters(
     tune: None | list[str] = None,
     *,
     fabric: L.Fabric,
-    factories: dict[K, mechanics.DatasetFactory],
-    vectors: dict[K, PrecomputedDsetVectors],
-    search_config: core_config.SearchConfig,
-    collate_config: core_config.RetrievalCollateConfig,
-    dataloader_config: core_config.DataLoaderConfig,
+    factories: dict[K, vod_datasets.DatasetFactory],
+    vectors: dict[K, helpers.PrecomputedDsetVectors],
+    search_config: vod_configs.SearchConfig,
+    collate_config: vod_configs.RetrievalCollateConfig,
+    dataloader_config: vod_configs.DataLoaderConfig,
     cache_dir: pathlib.Path,
     serve_on_gpu: bool = True,
     n_tuning_steps: int = 1_000,
@@ -107,7 +104,7 @@ def tune_parameters(
             vectors=vectors,
         )
 
-        with search_engine.build_search_engine(
+        with vod_search.build_multi_search_engine(
             sections=task.sections.data,
             vectors=task.sections.vectors,
             config=search_config,
@@ -119,7 +116,7 @@ def tune_parameters(
             search_client = master.get_client()
 
             # instantiate the dataloader
-            dataloader = support.instantiate_retrieval_dataloader(
+            dataloader = helpers.instantiate_retrieval_dataloader(
                 questions=task.questions,
                 sections=task.sections,
                 tokenizer=tokenizer,
@@ -184,13 +181,13 @@ def _info_bar(output: dict[str, Any], model: HybridRanker) -> str:
 class TuningTask:
     """Holds the train and validation datasets."""
 
-    questions: support.DsetWithVectors
-    sections: support.DsetWithVectors
+    questions: helpers.DsetWithVectors
+    sections: helpers.DsetWithVectors
 
 
 def _make_tuning_task(
-    factories: dict[K, mechanics.DatasetFactory],
-    vectors: dict[K, PrecomputedDsetVectors],
+    factories: dict[K, vod_datasets.DatasetFactory],
+    vectors: dict[K, helpers.PrecomputedDsetVectors],
 ) -> TuningTask:
     """Create the `RetrievalTask` from the training and validation factories."""
 
@@ -204,15 +201,15 @@ def _make_tuning_task(
         raise ValueError(f"Unknown field: {field}")
 
     return TuningTask(
-        questions=support.concatenate_datasets(
+        questions=helpers.concatenate_datasets(
             [
-                support.DsetWithVectors.cast(data=factory.get_qa_split(), vectors=_vec(key, "question"))
+                helpers.DsetWithVectors.cast(data=factory.get_qa_split(), vectors=_vec(key, "question"))
                 for key, factory in factories.items()
             ]
         ),
-        sections=support.concatenate_datasets(
+        sections=helpers.concatenate_datasets(
             [
-                support.DsetWithVectors.cast(data=factory.get_sections(), vectors=_vec(key, "section"))
+                helpers.DsetWithVectors.cast(data=factory.get_sections(), vectors=_vec(key, "section"))
                 for key, factory in factories.items()
             ]
         ),

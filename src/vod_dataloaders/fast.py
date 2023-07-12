@@ -3,8 +3,9 @@ from typing import Optional
 import numba
 import numpy as np
 from numpy import typing as npt
-from raffle_ds_research.tools import index_tools
 from typing_extensions import TypeVar
+
+from src import vod_search
 
 DtypeVar = TypeVar("DtypeVar", bound=np.dtype)
 
@@ -142,9 +143,9 @@ def gather_values_by_indices(
 
 
 def merge_search_results(
-    search_results: dict[str, index_tools.RetrievalBatch[npt.NDArray]],
+    search_results: dict[str, vod_search.RetrievalBatch[npt.NDArray]],
     weights: Optional[dict[str, float]] = None,
-) -> tuple[index_tools.RetrievalBatch, dict[str, npt.NDArray]]:
+) -> tuple[vod_search.RetrievalBatch, dict[str, npt.NDArray]]:
     """Merge search results with weights."""
     if weights is None:
         weights = {k: 1.0 for k in search_results}
@@ -165,7 +166,7 @@ def merge_search_results(
 
 
 def normalize_scores_(
-    search_results: dict[str, index_tools.RetrievalBatch[npt.NDArray]],
+    search_results: dict[str, vod_search.RetrievalBatch[npt.NDArray]],
     offset: float = 0.0,
 ) -> None:
     """Subtract the minimum score from all score to allow consistent aggregation."""
@@ -180,9 +181,9 @@ def _subtract_min_score(scores: npt.NDArray, offset: float) -> npt.NDArray:
 
 
 def _merge_n_search_results(
-    search_results: dict[str, index_tools.RetrievalBatch[npt.NDArray]],
+    search_results: dict[str, vod_search.RetrievalBatch[npt.NDArray]],
     weights: dict[str, float],
-) -> tuple[index_tools.RetrievalBatch, dict[str, npt.NDArray]]:
+) -> tuple[vod_search.RetrievalBatch, dict[str, npt.NDArray]]:
     keys = list(search_results.keys())
     first_result = search_results[keys[0]]
     first_weight = weights[keys[0]]
@@ -212,12 +213,12 @@ def _merge_n_search_results(
 
 
 def _merge_two_search_results(
-    a: index_tools.RetrievalBatch[npt.NDArray],
-    b: index_tools.RetrievalBatch[npt.NDArray],
-) -> index_tools.RetrievalBatch[npt.NDArray]:
+    a: vod_search.RetrievalBatch[npt.NDArray],
+    b: vod_search.RetrievalBatch[npt.NDArray],
+) -> vod_search.RetrievalBatch[npt.NDArray]:
     """Merge two search results."""
     scores, indices = _nopy_merge_two_search_results(a.scores, a.indices, b.scores, b.indices)
-    return index_tools.RetrievalBatch(scores=scores, indices=indices)
+    return vod_search.RetrievalBatch(scores=scores, indices=indices)
 
 
 @numba.njit(fastmath=True)
@@ -362,12 +363,12 @@ def _gumbel_1d_like(x: npt.NDArray, eps: float = 1e-18) -> npt.NDArray:
 
 
 def sample(
-    search_results: index_tools.RetrievalBatch[npt.NDArray],
+    search_results: vod_search.RetrievalBatch[npt.NDArray],
     total: int,
     n_positives: Optional[int] = None,
     temperature: float = 0.0,
     max_support_size: Optional[int] = None,
-) -> index_tools.RetrievalBatch[npt.NDArray]:
+) -> vod_search.RetrievalBatch[npt.NDArray]:
     """Sample search results."""
     bs = search_results.scores.shape[0]
     total = total or search_results.scores.shape[1]
@@ -384,7 +385,7 @@ def sample(
     is_positive.setflags(write=False)
 
     # Instantiate the output buffer
-    output = index_tools.RetrievalBatch(
+    output = vod_search.RetrievalBatch(
         scores=np.full((bs, total), fill_value=np.nan),
         indices=np.full((bs, total), fill_value=-1),
         labels=np.full((bs, total), fill_value=-1),
@@ -500,49 +501,3 @@ def _sample_1d(  # noqa: PLR0913, C901
         output_indices[cursor] = indices_i
         output_labels[cursor] = 0
         cursor += 1
-
-
-# if __name__ == "__main__":
-#     import rich
-
-#     bs = 1
-#     dim = 10
-#     data = {
-#         "a": index_tools.RetrievalBatch(
-#             scores=10 + np.random.randn(bs, dim).astype(np.float32),
-#             indices=np.random.randint(-1, dim, size=(bs, dim)),
-#             labels=np.random.randint(-1, 2, size=(bs, dim)),
-#         ),
-#         "b": index_tools.RetrievalBatch(
-#             scores=10 + np.random.randn(bs, dim + 1).astype(np.float32),
-#             indices=np.random.randint(-1, dim, size=(bs, dim + 1)),
-#         ),
-#         "c": index_tools.RetrievalBatch(
-#             scores=10 + np.random.randn(bs, dim + 2).astype(np.float32),
-#             indices=np.random.randint(-1, dim, size=(bs, dim + 2)),
-#         ),
-#     }
-#     rich.print(data)
-
-#     output, raw = merge_search_results(data, weights={"a": 100, "b": 1.0, "c": -100})
-
-#     rich.print("=== OUTPUT ===")
-#     rich.print(output)
-#     rich.print(raw)
-#     rich.print({k: log_softmax(v) for k, v in raw.items()})
-
-#     rich.print("==== SAMPLE ====")
-#     rich.print(sample(output, total=10, n_positives=5))
-
-# queries = np.random.randint(-1, dim, size=(bs, dim))
-# keys = np.random.randint(-1, dim, size=(bs, dim))
-# values = np.random.randn(bs, dim).astype(np.float32)
-# rich.print(
-#     {
-#         "queries": queries,
-#         "keys": keys,
-#         "values": values,
-#     }
-# )
-# output = gather_values_2d(queries, keys, values)
-# rich.print(output)

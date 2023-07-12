@@ -17,17 +17,14 @@ import torch
 import transformers
 from lightning.fabric import wrappers as fabric_wrappers
 from loguru import logger
-from raffle_ds_research.core import config as core_config
-from raffle_ds_research.core import mechanics
-from raffle_ds_research.core.mechanics.dataloader_sampler import DataloaderSampler
-from raffle_ds_research.core.ml.ranker import Ranker
-from raffle_ds_research.core.workflows.utils import support
-from raffle_ds_research.core.workflows.utils.schedule import BaseSchedule
-from raffle_ds_research.tools import dstruct, index_tools, pipes
-from raffle_ds_research.tools.pipes.hashing import fingerprint_torch_module
 from torch import distributed as torch_distributed
 from torch.utils import data as torch_data
 from typing_extensions import Self, Type
+
+from src import vod_configs, vod_dataloaders, vod_models, vod_search
+from src.vod_tools import dstruct, pipes
+from src.vod_tools.misc.schedule import BaseSchedule
+from src.vod_tools.pipes.hashing import fingerprint_torch_module
 
 T = TypeVar("T")
 
@@ -52,6 +49,14 @@ def is_engine_enabled(parameters: Optional[dict | DictProxy], engine: str) -> bo
     if parameters is None:
         return True
     return parameters.get(engine, 1.0) >= 0
+
+
+@dataclasses.dataclass(frozen=True)
+class PrecomputedDsetVectors:
+    """Holds the vectors for a given dataset and field."""
+
+    questions: dstruct.TensorStoreFactory
+    sections: dstruct.TensorStoreFactory
 
 
 @dataclasses.dataclass(frozen=True)
@@ -95,14 +100,14 @@ def instantiate_retrieval_dataloader(
     questions: DsetWithVectors,
     sections: DsetWithVectors,
     tokenizer: transformers.PreTrainedTokenizer | transformers.PreTrainedTokenizerFast,
-    search_client: index_tools.MultiSearchClient,
-    collate_config: core_config.RetrievalCollateConfig,
-    dataloader_config: core_config.DataLoaderConfig,
+    search_client: vod_search.MultiSearchClient,
+    collate_config: vod_configs.RetrievalCollateConfig,
+    dataloader_config: vod_configs.DataLoaderConfig,
     parameters: Optional[dict | DictProxy],
-    dl_sampler: typing.Optional[DataloaderSampler] = None,
+    dl_sampler: typing.Optional[vod_dataloaders.SamplerFactory] = None,
 ) -> torch_data.DataLoader[dict[str, Any]]:
     """Instantiate a dataloader for the retrieval task."""
-    collate_fn = mechanics.RetrievalCollate(
+    collate_fn = vod_dataloaders.RetrievalCollate(
         tokenizer=tokenizer,
         sections=sections.data,
         search_client=search_client,
@@ -149,7 +154,7 @@ class _WithVectors(dstruct.SizedDataset[dict[str, Any]]):
         return item
 
 
-def concatenate_datasets(dsets: typing.Iterable[support.DsetWithVectors]) -> support.DsetWithVectors:  # TODO: test this
+def concatenate_datasets(dsets: typing.Iterable[DsetWithVectors]) -> DsetWithVectors:
     """Concatenate datasets and remove duplicates."""
     dsets_by_fingerprint = collections.defaultdict(list)
     for dset in dsets:
@@ -168,7 +173,7 @@ def concatenate_datasets(dsets: typing.Iterable[support.DsetWithVectors]) -> sup
     # concatenate the datasets
     unique_dsets = [dsets[0] for dsets in dsets_by_fingerprint.values()]
     vecs = [dset.vectors for dset in unique_dsets if dset.vectors is not None]
-    return support.DsetWithVectors(
+    return DsetWithVectors(
         data=_concat_data([dset.data for dset in unique_dsets]),
         vectors=_concat_data(vecs) if vecs else None,
     )
@@ -251,7 +256,7 @@ def _gen_dummy_batch(bs: int = 8, r: int = 0) -> dict[str, torch.Tensor]:
     }
 
 
-def _test_model_backward(fabric: L.Fabric, ranker: Ranker, header: str = "", silent: bool = True) -> None:
+def _test_model_backward(fabric: L.Fabric, ranker: vod_models.Ranker, header: str = "", silent: bool = True) -> None:
     if torch_distributed.is_initialized():
         ranker.zero_grad()
         dummy_batch = _gen_dummy_batch(bs=8, r=fabric.global_rank)

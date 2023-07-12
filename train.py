@@ -1,3 +1,3 @@
-from raffle_ds_research.cli import train
+from src.cli import train
 
 train.run()

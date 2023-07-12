@@ -6,8 +6,10 @@ import warnings
 from typing import Any, Optional
 
 import datasets
-from raffle_ds_research.tools.pipes.utils.misc import pack_examples
-from raffle_ds_research.tools.raffle_datasets import RetrievalDataset
+
+from src.vod_tools.pipes.utils.misc import pack_examples
+
+from .base import RetrievalDataset
 
 SQUAD_KB_ID = 200_000
 

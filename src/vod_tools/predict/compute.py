@@ -11,18 +11,19 @@ import torch
 from lightning.fabric import wrappers as fabric_wrappers
 from loguru import logger
 from omegaconf import DictConfig
-from raffle_ds_research.tools import dstruct, pipes
-from raffle_ds_research.tools.utils import loader_config
-from raffle_ds_research.tools.utils.progress import IterProgressBar
 from torch.utils import data as torch_data
 from typing_extensions import TypeAlias
 
+from src import vod_configs
+from src.vod_tools import dstruct, pipes
+from src.vod_tools.misc.progress import IterProgressBar
+
 from .wrappers import PREDICT_IDX_COL_NAME, CollateWithIndices, DatasetWithIndices
 
-LoaderKwargs: TypeAlias = Union[dict[str, Any], DictConfig, loader_config.DataLoaderConfig]
+LoaderKwargs: TypeAlias = Union[dict[str, Any], DictConfig, vod_configs.DataLoaderConfig]
 
 
-class DataLoaderForPredictKwargs(loader_config.DataLoaderConfig):
+class DataLoaderForPredictKwargs(vod_configs.DataLoaderConfig):
     """Confiuguration for `torch.utils.data.Dataloader` for predictions."""
 
     @pydantic.validator("shuffle", pre=True)

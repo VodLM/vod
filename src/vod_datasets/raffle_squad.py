@@ -13,7 +13,8 @@ import datasets
 import fsspec
 import loguru
 import pydantic
-from raffle_ds_research.tools.raffle_datasets.base import (
+
+from .base import (
     DATASETS_CACHE_PATH,
     QueryModel,
     RetrievalDataset,

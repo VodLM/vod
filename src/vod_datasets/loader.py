@@ -7,11 +7,12 @@ from typing import Any, Literal, Optional, TypeVar
 
 import datasets
 import pydantic
-from raffle_ds_research.tools.raffle_datasets.base import RetrievalDataset
-from raffle_ds_research.tools.raffle_datasets.frank import load_frank
-from raffle_ds_research.tools.raffle_datasets.msmarco import load_msmarco
-from raffle_ds_research.tools.raffle_datasets.raffle_squad import load_raffle_squad
 from typing_extensions import Self, Type
+
+from .base import RetrievalDataset
+from .frank import load_frank
+from .msmarco import load_msmarco
+from .raffle_squad import load_raffle_squad
 
 
 class DatasetConfigOptions(pydantic.BaseModel):

@@ -15,6 +15,7 @@ from .py.search import (
     Bm25FactoryConfig,
     FaissFactoryConfig,
     FaissGpuConfig,
+    SearchConfig,
 )
 from .py.workflows import (
     BatchSizeConfig,

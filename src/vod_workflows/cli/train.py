@@ -13,17 +13,16 @@ import omegaconf
 from hydra.utils import instantiate
 from loguru import logger
 from omegaconf import DictConfig
-from raffle_ds_research.cli.utils.misc import _get_ranker_meta_data
 
 try:
     multiprocessing.set_start_method("forkserver", force=True)
 except RuntimeError:
     loguru.logger.debug("Could not set multiprocessing start method to `forkserver`")
-from raffle_ds_research.cli import utils as cli_utils  # noqa: E402
-from raffle_ds_research.core import workflows  # noqa: E402
-from raffle_ds_research.core.ml import Ranker  # noqa: E402
-from raffle_ds_research.tools.utils.config import register_omgeaconf_resolvers  # noqa: E402
-from raffle_ds_research.tools.utils.pretty import print_config  # noqa: E402
+
+from src import vod_configs, vod_models, vod_workflows
+from src.vod_tools.misc.omega_utils import register_omgeaconf_resolvers
+from src.vod_tools.misc.pretty import print_config
+from src.vod_workflows.cli import utils as cli_utils
 
 register_omgeaconf_resolvers()
 
@@ -33,7 +32,7 @@ def _is_gloabl_zero() -> bool:
     return os.environ.get("LOCAL_RANK", "0") == "0" and os.environ.get("NODE_RANK", "0") == "0"
 
 
-@hydra.main(config_path="../configs/", config_name="main", version_base="1.3")
+@hydra.main(config_path=vod_configs.hyra_conf_path(), config_name="main", version_base="1.3")
 def run(config: DictConfig) -> None:
     """Train a ranker for a retrieval task."""
     if config.load_from is not None:
@@ -63,7 +62,7 @@ def run(config: DictConfig) -> None:
     logger.info(f"Instantiating model <{config.model._target_}>")
     if config.seed is not None:
         fabric.seed_everything(config.seed)
-        ranker: Ranker = instantiate(config.model)
+    ranker: vod_models.Ranker = instantiate(config.model)
 
     # Log config & setup logger
     _customize_logger(fabric=fabric)
@@ -71,13 +70,13 @@ def run(config: DictConfig) -> None:
         cli_utils.log_config(
             config=config,
             exp_dir=exp_dir,
-            extras={"meta": _get_ranker_meta_data(ranker)},
+            extras={"meta": cli_utils._get_ranker_meta_data(ranker)},
             fabric=fabric,
         )
 
     # Train the model
     logger.info(f"Training the ranker with seed={config.seed}")
-    workflows.train_with_index_updates(
+    vod_workflows.train_with_index_updates(
         fabric=fabric,
         ranker=ranker,
         config=config,

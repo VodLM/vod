@@ -11,13 +11,12 @@ import torch
 import transformers
 from lightning.pytorch import utilities as pl_utils
 from loguru import logger
-from raffle_ds_research.core import config as core_config
-from raffle_ds_research.core.mechanics import dataset_factory, search_engine
-from raffle_ds_research.core.ml.monitor import RetrievalMetricCollection
-from raffle_ds_research.core.workflows.precompute import PrecomputedDsetVectors
-from raffle_ds_research.core.workflows.utils import support
-from raffle_ds_research.tools.utils.progress import IterProgressBar
-from raffle_ds_research.utils.config import flatten_dict
+
+from src import vod_configs, vod_datasets, vod_search
+from src.vod_models.monitor import RetrievalMetricCollection
+from src.vod_tools.misc.config import flatten_dict
+from src.vod_tools.misc.progress import IterProgressBar
+from src.vod_workflows.utils import helpers
 
 _DEFAULT_OUTPUT_KEYS = ["faiss", "bm25", "score"]
 
@@ -33,13 +32,13 @@ class ToDiskConfig:
 @torch.no_grad()
 @pl_utils.rank_zero_only
 def benchmark(
-    factory: dataset_factory.DatasetFactory,
+    factory: vod_datasets.DatasetFactory,
     *,
-    vectors: None | PrecomputedDsetVectors,
+    vectors: None | helpers.PrecomputedDsetVectors,
     metrics: Iterable[str],
-    search_config: core_config.SearchConfig,
-    collate_config: core_config.RetrievalCollateConfig,
-    dataloader_config: core_config.DataLoaderConfig,
+    search_config: vod_configs.SearchConfig,
+    collate_config: vod_configs.RetrievalCollateConfig,
+    dataloader_config: vod_configs.DataLoaderConfig,
     cache_dir: pathlib.Path,
     parameters: Optional[dict[str, float]] = None,
     output_keys: Optional[list[str]] = None,
@@ -48,24 +47,24 @@ def benchmark(
     to_disk_config: Optional[ToDiskConfig] = None,
 ) -> dict[str, float]:
     """Run benchmarks on a retrieval task."""
-    with search_engine.build_search_engine(
+    with vod_search.build_multi_search_engine(
         sections=factory.get_sections(),  # type: ignore
-        vectors=support.maybe_as_lazy_array(vectors.sections) if vectors is not None else None,
+        vectors=helpers.maybe_as_lazy_array(vectors.sections) if vectors is not None else None,
         config=search_config,
         cache_dir=cache_dir,
-        faiss_enabled=support.is_engine_enabled(parameters, "faiss"),
-        bm25_enabled=support.is_engine_enabled(parameters, "bm25"),
+        faiss_enabled=helpers.is_engine_enabled(parameters, "faiss"),
+        bm25_enabled=helpers.is_engine_enabled(parameters, "bm25"),
         serve_on_gpu=serve_on_gpu,
     ) as master:
         search_client = master.get_client()
 
         # Instantiate the dataloader
-        dataloader = support.instantiate_retrieval_dataloader(
-            questions=support.DsetWithVectors.cast(
+        dataloader = helpers.instantiate_retrieval_dataloader(
+            questions=helpers.DsetWithVectors.cast(
                 data=factory.get_qa_split(),
                 vectors=vectors.questions if vectors is not None else None,
             ),
-            sections=support.DsetWithVectors.cast(
+            sections=helpers.DsetWithVectors.cast(
                 data=factory.get_sections(),
                 vectors=vectors.sections if vectors is not None else None,
             ),

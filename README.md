@@ -1,6 +1,6 @@
-# raffle-ds-research
+# VOD - Variational Open-Domain
 
-User-friendly and scalable experimentation framework for modern NLP
+A scalable experimentation framework for latent-retrieval models.
 
 ## Install
 
@@ -51,18 +51,10 @@ See `configs/main.yaml` for the default configuration. You can override any of t
 poetry run train model/encoder=t5-base batch_size.per_device=4
 ```
 
-Recipes define a pre-configured set of arguments.
-Recipes are defined in `configs/recipe`.
-To use a recipe, for example `t5-base`, use:
+Configurations can be overriden using `patch` configurations (experiment, hardware, etc.). For instance, to train a retrieval model (base size) using torch DDP:
 
 ```shell
-poetry run train +recipe=frank-t5-base
-```
-
-### Serve a model for testing
-
-```shell
-# api stuff, coming soon
+poetry run train +patch/task=retrieval +patch/arch=ddp-base
 ```
 
 ## Tips and Tricks

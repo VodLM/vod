@@ -2,80 +2,20 @@ from __future__ import annotations
 
 import os
 import pathlib
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
+import elasticsearch
 import faiss
 import numpy as np
-import omegaconf
-import pydantic
 import torch
+from lightning.pytorch import utilities as pl_utils
 from loguru import logger
 
+from src import vod_configs
+from src.vod_configs.py.search import FAISS_METRICS_INV
 from src.vod_search import bm25_tools, faiss_tools, search_server
-from src.vod_search.faiss_tools.build_gpu import FaissGpuConfig
+from src.vod_search.multi_search import MultiSearchMaster
 from src.vod_tools import dstruct, pipes
-
-FAISS_METRICS = {
-    "l2": faiss.METRIC_L2,
-    "inner_product": faiss.METRIC_INNER_PRODUCT,
-    "l1": faiss.METRIC_L1,
-    "linf": faiss.METRIC_Linf,
-    "js": faiss.METRIC_JensenShannon,
-}
-
-FAISS_METRICS_INV = {v: k for k, v in FAISS_METRICS.items()}
-
-
-class FaissFactoryConfig(pydantic.BaseModel):
-    """Configures the building of a faiss server."""
-
-    factory: str = "Flat"
-    nprobe: int = 16
-    metric: int = faiss.METRIC_INNER_PRODUCT
-    train_size: Optional[int] = None
-    logging_level: str = "DEBUG"
-    host: str = "http://localhost"
-    port: int = 7678
-    gpu: Optional[FaissGpuConfig] = None
-
-    @pydantic.validator("metric", pre=True)
-    def _validate_metric(cls, v: str | int) -> int:
-        if isinstance(v, int):
-            return v
-
-        return FAISS_METRICS[v]
-
-    def fingerprint(self) -> str:
-        """Return a fingerprint for this config."""
-        excludes = {"host", "port", "logging_level"}
-        return pipes.fingerprint(self.dict(exclude=excludes))
-
-
-class Bm25FactoryConfig(pydantic.BaseModel):
-    """Configures the building of a bm25 server."""
-
-    text_key: str = "text"
-    group_key: Optional[str] = "group_hash"
-    section_id_key: Optional[str] = "id"
-    host: str = "http://localhost"
-    port: int = 9200
-    persistent: bool = True
-    es_body: Optional[dict] = None
-
-    @pydantic.validator("es_body", pre=True)
-    def _validate_es_body(cls, v: dict | None) -> dict | None:
-        if isinstance(v, omegaconf.DictConfig):
-            v = omegaconf.OmegaConf.to_container(v, resolve=True)  # type: ignore
-        return v
-
-    def fingerprint(self) -> str:
-        """Return a fingerprint for this config."""
-        excludes = {"host", "port", "persistent"}
-        return pipes.fingerprint(self.dict(exclude=excludes))
-
-
-class EnginefactoryConfig(FaissFactoryConfig, Bm25FactoryConfig):
-    """General configuration for the search engine."""
 
 
 def build_search_client(
@@ -97,7 +37,7 @@ def build_search_client(
             raise ValueError("Must provide vectors for `faiss` index")
         return build_faiss_index(
             vectors=vectors,
-            config=FaissFactoryConfig(**config),
+            config=vod_configs.FaissFactoryConfig(**config),
             cache_dir=cache_dir,
             skip_setup=skip_setup,
             barrier_fn=barrier_fn,
@@ -108,7 +48,7 @@ def build_search_client(
             raise ValueError("Must provide sections for `bm25` index")
         return build_bm25_master(
             sections=sections,
-            config=Bm25FactoryConfig(**config),
+            config=vod_configs.Bm25FactoryConfig(**config),
             skip_setup=skip_setup,
         )
 
@@ -117,12 +57,12 @@ def build_search_client(
 
 def build_bm25_master(
     sections: dstruct.SizedDataset[dict[str, Any]],
-    config: Bm25FactoryConfig | dict,
+    config: vod_configs.Bm25FactoryConfig | dict,
     skip_setup: bool = False,
 ) -> bm25_tools.Bm25Master:
     """Build a bm25 index."""
     if isinstance(config, dict):
-        config = Bm25FactoryConfig(**config)
+        config = vod_configs.Bm25FactoryConfig(**config)
     index_fingerprint = f"{pipes.fingerprint(sections)}-{config.fingerprint()}"
     logger.info(
         f"Init. bm25 index `{index_fingerprint}`, "
@@ -150,7 +90,7 @@ def build_bm25_master(
 def build_faiss_index(
     vectors: dstruct.SizedDataset[np.ndarray],
     *,
-    config: FaissFactoryConfig | dict,
+    config: vod_configs.FaissFactoryConfig | dict,
     cache_dir: str | pathlib.Path,
     skip_setup: bool = False,
     barrier_fn: None | Callable[[str], None] = None,
@@ -158,7 +98,7 @@ def build_faiss_index(
 ) -> search_server.SearchMaster:
     """Build a faiss index."""
     if isinstance(config, dict):
-        config = FaissFactoryConfig(**config)
+        config = vod_configs.FaissFactoryConfig(**config)
     if not torch.cuda.is_available():
         serve_on_gpu = False
     index_fingerprint = f"{pipes.fingerprint(vectors)}-{config.fingerprint()}"
@@ -211,3 +151,74 @@ def _rank_info() -> str:
     rank = os.getenv("RANK", None)
     winfo = f"[{rank}] " if rank is not None else ""
     return winfo
+
+
+def build_multi_search_engine(
+    *,
+    sections: None | dstruct.SizedDataset[dict[str, Any]],
+    vectors: None | dstruct.SizedDataset[np.ndarray],
+    config: vod_configs.SearchConfig,
+    cache_dir: str | pathlib.Path,
+    faiss_enabled: bool = True,
+    bm25_enabled: bool = True,
+    skip_setup: bool = False,
+    barrier_fn: None | Callable[[str], None] = None,
+    serve_on_gpu: bool = False,
+    close_existing_es_indices: bool = True,
+) -> MultiSearchMaster:
+    """Build a hybrid search engine."""
+    servers = {}
+
+    if close_existing_es_indices:
+        # Close all indices to avoid hitting memory limits
+        _close_all_es_indices()
+
+    if faiss_enabled:
+        if vectors is None:
+            raise ValueError("`vectors` must be provided if `faiss_enabled`")
+
+        faiss_server = build_faiss_index(
+            vectors=vectors,
+            config=config.faiss,
+            cache_dir=cache_dir,
+            skip_setup=skip_setup,
+            barrier_fn=barrier_fn,
+            serve_on_gpu=serve_on_gpu,
+        )
+        servers["faiss"] = faiss_server
+
+    if bm25_enabled:
+        if sections is None:
+            raise ValueError("`sections` must be provided if `bm25_enabled`")
+
+        bm25_server = build_bm25_master(
+            sections=sections,
+            config=config.bm25,
+            skip_setup=skip_setup,
+        )
+        servers["bm25"] = bm25_server
+
+    if len(servers) == 0:
+        raise ValueError("No search servers were enabled.")
+
+    return MultiSearchMaster(servers=servers, skip_setup=skip_setup)
+
+
+@pl_utils.rank_zero_only
+def _close_all_es_indices(es_url: str = "http://localhost:9200") -> None:
+    """Close all `elasticsearch` indices."""
+    logger.warning(f"Closing all ES indices at `{es_url}`")
+    try:
+        es = elasticsearch.Elasticsearch(es_url)
+        for index_name in es.indices.get(index="*"):
+            if index_name.startswith("."):
+                continue
+            logger.debug(f"Found ES index `{index_name}`")
+            try:
+                if es.indices.exists(index=index_name):
+                    logger.info(f"Closing ES index {index_name}")
+                    es.indices.close(index=index_name)
+            except Exception as exc:
+                logger.warning(f"Could not close index {index_name}: {exc}")
+    except Exception as exc:
+        logger.warning(f"Could not connect to ES: {exc}")

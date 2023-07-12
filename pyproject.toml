@@ -1,7 +1,7 @@
 [tool.commitizen]
 version = "0.1.0"
 version_files = [
-  "raffle_ds_research/__init__.py:__version__",
+  "src/__init__.py:__version__",
   "pyproject.toml:version",
   "VERSION",
 ]
@@ -10,19 +10,19 @@ bump_message = "[ci skip] bump: $current_version → $new_version"
 
 
 [tool.poetry]
-name = "raffle-ds-research"
+name = "vod"
 version = "0.1.0"
-description = "User-friendly and scalable experimentation framework for modern NLP"
+description = "Variational Open-Domain: A scalable experimentation framework for latent-retrieval models."
 authors = ["Valentin Liévin <vl@raffle.ai>"]
 readme = "README.md"
 packages = [
-    { from = "src", include = "vod_dataloaders" },
-    { from = "src", include = "vod_datasets" },
-    { from = "src", include = "vod_gradients" },
-    { from = "src", include = "vod_models" },
-    { from = "src", include = "vod_search" },
-    { from = "src", include = "vod_tools" },
-    { from = "src", include = "vod_workflows" },
+  { from = "src", include = "vod_dataloaders" },
+  { from = "src", include = "vod_datasets" },
+  { from = "src", include = "vod_gradients" },
+  { from = "src", include = "vod_models" },
+  { from = "src", include = "vod_search" },
+  { from = "src", include = "vod_tools" },
+  { from = "src", include = "vod_workflows" },
 ]
 
 
@@ -56,8 +56,9 @@ cython = "^0.29.33"
 elasticsearch = "^8.6.2"
 gcsfs = "^2023.3.0"
 richuru = "^0.1.1"
-numba = "^0.57.1"
 pydantic = "^1"
+numpy = "^1.24" # <-- setting this for numba
+numba = "^0.57.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.1"
@@ -70,12 +71,11 @@ ruff = "^0.0.261"
 gpustat = "^1.1"
 boto3 = "^1.26.137"
 
-
 [tool.poetry.group.cuda]
 optional = true
 
 [tool.poetry.group.cuda.dependencies]
-faiss-gpu = { platform = "linux", version = ">=1.7.2" }       # <-- or build it using `build-faiss.sh`
+faiss-gpu = { platform = "linux", version = ">=1.7.2" } # <-- or build it using `build-faiss.sh`
 
 [build-system]
 build-backend = "poetry.core.masonry.api"

@@ -16,9 +16,10 @@ import transformers
 import yaml
 from lightning.fabric.loggers.logger import Logger as FabricLogger
 from lightning.pytorch.loggers import WandbLogger
-from raffle_ds_research.core.ml import Ranker
-from raffle_ds_research.tools import interfaces
-from raffle_ds_research.utils.config import config_to_flat_dict
+
+from src import vod_models
+from src.vod_tools import interfaces
+from src.vod_tools.misc.config import config_to_flat_dict
 
 T = TypeVar("T")
 
@@ -62,7 +63,7 @@ def set_training_context() -> None:
     # torch.multiprocessing.set_sharing_strategy("file_system")
 
 
-def _get_ranker_meta_data(ranker: Ranker) -> dict[str, Any]:
+def _get_ranker_meta_data(ranker: vod_models.Ranker) -> dict[str, Any]:
     return {
         "n_trainable_params": sum(p.numel() for p in ranker.parameters() if p.requires_grad),
         "n_total_params": sum(p.numel() for p in ranker.parameters()),

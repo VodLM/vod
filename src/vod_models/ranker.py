@@ -9,11 +9,11 @@ from datasets.fingerprint import Hasher, hashregister
 from hydra.utils import instantiate
 from loguru import logger
 from omegaconf import DictConfig
-from raffle_ds_research.core.ml.gradients import Gradients
-from raffle_ds_research.core.ml.monitor import RetrievalMonitor
-from raffle_ds_research.tools import interfaces
-from raffle_ds_research.tools.pipes import fingerprint_torch_module
 from transformers import pytorch_utils, trainer_pt_utils  # type: ignore
+
+from src import vod_gradients
+from src.vod_models.monitor import RetrievalMonitor
+from src.vod_tools import interfaces, pipes
 
 
 def _maybe_instantiate(conf_or_obj: Union[Any, DictConfig], **kwargs: Any) -> object:
@@ -32,7 +32,7 @@ class Ranker(torch.nn.Module):
     def __init__(  # noqa: PLR0913
         self,
         encoder: interfaces.ProtocolEncoder,
-        gradients: Gradients,
+        gradients: vod_gradients.Gradients,
         optimizer: Optional[dict | DictConfig | functools.partial] = None,
         scheduler: Optional[dict | DictConfig | functools.partial] = None,
         monitor: Optional[RetrievalMonitor] = None,
@@ -192,4 +192,4 @@ def _filter_model_output(output: dict[str, Any]) -> dict[str, Any]:
 
 @hashregister(Ranker)
 def _hash_ranker(hasher: Hasher, value: Ranker) -> str:
-    return fingerprint_torch_module(hasher, value)
+    return pipes.fingerprint_torch_module(hasher, value)
