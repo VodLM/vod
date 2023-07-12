@@ -15,7 +15,16 @@ version = "0.1.0"
 description = "User-friendly and scalable experimentation framework for modern NLP"
 authors = ["Valentin Liévin <vl@raffle.ai>"]
 readme = "README.md"
-packages = [{ include = "raffle_ds_research" }]
+packages = [
+    { from = "src", include = "vod_dataloaders" },
+    { from = "src", include = "vod_datasets" },
+    { from = "src", include = "vod_gradients" },
+    { from = "src", include = "vod_models" },
+    { from = "src", include = "vod_search" },
+    { from = "src", include = "vod_tools" },
+    { from = "src", include = "vod_workflows" },
+]
+
 
 [tool.poetry.scripts]
 train = 'raffle_ds_research.cli.train:run'
@@ -38,7 +47,7 @@ tensorstore = "^0.1.32"
 hydra-colorlog = "^1.2.0"
 rich = "^13.3.1"
 optimum = "^1.7.1"
-faiss-cpu = { platform = "darwin", version = "==1.6.5" }
+faiss-cpu = { platform = "darwin", version = "1.7.4" }
 fastapi = ">=0.80"
 uvicorn = ">=0.20.0"
 psutil = "^5.9.4"
@@ -70,12 +79,6 @@ faiss-gpu = { platform = "linux", version = ">=1.7.2" }       # <-- or build it 
 
 [build-system]
 build-backend = "poetry.core.masonry.api"
-requires = ["poetry-core", "Cython", "numpy"]
-
-
-[tool.poetry.build]
-generate-setup-file = false
-script = "build.py"
 
 [tool.black]
 line-length = 120
