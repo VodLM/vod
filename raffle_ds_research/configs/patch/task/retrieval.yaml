@@ -4,7 +4,7 @@ defaults:
   # boost `ai_trainer` and `production` questions
   # - override /dl_sampler: promote_trusted_sources
   # HF model name
-  - override /model/encoder: bert-base
+  - override /model/encoder: mt5-base
   # Gradients
   - override /model/gradients: kl_div
   # model optimizer
@@ -31,13 +31,21 @@ dataset:
     - msmarco.en:val
 
 model:
+  encoder:
+    model_config:
+      dropout: 0.1 # default: 0.1 - doesn't work well with gradient caching
   optimizer:
-    lr: 1e-4
+    lr: 3e-5
     weight_decay: 1e-3
     eps: 1e-8
   gradients:
+    section_chunk_size: null
     self_supervision_weight: 0.0
     bm25_guidance_weight: 0.0
+  compile_encoder: true
+  compile_kwargs:
+    dynamic: false
+    fullgraph: false
 
 resources:
   num_workers: 2 # <--- 2 workers per GPU
@@ -87,7 +95,6 @@ collates:
     prefetch_n_sections: 1024
     do_sample: false
     post_filter: ensure_match
-
 
 search:
   faiss:

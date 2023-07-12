@@ -15,34 +15,11 @@ resources:
   num_proc: 16
   omp_threads: ${int_div:${n_cpus:},2}
 
-model:
-  encoder:
-    model_config:
-      dropout: 0.1 # default: 0.1 - doesn't work well with gradient caching
-  optimizer:
-    lr: 3e-5
-    weight_decay: 1e-3
-    eps: 1e-8
-  gradients:
-    section_chunk_size: null
-  compile_encoder: true
-  compile_kwargs:
-    dynamic: false
-    fullgraph: false
-
 batch_size:
   effective: 32
   per_device: 8
   per_device_eval: 16
   per_device_predict: 1024
-
-collates:
-  train:
-    n_sections: 24 # sample `x` sections from the candidate `z` sections
-    max_pos_sections: 8 # include at max `y` positive sections
-    prefetch_n_sections: 100 # retrieve `z` candidate sections
-    do_sample: true # sample the sections from the candidate sections (randomly)
-    in_batch_negatives: true
 
 fabric:
   precision: bf16-mixed

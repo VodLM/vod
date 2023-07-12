@@ -1,7 +1,6 @@
 # @package _global_
 
 defaults:
-  - override /dataset/templates: encode_context
   - override /model/encoder: bert-tiny
   - _self_
 
