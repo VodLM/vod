@@ -17,7 +17,7 @@ from raffle_ds_research.core import config as core_config
 from raffle_ds_research.core.mechanics import fast
 from raffle_ds_research.core.mechanics.post_filtering import PostFilter, post_filter_factory
 from raffle_ds_research.core.mechanics.section_sampler import sample_sections
-from raffle_ds_research.core.mechanics.utils import BlockTimer
+from raffle_ds_research.core.mechanics.utils import BlockTimer, cast_as_tensor
 from raffle_ds_research.tools import c_tools, dstruct, index_tools, pipes
 from raffle_ds_research.tools.pipes.utils.misc import pack_examples
 
@@ -123,13 +123,12 @@ class RetrievalCollate(pipes.Collate):
 
         # Flatten sections (in-batch negative)
         if self.config.in_batch_negatives:
-            sections, sampled_raw = gather_in_batch_negatives(
+            sections, sampled_raw = _gather_in_batch_negatives(
                 sections,
                 search_results=search_results,
                 raw_scores=raw_scores,
                 world_size=len(self.sections),
                 padding=True,  # <-- padding is required for `torch.compile()` to compile a single graph.
-                fill_score_offset=self.config.in_batch_neg_offset,
             )
 
         # Fetch the content of each section from the huggingface `datasets.Dataset`
@@ -138,33 +137,20 @@ class RetrievalCollate(pipes.Collate):
 
         # Tokenize the sections and add them to the output
         with BlockTimer(name="diagnostics.tokenize_time", output=diagnostics):
-            tokenized_sections = pipes.torch_tokenize_pipe(
-                flat_sections_content,
-                tokenizer=self.tokenizer,
-                text_key="text",
-                prefix_key="section.",
-                max_length=self.config.section_max_length,
-                truncation=True,
-                padding="max_length",
-            )
-            tokenized_sections = {k: v.view(*sections.indices.shape, -1) for k, v in tokenized_sections.items()}
-
-            # Tokenize the questions
-            tokenized_question = pipes.torch_tokenize_pipe(
+            tokenized_questions, tokenized_sections = _tokenize_fields(
                 batch,
+                flat_sections_content,
+                sections=sections,
                 tokenizer=self.tokenizer,
-                text_key="text",
-                prefix_key="question.",
-                max_length=self.config.question_max_length,
-                truncation=True,
-                padding="max_length",
+                config=self.config,
             )
 
-        # Get question/section attributes
-        attributes = self._get_attributes(
+        # Get question/section attributes (e.g., group_hash, kb_id, etc.)
+        attributes = _get_attributes_as_torch(
             batch,
             flat_sections_content,
             sections_shape=sections.indices.shape,
+            config=self.config,
         )
 
         # Debugging: proportion of in-domain sections (same group hash)
@@ -178,7 +164,7 @@ class RetrievalCollate(pipes.Collate):
         # Build the batch
         diagnostics["diagnostics.collate_time"] = time.perf_counter() - start_time
         batch = {
-            **tokenized_question,
+            **tokenized_questions,
             **tokenized_sections,
             **_sampled_sections_to_dict(sections, sampled_raw, prefix="section.", as_torch=True),
             **attributes,
@@ -187,39 +173,6 @@ class RetrievalCollate(pipes.Collate):
         }
 
         return batch
-
-    def _get_attributes(
-        self,
-        batch: dict[str, Any],
-        flat_sections_content: dict[str, Any],
-        sections_shape: tuple[int, ...],
-    ) -> dict[str, Any]:
-        as_tensor = functools.partial(_as_tensor, dtype=torch.long, replace={None: -1})
-        extras_keys_ops = {"id": as_tensor, "answer_id": as_tensor, "kb_id": as_tensor, "group_hash": as_tensor}
-
-        # Handle question attributes
-        question_extras = {}
-        for k, fn in extras_keys_ops.items():
-            if k not in batch:
-                continue
-            question_extras[f"question.{k}"] = fn(batch[k])
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            query_section_ids = torch.nested.nested_tensor(batch[self.config.section_id_keys.query])
-            question_extras["question.section_ids"] = torch.nested.to_padded_tensor(query_section_ids, padding=-1)
-
-        # Handle section attributes
-        sections_extras = {}
-        for k, fn in extras_keys_ops.items():
-            if k not in flat_sections_content:
-                continue
-            v = fn(flat_sections_content[k])
-            if isinstance(v, torch.Tensor):
-                v = v.view(sections_shape)
-            sections_extras[f"section.{k}"] = v
-
-        return {**question_extras, **sections_extras}
 
     def search(
         self,
@@ -385,33 +338,79 @@ def _sampled_sections_to_dict(
     return output  # type: ignore
 
 
-def _as_tensor(
-    x: list | np.ndarray | torch.Tensor,
-    dtype: torch.dtype,
-    replace: Optional[dict[T, T]] = None,
-) -> torch.Tensor:
-    if replace is not None:
-        if isinstance(x, list):
-            x = [replace.get(i, i) for i in x]
-        else:
-            raise TypeError(f"Cannot use `replace` with type {type(x)}")
+def _tokenize_fields(
+    batch: dict[str, Any],
+    flat_sections_content: dict[str, Any],
+    *,
+    sections: index_tools.RetrievalBatch,
+    config: core_config.RetrievalCollateConfig,
+    tokenizer: transformers.PreTrainedTokenizerBase,
+) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
+    tokenized_sections = pipes.torch_tokenize_pipe(
+        flat_sections_content,
+        tokenizer=tokenizer,
+        text_key="text",
+        prefix_key="section.",
+        max_length=config.section_max_length,
+        truncation=True,
+        padding="max_length",
+    )
+    tokenized_sections = {k: v.view(*sections.indices.shape, -1) for k, v in tokenized_sections.items()}
 
-    if isinstance(x, np.ndarray):
-        x = torch.from_numpy(x).to(dtype=dtype)
-    elif isinstance(x, torch.Tensor):
-        x = x.to(dtype=dtype)
-    else:
-        x = torch.tensor(x, dtype=dtype)
+    # Tokenize the questions
+    tokenized_question = pipes.torch_tokenize_pipe(
+        batch,
+        tokenizer=tokenizer,
+        text_key="text",
+        prefix_key="question.",
+        max_length=config.question_max_length,
+        truncation=True,
+        padding="max_length",
+    )
 
-    return x
+    return tokenized_question, tokenized_sections
 
 
-def gather_in_batch_negatives(
+def _get_attributes_as_torch(
+    batch: dict[str, Any],
+    flat_sections_content: dict[str, Any],
+    *,
+    sections_shape: tuple[int, ...],
+    config: core_config.RetrievalCollateConfig,
+) -> dict[str, Any]:
+    as_tensor = functools.partial(cast_as_tensor, dtype=torch.long, replace={None: -1})
+    extras_keys_ops = {"id": as_tensor, "answer_id": as_tensor, "kb_id": as_tensor, "group_hash": as_tensor}
+
+    # Handle question attributes
+    question_extras = {}
+    for k, fn in extras_keys_ops.items():
+        if k not in batch:
+            continue
+        question_extras[f"question.{k}"] = fn(batch[k])
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        query_section_ids = torch.nested.nested_tensor(batch[config.section_id_keys.query])
+        question_extras["question.section_ids"] = torch.nested.to_padded_tensor(query_section_ids, padding=-1)
+
+    # Handle section attributes
+    sections_extras = {}
+    for k, fn in extras_keys_ops.items():
+        if k not in flat_sections_content:
+            continue
+        v = fn(flat_sections_content[k])
+        if isinstance(v, torch.Tensor):
+            v = v.view(sections_shape)
+        sections_extras[f"section.{k}"] = v
+
+    return {**question_extras, **sections_extras}
+
+
+def _gather_in_batch_negatives(
     samples: index_tools.RetrievalBatch,
     search_results: index_tools.RetrievalBatch,
     raw_scores: dict[str, np.ndarray],
     world_size: int,
-    fill_score_offset: float = 0,
     padding: bool = True,
 ) -> tuple[index_tools.RetrievalBatch, dict[str, np.ndarray]]:
     """Merge all sections (positive and negative) as a flat batch."""
@@ -430,11 +429,6 @@ def gather_in_batch_negatives(
 
     # Gather the scores from the `candidates` batch, set the NaNs to the minimum score
     scores = c_tools.gather_by_index(unique_indices_, search_results.indices, search_results.scores)
-    scores = _fill_nan_scores(
-        scores,
-        ref_scores=search_results.scores,
-        fill_value_offset=fill_score_offset,
-    )
 
     # Gather the labels from the `positives` batch, set NaNs to negatives
     labels = c_tools.gather_by_index(unique_indices_, search_results.indices, search_results.labels)
@@ -444,11 +438,6 @@ def gather_in_batch_negatives(
     flat_raw_scores = {}
     for key in raw_scores:
         flat_raw_scores[key] = c_tools.gather_by_index(unique_indices_, search_results.indices, raw_scores[key])
-        flat_raw_scores[key] = _fill_nan_scores(
-            flat_raw_scores[key],
-            ref_scores=search_results.scores,
-            fill_value_offset=fill_score_offset,
-        )
 
     return (
         index_tools.RetrievalBatch(
@@ -459,10 +448,3 @@ def gather_in_batch_negatives(
         ),
         flat_raw_scores,
     )
-
-
-def _fill_nan_scores(scores: np.ndarray, ref_scores: np.ndarray, fill_value_offset: float = 0) -> np.ndarray:
-    ref_scores_ = np.where(np.isfinite(ref_scores), ref_scores, np.nan)
-    fill_value = np.nanmin(ref_scores_, axis=-1) + fill_value_offset
-    scores = np.where(np.isnan(scores), fill_value[:, None], scores)
-    return scores

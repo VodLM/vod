@@ -56,7 +56,7 @@ collates:
     max_pos_sections: 2
     prefetch_n_sections: 12
     do_sample: false
-    in_batch_negatives: false
+    in_batch_negatives: true
     post_filter: ensure_match
 
   benchmark:
