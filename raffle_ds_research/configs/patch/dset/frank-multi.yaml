@@ -47,13 +47,13 @@ benchmark:
   search:
     faiss:
       factory: IVFauto,Flat
-      nprobe: 64
+      nprobe: 128
 
 search:
   faiss:
     factory: OPQ32,IVFauto,PQ32x8
     metric: inner_product
-    nprobe: 32
+    nprobe: 64
 
 trainer:
   max_steps: 200_000

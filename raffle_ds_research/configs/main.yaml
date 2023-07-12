@@ -55,6 +55,7 @@ collates:
     # Configuration for the training/evaluation `Collate`
     n_sections: 16
     max_pos_sections: 4
+    support_size: 100
     prefetch_n_sections: 300
     post_filter: null
     do_sample: false
@@ -66,6 +67,7 @@ collates:
     # Configuration for the benchmark eval. `Collate`
     n_sections: null
     max_pos_sections: null
+    support_size: null
     prefetch_n_sections: 1000
     post_filter: null
     do_sample: false

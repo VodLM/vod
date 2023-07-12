@@ -118,7 +118,7 @@ class RetrievalCollate(pipes.Collate):
                     n_sections=self.config.n_sections,
                     max_pos_sections=self.config.max_pos_sections,
                     temperature=float(self.config.do_sample),
-                    max_support_size=self.config.prefetch_n_sections,  # <-- limit the candidate pool size
+                    max_support_size=self.config.support_size,  # <-- limit the candidate pool size
                 )
 
         # Flatten sections (in-batch negative)
@@ -376,8 +376,11 @@ def _sampled_sections_to_dict(
         output.update({f"{prefix}{k}": v for k, v in raw_scores.items()})
 
     if as_torch:
-        output = {k: torch.from_numpy(v) for k, v in output.items()}
-        output[f"{prefix}label"] = output[f"{prefix}label"].to(torch.bool)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=UserWarning)
+            # cast to torch tensors
+            output = {k: torch.from_numpy(v) for k, v in output.items()}
+            output[f"{prefix}label"] = output[f"{prefix}label"].to(torch.bool)
 
     return output  # type: ignore
 
