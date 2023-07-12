@@ -11,7 +11,6 @@ import rich
 import transformers
 from lightning.fabric import strategies as fabric_strategies
 from loguru import logger
-
 from raffle_ds_research.core import config as core_config
 from raffle_ds_research.core.mechanics import dataset_factory
 from raffle_ds_research.core.ml import Ranker

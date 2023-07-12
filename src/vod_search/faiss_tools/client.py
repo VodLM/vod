@@ -11,7 +11,6 @@ import numpy as np
 import requests
 import rich
 import torch
-
 from raffle_ds_research.tools.index_tools import io, search_server
 from raffle_ds_research.tools.index_tools import retrieval_data_type as rtypes
 

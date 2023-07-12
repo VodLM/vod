@@ -5,7 +5,6 @@ from typing import Any, Iterable
 
 import lightning.pytorch as pl
 import torch
-
 from raffle_ds_research.tools import dstruct, pipes
 
 PREDICT_IDX_COL_NAME = "__idx__"

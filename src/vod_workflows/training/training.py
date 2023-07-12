@@ -16,9 +16,6 @@ import torch
 import transformers
 from lightning.fabric import wrappers as fabric_wrappers
 from loguru import logger
-from rich import progress
-from torch.utils import data as torch_data
-
 from raffle_ds_research.core import config as core_config
 from raffle_ds_research.core import mechanics
 from raffle_ds_research.core.mechanics import search_engine
@@ -29,6 +26,8 @@ from raffle_ds_research.core.workflows.utils import io, support
 from raffle_ds_research.tools import dstruct
 from raffle_ds_research.tools.pipes.hashing import fingerprint_torch_module
 from raffle_ds_research.tools.utils.progress import IterProgressBar
+from rich import progress
+from torch.utils import data as torch_data
 
 K = typing.TypeVar("K")
 

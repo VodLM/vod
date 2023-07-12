@@ -2,16 +2,17 @@ from __future__ import annotations
 
 import abc
 import collections
-import copy
 from typing import Iterable
 
 import omegaconf
 from torch.utils import data as torch_data
-from vod_tools import dstruct
 from vod_tools.misc.config import maybe_cast_omegaconf
 
+from src import vod_configs
+from src.vod_tools import dstruct
 
-class DataloaderSampler(abc.ABC):
+
+class SamplerFactory(abc.ABC):
     """Abstract class for dataloader samplers."""
 
     @abc.abstractmethod
@@ -20,7 +21,7 @@ class DataloaderSampler(abc.ABC):
         pass
 
 
-class LookupSampler(DataloaderSampler):
+class LookupSamplerFactory(SamplerFactory):
     """Sampler that uses a lookup table to assign weights to samples."""
 
     def __init__(self, key: str, lookup: dict[str, float] | omegaconf.DictConfig, default_weight: float = 1.0):
@@ -39,7 +40,7 @@ class LookupSampler(DataloaderSampler):
         )
 
 
-class InverseFrequencySampler(DataloaderSampler):
+class InverseFrequencySamplerFactory(SamplerFactory):
     """Sampler that assigns weights inversely proportional to the frequency of the feature."""
 
     def __init__(self, key: str):
@@ -57,10 +58,10 @@ class InverseFrequencySampler(DataloaderSampler):
         )
 
 
-class ProductSampler(DataloaderSampler):
+class ProductSamplerFactory(SamplerFactory):
     """Sampler that computes the product of the weights of the given samplers."""
 
-    def __init__(self, samplers: Iterable[DataloaderSampler]):
+    def __init__(self, samplers: Iterable[SamplerFactory]):
         self.samplers = samplers
 
     def __call__(self, dataset: dstruct.SizedDataset[dict]) -> torch_data.WeightedRandomSampler:
@@ -75,21 +76,29 @@ class ProductSampler(DataloaderSampler):
         )
 
 
-def dl_sampler_factory(config: dict | omegaconf.DictConfig) -> None | DataloaderSampler:
+def sampler_factory(
+    config: dict
+    | omegaconf.DictConfig
+    | vod_configs.dataloaders.SamplerFactoryConfig
+    | list[dict | omegaconf.DictConfig]
+    | list[vod_configs.dataloaders.SamplerFactoryConfig],
+) -> SamplerFactory:
     """Return a dataloader sampler from the given config."""
-    if isinstance(config, omegaconf.DictConfig):
+    if isinstance(config, (omegaconf.DictConfig, omegaconf.ListConfig)):
         config = omegaconf.OmegaConf.to_container(config, resolve=True)  # type: ignore
-    else:
-        config = copy.deepcopy(config)
-    if len(config) == 0:
-        return None
-    mode = config.pop("mode")
-    if mode == "product":
-        return ProductSampler([dl_sampler_factory(sub_config) for sub_config in config["samplers"]])  # type: ignore
 
-    sampler = {
-        "lookup": LookupSampler,
-        "inverse_frequency": InverseFrequencySampler,
-    }
+    if isinstance(config, list):
+        return ProductSamplerFactory([sampler_factory(sub_config) for sub_config in config])
 
-    return sampler[mode](**config)
+    if not isinstance(config, vod_configs.dataloaders.SamplerFactoryConfig):
+        config = vod_configs.dataloaders.SamplerFactoryConfig(**config)
+
+    if config.mode == "lookup":
+        if config.lookup is None:
+            raise ValueError("Lookup sampler requires a lookup table.")
+        return LookupSamplerFactory(key=config.key, lookup=config.lookup, default_weight=config.default_weight)
+
+    if config.mode == "inverse_frequency":
+        return InverseFrequencySamplerFactory(key=config.key)
+
+    raise ValueError(f"Unknown sampler mode: {config.mode}")

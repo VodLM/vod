@@ -13,7 +13,6 @@ import omegaconf
 from hydra.utils import instantiate
 from loguru import logger
 from omegaconf import DictConfig
-
 from raffle_ds_research.cli.utils.misc import _get_ranker_meta_data
 
 try:

@@ -6,13 +6,12 @@ import tempfile
 
 import numpy as np
 import rich
-from tqdm import tqdm
-from transformers import AutoTokenizer
-
 from raffle_ds_research.core import config as core_config
 from raffle_ds_research.core.mechanics.dataset_factory import DatasetFactory
 from raffle_ds_research.core.mechanics.search_engine import build_search_engine
 from raffle_ds_research.tools import arguantic, index_tools
+from tqdm import tqdm
+from transformers import AutoTokenizer
 
 
 class BenchFrank(arguantic.Arguantic):

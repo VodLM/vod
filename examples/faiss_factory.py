@@ -15,12 +15,11 @@ import psutil
 import rich
 import torch
 from loguru import logger
-from rich.progress import track
-from rich.status import Status
-
 from raffle_ds_research.tools import arguantic, dstruct, index_tools
 from raffle_ds_research.tools.index_tools.faiss_tools.build_gpu import FaissGpuConfig
 from raffle_ds_research.tools.index_tools.index_factory import FaissFactoryConfig
+from rich.progress import track
+from rich.status import Status
 
 
 class Args(arguantic.Arguantic):

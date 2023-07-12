@@ -7,10 +7,9 @@ import loguru
 import rich.console
 import transformers
 from lightning.fabric.loggers import Logger as FabricLogger
-from rich import terminal_theme
-
 from raffle_ds_research.tools import pipes
 from raffle_ds_research.utils.pretty import print_metric_groups
+from rich import terminal_theme
 
 
 def log(

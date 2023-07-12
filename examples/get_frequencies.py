@@ -4,7 +4,6 @@ import timeit
 
 import numpy as np
 import rich
-
 from raffle_ds_research.tools import c_tools
 
 if __name__ == "__main__":

@@ -5,7 +5,6 @@ from typing import Any
 import lightning as L
 import omegaconf
 from lightning.pytorch import callbacks as pl_callbacks
-
 from raffle_ds_research.core.workflows.utils.schedule import schedule_factory
 
 

@@ -10,7 +10,6 @@ import randomname
 import torch
 from hydra import compose, initialize_config_module
 from omegaconf import DictConfig, OmegaConf
-
 from raffle_ds_research.tools.utils import misc
 from raffle_ds_research.tools.utils.git import git_branch_name, git_revision_hash, git_revision_short_hash
 

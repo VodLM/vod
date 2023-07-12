@@ -11,7 +11,6 @@ import torch
 import transformers
 from lightning.pytorch import utilities as pl_utils
 from loguru import logger
-
 from raffle_ds_research.core import config as core_config
 from raffle_ds_research.core.mechanics import dataset_factory, search_engine
 from raffle_ds_research.core.ml.monitor import RetrievalMetricCollection

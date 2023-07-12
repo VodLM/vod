@@ -9,11 +9,10 @@ from typing import Callable, Optional
 import faiss.contrib.torch_utils  # type: ignore
 import gpustat
 import numpy as np
-import pydantic
-import torch
 from loguru import logger
 from tqdm import tqdm
 
+from src import vod_configs
 from src.vod_search.faiss_tools import support as faiss_support
 from src.vod_tools import dstruct
 
@@ -24,24 +23,6 @@ def _get_max_gpu_usage() -> float:
     """Get the maximum GPU usage."""
     stats = gpustat.GPUStatCollection.new_query().jsonify()
     return max(g["memory.used"] / g["memory.total"] for g in stats["gpus"])
-
-
-def _get_gpu_resources(
-    devices: list[int], tempmem: int = -1, log_mem_allocation: bool = False
-) -> list[faiss.GpuResources]:
-    """Return a list of GPU resources."""
-    gpu_resources = []
-    ngpu = torch.cuda.device_count() if devices is None else len(devices)
-    for i in range(ngpu):
-        res = faiss.StandardGpuResources()
-        res.setLogMemoryAllocations(log_mem_allocation)
-        if tempmem is not None and tempmem > 0:
-            logger.debug(f"Setting GPU:{i} temporary memory to {faiss_support.format_bytes(tempmem, 'MB')}")
-            res.setTempMemory(tempmem)
-
-        gpu_resources.append(res)
-
-    return gpu_resources
 
 
 class WithTimer:
@@ -62,63 +43,15 @@ class WithTimer:
         self.log(f"Completed `{self.event_name}` in {time.time() - self._enter_time:.2f}s")
 
 
-class FaissGpuConfig(pydantic.BaseModel):
-    """Configuration for training a faiss index on GPUs."""
-
-    class Config:
-        """Pydantic configuration."""
-
-        arbitrary_types_allowed = False
-        extra = "forbid"
-
-    devices: list[int] = [-1]
-    use_float16: bool = True
-    use_precomputed_tables: bool = True
-    max_add: Optional[int] = 2**18
-    tempmem: Optional[int] = -1
-    keep_indices_on_cpu: bool = True
-    verbose: bool = True
-    shard: bool = True
-    add_batch_size: int = 2**18
-
-    @pydantic.validator("devices", pre=True, always=True)
-    def _validate_devices(cls, v):  # noqa: ANN
-        if v is None or v == [-1]:
-            return list(range(torch.cuda.device_count()))
-        return v
-
-    def cloner_options(self) -> faiss.GpuMultipleClonerOptions:
-        """Return a faiss.GpuMultipleClonerOptions."""
-        co = faiss.GpuMultipleClonerOptions()
-        co.useFloat16 = self.use_float16
-        co.useFloat16CoarseQuantizer = False
-        co.usePrecomputed = self.use_precomputed_tables
-        if self.keep_indices_on_cpu:
-            co.indicesOptions = faiss.INDICES_CPU
-        co.verbose = self.verbose
-        if self.max_add is not None:
-            co.reserveVecs = self.max_add
-
-        co.shard = self.shard
-
-        return co
-
-    def gpu_resources(self) -> list[faiss.GpuResources]:
-        """Return a list of GPU resources."""
-        if not self.devices:
-            raise ValueError(f"devices must be set to use `resource_vectors()`. devices={self.devices}")
-        return _get_gpu_resources(self.devices, self.tempmem or -1)
-
-
 def train_ivfpq_multigpu(
     ivfpq_factory: faiss_support.IVFPQFactory,
     *,
     x_train: np.ndarray,
     faiss_metric: int = faiss.METRIC_INNER_PRODUCT,
-    gpu_config: Optional[FaissGpuConfig] = None,
+    gpu_config: Optional[vod_configs.FaissGpuConfig] = None,
 ) -> tuple[None | faiss.VectorTransform, faiss.Index]:
     """Train a faiss index using multiple GPUs."""
-    gpu_config = gpu_config or FaissGpuConfig()
+    gpu_config = gpu_config or vod_configs.FaissGpuConfig()
 
     # make the preprocessor
     with WithTimer(f"Training processor {ivfpq_factory.preproc}", logger.info):
@@ -174,7 +107,7 @@ def _train_ivf(
     x_train: np.ndarray,
     *,
     n_centroids: int,
-    config: FaissGpuConfig,
+    config: vod_configs.FaissGpuConfig,
     preprocessor: None | faiss.VectorTransform,
     faiss_metric: int = faiss.METRIC_INNER_PRODUCT,
     max_points_per_centroid: Optional[int] = 10_000_000,
@@ -223,7 +156,7 @@ def _train_index_on_gpu(x_train: np.ndarray, index: faiss.Index) -> faiss.Index:
 def _train_ivfpq(
     x_train: np.ndarray,
     *,
-    ivfpq_factory: support.IVFPQFactory,
+    ivfpq_factory: faiss_support.IVFPQFactory,
     faiss_metric: int = faiss.METRIC_INNER_PRODUCT,
     preprocessor: None | faiss.VectorTransform,
     ivf: faiss.IndexFlat,
@@ -276,10 +209,10 @@ def build_faiss_index_multigpu(
     factory_string: str,
     train_size: Optional[int] = None,
     faiss_metric: int = faiss.METRIC_INNER_PRODUCT,
-    gpu_config: Optional[FaissGpuConfig] = None,
+    gpu_config: Optional[vod_configs.FaissGpuConfig] = None,
 ) -> faiss.Index:
     """Build a faiss IVF-PQ index using multiple GPUs."""
-    gpu_config = gpu_config or FaissGpuConfig()
+    gpu_config = gpu_config or vod_configs.FaissGpuConfig()
 
     # parse the factory string
     logger.info(f"Building index `{factory_string}`.")
@@ -365,7 +298,7 @@ def _populate_index_multigpu(  # noqa: PLR0912, PLR0915
     vectors: dstruct.SizedDataset[np.ndarray],
     *,
     index: faiss.Index,
-    gpu_config: FaissGpuConfig,
+    gpu_config: vod_configs.FaissGpuConfig,
     preprocessor: Optional[faiss.VectorTransform] = None,
 ) -> faiss.Index:
     """Add elements to a sharded index."""
@@ -394,14 +327,14 @@ def _populate_index_multigpu(  # noqa: PLR0912, PLR0915
     prev_gpu_usage = _get_max_gpu_usage()
     with WithTimer(f"Populating index ({len(steps)} steps)", logger.info):
         for i_slice, xs in tqdm(vectors_batch_iter, desc="Adding vectors to sharded index", total=len(steps)):
-            i0 = i_slice.start
+            i0 = i_slice.start  # type: ignore
             i1 = i0 + xs.shape[0]
             if np.isnan(xs).any():
                 logger.warning(f"NaN detected in vectors {i0}-{i1}")
                 xs[np.isnan(xs)] = 0
 
             # add a batch
-            gpu_index.add_with_ids(xs, np.arange(i0, i1))
+            gpu_index.add_with_ids(xs, np.arange(i0, i1))  # type: ignore
 
             # check if the GPU must be emptied
             gpu_usage = _get_max_gpu_usage()
@@ -415,17 +348,17 @@ def _populate_index_multigpu(  # noqa: PLR0912, PLR0915
                 if ngpu > 1:
                     for i in range(ngpu):
                         index_src_gpu = faiss.downcast_index(gpu_index.at(i))
-                        index_src = faiss.index_gpu_to_cpu(index_src_gpu)
+                        index_src = faiss.index_gpu_to_cpu(index_src_gpu)  # type: ignore
                         index_src.copy_subset_to(index, 0, 0, nb)
                         index_src_gpu.reset()
                         index_src_gpu.reserveMemory(max_add)
                 else:
-                    index_src = faiss.index_gpu_to_cpu(gpu_index)
+                    index_src = faiss.index_gpu_to_cpu(gpu_index)  # type: ignore
                     index_src.copy_subset_to(index, 0, 0, nb)
                     gpu_index.reset()
-                    gpu_index.reserveMemory(max_add)
+                    gpu_index.reserveMemory(max_add)  # type: ignore
                 try:
-                    gpu_index.sync_with_shard_indexes()
+                    gpu_index.sync_with_shard_indexes()  # type: ignore
                 except AttributeError:
                     with contextlib.suppress(AttributeError):
                         gpu_index.syncWithSubIndexes()
@@ -437,12 +370,12 @@ def _populate_index_multigpu(  # noqa: PLR0912, PLR0915
     if hasattr(gpu_index, "at"):
         # it is a sharded index
         for i in range(ngpu):
-            index_src = faiss.index_gpu_to_cpu(gpu_index.at(i))
+            index_src = faiss.index_gpu_to_cpu(gpu_index.at(i))  # type: ignore
             logger.debug("  - index %d size %d" % (i, index_src.ntotal))
             index_src.copy_subset_to(index, 0, 0, nb)
     else:
         # simple index
-        index_src = faiss.index_gpu_to_cpu(gpu_index)
+        index_src = faiss.index_gpu_to_cpu(gpu_index)  # type: ignore
         index_src.copy_subset_to(index, 0, 0, nb)
 
     del gpu_index

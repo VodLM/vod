@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any, Optional
 
 import jinja2
-
 from raffle_ds_research.tools.pipes.utils.misc import iter_examples
 
 

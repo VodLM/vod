@@ -11,7 +11,6 @@ import numpy as np
 import pytest
 import tensorstore
 import torch
-
 from raffle_ds_research.tools import predict_tools
 
 T = TypeVar("T")

@@ -12,11 +12,10 @@ import tensorstore as ts
 import torch
 from loguru import logger
 from omegaconf import DictConfig
-from rich.progress import track
-from torch.utils.data.dataloader import default_collate
-
 from raffle_ds_research.tools import dstruct, interfaces, pipes
 from raffle_ds_research.tools.utils import loader_config
+from rich.progress import track
+from torch.utils.data.dataloader import default_collate
 
 from .compute import LoaderKwargs, compute_and_store_predictions
 from .fingerprint import make_predict_fingerprint

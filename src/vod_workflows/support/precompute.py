@@ -8,7 +8,6 @@ from typing import Any, Callable, Literal, TypeVar
 import lightning as L
 import loguru
 import transformers
-
 from raffle_ds_research.core import config as core_config
 from raffle_ds_research.core import ml
 from raffle_ds_research.core.mechanics import dataset_factory

@@ -11,8 +11,8 @@ from lightning.pytorch import utilities as pl_utils
 from loguru import logger
 from typing_extensions import Self, Type
 
-from raffle_ds_research.tools import dstruct, index_tools
-from raffle_ds_research.tools.index_tools.multi_search import MultiSearchMaster
+from src import vod_search
+from src.vod_tools import dstruct
 
 
 class SearchConfig(pydantic.BaseModel):
@@ -25,8 +25,8 @@ class SearchConfig(pydantic.BaseModel):
 
     text_key: str = "text"
     group_key: str = "group_hash"
-    faiss: Optional[index_tools.FaissFactoryConfig] = None
-    bm25: Optional[index_tools.Bm25FactoryConfig] = None
+    faiss: Optional[vod_search.FaissFactoryConfig] = None
+    bm25: Optional[vod_search.Bm25FactoryConfig] = None
 
     @pydantic.validator("faiss", pre=True)
     def _validate_faiss(cls, v: dict | None) -> dict | None:
@@ -34,7 +34,7 @@ class SearchConfig(pydantic.BaseModel):
             return None
 
         if isinstance(v, (dict, omegaconf.DictConfig)):
-            return index_tools.FaissFactoryConfig(**v).dict()
+            return vod_search.FaissFactoryConfig(**v).dict()
 
         return v
 
@@ -44,7 +44,7 @@ class SearchConfig(pydantic.BaseModel):
             return None
 
         if isinstance(v, (dict, omegaconf.DictConfig)):
-            return index_tools.Bm25FactoryConfig(**v).dict()
+            return vod_search.Bm25FactoryConfig(**v).dict()
 
         return v
 
@@ -66,7 +66,7 @@ def build_search_engine(
     barrier_fn: None | Callable[[str], None] = None,
     serve_on_gpu: bool = False,
     close_existing_es_indices: bool = True,
-) -> index_tools.MultiSearchMaster:
+) -> vod_search.MultiSearchMaster:
     """Build a search engine."""
     servers = {}
 
@@ -78,7 +78,7 @@ def build_search_engine(
         if vectors is None:
             raise ValueError("`vectors` must be provided if `faiss_enabled`")
 
-        faiss_server = index_tools.build_faiss_index(
+        faiss_server = vod_search.build_faiss_index(
             vectors=vectors,
             config=config.faiss,
             cache_dir=cache_dir,
@@ -92,7 +92,7 @@ def build_search_engine(
         if sections is None:
             raise ValueError("`sections` must be provided if `bm25_enabled`")
 
-        bm25_server = index_tools.build_bm25_master(
+        bm25_server = vod_search.build_bm25_master(
             sections=sections,
             config=config.bm25,
             skip_setup=skip_setup,
@@ -102,7 +102,7 @@ def build_search_engine(
     if len(servers) == 0:
         raise ValueError("No search servers were enabled.")
 
-    return MultiSearchMaster(servers=servers, skip_setup=skip_setup)
+    return vod_search.MultiSearchMaster(servers=servers, skip_setup=skip_setup)
 
 
 @pl_utils.rank_zero_only

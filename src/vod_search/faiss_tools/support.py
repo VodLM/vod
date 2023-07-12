@@ -31,16 +31,6 @@ def rate_limited_imap(func: Callable[[int], T], seq: Iterable, workers: int = 1)
     yield res.get()
 
 
-def format_bytes(x: int, unit: Literal["KB", "MB", "GB"]) -> str:
-    """Format bytes to a human readable format."""
-    divider = {
-        "KB": 1024,
-        "MB": 1024**2,
-        "GB": 1024**3,
-    }
-    return f"{x / divider[unit]:.2f} {unit}"
-
-
 index_factory_pattern = re.compile(
     r"(?P<preproc>(OPQ[0-9]+(_[0-9]+)?,|PCAR[0-9]+,))?"
     r"IVF(?P<n_centroids>([0-9]+)),"

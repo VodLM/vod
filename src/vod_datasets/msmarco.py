@@ -14,8 +14,6 @@ import datasets
 import fsspec
 import loguru
 import pydantic
-from rich.progress import track
-
 from raffle_ds_research.tools.raffle_datasets.base import (
     DATASETS_CACHE_PATH,
     QueryModel,
@@ -24,6 +22,7 @@ from raffle_ds_research.tools.raffle_datasets.base import (
     SilentHuggingfaceDecorator,
     init_gcloud_filesystem,
 )
+from rich.progress import track
 
 MS_MARCO_KB_ID = 100_000
 

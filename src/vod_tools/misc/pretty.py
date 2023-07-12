@@ -1,17 +1,26 @@
-
 from __future__ import annotations
 
 import contextlib
 import dataclasses
 from copy import copy
 from numbers import Number
-from typing import Any, List, Optional
+from typing import Any, List, Literal, Optional
 
 import rich
 import torch
 from omegaconf import DictConfig, OmegaConf, open_dict
 from rich.syntax import Syntax
 from rich.tree import Tree
+
+
+def human_format_bytes(x: int, unit: Literal["KB", "MB", "GB"]) -> str:
+    """Format bytes to a human readable format."""
+    divider = {
+        "KB": 1024,
+        "MB": 1024**2,
+        "GB": 1024**3,
+    }
+    return f"{x / divider[unit]:.2f} {unit}"
 
 
 def human_format_nb(num: int | float, precision: int = 2, base: float = 1000.0) -> str:

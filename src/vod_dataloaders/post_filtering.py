@@ -5,7 +5,6 @@ import math
 from typing import Any, TypeVar
 
 import numpy as np
-
 from raffle_ds_research.tools import dstruct
 
 K = TypeVar("K")

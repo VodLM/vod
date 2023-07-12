@@ -7,7 +7,6 @@ import string
 
 import numpy as np
 import pytest
-
 from raffle_ds_research.core.mechanics.retrieval_collate import weighted_merge_search_results
 from raffle_ds_research.tools import index_tools
 

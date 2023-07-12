@@ -11,7 +11,6 @@ import stackprinter
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from loguru import logger
-
 from raffle_ds_research.tools.index_tools import io
 from raffle_ds_research.tools.index_tools.faiss_tools import SearchFaissQuery
 from raffle_ds_research.tools.index_tools.faiss_tools.build_gpu import FaissGpuConfig

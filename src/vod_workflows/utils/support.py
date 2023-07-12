@@ -17,10 +17,6 @@ import torch
 import transformers
 from lightning.fabric import wrappers as fabric_wrappers
 from loguru import logger
-from torch import distributed as torch_distributed
-from torch.utils import data as torch_data
-from typing_extensions import Self, Type
-
 from raffle_ds_research.core import config as core_config
 from raffle_ds_research.core import mechanics
 from raffle_ds_research.core.mechanics.dataloader_sampler import DataloaderSampler
@@ -29,6 +25,9 @@ from raffle_ds_research.core.workflows.utils import support
 from raffle_ds_research.core.workflows.utils.schedule import BaseSchedule
 from raffle_ds_research.tools import dstruct, index_tools, pipes
 from raffle_ds_research.tools.pipes.hashing import fingerprint_torch_module
+from torch import distributed as torch_distributed
+from torch.utils import data as torch_data
+from typing_extensions import Self, Type
 
 T = TypeVar("T")
 

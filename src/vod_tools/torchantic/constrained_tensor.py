@@ -5,7 +5,6 @@ from typing import Any, Callable, Dict, Iterable, Optional, Self, Type, Union
 import numpy as np
 import torch
 from pydantic import BaseModel
-
 from raffle_ds_research.tools.utils.pretty import repr_tensor
 
 

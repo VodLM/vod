@@ -13,13 +13,13 @@ import torch
 import transformers
 from loguru import logger
 
-from raffle_ds_research.core import config as core_config
-from raffle_ds_research.core.mechanics import fast
-from raffle_ds_research.core.mechanics.post_filtering import PostFilter, post_filter_factory
-from raffle_ds_research.core.mechanics.section_sampler import sample_sections
-from raffle_ds_research.core.mechanics.utils import BlockTimer, cast_as_tensor
-from raffle_ds_research.tools import c_tools, dstruct, index_tools, pipes
-from raffle_ds_research.tools.pipes.utils.misc import pack_examples
+from src import vod_configs, vod_search
+from src.vod_dataloaders import fast
+from src.vod_tools import dstruct, pipes
+from src.vod_tools.pipes.utils.misc import pack_examples
+
+from .post_filtering import PostFilter, post_filter_factory
+from .utils import BlockTimer, cast_as_tensor
 
 T = TypeVar("T")
 
@@ -39,18 +39,18 @@ class RetrievalCollate(pipes.Collate):
     """
 
     tokenizer: transformers.PreTrainedTokenizerBase
-    search_client: index_tools.MultiSearchClient
+    search_client: vod_search.MultiSearchClient
     post_filter: Optional[PostFilter]
     sections: dstruct.SizedDataset[dict[str, Any]]
-    config: core_config.RetrievalCollateConfig
+    config: vod_configs.RetrievalCollateConfig
 
     def __init__(
         self,
         *,
         tokenizer: transformers.PreTrainedTokenizerBase,
-        search_client: index_tools.MultiSearchClient,
+        search_client: vod_search.MultiSearchClient,
         sections: dstruct.SizedDataset[dict[str, Any]],
-        config: core_config.RetrievalCollateConfig,
+        config: vod_configs.RetrievalCollateConfig,
         parameters: Optional[dict | DictProxy] = None,
     ):
         if "bm25" not in search_client.clients:
@@ -178,7 +178,7 @@ class RetrievalCollate(pipes.Collate):
         self,
         batch: dict[str, Any],
         top_k: int,
-    ) -> tuple[index_tools.RetrievalBatch, dict[str, np.ndarray]]:
+    ) -> tuple[vod_search.RetrievalBatch, dict[str, np.ndarray]]:
         """Search the batch of queries and return the top `top_k` results."""
         # Get the query ids
         query_group_ids = batch[self.config.group_id_keys.query]
@@ -213,9 +213,9 @@ def _multi_search(
     group: Optional[list[str]] = None,
     query_section_ids: list[list[str | int]],
     top_k: int,
-    clients: dict[str, index_tools.SearchClient],
+    clients: dict[str, vod_search.SearchClient],
     weights: dict[str, float],
-) -> tuple[index_tools.RetrievalBatch, dict[str, np.ndarray]]:
+) -> tuple[vod_search.RetrievalBatch, dict[str, np.ndarray]]:
     """Query a multisearch egine."""
     if "bm25" not in clients:
         raise ValueError("The BM25 client must be specified to lookup the positive sections.")
@@ -275,8 +275,8 @@ def _multi_search(
     return combined_results, raw_scores
 
 
-async def _execute_search(payloads: list[dict[str, Any]]) -> list[index_tools.RetrievalBatch]:
-    def search_fn(args: dict[str, Any]) -> index_tools.RetrievalBatch[np.ndarray]:
+async def _execute_search(payloads: list[dict[str, Any]]) -> list[vod_search.RetrievalBatch]:
+    def search_fn(args: dict[str, Any]) -> vod_search.RetrievalBatch[np.ndarray]:
         client = args.pop("client")
         return client.search(**args)
 
@@ -293,13 +293,13 @@ async def _execute_search(payloads: list[dict[str, Any]]) -> list[index_tools.Re
 
 
 def _post_filter(
-    search_results: index_tools.RetrievalBatch,
+    search_results: vod_search.RetrievalBatch,
     raw_scores: dict[str, np.ndarray],
     *,
     post_filter: PostFilter,
     batch: dict[str, Any],
     diagnostics: dict[str, Any],
-) -> tuple[index_tools.RetrievalBatch, dict[str, np.ndarray]]:
+) -> tuple[vod_search.RetrievalBatch, dict[str, np.ndarray]]:
     n_not_inf = (~np.isinf(search_results.scores)).sum()
     all_scores = {"main": search_results.scores, **raw_scores}
     all_scores = post_filter(search_results.indices, all_scores, query=batch)
@@ -311,7 +311,7 @@ def _post_filter(
 
 
 def _sampled_sections_to_dict(
-    sections: index_tools.RetrievalBatch,
+    sections: vod_search.RetrievalBatch,
     raw_scores: Optional[dict[str, np.ndarray]] = None,
     prefix: str = "",
     as_torch: bool = False,
@@ -342,8 +342,8 @@ def _tokenize_fields(
     batch: dict[str, Any],
     flat_sections_content: dict[str, Any],
     *,
-    sections: index_tools.RetrievalBatch,
-    config: core_config.RetrievalCollateConfig,
+    sections: vod_search.RetrievalBatch,
+    config: vod_configs.RetrievalCollateConfig,
     tokenizer: transformers.PreTrainedTokenizerBase,
 ) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
     tokenized_sections = pipes.torch_tokenize_pipe(
@@ -376,7 +376,7 @@ def _get_attributes_as_torch(
     flat_sections_content: dict[str, Any],
     *,
     sections_shape: tuple[int, ...],
-    config: core_config.RetrievalCollateConfig,
+    config: vod_configs.RetrievalCollateConfig,
 ) -> dict[str, Any]:
     as_tensor = functools.partial(cast_as_tensor, dtype=torch.long, replace={None: -1})
     extras_keys_ops = {"id": as_tensor, "answer_id": as_tensor, "kb_id": as_tensor, "group_hash": as_tensor}
@@ -407,12 +407,12 @@ def _get_attributes_as_torch(
 
 
 def _gather_in_batch_negatives(
-    samples: index_tools.RetrievalBatch,
-    search_results: index_tools.RetrievalBatch,
+    samples: vod_search.RetrievalBatch,
+    search_results: vod_search.RetrievalBatch,
     raw_scores: dict[str, np.ndarray],
     world_size: int,
     padding: bool = True,
-) -> tuple[index_tools.RetrievalBatch, dict[str, np.ndarray]]:
+) -> tuple[vod_search.RetrievalBatch, dict[str, np.ndarray]]:
     """Merge all sections (positive and negative) as a flat batch."""
     unique_indices = np.unique(samples.indices)
     if padding:
@@ -428,19 +428,19 @@ def _gather_in_batch_negatives(
     unique_indices_ = unique_indices[None, :].repeat(samples.indices.shape[0], axis=0)
 
     # Gather the scores from the `candidates` batch, set the NaNs to the minimum score
-    scores = c_tools.gather_by_index(unique_indices_, search_results.indices, search_results.scores)
+    scores = fast.gather_values_by_indices(unique_indices_, search_results.indices, search_results.scores)
 
     # Gather the labels from the `positives` batch, set NaNs to negatives
-    labels = c_tools.gather_by_index(unique_indices_, search_results.indices, search_results.labels)
+    labels = fast.gather_values_by_indices(unique_indices_, search_results.indices, search_results.labels)
     labels[np.isnan(labels)] = -1
 
     # Other scores (client scores)
     flat_raw_scores = {}
     for key in raw_scores:
-        flat_raw_scores[key] = c_tools.gather_by_index(unique_indices_, search_results.indices, raw_scores[key])
+        flat_raw_scores[key] = fast.gather_values_by_indices(unique_indices_, search_results.indices, raw_scores[key])
 
     return (
-        index_tools.RetrievalBatch(
+        vod_search.RetrievalBatch(
             indices=unique_indices,
             scores=scores,
             labels=labels,
@@ -448,3 +448,37 @@ def _gather_in_batch_negatives(
         ),
         flat_raw_scores,
     )
+
+
+def sample_sections(
+    *,
+    search_results: vod_search.RetrievalBatch,
+    raw_scores: dict[str, np.ndarray],
+    n_sections: int,
+    max_pos_sections: Optional[int],
+    temperature: float = 0,
+    max_support_size: Optional[int] = None,
+) -> tuple[vod_search.RetrievalBatch, dict[str, np.ndarray]]:
+    """Sample the positive and negative sections."""
+    samples = fast.sample(
+        search_results=search_results,
+        total=n_sections,
+        n_positives=max_pos_sections,
+        temperature=temperature,
+        max_support_size=max_support_size,
+    )
+
+    # Sample the `raw_scores`
+    sampled_raw_scores = {}
+    for key, scores in raw_scores.items():
+        sampled_raw_scores[key] = fast.gather_values_by_indices(samples.indices, search_results.indices, scores)
+
+    # Set -inf to the mask section (index -1)
+    is_masked = samples.indices < 0
+    samples.scores.setflags(write=True)
+    samples.scores[is_masked] = -np.inf
+    for scores in sampled_raw_scores.values():
+        scores.setflags(write=True)
+        scores[is_masked] = -np.inf
+
+    return samples, sampled_raw_scores

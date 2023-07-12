@@ -6,10 +6,9 @@ from typing import Literal, Optional
 import pydantic
 import torch
 import transformers
+from raffle_ds_research.tools import interfaces
 from torch import nn
 from typing_extensions import Self, Type
-
-from raffle_ds_research.tools import interfaces
 
 
 class TransformerEncoderConfig(pydantic.BaseModel):

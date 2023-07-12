@@ -9,8 +9,6 @@ import lightning as L
 import torch
 import transformers
 from loguru import logger
-from torch import nn
-
 from raffle_ds_research.core import config as core_config
 from raffle_ds_research.core import mechanics
 from raffle_ds_research.core.mechanics import search_engine
@@ -19,6 +17,7 @@ from raffle_ds_research.core.workflows.precompute import PrecomputedDsetVectors
 from raffle_ds_research.core.workflows.utils import support
 from raffle_ds_research.tools import dstruct
 from raffle_ds_research.tools.utils.progress import IterProgressBar
+from torch import nn
 
 _DEFAULT_TUNE_LIST = ["bm25"]
 

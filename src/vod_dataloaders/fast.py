@@ -3,9 +3,8 @@ from typing import Optional
 import numba
 import numpy as np
 from numpy import typing as npt
-from typing_extensions import TypeVar
-
 from raffle_ds_research.tools import index_tools
+from typing_extensions import TypeVar
 
 DtypeVar = TypeVar("DtypeVar", bound=np.dtype)
 

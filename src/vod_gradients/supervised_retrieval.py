@@ -1,137 +1,18 @@
-# pylint: disable=no-member
 from __future__ import annotations
 
-import abc
 import copy
 import math
 import warnings
 from typing import Any, Callable, Iterable, Optional
 
 import lightning as L
-import pydantic
 import torch
 import torch.nn
-from torch.distributions import Categorical
 
-from raffle_ds_research.tools import pipes
-
-
-class Gradients:
-    """Base class for the gradients layer. The gradients layer is a pure function."""
-
-    @abc.abstractmethod
-    def __call__(self, intermediate_results: dict) -> dict:
-        """Compute the gradients/loss."""
-        raise NotImplementedError
-
-    def forward_backward(
-        self,
-        batch: dict[str, torch.Tensor],
-        fwd_fn: None | Callable[[dict], dict],
-        fabric: None | L.Fabric = None,
-        loss_scaler: Optional[float] = None,
-        backward_kwargs: Optional[dict] = None,
-        no_backward_sync: bool = False,
-        fwd_kwargs: None | dict = None,
-        **kwargs: Any,
-    ) -> dict[str, torch.Tensor]:
-        """Run a forward pass with a backward pass."""
-        fwd_kwargs = fwd_kwargs or {}
-        grad_output = fwd_fn(batch, **fwd_kwargs) if fwd_fn is not None else {}
-
-        # compute the loss
-        loss = grad_output["loss"]
-        if loss_scaler is not None:
-            loss *= loss_scaler
-
-        # backward pass
-        backward_kwargs = backward_kwargs or {}
-        if fabric is None:
-            loss.backward(**backward_kwargs)
-        else:
-            with fabric.no_backward_sync(fwd_fn, enabled=no_backward_sync):  # type: ignore
-                fabric.backward(loss, **backward_kwargs)
-
-        return grad_output
+from src.vod_gradients import base
 
 
-class GradientInputs(pydantic.BaseModel):
-    """collection of inputs for the supervised gradients model."""
-
-    class Config:
-        """pydantic config."""
-
-        arbitrary_types_allowed = True
-
-    hq: Optional[torch.Tensor] = None
-    hd: Optional[torch.Tensor] = None
-    targets: torch.Tensor = pydantic.Field(
-        ...,
-        description="Retrieval labels.",
-        alias="section.label",
-    )
-    scores: torch.Tensor = pydantic.Field(
-        ...,
-        description="Retrieval scores.",
-        alias="section.score",
-    )
-    bm25: Optional[torch.Tensor] = pydantic.Field(
-        None,
-        description="bm25 Retrieval scores.",
-        alias="section.bm25",
-    )
-    faiss: Optional[torch.Tensor] = pydantic.Field(
-        None,
-        description="faiss Retrieval scores.",
-        alias="section.faiss",
-    )
-
-    # Precomputed logprobs from the model.
-    pre_logits: Optional[torch.Tensor] = pydantic.Field(
-        None,
-        description="Precomputed logprobs from the model.",
-        alias="section.pre_logits",
-    )
-
-    pre_n_positive: Optional[torch.Tensor] = pydantic.Field(
-        None,
-        description="Precomputed total number of positive documents.",
-        alias="section.pre_n_positive",
-    )
-
-    def pprint(self, **kwargs: Any) -> None:
-        """Pretty print the inputs."""
-        pipes.pprint_batch({k: v for k, v in self.dict().items() if v is not None}, **kwargs)
-
-
-class SelfSupervisedGradients(Gradients):
-    """Compute the gradients for the `self-supervised` method."""
-
-    def forward(self, inputs: dict, **kwargs: Any) -> dict:
-        """Parse the inputs and compute the loss."""
-        data = GradientInputs(**inputs)
-
-        # compute the scores for each pair of (question, section)
-        # Note: we can add negative samples across batch here.
-        scores = _compute_retriever_logprobs(data)
-
-        # Compute the targets, they are defined as labelled sections
-        #  which are assigned with the max. model score.
-        masked_scores = scores.clone()
-        masked_scores[~data.targets] = -torch.inf
-        targets = masked_scores.argmax(dim=-1).detach()
-
-        # Compute the loss
-        # Note: we can also use the signal from all
-        #       the positive documents.
-        pz = Categorical(logits=masked_scores)
-        log_pz = pz.log_prob(targets)
-        loss = -log_pz.mean()
-
-        return {"loss": loss, "_targets": data.targets, "_logits": scores}
-
-
-class KlDivGradients(Gradients):
+class KlDivGradients(base.Gradients):
     """Compute the KL divergence between the model and the data."""
 
     def __init__(
@@ -159,7 +40,7 @@ class KlDivGradients(Gradients):
         **kwargs: Any,
     ) -> dict[str, torch.Tensor]:
         """Parse the inputs and compute the loss."""
-        data = GradientInputs(**inputs)
+        data = base.GradientInputs(**inputs)
 
         # 1. Compute the KL divergence between the model and the data
         # Determine the masked sections
@@ -354,7 +235,7 @@ def _iter_chunks(
         yield chunk
 
 
-def _compute_retriever_logprobs(data: GradientInputs, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+def _compute_retriever_logprobs(data: base.GradientInputs, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
     """Compute the log-probabilities for each pair of (question, section) assigned by the model."""
     if data.hd.dim() == 2:  # noqa: PLR2004
         retriever_logprobs = torch.einsum("bh, dh -> bd", data.hq, data.hd)
@@ -369,7 +250,7 @@ def _compute_retriever_logprobs(data: GradientInputs, mask: Optional[torch.Tenso
 
 
 @torch.no_grad()
-def _compute_data_targets(data: GradientInputs, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+def _compute_data_targets(data: base.GradientInputs, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
     """Compute the reference probabilities for each pair of (question, section)."""
     data_targets = data.targets.float()
     if mask is not None:

@@ -9,12 +9,11 @@ from datasets.fingerprint import Hasher, hashregister
 from hydra.utils import instantiate
 from loguru import logger
 from omegaconf import DictConfig
-from transformers import pytorch_utils, trainer_pt_utils  # type: ignore
-
 from raffle_ds_research.core.ml.gradients import Gradients
 from raffle_ds_research.core.ml.monitor import RetrievalMonitor
 from raffle_ds_research.tools import interfaces
 from raffle_ds_research.tools.pipes import fingerprint_torch_module
+from transformers import pytorch_utils, trainer_pt_utils  # type: ignore
 
 
 def _maybe_instantiate(conf_or_obj: Union[Any, DictConfig], **kwargs: Any) -> object:

@@ -27,7 +27,7 @@ packages = [
 
 
 [tool.poetry.scripts]
-train = 'raffle_ds_research.cli.train:run'
+train = 'src.vod_workflows.cli.train:run'
 watch = 'watch_gpus:run'
 
 [tool.poetry.dependencies]

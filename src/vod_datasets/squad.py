@@ -6,7 +6,6 @@ import warnings
 from typing import Any, Optional
 
 import datasets
-
 from raffle_ds_research.tools.pipes.utils.misc import pack_examples
 from raffle_ds_research.tools.raffle_datasets import RetrievalDataset
 

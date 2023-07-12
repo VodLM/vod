@@ -16,7 +16,6 @@ import transformers
 import yaml
 from lightning.fabric.loggers.logger import Logger as FabricLogger
 from lightning.pytorch.loggers import WandbLogger
-
 from raffle_ds_research.core.ml import Ranker
 from raffle_ds_research.tools import interfaces
 from raffle_ds_research.utils.config import config_to_flat_dict

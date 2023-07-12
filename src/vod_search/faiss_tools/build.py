@@ -6,7 +6,6 @@ import faiss
 import numpy as np
 import torch
 from loguru import logger
-
 from raffle_ds_research.tools import dstruct
 from raffle_ds_research.tools.index_tools.faiss_tools import build_gpu, support
 

@@ -18,6 +18,8 @@ from src.vod_tools import pipes
 
 T = typing_extensions.TypeVar("T")
 
+_N_VALID_SAMPLES = 3
+
 
 def _tokenize(text: str) -> list[str]:
     text = text.translate(str.maketrans(" ", " ", string.punctuation))
@@ -46,15 +48,15 @@ class DatasetFactory:
     def __init__(
         self,
         loader: Callable[[], vod_datasets.RetrievalDataset],
-        config: dict | core_config.DatasetFactoryConfig,
+        config: dict | vod_configs.DatasetFactoryConfig,
     ):
         self.loader = loader
-        self.config = _cast_pydantic_model(config, core_config.DatasetFactoryConfig)
+        self.config = _cast_pydantic_model(config, vod_configs.DatasetFactoryConfig)
 
     @classmethod
-    def from_config(cls: Type[Self], config: dict | core_config.DatasetFactoryConfig) -> Self:
+    def from_config(cls: Type[Self], config: dict | vod_configs.DatasetFactoryConfig) -> Self:
         """Instantiate a sequence of builders from a list of name."""
-        config = _cast_pydantic_model(config, core_config.DatasetFactoryConfig)
+        config = _cast_pydantic_model(config, vod_configs.DatasetFactoryConfig)
         if config.name is None:
             raise ValueError("A name must be provided to instantiate a dataset builder.")
         loader = vod_datasets.RetrievalDatasetLoader(name=config.name)
@@ -250,13 +252,13 @@ class SectionModel(pydantic.BaseModel):
 
 
 def _validate_questions(dset: datasets.Dataset) -> None:
-    for i in range(vod_configs._N_VALID_SAMPLES):
+    for i in range(_N_VALID_SAMPLES):
         row = dset[i]
         QuestionModel(**row)
 
 
 def _validate_sections(corpus: datasets.Dataset) -> None:
-    for i in range(vod_configs._N_VALID_SAMPLES):
+    for i in range(_N_VALID_SAMPLES):
         row = corpus[i]
         SectionModel(**row)
 

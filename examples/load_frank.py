@@ -4,9 +4,8 @@ import collections
 import sys
 
 import rich
-from rich.progress import track
-
 from raffle_ds_research.tools import arguantic, raffle_datasets
+from rich.progress import track
 
 
 class Args(arguantic.Arguantic):

@@ -15,14 +15,13 @@ import rich
 import torch
 import transformers
 from loguru import logger
-from tqdm import tqdm
-
 from raffle_ds_research.core import mechanics
 from raffle_ds_research.core.ml.monitor import Monitor, RetrievalMetricCollection
 from raffle_ds_research.core.ml.simple_ranker import SimpleRanker
 from raffle_ds_research.tools import arguantic, index_tools, pipes, predict
 from raffle_ds_research.tools.index_tools import faiss_tools
 from raffle_ds_research.utils.pretty import print_metric_groups
+from tqdm import tqdm
 
 dotenv.load_dotenv(Path(__file__).parent / ".predict.env")
 

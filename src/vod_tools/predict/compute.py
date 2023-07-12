@@ -11,12 +11,11 @@ import torch
 from lightning.fabric import wrappers as fabric_wrappers
 from loguru import logger
 from omegaconf import DictConfig
-from torch.utils import data as torch_data
-from typing_extensions import TypeAlias
-
 from raffle_ds_research.tools import dstruct, pipes
 from raffle_ds_research.tools.utils import loader_config
 from raffle_ds_research.tools.utils.progress import IterProgressBar
+from torch.utils import data as torch_data
+from typing_extensions import TypeAlias
 
 from .wrappers import PREDICT_IDX_COL_NAME, CollateWithIndices, DatasetWithIndices
 

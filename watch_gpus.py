@@ -6,7 +6,6 @@ from typing import Optional
 
 import gpustat
 import loguru
-
 from raffle_ds_research.tools import arguantic
 
 

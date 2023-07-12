@@ -9,7 +9,6 @@ import numpy as np
 import rich
 import torch
 from loguru import logger
-
 from raffle_ds_research.tools import arguantic
 from raffle_ds_research.tools.index_tools import faiss_tools
 
