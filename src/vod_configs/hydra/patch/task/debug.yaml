@@ -58,9 +58,10 @@ resources:
 
 collates:
   train:
-    n_sections: 5
-    max_pos_sections: 2
-    prefetch_n_sections: 12
+    n_sections: 12
+    max_pos_sections: 4
+    support_size: 30
+    prefetch_n_sections: 32
     do_sample: false
     in_batch_negatives: true
     post_filter: ensure_match

@@ -276,7 +276,7 @@ def _safe_yaml(section: str) -> str:
     return section
 
 
-def pprint_retrieval_batch(  # noqa: C901
+def pprint_retrieval_batch(  # noqa: C901, PLR0915
     batch: dict[str, Any],
     idx: Optional[list[int]] = None,  # noqa: ARG
     *,
@@ -285,6 +285,7 @@ def pprint_retrieval_batch(  # noqa: C901
     max_sections: Optional[int] = 10,
     console: Optional[rich.console.Console] = None,
     output_file: Optional[str | pathlib.Path] = None,
+    footer: str | bool = True,
     **kwargs: Any,
 ) -> dict:
     """Pretty print a batch of data for supervised retrieval."""
@@ -346,13 +347,13 @@ def pprint_retrieval_batch(  # noqa: C901
 
         # sort the questions by positive label (first), then higher score (second)
         _indices_i = range(len(batch["section.label"][i]))
-        _labels_i = [float(x) for x in batch["section.label"][i]]
-        _scores_i = [-math.inf if math.isnan(x) else x for x in batch["section.score"][i]]
+        _labels_i = [float(x > 0) for x in batch["section.label"][i]]
+        sort_scores = _cleanup_scores(batch["section.score"][i])
         section_sort_ids = [
-            i for i, _, _ in sorted(zip(_indices_i, _labels_i, _scores_i), key=lambda x: (x[1], x[2]), reverse=True)
+            i for i, _, _ in sorted(zip(_indices_i, _labels_i, sort_scores), key=lambda x: (x[1], x[2]), reverse=True)
         ]
 
-        for j in section_sort_ids:
+        for count, j in enumerate(section_sort_ids):
             section = tokenizer.decode(section_input_ids[i][j], **kwargs)
             section_data = {
                 **{str(key): _format(batch[key][i][j]) for key in section_keys if key in batch},  # type: ignore
@@ -363,7 +364,7 @@ def pprint_retrieval_batch(  # noqa: C901
             node_style = "bold cyan" if section_data.get("section.label", False) else "white"
 
             question_tree.add(section_node, style=node_style)
-            if max_sections is not None and j >= max_sections:
+            if max_sections is not None and count >= max_sections:
                 break
 
         tree.add(question_tree)
@@ -373,5 +374,17 @@ def pprint_retrieval_batch(  # noqa: C901
             rich.print(tree, file=f)
 
     console.print(tree)
+    if isinstance(footer, str):
+        console.print(footer)
+    elif footer:  # print a line separator
+        console_width = console.size.width
+        console.print("-" * console_width)
 
     return {}
+
+
+def _cleanup_scores(sort_scores: list[float]) -> list[float]:
+    non_nan_scores = [x for x in sort_scores if not math.isnan(x)]
+    min_score = min(non_nan_scores) if len(non_nan_scores) > 0 else 0.0
+    sort_scores = [min_score - 1 if math.isnan(x) else x for x in sort_scores]
+    return sort_scores
