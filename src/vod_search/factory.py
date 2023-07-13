@@ -10,12 +10,12 @@ import numpy as np
 import torch
 from lightning.pytorch import utilities as pl_utils
 from loguru import logger
+from vod_configs.py.search import FAISS_METRICS_INV
+from vod_search import bm25_tools, faiss_tools, search_server
+from vod_search.multi_search import MultiSearchMaster
+from vod_tools import dstruct, pipes
 
 from src import vod_configs
-from src.vod_configs.py.search import FAISS_METRICS_INV
-from src.vod_search import bm25_tools, faiss_tools, search_server
-from src.vod_search.multi_search import MultiSearchMaster
-from src.vod_tools import dstruct, pipes
 
 
 def build_search_client(

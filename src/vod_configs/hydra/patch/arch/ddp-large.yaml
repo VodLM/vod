@@ -5,7 +5,7 @@
 defaults:
   - ddp-base
   # HF transformer model name
-  - override /model/encoder: bert-large
+  - override /model/encoder: mt5-large
 
 batch_size:
   effective: 32

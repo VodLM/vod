@@ -1,7 +1,10 @@
 on_init: false
 n_max_eval: 1_000
-tune_parameters: true
-n_tuning_steps: 1_000
+tuning:
+  steps: "5min"
+  batch_size: 100
+  learning_rate: 1e-3
+  collate_overrides: null
 parameters:
   faiss: 1.0
   bm25: 1.0

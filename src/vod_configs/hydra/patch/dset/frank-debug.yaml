@@ -3,18 +3,15 @@
 dataset:
   train:
     - frank.A.en-pos:train
-    - frank.A.da-pos:train
   validation:
     - frank.A.en-pos:val
-    - frank.A.da-pos:val
   benchmark:
-    - frank.B.en-pos:val
-    - frank.B.da-pos:val
+    - frank.A.en-pos:val
 
 benchmark:
   search:
     faiss:
-      factory: Flat
+      factory: IVFauto,Flat
       nprobe: 32
 
 search:

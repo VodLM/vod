@@ -1,4 +1,4 @@
-_target_: src.vod_models.TransformerEncoder
+_target_: vod_models.TransformerEncoder
 cls_name: BertModel
 model_name: bert-base-uncased
 model_config: {}

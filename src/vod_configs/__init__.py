@@ -18,6 +18,8 @@ from .py.search import (
     SearchConfig,
 )
 from .py.workflows import (
+    RE_DURATION_IN_MINUTES,
+    RE_DURATION_IN_SECONDS,
     BatchSizeConfig,
     BenchmarkConfig,
     CollateConfigs,

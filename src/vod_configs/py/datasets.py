@@ -6,6 +6,7 @@ from typing import Any, Optional, Union
 import omegaconf
 import pydantic
 import transformers
+from vod_configs.py.utils import StrictModel
 from vod_tools.misc.config import as_pyobj_validator
 
 _DEFAULT_SPLITS = ["train", "validation"]
@@ -89,13 +90,8 @@ FRANK_B_KBIDS = [
 ]  # noqa: E501
 
 
-class NamedDset(pydantic.BaseModel):
+class NamedDset(StrictModel):
     """A dataset name with splits."""
-
-    class Config:
-        """Pydantic configuration."""
-
-        extra = pydantic.Extra.forbid
 
     name: str
     split: str
@@ -163,13 +159,12 @@ def parse_named_dsets(names: str | list[str], default_splits: Optional[list[str]
     return outputs
 
 
-class BaseDatasetFactoryConfig(pydantic.BaseModel):
+class BaseDatasetFactoryConfig(StrictModel):
     """Defines a base configuration for a retrieval dataset builder."""
 
     class Config:
         """Pydantic config for the `DatasetFactoryConfig` class."""
 
-        extra = pydantic.Extra.forbid
         arbitrary_types_allowed = True
 
     tokenizer: Union[transformers.PreTrainedTokenizer, transformers.PreTrainedTokenizerFast]

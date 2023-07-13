@@ -6,6 +6,7 @@ import pydantic
 import torch
 from loguru import logger
 from typing_extensions import Self, Type
+from vod_configs.py.utils import StrictModel
 
 from src.vod_tools import pipes
 from src.vod_tools.misc.pretty import human_format_bytes
@@ -28,14 +29,8 @@ FAISS_METRICS = {
 FAISS_METRICS_INV = {v: k for k, v in FAISS_METRICS.items()}
 
 
-class FaissGpuConfig(pydantic.BaseModel):
+class FaissGpuConfig(StrictModel):
     """Configuration for training a faiss index on GPUs."""
-
-    class Config:
-        """Pydantic configuration."""
-
-        arbitrary_types_allowed = False
-        extra = "forbid"
 
     devices: list[int] = [-1]
     use_float16: bool = True
@@ -76,7 +71,7 @@ class FaissGpuConfig(pydantic.BaseModel):
         return _get_gpu_resources(self.devices, self.tempmem or -1)
 
 
-class FaissFactoryConfig(pydantic.BaseModel):
+class FaissFactoryConfig(StrictModel):
     """Configures the building of a faiss server."""
 
     factory: str = "Flat"
@@ -101,7 +96,7 @@ class FaissFactoryConfig(pydantic.BaseModel):
         return pipes.fingerprint(self.dict(exclude=excludes))
 
 
-class Bm25FactoryConfig(pydantic.BaseModel):
+class Bm25FactoryConfig(StrictModel):
     """Configures the building of a bm25 server."""
 
     text_key: str = "text"
@@ -142,13 +137,8 @@ def _get_gpu_resources(
     return gpu_resources
 
 
-class SearchConfig(pydantic.BaseModel):
+class SearchConfig(StrictModel):
     """Base configuration for search engines (e.g., bm25, faiss)."""
-
-    class Config:
-        """Pydantic configuration."""
-
-        extra = pydantic.Extra.forbid
 
     text_key: str = "text"
     group_key: str = "group_hash"

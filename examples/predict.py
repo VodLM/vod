@@ -11,9 +11,8 @@ import tensorstore as ts
 import torch
 import transformers
 from transformers import BertModel
-
-from src.vod_tools import pipes, predict
-from src.vod_tools.misc.trainer import Trainer
+from vod_tools import pipes, predict
+from vod_tools.misc.trainer import Trainer
 
 dotenv.load_dotenv(str(Path(__file__).parent / ".predict.env"))
 

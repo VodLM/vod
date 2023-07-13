@@ -3,25 +3,30 @@
 from __future__ import annotations
 
 import argparse
+import pathlib
 import re
+import sys
 
-import faiss
-import numpy as np
-import stackprinter
-import uvicorn
-from fastapi import FastAPI, HTTPException
-from loguru import logger
+src_path = pathlib.Path(__file__).absolute().parent.parent.parent.parent
+sys.path.insert(0, src_path.as_posix())  # hack to allow imports from src
 
-from src.vod_search import io
-from src.vod_search.faiss_tools import SearchFaissQuery
-from src.vod_search.faiss_tools.build_gpu import FaissGpuConfig
-from src.vod_search.faiss_tools.models import (
+import faiss  # noqa: E402
+import numpy as np  # noqa: E402
+import stackprinter  # noqa: E402
+import uvicorn  # noqa: E402
+from fastapi import FastAPI, HTTPException  # noqa: E402
+from loguru import logger  # noqa: E402
+
+from src import vod_configs  # noqa: E402
+from src.vod_search import io  # noqa: E402
+from src.vod_search.faiss_tools import SearchFaissQuery  # noqa: E402
+from src.vod_search.faiss_tools.models import (  # noqa: E402
     FaissSearchResponse,
     FastFaissSearchResponse,
     FastSearchFaissQuery,
 )
-from src.vod_search.retrieval_data_type import RetrievalDataType
-from src.vod_tools.utils.exceptions import dump_exceptions_to_file
+from src.vod_search.retrieval_data_type import RetrievalDataType  # noqa: E402
+from src.vod_tools.misc.exceptions import dump_exceptions_to_file  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -50,7 +55,7 @@ logger.info("Starting API")
 faiss_index = init_index(args)
 if args.serve_on_gpu:
     logger.info("Moving index to GPU")
-    co = FaissGpuConfig().cloner_options()
+    co = vod_configs.FaissGpuConfig().cloner_options()
     faiss_index = faiss.index_cpu_to_all_gpus(faiss_index, co=co)
 
 
@@ -79,9 +84,9 @@ async def fast_search(query: FastSearchFaissQuery) -> FastFaissSearchResponse:
     """Search the index."""
     try:
         deserializer = {
-            RetrievalDataType.NUMPY: io.deserialize_np_array,
-            RetrievalDataType.TORCH: io.deserialize_torch_tensor,
-        }[query.array_type]
+            RetrievalDataType.NUMPY.value: io.deserialize_np_array,
+            RetrievalDataType.TORCH.value: io.deserialize_torch_tensor,
+        }[query.array_type.value]
         query_vec = deserializer(query.vectors)
         if len(query_vec.shape) != 2:  # noqa: PLR2004
             raise ValueError(f"Expected 2D array, got {len(query_vec.shape)}D array")

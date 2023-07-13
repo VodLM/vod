@@ -6,8 +6,7 @@ import warnings
 from typing import Any, Optional
 
 import datasets
-
-from src.vod_tools.pipes.utils.misc import pack_examples
+from vod_tools.pipes.utils.misc import pack_examples
 
 from .base import RetrievalDataset
 

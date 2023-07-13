@@ -14,9 +14,9 @@ from loguru import logger
 from omegaconf import DictConfig
 from rich.progress import track
 from torch.utils.data.dataloader import default_collate
+from vod_tools import dstruct, interfaces, pipes
 
 from src import vod_configs
-from src.vod_tools import dstruct, interfaces, pipes
 
 from .compute import LoaderKwargs, compute_and_store_predictions
 from .fingerprint import make_predict_fingerprint

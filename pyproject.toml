@@ -16,6 +16,7 @@ description = "Variational Open-Domain: A scalable experimentation framework for
 authors = ["Valentin Liévin <vl@raffle.ai>"]
 readme = "README.md"
 packages = [
+  { include = "src" }, # TODO: remove?
   { from = "src", include = "vod_dataloaders" },
   { from = "src", include = "vod_datasets" },
   { from = "src", include = "vod_gradients" },
@@ -23,11 +24,12 @@ packages = [
   { from = "src", include = "vod_search" },
   { from = "src", include = "vod_tools" },
   { from = "src", include = "vod_workflows" },
+  { from = "src", include = "vod_cli" },
 ]
 
 
 [tool.poetry.scripts]
-train = 'src.vod_workflows.cli.train:run'
+train = 'vod_cli.train:run'
 watch = 'watch_gpus:run'
 
 [tool.poetry.dependencies]

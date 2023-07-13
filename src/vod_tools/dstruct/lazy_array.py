@@ -7,9 +7,8 @@ from typing import Iterable, Optional
 import datasets
 import numpy as np
 import tensorstore as ts
-
-from src.vod_tools.dstruct.sized_dataset import SizedDataset, SliceType
-from src.vod_tools.dstruct.ts_factory import TensorStoreFactory
+from vod_tools.dstruct.sized_dataset import SizedDataset, SliceType
+from vod_tools.dstruct.ts_factory import TensorStoreFactory
 
 
 class LazyArray(abc.ABC, SizedDataset[np.ndarray]):

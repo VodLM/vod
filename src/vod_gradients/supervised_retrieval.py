@@ -8,11 +8,10 @@ from typing import Any, Callable, Iterable, Optional
 import lightning as L
 import torch
 import torch.nn
+from vod_gradients import base
 
-from src.vod_gradients import base
 
-
-class KlDivGradients(base.Gradients):
+class SupervisedRetrievalGradients(base.Gradients):
     """Compute the KL divergence between the model and the data."""
 
     def __init__(

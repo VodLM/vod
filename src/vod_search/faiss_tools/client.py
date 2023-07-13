@@ -11,9 +11,8 @@ import numpy as np
 import requests
 import rich
 import torch
-
-from src.vod_search import io, search_server
-from src.vod_search import retrieval_data_type as rtypes
+from vod_search import io, search_server
+from vod_search import retrieval_data_type as rtypes
 
 # get the path to the server script
 server_run_path = Path(__file__).parent / "server.py"

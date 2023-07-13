@@ -1,4 +1,4 @@
-_target_: src.vod_configs.TrainerConfig
+_target_: vod_configs.TrainerConfig
 max_steps: 1_000_000
 val_check_interval: 500
 log_interval: 10

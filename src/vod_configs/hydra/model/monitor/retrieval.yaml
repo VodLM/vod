@@ -1,2 +1,2 @@
-_target_: src.vod_models.RetrievalMonitor
+_target_: vod_models.RetrievalMonitor
 metrics: [ "ndcg", "mrr@10", "hitrate@1", "hitrate@3" ]

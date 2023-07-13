@@ -6,10 +6,10 @@ import faiss
 import numpy as np
 import torch
 from loguru import logger
+from vod_search.faiss_tools import build_gpu, support
+from vod_tools import dstruct
 
 from src import vod_configs
-from src.vod_search.faiss_tools import build_gpu, support
-from src.vod_tools import dstruct
 
 
 def build_faiss_index(
@@ -68,6 +68,7 @@ def _build_faiss_index_on_cpu(
             logger.info(f"Training faiss index on `{len(batch)}` vectors " f"({len(batch) / len(vectors):.2%} (cpu)")
             index.train(batch)  # type: ignore
 
+        logger.info(f"Adding `{len(batch)}` vectors to the index ({len(batch) / len(vectors):.2%} (cpu)")
         index.add(batch)
 
     if index.ntotal != len(vectors) or index.d != vector_size:

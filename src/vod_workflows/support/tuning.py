@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import pathlib
+import time
 import typing
 from typing import Any
 
@@ -10,11 +11,11 @@ import torch
 import transformers
 from loguru import logger
 from torch import nn
+from vod_tools import dstruct
+from vod_tools.misc.progress import IterProgressBar
+from vod_workflows.utils import helpers
 
 from src import vod_configs, vod_datasets, vod_gradients, vod_search
-from src.vod_tools import dstruct
-from src.vod_tools.misc.progress import IterProgressBar
-from src.vod_workflows.utils import helpers
 
 _DEFAULT_TUNE_LIST = ["bm25"]
 
@@ -26,22 +27,20 @@ def _min_score_no_nan(score: torch.Tensor, dim: int) -> torch.Tensor:
         dim=dim,
         keepdim=True,
     )
-    return min_scores_along_dim
+
+    return torch.where(torch.isinf(min_scores_along_dim), 0, min_scores_along_dim)
 
 
 class HybridRanker(nn.Module):
     """A ranker that combines multiple scores."""
 
-    def __init__(
-        self,
-        parameters: dict[str, Any],
-        require_grads: list[str],
-    ) -> None:
+    def __init__(self, parameters: dict[str, Any], require_grads: list[str], nan_offset: float = 0.0) -> None:
         super().__init__()
-        self.grad_fn = vod_gradients.KlDivGradients()
+        self.grad_fn = vod_gradients.SupervisedRetrievalGradients()
         self.params = nn.ParameterDict(
             {k: nn.Parameter(torch.tensor(v), requires_grad=k in require_grads) for k, v in parameters.items()}
         )
+        self.nan_offset = nan_offset
 
     def pydict(self) -> dict[str, Any]:
         """Return a python dictionary of the parameters."""
@@ -58,7 +57,7 @@ class HybridRanker(nn.Module):
             # Fetch the score
             score = batch[batch_key]
             min_scores_along_dim = _min_score_no_nan(score, dim=1)
-            score = torch.where(torch.isnan(score), min_scores_along_dim, score)
+            score = torch.where(torch.isnan(score), min_scores_along_dim + self.nan_offset, score)
 
             # Add the score to the hybrid score
             hybrid_score = weight * score if hybrid_score is None else hybrid_score + weight * score
@@ -74,6 +73,33 @@ class HybridRanker(nn.Module):
 K = typing.TypeVar("K")
 
 
+def get_total_duration(duration: str) -> float:
+    """Return the total duration in seconds."""
+    max_duration = vod_configs.RE_DURATION_IN_SECONDS.match(duration)
+    if max_duration is not None:
+        return float(max_duration.group(1))
+
+    max_duration = vod_configs.RE_DURATION_IN_MINUTES.match(duration)
+    if max_duration is not None:
+        return float(max_duration.group(1)) * 60
+
+    raise ValueError(f"Unknown duration format: {duration}")
+
+
+def should_stop(
+    step: int,
+    elapsed_time: float,
+    total_steps: None | int,
+    total_time: None | float,
+) -> bool:
+    """Return whether the tuning should stop."""
+    return (total_steps is not None and step >= total_steps) or (total_time is not None and elapsed_time >= total_time)
+
+
+class NanLossError(ValueError):
+    """Raised when a loss is NaN."""
+
+
 def tune_parameters(
     parameters: dict[str, float],
     tune: None | list[str] = None,
@@ -86,7 +112,8 @@ def tune_parameters(
     dataloader_config: vod_configs.DataLoaderConfig,
     cache_dir: pathlib.Path,
     serve_on_gpu: bool = True,
-    n_tuning_steps: int = 1_000,
+    tuning_steps: int | str = "3min",
+    learning_rate: float = 1e-3,
     tokenizer: transformers.PreTrainedTokenizer | transformers.PreTrainedTokenizerFast,
 ) -> dict[str, float]:
     """Run benchmarks on a retrieval task."""
@@ -96,7 +123,7 @@ def tune_parameters(
 
     if fabric.is_global_zero:
         # Define the model
-        model = HybridRanker(parameters=parameters, require_grads=tune)
+        model = HybridRanker(parameters=parameters, require_grads=tune, nan_offset=-100)
 
         # make task
         task = _make_tuning_task(
@@ -126,37 +153,59 @@ def tune_parameters(
                 parameters=parameters,
             )
 
+            output = {}
+            step = 0
             try:
                 # Optimizer
-                optimizer = torch.optim.Adam(model.parameters(), lr=5e-3)
+                optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
-                # run the evaluation
-                output = {}
-                should_stop = False
-                step = 0
+                # Define the total duration
+                if isinstance(tuning_steps, str):
+                    total_duration = get_total_duration(tuning_steps)
+                    total_steps = None
+                else:
+                    total_duration = None
+                    total_steps = tuning_steps
+
                 with IterProgressBar() as pbar:
                     ptask = pbar.add_task(
-                        "Tuning parameters", total=n_tuning_steps, info=_info_bar(output=output, model=model)
+                        "Tuning parameters",
+                        total=total_steps or total_duration,
+                        info=_info_bar(output=output, model=model),
                     )
-                    while not should_stop:
+                    t_0 = time.perf_counter()
+                    tick = time.perf_counter()
+                    while not should_stop(
+                        step,
+                        time.perf_counter() - t_0,
+                        total_steps=total_steps,
+                        total_time=total_duration,
+                    ):
                         for batch in dataloader:
-                            # compute the gradients
                             output = model(batch)
                             loss = output["loss"]
+                            if torch.isnan(loss):
+                                raise NanLossError("NaN loss")
                             loss.backward()
 
-                            # update the parameters
+                            # Update the parameters
                             optimizer.step()
                             optimizer.zero_grad()
 
-                            # do optimization here
+                            # Update the progress bar
                             step += 1
-                            pbar.update(ptask, advance=1, info=_info_bar(output=output, model=model))
-                            if step >= n_tuning_steps:
-                                should_stop = True
-                                break
+                            pbar.update(
+                                ptask,
+                                advance=1 if total_steps else time.perf_counter() - tick,
+                                info=_info_bar(output=output, model=model),
+                            )
+                            tick = time.perf_counter()
+
             except KeyboardInterrupt:
-                logger.warning("Parameter tuning interrupted (KeyboardInterrupt).")
+                logger.warning(f"Parameter tuning interrupted at step {step} (KeyboardInterrupt).")
+
+            except NanLossError:
+                logger.error(f"Parameter tuning aborted at step {step} (NaN loss).")
 
         # update the parameters
         parameters = model.pydict()

@@ -10,10 +10,10 @@ from hydra.utils import instantiate
 from loguru import logger
 from omegaconf import DictConfig
 from transformers import pytorch_utils, trainer_pt_utils  # type: ignore
+from vod_models.monitor import RetrievalMonitor
+from vod_tools import interfaces, pipes
 
 from src import vod_gradients
-from src.vod_models.monitor import RetrievalMonitor
-from src.vod_tools import interfaces, pipes
 
 
 def _maybe_instantiate(conf_or_obj: Union[Any, DictConfig], **kwargs: Any) -> object:

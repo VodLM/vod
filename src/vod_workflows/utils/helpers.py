@@ -20,11 +20,11 @@ from loguru import logger
 from torch import distributed as torch_distributed
 from torch.utils import data as torch_data
 from typing_extensions import Self, Type
+from vod_tools import dstruct, pipes
+from vod_tools.misc.schedule import BaseSchedule
+from vod_tools.pipes.hashing import fingerprint_torch_module
 
 from src import vod_configs, vod_dataloaders, vod_models, vod_search
-from src.vod_tools import dstruct, pipes
-from src.vod_tools.misc.schedule import BaseSchedule
-from src.vod_tools.pipes.hashing import fingerprint_torch_module
 
 T = TypeVar("T")
 
@@ -192,7 +192,7 @@ def _concat_data(data: list[D]) -> D:
     return dstruct.ConcatenatedSizedDataset(data)  # type: ignore
 
 
-def _barrier_fn(name: str, fabric: L.Fabric) -> None:
+def barrier_fn(name: str, fabric: L.Fabric) -> None:
     """Barrier to synchronize all processes."""
     if fabric.world_size == 1:
         return

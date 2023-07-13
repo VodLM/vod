@@ -4,7 +4,7 @@ defaults:
       - csv
   - _self_
 
-_target_: src.vod_workflows.cli.utils.init_fabric
+_target_: vod_cli.utils.init_fabric
 accelerator: auto
 devices: ${resources.n_devices}
 precision: 32

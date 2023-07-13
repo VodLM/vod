@@ -8,9 +8,9 @@ import numpy as np
 import rich
 from tqdm import tqdm
 from transformers import AutoTokenizer
+from vod_tools import arguantic
 
 from src import vod_configs, vod_datasets, vod_search
-from src.vod_tools import arguantic
 
 
 class BenchFrank(arguantic.Arguantic):

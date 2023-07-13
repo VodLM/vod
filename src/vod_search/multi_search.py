@@ -4,9 +4,8 @@ import asyncio
 from typing import Any, Optional
 
 import numpy as np
-
-from src.vod_search import retrieval_data_type as rtypes
-from src.vod_search import search_server
+from vod_search import retrieval_data_type as rtypes
+from vod_search import search_server
 
 
 class MultiSearchClient(search_server.SearchClient):

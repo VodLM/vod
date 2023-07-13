@@ -1,4 +1,4 @@
-_target_: src.vod_gradients.KlDivGradients
+_target_: vod_gradients.SupervisedRetrievalGradients
 eps: null
 self_supervision_weight: 0.0
 bm25_guidance_weight: 0.0

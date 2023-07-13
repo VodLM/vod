@@ -3,8 +3,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 import jinja2
-
-from src.vod_tools.pipes.utils.misc import iter_examples
+from vod_tools.pipes.utils.misc import iter_examples
 
 
 def template_pipe(

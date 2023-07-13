@@ -17,9 +17,9 @@ import torch
 from loguru import logger
 from rich.progress import track
 from rich.status import Status
+from vod_tools import arguantic, dstruct
 
 from src import vod_configs, vod_search
-from src.vod_tools import arguantic, dstruct
 
 
 class Args(arguantic.Arguantic):

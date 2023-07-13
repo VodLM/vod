@@ -11,8 +11,7 @@ import numpy as np
 import pytest
 import tensorstore
 import torch
-
-from src.vod_tools import predict
+from vod_tools import predict
 
 T = TypeVar("T")
 
@@ -75,6 +74,10 @@ def _collate(examples: Iterable[dict[str, Any]], **kwargs: Any) -> dict[str, Any
 def test_predict(tmpdir: str | Path, data: VectorDataset, model_output_key: Optional[str]) -> None:
     """Test that the prediction works as expected."""
     model = Array(y=data.y, output_key=model_output_key)
+    fabric = L.Fabric()
+    model = fabric.setup_module(model)
+
+    # create the predict function
     predict_fn = functools.partial(
         predict.predict,
         data,

@@ -7,9 +7,8 @@ import datasets
 import numpy as np
 import torch
 from datasets import fingerprint
-
-from src.vod_tools import dstruct, interfaces, pipes
-from src.vod_tools.misc.tensor_tools import serialize_tensor
+from vod_tools import dstruct, interfaces, pipes
+from vod_tools.misc.tensor_tools import serialize_tensor
 
 
 def make_predict_fingerprint(

@@ -7,10 +7,10 @@ from typing import Any, Callable, Literal, TypeVar
 import lightning as L
 import loguru
 import transformers
+from vod_tools import dstruct, pipes, predict
+from vod_workflows.utils import helpers
 
 from src import vod_configs, vod_datasets, vod_models
-from src.vod_tools import dstruct, pipes, predict
-from src.vod_workflows.utils import helpers
 
 K = TypeVar("K")
 
@@ -69,7 +69,7 @@ def compute_dataset_vectors(
 ) -> dstruct.TensorStoreFactory:
     """Compute the vectors for a given dataset and field."""
     collate_fn = init_predict_collate_fn(collate_config, field=field, tokenizer=tokenizer)
-    barrier_fn = functools.partial(helpers._barrier_fn, fabric=fabric)
+    barrier_fn = functools.partial(helpers.barrier_fn, fabric=fabric)
 
     # construct the dataset
     if isinstance(factory, vod_datasets.DatasetFactory):

@@ -13,10 +13,10 @@ from loguru import logger
 from omegaconf import DictConfig
 from torch.utils import data as torch_data
 from typing_extensions import TypeAlias
+from vod_tools import dstruct, pipes
+from vod_tools.misc.progress import IterProgressBar
 
 from src import vod_configs
-from src.vod_tools import dstruct, pipes
-from src.vod_tools.misc.progress import IterProgressBar
 
 from .wrappers import PREDICT_IDX_COL_NAME, CollateWithIndices, DatasetWithIndices
 

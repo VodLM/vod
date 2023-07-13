@@ -11,11 +11,15 @@ elif [ -f /etc/redhat-release ]; then
     echo "CentOS based"
     PKGMD="yum"
     sudo $PKGMD update
-    sudo $PKGMD install -y zsh git htop util-linux-user gcc kernel-devel
+    sudo $PKGMD install -y zsh git htop util-linux-user gcc kernel-devel libblas-dev
 else
     echo "Unknown OS, defaulting to apt-get"
     PKGMD="apt-get"
 fi
+
+# Test
+strings /usr/lib/x86_64-linux-gnu/libstdc++.so.6 | grep GLIBCXX # GLIBCXX_3.4.30
+
 
 
 # oh my zsh
@@ -36,12 +40,12 @@ bash Mambaforge-$(uname)-$(uname -m).sh
 mamba init
 
 # setup mamba env
-mamba create --name dev python=3.10
-echo 'mamba activate dev' >>~/.zshrc
+mamba create --name vod python=3.10
+echo 'mamba activate vod' >>~/.zshrc
 source ~/.zshrc
 mamba install -y -c nvidia cuda
-mamba install -y -c conda-forge cudnn cudatoolkit==12.1
-pip install gpustat nvitop
+mamba install -y -c conda-forge cudnn cudatoolkit
+pip install pip poetry gpustat nvitop
 
 # install and setup elasticsearch
 if [[ $PKGMD != "apt-get" ]]; then
@@ -58,7 +62,7 @@ else
 
 # setup elasticsearch config: open file and comment out the security stuff
 sudo nano /etc/elasticsearch/elasticsearch.yml
-# setup elasticsearch jvm: limit the virtual memory to 64GB
+# setup elasticsearch jvm: limit the virtual memory to 320GB
 es_opts='
 -Xms64g
 -Xmx320g
@@ -70,25 +74,13 @@ sudo systemctl daemon-reload
 sudo systemctl enable elasticsearch.service
 sudo systemctl stop elasticsearch.service
 sudo systemctl start elasticsearch.service
-# sudo systemctl stop elasticsearch.service
 
 
-# install poetry
-curl -sSL https://install.python-poetry.org | python3 -
-echo 'export PATH="/home/vlievin/.local/bin:$PATH"' >>~/.zshrc
-source ~/.zshrc
+# Environment
+nano ~/.raffle/gc-mlm-100322.json # <- Put your Google credentials here
+nano ~/.raffle/.env # <- Copy the rest of your env variables here >
 
-
-gcp='...'
-mkdir ~/.raffle/
-echo "$gcp" >~/.raffle/gc-mlm-100322.json
-
-
-ENV="
-NAMESPACE=local
-# < copy the rest of your env variables here >s
-"
-echo "$ENV" >~/.raffle/.env
+# Auto-load env variables
 line='export $(grep -v "^#" ~/.raffle/.env | xargs)'
 echo $line >>~/.zshrc
 source ~/.zshrc

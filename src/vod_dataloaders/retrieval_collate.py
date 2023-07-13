@@ -12,11 +12,11 @@ import numpy as np
 import torch
 import transformers
 from loguru import logger
+from vod_dataloaders import fast
+from vod_tools import dstruct, pipes
+from vod_tools.pipes.utils.misc import pack_examples
 
 from src import vod_configs, vod_search
-from src.vod_dataloaders import fast
-from src.vod_tools import dstruct, pipes
-from src.vod_tools.pipes.utils.misc import pack_examples
 
 from .post_filtering import PostFilter, post_filter_factory
 from .utils import BlockTimer, cast_as_tensor
@@ -303,7 +303,7 @@ def _post_filter(
     n_not_inf = (~np.isinf(search_results.scores)).sum()
     all_scores = {"main": search_results.scores, **raw_scores}
     all_scores = post_filter(search_results.indices, all_scores, query=batch)
-    search_results.scores = all_scores.pop("main")  # TODO : make new
+    search_results.scores = all_scores.pop("main")
     n_not_inf_after = (~np.isinf(search_results.scores)).sum()
     prop_filtered = (n_not_inf - n_not_inf_after) / search_results.scores.size
     diagnostics["diagnostics.post_filtered"] = prop_filtered

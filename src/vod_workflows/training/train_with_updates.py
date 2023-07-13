@@ -9,17 +9,16 @@ import numpy as np
 import omegaconf
 import rich
 import transformers
-from lightning.fabric import strategies as fabric_strategies
 from loguru import logger
+from vod_tools import cache_manager, pipes
+from vod_tools.misc.pretty import print_metric_groups
+from vod_workflows.evaluation.evaluation import ToDiskConfig, benchmark
+from vod_workflows.support.precompute import compute_vectors
+from vod_workflows.support.tuning import tune_parameters
+from vod_workflows.training.training import index_and_train
+from vod_workflows.utils import helpers, io, logging
 
 from src import vod_configs, vod_datasets, vod_models
-from src.vod_tools import cache_manager, pipes
-from src.vod_tools.misc.pretty import print_metric_groups
-from src.vod_workflows.evaluation.evaluation import ToDiskConfig, benchmark
-from src.vod_workflows.support.precompute import compute_vectors
-from src.vod_workflows.support.tuning import tune_parameters
-from src.vod_workflows.training.training import index_and_train
-from src.vod_workflows.utils import helpers, io, logging
 
 K = TypeVar("K")
 
@@ -32,7 +31,7 @@ def train_with_index_updates(  # noqa: C901, PLR0915
     load_from: Optional[str] = None,  # todo
 ) -> vod_models.Ranker:
     """Train a ranking model while periodically updating the index."""
-    barrier = functools.partial(helpers._barrier_fn, fabric=fabric)
+    barrier = functools.partial(helpers.barrier_fn, fabric=fabric)
     if isinstance(config, omegaconf.DictConfig):
         config = vod_configs.TrainWithIndexUpdatesConfigs.parse(config)
 
@@ -41,9 +40,6 @@ def train_with_index_updates(  # noqa: C901, PLR0915
     logger.info(f"The search index will be updated at steps: {_pretty_steps(update_steps)}")
     if len(update_steps) == 0:
         raise ValueError("No index update steps were defined.")
-
-    # Check and adapt the DeepSpeed config
-    deepspeed_enabled = _setup_deepspeed(fabric=fabric, ranker=ranker, config=config.trainer)
 
     # Setting up the optimizer
     optimizer = ranker.get_optimizer()
@@ -60,8 +56,7 @@ def train_with_index_updates(  # noqa: C901, PLR0915
         val_check_interval=config.trainer.val_check_interval,
         n_max_eval=config.trainer.n_max_eval,
         accumulate_grad_batches=_infer_accumulate_grad_batches(fabric, config.batch_size),
-        # gradient clipping here is disabled when using DeepSpeed (handled automatically)
-        gradient_clip_val=None if deepspeed_enabled else config.trainer.gradient_clip_val,
+        gradient_clip_val=config.trainer.gradient_clip_val,
         parameters=config.trainer.parameters,
     )
 
@@ -81,11 +76,10 @@ def train_with_index_updates(  # noqa: C901, PLR0915
     ranker, optimizer = fabric.setup(ranker, optimizer)
 
     # Train the model for each period
-    update_steps = update_steps + [None]
     barrier("Training starting..")
-    for pidx, (start_step, end_step) in enumerate(zip(update_steps[:-1], update_steps[1:])):
+    for pidx, (start_step, end_step) in enumerate(zip(update_steps, update_steps[1:] + [None])):
         if end_step is not None and state.step > end_step:
-            logger.info(f"Skipping period {pidx + 1}/{len(update_steps) - 1} (step {start_step} -> {end_step})")
+            logger.info(f"Skipping period {pidx + 1}/{len(update_steps)} (step {start_step} -> {end_step})")
             continue
 
         # Update the Trainer state
@@ -105,7 +99,10 @@ def train_with_index_updates(  # noqa: C901, PLR0915
             delete_existing=False,
             persist=state.period == 0,  # keep the cache for the first period
         ) as cache_dir:
-            all_dset_factories = _get_dset_factories(config.dataset.get("all"), config=config.dataset)
+            all_dset_factories = _get_dset_factories(
+                config.dataset.get("all" if run_benchmarks else "train+val"),
+                config=config.dataset,
+            )
 
             # pre-process all datasets on global zero, this is done implicitely when loading a dataset
             if fabric.is_global_zero:
@@ -119,15 +116,6 @@ def train_with_index_updates(  # noqa: C901, PLR0915
             if helpers.is_engine_enabled(train_parameters, "faiss") or (
                 run_benchmarks and helpers.is_engine_enabled(bench_parameters, "faiss")
             ):
-                # Select the factories to process
-                # if run_benchmarks:
-                #     compute_factories = all_dset_factories
-                # else:
-                #     compute_factories = {
-                #         **_get_dset_factories(config.dataset.get("train"), config=config.dataset),
-                #         **_get_dset_factories(config.dataset.get("validation"), config=config.dataset),
-                #     }
-
                 # Compute the vectors
                 vectors = compute_vectors(
                     all_dset_factories,
@@ -144,22 +132,25 @@ def train_with_index_updates(  # noqa: C901, PLR0915
 
             # Tune the parameters and benchmark the ranker on each dataset separately
             if run_benchmarks:
-                if config.benchmark.tune_parameters and (
-                    bench_parameters.get("faiss", -1) > 0 and helpers.is_engine_enabled(bench_parameters, "bm25")
-                ):
+                if config.benchmark.tuning is not None and bench_parameters.get("faiss", -1) > 0:
                     barrier("Tuning retrieval parameters..")
                     bench_parameters = tune_parameters(
                         parameters=bench_parameters,
                         tune=["bm25"],
                         fabric=fabric,
-                        factories=_get_dset_factories(config.dataset.get("validation"), config=config.dataset),
+                        factories=_get_dset_factories(config.dataset.get("val"), config=config.dataset),
                         vectors=vectors,
                         search_config=config.search,
-                        collate_config=config.collates.train,
-                        dataloader_config=_patch_mum_worker(config.dataloaders.benchmark, fabric=fabric),
+                        collate_config=config.collates.train.copy(update=config.benchmark.tuning.collate_overrides),
+                        dataloader_config=_patch_mum_worker(
+                            config.dataloaders.benchmark,
+                            fabric=fabric,
+                            overrides={"batch_size": config.benchmark.tuning.batch_size},
+                        ),
                         cache_dir=cache_dir,
                         serve_on_gpu=True,
-                        n_tuning_steps=config.benchmark.n_tuning_steps,
+                        tuning_steps=config.benchmark.tuning.steps,
+                        learning_rate=config.benchmark.tuning.learning_rate,
                         tokenizer=config.dataset.tokenizer,
                     )
                     logger.info(f"Tuned parameters: {bench_parameters}")
@@ -190,7 +181,7 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                 fabric=fabric,
                 vectors=vectors,  # type: ignore
                 train_factories=_get_dset_factories(config.dataset.get("train"), config=config.dataset),
-                val_factories=_get_dset_factories(config.dataset.get("validation"), config=config.dataset),
+                val_factories=_get_dset_factories(config.dataset.get("val"), config=config.dataset),
                 tokenizer=config.dataset.tokenizer,
                 search_config=config.search,
                 collate_config=config.collates.train,
@@ -215,25 +206,6 @@ def train_with_index_updates(  # noqa: C901, PLR0915
         scheduler = ranker.get_scheduler(helpers.unwrap_optimizer(optimizer))
 
     return ranker
-
-
-def _setup_deepspeed(
-    fabric: L.Fabric,
-    ranker: vod_models.Ranker,
-    config: vod_configs.TrainerConfig,
-) -> bool:
-    deepspeed_enabled = isinstance(fabric.strategy, fabric_strategies.DeepSpeedStrategy)  # type: ignore
-    if deepspeed_enabled:
-        if config.gradient_clip_val is not None:
-            fabric.strategy.config["gradient_clipping"] = config.gradient_clip_val  # type: ignore
-        if fabric.is_global_zero:
-            rich.print(fabric.strategy.config)  # type: ignore
-        if fabric.strategy.config["activation_checkpointing"]["cpu_checkpointing"] and isinstance(  # type: ignore
-            ranker.encoder, vod_models.TransformerEncoder
-        ):
-            # activate checkpointing using `transformers` API -- experimental!
-            ranker.encoder.backbone.gradient_checkpointing_enable()
-    return deepspeed_enabled
 
 
 def _on_first_batch_fn(
@@ -287,7 +259,10 @@ def _run_benchmarks(
                 metrics=config.benchmark.metrics,
                 search_config=search_config,
                 collate_config=config.collates.benchmark,
-                dataloader_config=_patch_mum_worker(config.dataloaders.benchmark, fabric=fabric),
+                dataloader_config=_patch_mum_worker(
+                    config.dataloaders.benchmark,
+                    fabric=fabric,
+                ),
                 cache_dir=cache_dir,
                 parameters=parameters,
                 serve_on_gpu=True,
@@ -306,10 +281,12 @@ def _run_benchmarks(
 def _patch_mum_worker(
     dl_config: vod_configs.DataLoaderConfig,
     fabric: L.Fabric,
+    overrides: Optional[dict[str, Any]] = None,
 ) -> vod_configs.DataLoaderConfig:
     return dl_config.copy(
         update={
             "num_workers": fabric.world_size * dl_config.num_workers,
+            **(overrides or {}),
         }
     )
 

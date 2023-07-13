@@ -3,16 +3,18 @@ from __future__ import annotations
 import typing
 from typing import Optional
 
-import pydantic
+from vod_configs.py.utils import StrictModel
 
 
-class DataLoaderConfig(pydantic.BaseModel):
+class KeyMap(StrictModel):
+    """Defines the name of the keys used on the query side and on the section side."""
+
+    query: str
+    section: str
+
+
+class DataLoaderConfig(StrictModel):
     """Base configuration for a pytorch DataLoader."""
-
-    class Config:
-        """pydantic config."""
-
-        extra = pydantic.Extra.forbid
 
     batch_size: int
     shuffle: bool = False
@@ -24,25 +26,8 @@ class DataLoaderConfig(pydantic.BaseModel):
     persistent_workers: bool = False
 
 
-class KeyMap(pydantic.BaseModel):
-    """Defines the name of the keys used on the query side and on the section side."""
-
-    class Config:
-        """Pydantic config."""
-
-        extra = "forbid"
-
-    query: str
-    section: str
-
-
-class BaseCollateConfig(pydantic.BaseModel):
+class BaseCollateConfig(StrictModel):
     """Defines a base configuration for the collate function."""
-
-    class Config:
-        """Pydantic config."""
-
-        extra = "forbid"
 
     question_max_length: int = 512
     section_max_length: int = 512
@@ -50,11 +35,6 @@ class BaseCollateConfig(pydantic.BaseModel):
 
 class RetrievalCollateConfig(BaseCollateConfig):
     """Defines a configuration for the retrieval collate function."""
-
-    class Config:
-        """Pydantic config."""
-
-        extra = "forbid"
 
     # base config
     prefetch_n_sections: int = 100
@@ -74,13 +54,8 @@ class RetrievalCollateConfig(BaseCollateConfig):
     group_id_keys: KeyMap = KeyMap(query="group_hash", section="group_hash")  #  group hash (kb_id, lang, etc.)
 
 
-class SamplerFactoryConfig(pydantic.BaseModel):
+class SamplerFactoryConfig(StrictModel):
     """Configuration for a dataloader sampler."""
-
-    class Config:
-        """pydantic config."""
-
-        extra = "forbid"
 
     mode: typing.Literal["lookup", "inverse_frequency"]
     key: str

@@ -16,9 +16,8 @@ import rich
 import rich.progress
 from elasticsearch import helpers as es_helpers
 from loguru import logger
-
-from src.vod_search import retrieval_data_type as rtypes
-from src.vod_search import search_server
+from vod_search import retrieval_data_type as rtypes
+from vod_search import search_server
 
 es_logger = logging.getLogger("elastic_transport")
 es_logger.setLevel(logging.WARNING)

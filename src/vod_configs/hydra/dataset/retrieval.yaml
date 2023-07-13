@@ -3,7 +3,7 @@ defaults:
   - templates: default
   - _self_
 
-_target_: src.vod_configs.MultiDatasetFactoryConfig
+_target_: vod_configs.MultiDatasetFactoryConfig
 
 # dataset groups
 train: frank.A.en-pos:train

@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
-from src.vod_tools import dstruct
+from vod_tools import dstruct
 
 
 @pytest.fixture

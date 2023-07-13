@@ -6,7 +6,7 @@ defaults:
   # HF model name
   - override /model/encoder: mt5-base
   # Gradients
-  - override /model/gradients: kl_div
+  - override /model/gradients: supervised_retrieval
   # model optimizer
   - override /model/optimizer: adamw
   # use the KL divergence from the model to the binary targets
@@ -69,14 +69,15 @@ trainer:
       mode: linear
       start: 0
       value: 1
-      period: ${trainer.period}
       offset: ${trainer.period}
+      period: ${trainer.period}
 
 benchmark:
   n_max_eval: 1_000
   on_init: false
-  tune_parameters: false
-  n_tuning_steps: 1_000
+  tuning:
+    steps: 5min
+    batch_size: 32
   parameters:
     faiss: 1.0
     bm25: 1.0

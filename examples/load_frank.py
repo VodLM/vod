@@ -5,8 +5,7 @@ import sys
 
 import rich
 from rich.progress import track
-
-from src.vod_tools import arguantic, vod_data
+from vod_tools import arguantic, vod_data
 
 
 class Args(arguantic.Arguantic):

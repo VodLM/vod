@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import rich
-
-from src.vod_tools import arguantic, vod_data
+from vod_tools import arguantic, vod_data
 
 
 class Args(arguantic.Arguantic):

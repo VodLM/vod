@@ -8,8 +8,7 @@ import torch
 import transformers
 from torch import nn
 from typing_extensions import Self, Type
-
-from src.vod_tools import interfaces
+from vod_tools import interfaces
 
 
 class TransformerEncoderConfig(pydantic.BaseModel):

@@ -4,7 +4,7 @@
 
 defaults:
   # HF transformer model name
-  - override /model/encoder: bert-base
+  - override /model/encoder: mt5-base
   # LR scheduler
   - override /model/scheduler: linear
   # Fabric Strategy

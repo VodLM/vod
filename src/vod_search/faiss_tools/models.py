@@ -3,8 +3,7 @@ from __future__ import annotations
 from typing import Optional
 
 import pydantic
-
-from src.vod_search.retrieval_data_type import RetrievalDataType
+from vod_search.retrieval_data_type import RetrievalDataType
 
 
 class FaissInitConfig(pydantic.BaseModel):

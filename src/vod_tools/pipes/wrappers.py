@@ -3,7 +3,7 @@ from __future__ import annotations
 from copy import copy
 from typing import Any, Optional
 
-from src.vod_tools.pipes.protocols import Pipe
+from vod_tools.pipes.protocols import Pipe
 
 
 def retain_inputs_wrapper(pipe: Pipe) -> Pipe:

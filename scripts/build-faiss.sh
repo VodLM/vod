@@ -15,7 +15,7 @@ git clone https://github.com/facebookresearch/faiss.git
 cd faiss
 
 # install Cmake, BLAS, MKL and swig
-mamba install -y -c conda-forge cmake==3.23.1 libblas liblapack mkl mkl-include swig==4.1.1 numpy
+mamba install -y -c conda-forge cmake==3.23.1 libblas liblapack mkl mkl-include swig==4.1.1 numpy openblas libgcc
 # mamba install -c conda-forge gcc=12.1.0
 # mamba install -y -c rapidsai -c conda-forge -c nvidia raft-dask pylibraft
 

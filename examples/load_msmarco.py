@@ -3,9 +3,9 @@ from __future__ import annotations
 from typing import Optional
 
 import rich
+from vod_tools import arguantic
 
 from src import vod_datasets
-from src.vod_tools import arguantic
 
 
 class Args(arguantic.Arguantic):

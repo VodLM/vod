@@ -8,9 +8,8 @@ import rich.console
 import transformers
 from lightning.fabric.loggers import Logger as FabricLogger
 from rich import terminal_theme
-
-from src.vod_tools import pipes
-from src.vod_tools.misc.pretty import print_metric_groups
+from vod_tools import pipes
+from vod_tools.misc.pretty import print_metric_groups
 
 
 def log(

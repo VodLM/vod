@@ -16,10 +16,10 @@ import transformers
 import yaml
 from lightning.fabric.loggers.logger import Logger as FabricLogger
 from lightning.pytorch.loggers import WandbLogger
+from vod_tools import interfaces
+from vod_tools.misc.config import config_to_flat_dict
 
 from src import vod_models
-from src.vod_tools import interfaces
-from src.vod_tools.misc.config import config_to_flat_dict
 
 T = TypeVar("T")
 

@@ -10,17 +10,25 @@ model:
   gradients:
     section_chunk_size: null
 
+env:
+  OMP_NUM_THREADS: 8
+
+search:
+  faiss:
+    factory: IVFauto,Flat
+    nprobe: 32
+
 benchmark:
   n_max_eval: 100
   on_init: false
-  tune_parameters: false # <- TODO!
-  n_tuning_steps: 100
+  tuning: null
   parameters:
     bm25: 1.0
     faiss: 0.0
   search:
     faiss:
       factory: Flat
+      nprobe: 32
 
 trainer:
   max_steps: 1000
@@ -32,12 +40,11 @@ trainer:
     faiss: 0.0
 
 dataset:
-  subset_size: null
+  subset_size: 200
   filter_unused_sections: false
   train: frank.A.en-pos:train
   validation: frank.A.en-pos:val
-  benchmark:
-    - frank.A.en-pos:val
+  benchmark: frank.A.en-pos:val
 
 batch_size:
   effective: 16

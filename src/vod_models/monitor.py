@@ -12,6 +12,11 @@ import omegaconf
 import torch
 import torchmetrics
 from torchmetrics import Metric, MetricCollection
+from torchmetrics.functional.retrieval import (
+    retrieval_normalized_dcg,
+    retrieval_precision,
+    retrieval_recall,
+)
 
 
 @torch.jit.script
@@ -127,21 +132,21 @@ class NormalizedDCG(LightningAveragedMetric):
     """Normalized Discounted Cumulative Gain (NDCG)."""
 
     def _metric_fn(self, preds: torch.Tensor, target: torch.Tensor, top_k: Optional[int]) -> torch.Tensor:
-        return torchmetrics.functional.retrieval_normalized_dcg(preds=preds, target=target, top_k=top_k)
+        return retrieval_normalized_dcg(preds=preds, target=target, top_k=top_k)
 
 
 class Recall(LightningAveragedMetric):
     """Recall metric."""
 
     def _metric_fn(self, preds: torch.Tensor, target: torch.Tensor, top_k: Optional[int]) -> torch.Tensor:
-        return torchmetrics.functional.retrieval_recall(preds=preds, target=target, top_k=top_k)
+        return retrieval_recall(preds=preds, target=target, top_k=top_k)
 
 
 class Precision(LightningAveragedMetric):
     """Precision metric."""
 
     def _metric_fn(self, preds: torch.Tensor, target: torch.Tensor, top_k: Optional[int]) -> torch.Tensor:
-        return torchmetrics.functional.retrieval_precision(preds=preds, target=target, top_k=top_k)
+        return retrieval_precision(preds=preds, target=target, top_k=top_k)
 
 
 def retrieval_metric_factory(name: str, **kwargs: Any) -> Metric:

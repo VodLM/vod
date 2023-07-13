@@ -1,9 +1,9 @@
 defaults:
   - encoder: bert-tiny
-  - gradients: kl_div
+  - gradients: supervised_retrieval
   - optimizer: adamw # todo: lion
   - scheduler: linear
   - monitor: retrieval
   - _self_
 
-_target_: src.vod_models.Ranker
+_target_: vod_models.Ranker

@@ -5,8 +5,7 @@ from typing import Any, Optional
 import datasets.fingerprint
 import torch.nn
 from transformers import BertModel
-
-from src.vod_tools import pipes
+from vod_tools import pipes
 
 
 class SimpleRanker(torch.nn.Module):

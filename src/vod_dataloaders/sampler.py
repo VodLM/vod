@@ -79,9 +79,9 @@ class ProductSamplerFactory(SamplerFactory):
 def sampler_factory(
     config: dict
     | omegaconf.DictConfig
-    | vod_configs.dataloaders.SamplerFactoryConfig
+    | vod_configs.SamplerFactoryConfig
     | list[dict | omegaconf.DictConfig]
-    | list[vod_configs.dataloaders.SamplerFactoryConfig],
+    | list[vod_configs.SamplerFactoryConfig],
 ) -> SamplerFactory:
     """Return a dataloader sampler from the given config."""
     if isinstance(config, (omegaconf.DictConfig, omegaconf.ListConfig)):
@@ -90,8 +90,8 @@ def sampler_factory(
     if isinstance(config, list):
         return ProductSamplerFactory([sampler_factory(sub_config) for sub_config in config])
 
-    if not isinstance(config, vod_configs.dataloaders.SamplerFactoryConfig):
-        config = vod_configs.dataloaders.SamplerFactoryConfig(**config)
+    if not isinstance(config, vod_configs.SamplerFactoryConfig):
+        config = vod_configs.SamplerFactoryConfig(**config)
 
     if config.mode == "lookup":
         if config.lookup is None:

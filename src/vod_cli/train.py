@@ -19,10 +19,11 @@ try:
 except RuntimeError:
     loguru.logger.debug("Could not set multiprocessing start method to `forkserver`")
 
+from vod_cli import utils as cli_utils
+from vod_tools.misc.omega_utils import register_omgeaconf_resolvers
+from vod_tools.misc.pretty import print_config
+
 from src import vod_configs, vod_models, vod_workflows
-from src.vod_tools.misc.omega_utils import register_omgeaconf_resolvers
-from src.vod_tools.misc.pretty import print_config
-from src.vod_workflows.cli import utils as cli_utils
 
 register_omgeaconf_resolvers()
 
@@ -115,9 +116,9 @@ def _customize_logger(fabric: L.Fabric) -> None:
     logger.remove()
     logger.add(sys.stderr, format=logger_format)
 
-    if not fabric.is_global_zero:
-        # change the log level to avoid spamming the console
-        logger.configure(
-            handlers=[{"sink": sys.stderr, "level": "WARNING", "format": logger_format}],
-            extra={"rank": 1 + fabric.global_rank, "world_size": fabric.world_size},
-        )
+    # if not fabric.is_global_zero:
+    #     # change the log level to avoid spamming the console
+    #     logger.configure(
+    #         handlers=[{"sink": sys.stderr, "level": "WARNING", "format": logger_format}],
+    #         extra={"rank": 1 + fabric.global_rank, "world_size": fabric.world_size},
+    #     )

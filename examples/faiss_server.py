@@ -9,9 +9,8 @@ import numpy as np
 import rich
 import torch
 from loguru import logger
-
-from src.vod_search import faiss_tools
-from src.vod_tools import arguantic
+from vod_search import faiss_tools
+from vod_tools import arguantic
 
 
 class ProfileArgs(arguantic.Arguantic):

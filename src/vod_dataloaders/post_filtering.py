@@ -5,8 +5,7 @@ import math
 from typing import Any, TypeVar
 
 import numpy as np
-
-from src.vod_tools import dstruct
+from vod_tools import dstruct
 
 K = TypeVar("K")
 

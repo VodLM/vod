@@ -23,8 +23,7 @@ import rich.status
 import torch
 from loguru import logger
 from rich.progress import track
-
-from src.vod_tools import arguantic
+from vod_tools import arguantic
 
 
 def _get_memory_usage() -> float:

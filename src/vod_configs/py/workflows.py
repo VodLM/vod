@@ -3,6 +3,7 @@ from __future__ import annotations
 import dataclasses
 import functools
 import pathlib
+import re
 from typing import Any, Literal, Optional, Union
 
 import hydra
@@ -10,6 +11,7 @@ import omegaconf
 import pydantic
 from omegaconf import DictConfig, ListConfig
 from typing_extensions import Self, Type
+from vod_configs.py.utils import StrictModel
 from vod_tools.misc.config import as_pyobj_validator
 from vod_tools.misc.schedule import BaseSchedule, schedule_factory
 
@@ -17,14 +19,50 @@ from .dataloaders import BaseCollateConfig, DataLoaderConfig, RetrievalCollateCo
 from .datasets import BaseDatasetFactoryConfig, DatasetFactoryConfig, NamedDset, parse_named_dsets
 from .search import SearchConfig
 
+# match the number of seconds in the format `123s`
+RE_DURATION_IN_SECONDS = re.compile(r"(\d+)s")
+# match the number of minutes in the format `123min`
+RE_DURATION_IN_MINUTES = re.compile(r"(\d+)min")
 
-class BenchmarkConfig(pydantic.BaseModel):
+
+class TuningConfig(StrictModel):
     """Configures the batch size for the train, eval, and predict stages."""
+
+    steps: int | str = "3min"
+    batch_size: int = 100
+    learning_rate: float = 1e-3
+    collate_overrides: dict[str, Any] = {}
+
+    @pydantic.validator("steps", pre=True)
+    def _validate_steps(cls, v: int | str) -> int | str:
+        if isinstance(v, str) and (re.match(RE_DURATION_IN_SECONDS, v) or re.match(RE_DURATION_IN_MINUTES, v)):
+            return v
+
+        return int(v)
+
+    @pydantic.validator("collate_overrides", pre=True)
+    def _validate_collate_overrides(cls, v: None | dict[str, Any]) -> dict[str, Any]:
+        if v is None:
+            return {}
+
+        if isinstance(v, omegaconf.DictConfig):
+            return omegaconf.OmegaConf.to_container(v, resolve=True)  # type: ignore
+
+        return v
+
+
+class BenchmarkConfig(StrictModel):
+    """Configures the batch size for the train, eval, and predict stages."""
+
+    class Config:
+        """Pydantic configuration."""
+
+        extra = "forbid"
+        allow_mutation = False
 
     on_init: bool = False
     n_max_eval: Optional[int] = None
-    tune_parameters: bool = True
-    n_tuning_steps: int = 1_000
+    tuning: Optional[TuningConfig] = None
     parameters: dict[str, float] = {}
     metrics: list[str] = ["ndcg", "mrr", "hitrate@01", "hitrate@03", "hitrate@10", "hitrate@30"]
     search: dict[str, Any] = {}
@@ -50,7 +88,7 @@ class BenchmarkConfig(pydantic.BaseModel):
         return cls(**obj)  # type: ignore
 
 
-class TrainerConfig(pydantic.BaseModel):
+class TrainerConfig(StrictModel):
     """Configures a group of indexes (e.g., bm25, faiss)."""
 
     max_steps: int = 1_000_000
@@ -94,7 +132,7 @@ class TrainerConfig(pydantic.BaseModel):
         return cls(**obj)  # type: ignore
 
 
-class BatchSizeConfig(pydantic.BaseModel):
+class BatchSizeConfig(StrictModel):
     """Configures the batch size for the train, eval, and predict stages."""
 
     effective: int = 32
@@ -201,14 +239,16 @@ class MultiDatasetFactoryConfig(BaseDatasetFactoryConfig):
         return DatasetFactoryConfig(
             name=dset.name,
             split=dset.split,
-            **self.dict(exclude={"train", "validation", "benchmark", "metrics"}),
+            **self.dict(exclude={"train", "validation", "benchmark"}),
         )
 
-    def get(self, what: Literal["all", "train", "validation", "benchmark"]) -> set[NamedDset]:
+    def get(self, what: Literal["all", "train+val", "train", "val", "validation", "benchmark"]) -> set[NamedDset]:
         """Return all datasets."""
         known_groups = {
             "all": self.train + self.validation + self.benchmark,
+            "train+val": self.train + self.validation,
             "train": self.train,
+            "val": self.validation,
             "validation": self.validation,
             "benchmark": self.benchmark,
         }

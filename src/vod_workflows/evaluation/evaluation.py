@@ -11,12 +11,12 @@ import torch
 import transformers
 from lightning.pytorch import utilities as pl_utils
 from loguru import logger
+from vod_models.monitor import RetrievalMetricCollection
+from vod_tools.misc.config import flatten_dict
+from vod_tools.misc.progress import IterProgressBar
+from vod_workflows.utils import helpers
 
 from src import vod_configs, vod_datasets, vod_search
-from src.vod_models.monitor import RetrievalMetricCollection
-from src.vod_tools.misc.config import flatten_dict
-from src.vod_tools.misc.progress import IterProgressBar
-from src.vod_workflows.utils import helpers
 
 _DEFAULT_OUTPUT_KEYS = ["faiss", "bm25", "score"]
 
@@ -53,7 +53,7 @@ def benchmark(
         config=search_config,
         cache_dir=cache_dir,
         faiss_enabled=helpers.is_engine_enabled(parameters, "faiss"),
-        bm25_enabled=helpers.is_engine_enabled(parameters, "bm25"),
+        bm25_enabled=True,
         serve_on_gpu=serve_on_gpu,
     ) as master:
         search_client = master.get_client()

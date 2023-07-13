@@ -11,10 +11,10 @@ import gpustat
 import numpy as np
 from loguru import logger
 from tqdm import tqdm
+from vod_search.faiss_tools import support as faiss_support
+from vod_tools import dstruct
 
 from src import vod_configs
-from src.vod_search.faiss_tools import support as faiss_support
-from src.vod_tools import dstruct
 
 _MAX_GPU_MEM_USAGE = 0.8  # Limit max GPU memory usage to 80% of total
 
@@ -371,7 +371,7 @@ def _populate_index_multigpu(  # noqa: PLR0912, PLR0915
         # it is a sharded index
         for i in range(ngpu):
             index_src = faiss.index_gpu_to_cpu(gpu_index.at(i))  # type: ignore
-            logger.debug("  - index %d size %d" % (i, index_src.ntotal))
+            logger.debug("  - index %d size %d" % (i, index.ntotal))
             index_src.copy_subset_to(index, 0, 0, nb)
     else:
         # simple index

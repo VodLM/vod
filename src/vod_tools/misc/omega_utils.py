@@ -10,9 +10,8 @@ import randomname
 import torch
 from hydra import compose, initialize_config_module
 from omegaconf import DictConfig, OmegaConf
-
-from src.vod_tools.misc import misc
-from src.vod_tools.misc.git import git_branch_name, git_revision_hash, git_revision_short_hash
+from vod_tools.misc import misc
+from vod_tools.misc.git import git_branch_name, git_revision_hash, git_revision_short_hash
 
 
 def init_hydra_config(

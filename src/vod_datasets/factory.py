@@ -12,9 +12,9 @@ import pydantic
 import typing_extensions
 from loguru import logger
 from typing_extensions import Self, Type, TypeVar
+from vod_tools import pipes
 
 from src import vod_configs, vod_datasets
-from src.vod_tools import pipes
 
 T = typing_extensions.TypeVar("T")
 
