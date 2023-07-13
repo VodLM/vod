@@ -8,46 +8,26 @@ from typing import Any, Callable, Iterable, Optional
 import lightning as L
 import torch
 import torch.nn
-from vod_gradients import base
+
+from src.vod_gradients import base
 
 
-@torch.jit.script  # type: ignore
-def _compute_loss(
-    *,
-    ref_retriever_probs: torch.Tensor,
-    retriever_logprobs: torch.Tensor,
-    data_targets: torch.Tensor,
-    section_mask: torch.Tensor,
-    n_positive: torch.Tensor,
-) -> torch.Tensor:
-    """KL divervgence between the model and the data.
-
-    `nabla kld = 1 / Np * sum_{i=1}^Np (p_i - 1[i in P]) nabla log p_i`
-    """
-    w = 1 / n_positive[:, None] * (ref_retriever_probs - data_targets)
-    loss = torch.sum(
-        torch.where(section_mask, 0, w.detach() * retriever_logprobs),
-        dim=-1,
-    )
-    has_positive_section = n_positive > 0
-    if has_positive_section.any():
-        loss = torch.where(has_positive_section, loss, torch.zeros_like(loss))
-        loss = loss.sum() / has_positive_section.float().sum()
-    else:
-        loss = torch.full_like(loss, fill_value=math.nan).sum()
-    return loss
-
-
-class SupervisedRetrievalGradients(base.Gradients):
+class KlDivGradients(base.Gradients):
     """Compute the KL divergence between the model and the data."""
 
     def __init__(
         self,
-        bm25_guidance_weight: float = 0.0,  # TODO: re-implement
-        self_supervision_weight: float = 1.0,  # TODO: re-implement
-        section_chunk_size: Optional[int] = None,  # TODO: consider removing it
+        eps: Optional[float] = None,
+        bm25_guidance_weight: float = 0.0,
+        self_supervision_weight: float = 1.0,
+        section_chunk_size: Optional[int] = None,
     ):
         super().__init__()
+        if eps:
+            self.log_eps = math.log(eps)
+        else:
+            self.log_eps = -math.inf
+
         self.bm25_guidance_weight = bm25_guidance_weight
         self.self_supervision_weight = self_supervision_weight
         self.section_chunk_size = section_chunk_size
@@ -82,22 +62,22 @@ class SupervisedRetrievalGradients(base.Gradients):
                 warnings.warn("This batch contains a question without positive section.", stacklevel=2)
 
             n_positives = torch.where(n_positives == 0, (~is_padding).float().sum(dim=1), n_positives)
+            ...
         else:
             n_positives = data.pre_n_positives
 
         # 4.2 compute the model probabilities
-        ref_retriever_probs = (
-            retriever_logprobs.exp().detach() if data.pre_logits is None else data.pre_logits.exp().detach()
-        )
+        model_probs = retriever_logprobs.exp().detach() if data.pre_logits is None else data.pre_logits.exp().detach()
 
         # 5. Compute the loss: KL divergences between the model and the sampling distributions
-        loss = _compute_loss(
-            ref_retriever_probs=ref_retriever_probs,
-            retriever_logprobs=retriever_logprobs,
-            data_targets=data_targets,
-            n_positive=n_positives,
-            section_mask=is_padding,
-        )
+        w = 1 / n_positives[:, None] * (model_probs - data_targets)
+        loss = torch.sum(w.detach() * retriever_logprobs, dim=-1)
+        per_sample_mask = n_positives > 0
+        if per_sample_mask.any():
+            loss = torch.where(per_sample_mask, loss, torch.zeros_like(loss))
+            loss = loss.sum() / per_sample_mask.sum()
+        else:
+            loss = torch.full_like(loss, fill_value=math.nan).sum()
 
         # 6. Compute the KL divergences between the model and the sampling distributions
         # KL ( p_ref(z) | p_model(z)) for `p_ref` = score, bm25, faiss
@@ -119,7 +99,7 @@ class SupervisedRetrievalGradients(base.Gradients):
             "loss": loss,
             "_targets": data_targets,
             "_logits": retriever_logprobs,
-            "_n_positives": n_positives,
+            "_n_positive": n_positives,
             **{f"kl_{k}": kl.mean().detach() for k, kl in kls.items()},
         }
 

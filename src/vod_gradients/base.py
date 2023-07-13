@@ -87,10 +87,10 @@ class GradientInputs(pydantic.BaseModel):
         alias="section.pre_logits",
     )
 
-    pre_n_positive: Optional[torch.Tensor] = pydantic.Field(
+    pre_n_positives: Optional[torch.Tensor] = pydantic.Field(
         None,
         description="Precomputed total number of positive documents.",
-        alias="section.pre_n_positive",
+        alias="section.pre_n_positives",
     )
 
     def pprint(self, **kwargs: Any) -> None:

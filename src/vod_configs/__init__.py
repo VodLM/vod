@@ -11,6 +11,9 @@ from .py.datasets import (
     NamedDset,
     parse_named_dsets,
 )
+from .py.models import (
+    TokenizerConfig,
+)
 from .py.search import (
     Bm25FactoryConfig,
     FaissFactoryConfig,
@@ -18,8 +21,6 @@ from .py.search import (
     SearchConfig,
 )
 from .py.workflows import (
-    RE_DURATION_IN_MINUTES,
-    RE_DURATION_IN_SECONDS,
     BatchSizeConfig,
     BenchmarkConfig,
     CollateConfigs,

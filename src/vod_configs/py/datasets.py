@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import copy
-from typing import Any, Optional, Union
+from typing import Any, Optional
 
 import omegaconf
 import pydantic
-import transformers
 from vod_configs.py.utils import StrictModel
 from vod_tools.misc.config import as_pyobj_validator
 
@@ -162,12 +161,6 @@ def parse_named_dsets(names: str | list[str], default_splits: Optional[list[str]
 class BaseDatasetFactoryConfig(StrictModel):
     """Defines a base configuration for a retrieval dataset builder."""
 
-    class Config:
-        """Pydantic config for the `DatasetFactoryConfig` class."""
-
-        arbitrary_types_allowed = True
-
-    tokenizer: Union[transformers.PreTrainedTokenizer, transformers.PreTrainedTokenizerFast]
     templates: dict[str, str] = DEFAULT_TEMPLATES
     prep_map_kwargs: dict[str, Any] = {}
     subset_size: Optional[int] = None

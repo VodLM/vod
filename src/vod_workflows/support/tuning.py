@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import dataclasses
 import pathlib
-import time
 import typing
 from typing import Any
 
@@ -86,14 +85,12 @@ def get_total_duration(duration: str) -> float:
     raise ValueError(f"Unknown duration format: {duration}")
 
 
-def should_stop(
+def _should_stop(
     step: int,
-    elapsed_time: float,
     total_steps: None | int,
-    total_time: None | float,
 ) -> bool:
     """Return whether the tuning should stop."""
-    return (total_steps is not None and step >= total_steps) or (total_time is not None and elapsed_time >= total_time)
+    return total_steps is not None and step >= total_steps
 
 
 class NanLossError(ValueError):
@@ -112,8 +109,8 @@ def tune_parameters(
     dataloader_config: vod_configs.DataLoaderConfig,
     cache_dir: pathlib.Path,
     serve_on_gpu: bool = True,
-    tuning_steps: int | str = "3min",
-    learning_rate: float = 1e-3,
+    tuning_steps: int = 1000,
+    learning_rate: float = 1e-2,
     tokenizer: transformers.PreTrainedTokenizer | transformers.PreTrainedTokenizerFast,
 ) -> dict[str, float]:
     """Run benchmarks on a retrieval task."""
@@ -158,28 +155,19 @@ def tune_parameters(
             try:
                 # Optimizer
                 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-
-                # Define the total duration
-                if isinstance(tuning_steps, str):
-                    total_duration = get_total_duration(tuning_steps)
-                    total_steps = None
-                else:
-                    total_duration = None
-                    total_steps = tuning_steps
+                lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(
+                    optimizer=optimizer, max_lr=learning_rate, total_steps=tuning_steps
+                )
 
                 with IterProgressBar() as pbar:
                     ptask = pbar.add_task(
                         "Tuning parameters",
-                        total=total_steps or total_duration,
+                        total=tuning_steps,
                         info=_info_bar(output=output, model=model),
                     )
-                    t_0 = time.perf_counter()
-                    tick = time.perf_counter()
-                    while not should_stop(
+                    while not _should_stop(
                         step,
-                        time.perf_counter() - t_0,
-                        total_steps=total_steps,
-                        total_time=total_duration,
+                        total_steps=tuning_steps,
                     ):
                         for batch in dataloader:
                             output = model(batch)
@@ -191,15 +179,15 @@ def tune_parameters(
                             # Update the parameters
                             optimizer.step()
                             optimizer.zero_grad()
+                            lr_scheduler.step()
 
                             # Update the progress bar
                             step += 1
                             pbar.update(
                                 ptask,
-                                advance=1 if total_steps else time.perf_counter() - tick,
+                                advance=1,
                                 info=_info_bar(output=output, model=model),
                             )
-                            tick = time.perf_counter()
 
             except KeyboardInterrupt:
                 logger.warning(f"Parameter tuning interrupted at step {step} (KeyboardInterrupt).")

@@ -3,7 +3,6 @@ from __future__ import annotations
 import dataclasses
 import functools
 import pathlib
-import re
 from typing import Any, Literal, Optional, Union
 
 import hydra
@@ -11,6 +10,7 @@ import omegaconf
 import pydantic
 from omegaconf import DictConfig, ListConfig
 from typing_extensions import Self, Type
+from vod_configs.py.models import TokenizerConfig
 from vod_configs.py.utils import StrictModel
 from vod_tools.misc.config import as_pyobj_validator
 from vod_tools.misc.schedule import BaseSchedule, schedule_factory
@@ -19,26 +19,14 @@ from .dataloaders import BaseCollateConfig, DataLoaderConfig, RetrievalCollateCo
 from .datasets import BaseDatasetFactoryConfig, DatasetFactoryConfig, NamedDset, parse_named_dsets
 from .search import SearchConfig
 
-# match the number of seconds in the format `123s`
-RE_DURATION_IN_SECONDS = re.compile(r"(\d+)s")
-# match the number of minutes in the format `123min`
-RE_DURATION_IN_MINUTES = re.compile(r"(\d+)min")
-
 
 class TuningConfig(StrictModel):
     """Configures the batch size for the train, eval, and predict stages."""
 
-    steps: int | str = "3min"
+    steps: int = 1000
     batch_size: int = 100
     learning_rate: float = 1e-3
     collate_overrides: dict[str, Any] = {}
-
-    @pydantic.validator("steps", pre=True)
-    def _validate_steps(cls, v: int | str) -> int | str:
-        if isinstance(v, str) and (re.match(RE_DURATION_IN_SECONDS, v) or re.match(RE_DURATION_IN_MINUTES, v)):
-            return v
-
-        return int(v)
 
     @pydantic.validator("collate_overrides", pre=True)
     def _validate_collate_overrides(cls, v: None | dict[str, Any]) -> dict[str, Any]:
@@ -265,6 +253,7 @@ class TrainWithIndexUpdatesConfigs:
     """Models the configuration for a workflow that trains a model and periodically indexes the data."""
 
     dataset: MultiDatasetFactoryConfig
+    tokenizer: TokenizerConfig
     dataloaders: DataLoaderConfigs
     collates: CollateConfigs
     trainer: TrainerConfig
@@ -287,6 +276,7 @@ class TrainWithIndexUpdatesConfigs:
             search=SearchConfig.parse(config.search),
             sys=SysConfig.parse(config.sys),
             dl_sampler=_parse_dl_sampler(config.dl_sampler),
+            tokenizer=hydra.utils.instantiate(config.tokenizer),
         )
 
 

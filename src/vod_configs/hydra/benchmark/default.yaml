@@ -1,7 +1,7 @@
 on_init: false
 n_max_eval: 1_000
 tuning:
-  steps: "5min"
+  steps: 1000
   batch_size: 100
   learning_rate: 1e-3
   collate_overrides: null

@@ -1,5 +1,4 @@
 defaults:
-  - tokenizer: default
   - templates: default
   - _self_
 

@@ -99,18 +99,18 @@ def train_with_index_updates(  # noqa: C901, PLR0915
             delete_existing=False,
             persist=state.period == 0,  # keep the cache for the first period
         ) as cache_dir:
-            all_dset_factories = _get_dset_factories(
+            factories = _get_dset_factories(
                 config.dataset.get("all" if run_benchmarks else "train+val"),
                 config=config.dataset,
             )
-
             # pre-process all datasets on global zero, this is done implicitely when loading a dataset
-            if fabric.is_global_zero:
-                for key, factory in all_dset_factories.items():
-                    logger.debug(f"Pre-processing `{key}` ...")
-                    factory.get_qa_split()
-                    factory.get_sections()
-            barrier("Pre-processing done.")
+            if pidx == 0:
+                if fabric.is_global_zero:
+                    for key, factory in factories.items():
+                        logger.debug(f"Pre-processing `{key}` ...")
+                        factory.get_qa_split()
+                        factory.get_sections()
+                barrier("Pre-processing done.")
 
             # pre-compute the vectors for each dataset, this is deactivated when faiss is not in use
             if helpers.is_engine_enabled(train_parameters, "faiss") or (
@@ -118,17 +118,17 @@ def train_with_index_updates(  # noqa: C901, PLR0915
             ):
                 # Compute the vectors
                 vectors = compute_vectors(
-                    all_dset_factories,
+                    factories,
                     ranker=ranker,
+                    tokenizer=config.tokenizer.instantiate(),
                     fabric=fabric,
                     cache_dir=cache_dir,
-                    dataset_config=config.dataset,
                     collate_config=config.collates.predict,
                     dataloader_config=config.dataloaders.predict,
                 )
             else:
                 logger.info("Faiss engine is disabled. Skipping vector pre-computation.")
-                vectors = {dset: None for dset in all_dset_factories}
+                vectors = {dset: None for dset in factories}
 
             # Tune the parameters and benchmark the ranker on each dataset separately
             if run_benchmarks:
@@ -151,7 +151,7 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                         serve_on_gpu=True,
                         tuning_steps=config.benchmark.tuning.steps,
                         learning_rate=config.benchmark.tuning.learning_rate,
-                        tokenizer=config.dataset.tokenizer,
+                        tokenizer=config.tokenizer.instantiate(),
                     )
                     logger.info(f"Tuned parameters: {bench_parameters}")
 
@@ -162,7 +162,7 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                     state=state,
                     parameters=bench_parameters,
                     cache_dir=cache_dir,
-                    factories=all_dset_factories,
+                    factories=factories,
                     vectors=vectors,
                 )
                 barrier("Completed benchmarks.")
@@ -182,7 +182,7 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                 vectors=vectors,  # type: ignore
                 train_factories=_get_dset_factories(config.dataset.get("train"), config=config.dataset),
                 val_factories=_get_dset_factories(config.dataset.get("val"), config=config.dataset),
-                tokenizer=config.dataset.tokenizer,
+                tokenizer=config.tokenizer.instantiate(),
                 search_config=config.search,
                 collate_config=config.collates.train,
                 train_dataloader_config=config.dataloaders.train,
@@ -194,7 +194,7 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                 checkpoint_path=config.trainer.checkpoint_path,
                 on_first_batch_fn=functools.partial(
                     _on_first_batch_fn,
-                    tokenizer=config.dataset.tokenizer,
+                    tokenizer=config.tokenizer.instantiate(),
                     output_file=pathlib.Path(f"{state.step}-training-batch.txt"),
                 ),
                 pbar_keys=config.trainer.pbar_keys,
@@ -269,7 +269,7 @@ def _run_benchmarks(
                 n_max=config.benchmark.n_max_eval,
                 to_disk_config=ToDiskConfig(
                     logdir=logdir,
-                    tokenizer=config.dataset.tokenizer,
+                    tokenizer=config.tokenizer.instantiate(),
                 ),
             )
             if metrics is not None:

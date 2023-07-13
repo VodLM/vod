@@ -25,19 +25,6 @@ class RetrievalDataset(pydantic.BaseModel):
     sections: datasets.Dataset
 
 
-def init_gcloud_filesystem() -> fsspec.AbstractFileSystem:
-    """Initialize a GCS filesystem."""
-    try:
-        token = os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
-    except KeyError as exc:
-        raise RuntimeError("Missing `GOOGLE_APPLICATION_CREDENTIALS` environment variables. ") from exc
-    try:
-        project = os.environ["GCLOUD_PROJECT_ID"]
-    except KeyError as exc:
-        raise RuntimeError("Missing `GCLOUD_PROJECT_ID` environment variables. ") from exc
-    return gcsfs.GCSFileSystem(token=token, project=project)
-
-
 class QueryModel(pydantic.BaseModel):
     """A base query data model."""
 
@@ -112,4 +99,14 @@ class SilentHuggingfaceDecorator:
         return wrapper
 
 
-"""Raffle datasets for information retrieval."""
+def init_gcloud_filesystem() -> fsspec.AbstractFileSystem:
+    """Initialize a GCS filesystem."""
+    try:
+        token = os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
+    except KeyError as exc:
+        raise RuntimeError("Missing `GOOGLE_APPLICATION_CREDENTIALS` environment variables. ") from exc
+    try:
+        project = os.environ["GCLOUD_PROJECT_ID"]
+    except KeyError as exc:
+        raise RuntimeError("Missing `GCLOUD_PROJECT_ID` environment variables. ") from exc
+    return gcsfs.GCSFileSystem(token=token, project=project)

@@ -76,8 +76,9 @@ benchmark:
   n_max_eval: 1_000
   on_init: false
   tuning:
-    steps: 5min
+    steps: 1_000
     batch_size: 32
+    learning_rate: 1e-2
   parameters:
     faiss: 1.0
     bm25: 1.0
@@ -93,7 +94,7 @@ collates:
     in_batch_negatives: true
   benchmark:
     n_sections: null
-    prefetch_n_sections: 1024
+    prefetch_n_sections: 512
     do_sample: false
     post_filter: ensure_match
 

@@ -47,7 +47,7 @@ benchmark:
   search:
     faiss:
       factory: IVFauto,Flat
-      nprobe: 128
+      nprobe: 64
 
 search:
   faiss:

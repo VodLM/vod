@@ -23,9 +23,9 @@ def compute_vectors(
     factories: dict[K, vod_datasets.DatasetFactory],
     *,
     ranker: vod_models.Ranker,
+    tokenizer: transformers.PreTrainedTokenizerBase,
     fabric: L.Fabric,
     cache_dir: pathlib.Path,
-    dataset_config: vod_configs.MultiDatasetFactoryConfig,
     collate_config: vod_configs.BaseCollateConfig,
     dataloader_config: vod_configs.DataLoaderConfig,
 ) -> dict[K, helpers.PrecomputedDsetVectors]:
@@ -36,7 +36,7 @@ def compute_vectors(
         fabric=fabric,
         collate_config=collate_config,
         dataloader_config=dataloader_config,
-        tokenizer=dataset_config.tokenizer,
+        tokenizer=tokenizer,
         cache_dir=cache_dir,
     )
 

@@ -3,6 +3,7 @@ defaults:
   - dl_sampler: none
   - search: default
   - model: default
+  - tokenizer: default
   - trainer: default
   - benchmark: default
   - resources: default
