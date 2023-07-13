@@ -72,19 +72,6 @@ class HybridRanker(nn.Module):
 K = typing.TypeVar("K")
 
 
-def get_total_duration(duration: str) -> float:
-    """Return the total duration in seconds."""
-    max_duration = vod_configs.RE_DURATION_IN_SECONDS.match(duration)
-    if max_duration is not None:
-        return float(max_duration.group(1))
-
-    max_duration = vod_configs.RE_DURATION_IN_MINUTES.match(duration)
-    if max_duration is not None:
-        return float(max_duration.group(1)) * 60
-
-    raise ValueError(f"Unknown duration format: {duration}")
-
-
 def _should_stop(
     step: int,
     total_steps: None | int,
