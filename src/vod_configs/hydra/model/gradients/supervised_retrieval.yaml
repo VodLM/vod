@@ -1,4 +1,4 @@
 _target_: vod_gradients.SupervisedRetrievalGradients
 self_supervision_weight: 0.0
-bm25_guidance_weight: 0.0
-section_chunk_size: null
+guidance_weight: 0.0
+guidance: bm25

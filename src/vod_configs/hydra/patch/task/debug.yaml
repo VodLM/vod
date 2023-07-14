@@ -8,14 +8,16 @@ seed: 1
 
 model:
   gradients:
-    section_chunk_size: null
+    self_supervision_weight: 3e-1
+    guidance_weight: 1e-2
+    guidance: bm25
 
 env:
   OMP_NUM_THREADS: 8
 
 search:
   faiss:
-    factory: IVFauto,Flat
+    factory: Flat
     nprobe: 32
 
 benchmark:

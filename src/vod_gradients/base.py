@@ -80,19 +80,6 @@ class GradientInputs(pydantic.BaseModel):
         alias="section.faiss",
     )
 
-    # Precomputed logprobs from the model.
-    pre_logits: Optional[torch.Tensor] = pydantic.Field(
-        None,
-        description="Precomputed logprobs from the model.",
-        alias="section.pre_logits",
-    )
-
-    pre_n_positives: Optional[torch.Tensor] = pydantic.Field(
-        None,
-        description="Precomputed total number of positive documents.",
-        alias="section.pre_n_positives",
-    )
-
     def pprint(self, **kwargs: Any) -> None:
         """Pretty print the inputs."""
         pipes.pprint_batch({k: v for k, v in self.dict().items() if v is not None}, **kwargs)

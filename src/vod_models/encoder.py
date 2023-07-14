@@ -7,8 +7,10 @@ import pydantic
 import torch
 import transformers
 from torch import nn
-from typing_extensions import Self, Type
+from typing_extensions import Self, Type, TypeAlias
 from vod_tools import interfaces
+
+AggMethod: TypeAlias = Literal["mean", "max", "cls"]
 
 
 class TransformerEncoderConfig(pydantic.BaseModel):
@@ -17,18 +19,22 @@ class TransformerEncoderConfig(pydantic.BaseModel):
     model_name: str
     vector_size: Optional[int] = None
     cls_name: str = "AutoModel"
-    agg: Literal["mean", "max", "cls"] = "mean"
+    agg: AggMethod = "mean"
     model_config: Optional[dict] = None
 
 
+@torch.jit.script  # type: ignore
 def _mean_agg(x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:  # noqa: ARG001
-    return x.sum(dim=-2) / mask.sum(dim=-1, keepdim=True)
+    sum_mask = mask.sum(dim=-1)
+    return torch.where(mask.sum(dim=-1) > 0, x.sum(dim=-2) / sum_mask[..., None], 0.0)
 
 
+@torch.jit.script  # type: ignore
 def _cls_agg(x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:  # noqa: ARG001
     return x[..., 0, :]
 
 
+@torch.jit.script  # type: ignore
 def _max_agg(x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:  # noqa: ARG001
     return x.max(dim=-2).values
 
@@ -38,6 +44,38 @@ AGGREGATOR_FNS = {
     "max": _max_agg,
     "cls": _cls_agg,
 }
+
+
+class EncoderPooler(nn.Module):
+    """Pool the hidden states of a transformer encoder.
+
+    See `https://github.com/huggingface/transformers/blob/91d7df58b6537d385e90578dac40204cb550f706/src/transformers/models/bert/modeling_bert.py#L654C7-L654C17`
+    """
+
+    output_size: int
+
+    def __init__(
+        self,
+        hidden_size: int,
+        output_size: int,
+        agg_method: AggMethod = "mean",
+        std_init: Optional[float] = None,
+    ):
+        super().__init__()
+        self.output_size = output_size
+        self.dense = nn.Linear(hidden_size, output_size)
+        if std_init is not None:
+            nn.init.normal_(self.dense.weight, std=std_init)
+
+        self.activation = nn.Tanh()
+        self.agg_fn = AGGREGATOR_FNS[agg_method]
+
+    def forward(self, hidden_states: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
+        """Pools the model output and project. Note that the activation is applied last."""
+        hidden_states = self.agg_fn(hidden_states, attention_mask)
+        pooled_output = self.dense(hidden_states)
+        pooled_output = self.activation(pooled_output)
+        return pooled_output
 
 
 def _translate_config(model_name: str, config: None | dict) -> dict:
@@ -70,6 +108,7 @@ class TransformerEncoder(nn.Module, interfaces.ProtocolEncoder):
         cls_name: str = "AutoModel",
         agg: Literal["mean", "max", "cls"] = "mean",
         cache_dir: None | str | pathlib.Path = None,
+        std_init: Optional[float] = None,
     ):
         super().__init__()
         self.config = TransformerEncoderConfig(
@@ -89,22 +128,16 @@ class TransformerEncoder(nn.Module, interfaces.ProtocolEncoder):
         if self.backbone.config.hidden_size is None:
             raise ValueError("`hidden_size` could not be inferred from the model config.")
 
-        # delete the projection layer to avoid `none` grads
+        # Delete the projection layer to avoid `none` grads
         if hasattr(self.backbone, "pooler"):
             self.backbone.pooler = None
 
-        # make the projection layer
+        # Define the output dim
         if vector_size is None:
             vector_size = int(self.backbone.config.hidden_size)
 
-        self.projection = nn.Sequential(
-            torch.nn.Tanh(),
-            nn.Linear(self.backbone.config.hidden_size, vector_size),
-        )
-        self._output_size = vector_size
-
-        # aggregator
-        self.agg_fn = AGGREGATOR_FNS[self.config.agg]
+        # Projection layer
+        self.pooler = EncoderPooler(self.backbone.config.hidden_size, vector_size, agg, std_init=std_init)
 
     def save(self, path: str | pathlib.Path) -> None:
         """Save the encoder."""
@@ -131,9 +164,8 @@ class TransformerEncoder(nn.Module, interfaces.ProtocolEncoder):
     ) -> torch.Tensor:
         """Embed/encode a tokenized field into a vector."""
         outputs = self.backbone(input_ids, attention_mask)
-        hidden_state = self.agg_fn(outputs.last_hidden_state, attention_mask)
-        return self.projection(hidden_state)
+        return self.pooler(outputs.last_hidden_state, attention_mask)
 
     def get_output_shape(self, field: Optional[interfaces.TokenizedField] = None) -> tuple[int, ...]:  # noqa: ARG002
         """Get the output shape of the encoder. Set `-1` for unknown dimensions."""
-        return (self._output_size,)
+        return (self.pooler.output_size,)
