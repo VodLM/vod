@@ -23,10 +23,11 @@ class TransformerEncoderConfig(pydantic.BaseModel):
     model_config: Optional[dict] = None
 
 
-@torch.jit.script  # type: ignore
+# @torch.jit.script  # type: ignore
 def _mean_agg(x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:  # noqa: ARG001
-    sum_mask = mask.sum(dim=-1)
-    return torch.where(mask.sum(dim=-1) > 0, x.sum(dim=-2) / sum_mask[..., None], 0.0)
+    sum_mask = mask.sum(dim=-1, keepdim=True)
+    x_mean = x.sum(dim=-2) / sum_mask.float()
+    return torch.where(sum_mask > 0, x_mean, 0.0)
 
 
 @torch.jit.script  # type: ignore
