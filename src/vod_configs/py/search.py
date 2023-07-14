@@ -37,7 +37,7 @@ class FaissGpuConfig(StrictModel):
     use_precomputed_tables: bool = True
     max_add: Optional[int] = 2**18
     tempmem: Optional[int] = -1
-    keep_indices_on_cpu: bool = True
+    keep_indices_on_cpu: bool = False
     verbose: bool = True
     shard: bool = True
     add_batch_size: int = 2**18

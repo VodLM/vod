@@ -82,8 +82,6 @@ def index_and_train(
     parameters = mp.Manager().dict()
     parameters.update(trainer_state.get_parameters())
 
-    helpers._test_model_backward(fabric=fabric, ranker=ranker, header="Train and index :: before moving to CPU")
-
     # free GPU resources see: https://github.com/Lightning-AI/lightning/issues/17937
     # if helpers.is_engine_enabled(parameters, "faiss"):
     #     ranker.to("cpu")

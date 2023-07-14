@@ -9,6 +9,7 @@ from multiprocessing.managers import DictProxy
 from typing import Any, Optional, TypeVar
 
 import numpy as np
+import rich
 import torch
 import transformers
 from loguru import logger
@@ -24,6 +25,7 @@ from .utils import BlockTimer, cast_as_tensor
 T = TypeVar("T")
 
 ROW_IDX_COL_NAME: str = "__row_idx__"
+FLOAT_INF_THRES = 3.0e38  # <-- values above this threshold are considered as inf
 
 
 class RetrievalCollate(pipes.Collate):
@@ -248,7 +250,19 @@ def _multi_search(
 
     # Unpack the results
     search_results = dict(zip(["lookup"] + client_names, search_results))
-    search_results["lookup"].scores.fill(0.0)  # Discard the scores for the lookup
+    search_results["lookup"].scores.fill(0.0)  # Discard the scores for the lookup client
+
+    # DEBUGGING - check for inf scores in the faiss results
+    if "faiss" in search_results:
+        r = search_results["faiss"]
+        is_inf = r.scores >= FLOAT_INF_THRES
+        if is_inf.any():
+            rich.print(r)
+            warnings.warn(
+                f"Found {is_inf.sum()} ({is_inf.sum() / is_inf.size:.2%}) inf scores in the faiss results.",
+                stacklevel=2,
+            )
+            r.scores[is_inf] = np.nan
 
     # Retrieve the meta data
     for name, result in search_results.items():

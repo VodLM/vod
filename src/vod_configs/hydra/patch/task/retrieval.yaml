@@ -75,10 +75,7 @@ trainer:
 benchmark:
   n_max_eval: 1_000
   on_init: false
-  tuning:
-    steps: 1_000
-    batch_size: 32
-    learning_rate: 1e-2
+  tuning: null # TODO: add tuning
   parameters:
     faiss: 1.0
     bm25: 1.0
@@ -103,7 +100,7 @@ search:
     factory: OPQ32,IVFauto,PQ32x8
     metric: inner_product
     nprobe: 32
-    train_size: 1_000_000
+    train_size: 3_000_000
   bm25:
     text_key: text
     group_key: group_hash

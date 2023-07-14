@@ -150,7 +150,7 @@ def tune_parameters(
                     ptask = pbar.add_task(
                         "Tuning parameters",
                         total=tuning_steps,
-                        info=_info_bar(output=output, model=model),
+                        info=_info_bar(output=output, model=model, step=step, total_steps=tuning_steps),
                     )
                     while not _should_stop(
                         step,
@@ -173,7 +173,7 @@ def tune_parameters(
                             pbar.update(
                                 ptask,
                                 advance=1,
-                                info=_info_bar(output=output, model=model),
+                                info=_info_bar(output=output, model=model, step=step, total_steps=tuning_steps),
                             )
 
             except KeyboardInterrupt:
@@ -189,9 +189,9 @@ def tune_parameters(
     return fabric.broadcast(parameters)
 
 
-def _info_bar(output: dict[str, Any], model: HybridRanker) -> str:
+def _info_bar(output: dict[str, Any], model: HybridRanker, step: int, total_steps: int) -> str:
     """Return the info bar."""
-    base = ""
+    base = f"{step}/{total_steps}"
     if "loss" in output:
         base += f" loss={output['loss'].item():.3f}"
 

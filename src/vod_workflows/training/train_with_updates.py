@@ -256,6 +256,7 @@ def _run_benchmarks(
             metrics = benchmark(
                 factory=factories[dset],
                 vectors=vectors[dset],
+                tokenizer=config.tokenizer.instantiate(),
                 metrics=config.benchmark.metrics,
                 search_config=search_config,
                 collate_config=config.collates.benchmark,

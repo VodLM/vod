@@ -5,7 +5,7 @@ mamba install -y -c conda-forge cmake==3.23.1 libblas liblapack mkl mkl-include 
 mamba install -y pip poetry
 # mamba install -c "pytorch/label/nightly" faiss-gpu
 poetry install
-pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118 # re-install torch to get the right cuda version
 bash scripts/build-faiss.sh
 
 

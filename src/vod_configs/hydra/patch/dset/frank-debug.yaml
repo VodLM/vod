@@ -16,6 +16,6 @@ benchmark:
 
 search:
   faiss:
-    factory: IVFauto,Flat
+    factory: OPQ32_512,IVFauto,PQ32x8
     metric: inner_product
     nprobe: 32
