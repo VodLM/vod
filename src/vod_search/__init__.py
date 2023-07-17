@@ -1,7 +1,7 @@
 """Tools for indexing and searching knowledge bases."""
 from __future__ import annotations
 
-from .bm25_tools import Bm25Client, Bm25Master
+from .es_tools import ElasticsearchClient, Bm25Master
 from .factory import (
     build_bm25_master,
     build_faiss_index,

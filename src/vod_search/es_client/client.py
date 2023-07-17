@@ -16,7 +16,7 @@ import rich
 import rich.progress
 from elasticsearch import helpers as es_helpers
 from loguru import logger
-from vod_search import retrieval_data_type as rtypes
+from vod_search import rdtypes as rtypes
 from vod_search import search_server
 
 es_logger = logging.getLogger("elastic_transport")
@@ -30,8 +30,8 @@ TERMS_BOOST = 10_000  # Set this value high enough to make sure we can identify 
 EPS = 1e-5
 
 
-class Bm25Client(search_server.SearchClient):
-    """BM25 client for interacting for spawning a BM25 server and querying it."""
+class ElasticsearchClient(search_server.SearchClient):
+    """ElasticSearch client for interacting for spawning an `elasticsearch` server and querying it."""
 
     requires_vectors: bool = False
     _client: es.Elasticsearch
@@ -225,7 +225,7 @@ def _yield_input_data(
         }
 
 
-class Bm25Master(search_server.SearchMaster[Bm25Client]):
+class Bm25Master(search_server.SearchMaster[ElasticsearchClient]):
     """Handles a BM25 search server."""
 
     _allow_existing_server: bool = True
@@ -307,9 +307,9 @@ class Bm25Master(search_server.SearchMaster[Bm25Client]):
         """Return the name of the service."""
         return f"Elasticsearch[{self.url}]"
 
-    def get_client(self) -> Bm25Client:
+    def get_client(self) -> ElasticsearchClient:
         """Get a client to the search server."""
-        return Bm25Client(self.url, index_name=self._index_name, supports_groups=self.supports_groups)
+        return ElasticsearchClient(self.url, index_name=self._index_name, supports_groups=self.supports_groups)
 
 
 def maybe_ingest_data(

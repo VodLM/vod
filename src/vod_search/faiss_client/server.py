@@ -16,16 +16,16 @@ import stackprinter  # noqa: E402
 import uvicorn  # noqa: E402
 from fastapi import FastAPI, HTTPException  # noqa: E402
 from loguru import logger  # noqa: E402
+from vod_search.rdtypes import RetrievalDataType  # noqa: E402
 
 from src import vod_configs  # noqa: E402
 from src.vod_search import io  # noqa: E402
-from src.vod_search.faiss_tools import SearchFaissQuery  # noqa: E402
-from src.vod_search.faiss_tools.models import (  # noqa: E402
+from src.vod_search.faiss_client import SearchFaissQuery  # noqa: E402
+from src.vod_search.faiss_client.models import (  # noqa: E402
     FaissSearchResponse,
     FastFaissSearchResponse,
     FastSearchFaissQuery,
 )
-from src.vod_search.retrieval_data_type import RetrievalDataType  # noqa: E402
 from src.vod_tools.misc.exceptions import dump_exceptions_to_file  # noqa: E402
 
 
