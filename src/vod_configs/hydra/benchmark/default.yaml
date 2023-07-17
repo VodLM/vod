@@ -11,8 +11,9 @@ parameters:
 metrics:
   - "ndcg"
   - "mrr@10"
+  - "mrr@100"
   - "hitrate@01"
   - "hitrate@03"
-  - "hitrate@20"
+  - "hitrate@10"
   - "hitrate@100"
   - "recall@50"

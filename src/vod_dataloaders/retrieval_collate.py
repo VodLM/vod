@@ -25,7 +25,7 @@ from .utils import BlockTimer, cast_as_tensor
 T = TypeVar("T")
 
 ROW_IDX_COL_NAME: str = "__row_idx__"
-FLOAT_INF_THRES = 3.0e38  # <-- values above this threshold are considered as inf
+FLOAT_INF_THRES = 3e12  # <-- values above this threshold are considered as inf
 
 
 class RetrievalCollate(pipes.Collate):

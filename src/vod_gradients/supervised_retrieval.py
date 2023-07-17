@@ -18,17 +18,19 @@ class SupervisedRetrievalGradients(base.Gradients):
         guidance_weight: float = 0.0,
         guidance: Literal["bm25", "zero"] = "bm25",
         self_supervision_weight: float = 0.0,
+        anchor_weight: float = 0.0,
     ):
         super().__init__()
         self.guidance = guidance
         self.guidance_weight = guidance_weight
         self.self_supervision_weight = self_supervision_weight
+        self.anchor_weight = anchor_weight
 
     def __call__(
         self,
         inputs: dict[str, torch.Tensor],
         skip_diagnostics: bool = False,
-        retriever_logprobs: Optional[torch.Tensor] = None,
+        retriever_scores: Optional[torch.Tensor] = None,
         **kwargs: Any,
     ) -> dict[str, torch.Tensor]:
         """Parse the inputs and compute the loss."""
@@ -40,12 +42,11 @@ class SupervisedRetrievalGradients(base.Gradients):
 
         # 2. compute the probabilities for each pair of (question, section) assigned by the model
         if data.hq is None or data.hd is None:
-            if retriever_logprobs is None:
-                raise ValueError("`hq` and `hd` were not provided, `retriever_logprobs` must be specified.")
-            retriever_logprobs = retriever_scores = retriever_logprobs
+            if retriever_scores is None:
+                raise ValueError("`hq` and `hd` were not provided, `retriever_scores` must be specified.")
         else:
             retriever_scores = _compute_retriever_scores(hq=data.hq, hd=data.hd, mask=is_padding)
-            retriever_logprobs = retriever_scores.log_softmax(dim=-1)
+        retriever_logprobs = retriever_scores.log_softmax(dim=-1)
 
         # 3. compute the reference probabilities for each pair of (question, section)
         data_targets = _cast_data_targets(data.targets, is_padding)
@@ -74,7 +75,7 @@ class SupervisedRetrievalGradients(base.Gradients):
                 "bm25": data.bm25,
                 "zero": torch.zeros_like(data.scores),
             }[self.guidance]
-            guidance_loss = _compute_hubert_loss(retriever_scores, ref_score)
+            guidance_loss = _compute_hubert_loss(retriever_logprobs, ref_score)
             loss += self.guidance_weight * guidance_loss
             aux_losses[f"{self.guidance}_guidance"] = guidance_loss
         if self.self_supervision_weight > 0:
@@ -87,6 +88,11 @@ class SupervisedRetrievalGradients(base.Gradients):
             )
             loss += self.self_supervision_weight * loss_self_supervision
             aux_losses["self_supervision"] = loss_self_supervision
+        if self.anchor_weight > 0:
+            # Center the scores around 0
+            anchor_loss = retriever_scores[retriever_scores.isfinite()].pow(2).mean()
+            loss += self.anchor_weight * anchor_loss
+            aux_losses["anchor"] = anchor_loss
 
         # 7. Compute the KL divergences between the model and the sampling distributions
         # KL ( p_ref(z) | p_model(z)) for `p_ref` = score, bm25, faiss

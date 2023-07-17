@@ -65,8 +65,8 @@ class HybridRanker(nn.Module):
             raise ValueError("No hybrid score was computed")
 
         # Compute the gradients
-        hybrid_logprobs = torch.log_softmax(hybrid_score, dim=-1)
-        return self.grad_fn(batch, retriever_logprobs=hybrid_logprobs)
+        retriever_scores = torch.log_softmax(hybrid_score, dim=-1)
+        return self.grad_fn(batch, retriever_scores=retriever_scores)
 
 
 K = typing.TypeVar("K")

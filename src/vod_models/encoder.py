@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import math
 import pathlib
+import warnings
 from typing import Literal, Optional
 
 import pydantic
@@ -10,7 +12,7 @@ from torch import nn
 from typing_extensions import Self, Type, TypeAlias
 from vod_tools import interfaces
 
-AggMethod: TypeAlias = Literal["mean", "max", "cls"]
+AggMethod: TypeAlias = Literal["mean", "max", "cls", "attention"]
 
 
 class TransformerEncoderConfig(pydantic.BaseModel):
@@ -23,27 +25,90 @@ class TransformerEncoderConfig(pydantic.BaseModel):
     model_config: Optional[dict] = None
 
 
-# @torch.jit.script  # type: ignore
-def _mean_agg(x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:  # noqa: ARG001
-    sum_mask = mask.sum(dim=-1, keepdim=True)
-    x_mean = x.sum(dim=-2) / sum_mask.float()
-    return torch.where(sum_mask > 0, x_mean, 0.0)
+class Aggregator(nn.Module):
+    """Base class for aggregators."""
+
+    def __init__(self, config: transformers.PretrainedConfig) -> None:  # noqa: ARG002
+        super().__init__()
+
+    def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+        """Summarize a sequence of hidden states into a single one."""
+        raise NotImplementedError()
 
 
-@torch.jit.script  # type: ignore
-def _cls_agg(x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:  # noqa: ARG001
-    return x[..., 0, :]
+class _MeanAgg(Aggregator):
+    def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:  # noqa: ARG
+        sum_mask = mask.sum(dim=-1, keepdim=True)
+        x_mean = x.sum(dim=-2) / sum_mask.float()
+        return torch.where(sum_mask > 0, x_mean, 0.0)
 
 
-@torch.jit.script  # type: ignore
-def _max_agg(x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:  # noqa: ARG001
-    return x.max(dim=-2).values
+class _ClsAgg(Aggregator):
+    def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:  # noqa: ARG
+        return x[..., 0, :]
+
+
+class _MaxAgg(Aggregator):
+    def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:  # noqa: ARG
+        return x.max(dim=-2).values
+
+
+class _AttentionAgg(Aggregator):
+    """Attention-based aggregation."""
+
+    def __init__(self, config: transformers.PretrainedConfig):
+        super().__init__(config)
+
+        # Parse config
+        act_type = _fetch_agg(config)
+        hidden_size = config.hidden_size
+        num_heads = config.num_attention_heads
+
+        if hidden_size % num_heads != 0:
+            # get the lowest nearest `num_heads` value that divides `hidden_size`
+            num_heads = math.gcd(hidden_size, math.ceil(hidden_size / num_heads) * num_heads)
+            warnings.warn(
+                f"num_heads was changed from `{config.num_attention_heads}` to `{num_heads}` "
+                f"to divide hidden_size `{hidden_size}`.",
+                stacklevel=2,
+            )
+
+        # Set the module params
+        self.num_heads = num_heads
+        self.query_values = nn.Linear(hidden_size, hidden_size + num_heads)
+        self.activation = {
+            "relu": nn.ReLU,
+            "tanh": nn.Tanh,
+            "sigmoid": nn.Sigmoid,
+            "gelu": nn.GELU,
+            "gated-gelu": nn.GELU,
+        }[act_type]()
+
+    def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+        """Summarize a sequence of hidden states into a single one."""
+        qv = self.query_values(x)
+        queries, values = qv[..., : self.num_heads], qv[..., self.num_heads :]
+        queries = torch.where(mask.unsqueeze(-1) > 0, queries, -math.inf).softmax(dim=-2)
+        values = values.view(*values.shape[:-1], self.num_heads, -1)
+        y = torch.einsum("...th,...thd->...hd", queries, values)
+        y = y.view(*y.shape[:-2], -1)
+        y = self.activation(y)
+        return y
+
+
+def _fetch_agg(config: transformers.PretrainedConfig) -> str:
+    """Fetch the aggregation method."""
+    if isinstance(config, transformers.T5Config):
+        return config.feed_forward_proj
+
+    return config.hidden_act
 
 
 AGGREGATOR_FNS = {
-    "mean": _mean_agg,
-    "max": _max_agg,
-    "cls": _cls_agg,
+    "mean": _MeanAgg,
+    "max": _MaxAgg,
+    "cls": _ClsAgg,
+    "attention": _AttentionAgg,
 }
 
 
@@ -57,19 +122,16 @@ class EncoderPooler(nn.Module):
 
     def __init__(
         self,
-        hidden_size: int,
+        config: transformers.PretrainedConfig,
         output_size: int,
         agg_method: AggMethod = "mean",
-        std_init: Optional[float] = None,
     ):
         super().__init__()
         self.output_size = output_size
-        self.dense = nn.Linear(hidden_size, output_size)
-        if std_init is not None:
-            nn.init.normal_(self.dense.weight, std=std_init)
+        self.dense = nn.Linear(config.hidden_size, output_size)
 
         self.activation = nn.Tanh()
-        self.agg_fn = AGGREGATOR_FNS[agg_method]
+        self.agg_fn = AGGREGATOR_FNS[agg_method](config)
 
     def forward(self, hidden_states: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
         """Pools the model output and project. Note that the activation is applied last."""
@@ -109,7 +171,6 @@ class TransformerEncoder(nn.Module, interfaces.ProtocolEncoder):
         cls_name: str = "AutoModel",
         agg: Literal["mean", "max", "cls"] = "mean",
         cache_dir: None | str | pathlib.Path = None,
-        std_init: Optional[float] = None,
     ):
         super().__init__()
         self.config = TransformerEncoderConfig(
@@ -138,7 +199,11 @@ class TransformerEncoder(nn.Module, interfaces.ProtocolEncoder):
             vector_size = int(self.backbone.config.hidden_size)
 
         # Projection layer
-        self.pooler = EncoderPooler(self.backbone.config.hidden_size, vector_size, agg, std_init=std_init)
+        self.pooler = EncoderPooler(
+            self.backbone.config,
+            vector_size,
+            agg,
+        )
 
     def save(self, path: str | pathlib.Path) -> None:
         """Save the encoder."""
