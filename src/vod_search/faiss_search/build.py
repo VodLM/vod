@@ -6,7 +6,7 @@ import faiss
 import numpy as np
 import torch
 from loguru import logger
-from vod_search.faiss_tools import build_gpu, support
+from vod_search.faiss_search import build_gpu, support
 from vod_tools import dstruct
 
 from src import vod_configs

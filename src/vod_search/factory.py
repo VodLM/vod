@@ -11,14 +11,14 @@ import torch
 from lightning.pytorch import utilities as pl_utils
 from loguru import logger
 from vod_configs.py.search import FAISS_METRICS_INV
-from vod_search import bm25_tools, faiss_tools, search_server
+from vod_search import base, es_search, faiss_search, qdrant_search
 from vod_search.multi_search import MultiSearchMaster
 from vod_tools import dstruct, pipes
 
 from src import vod_configs
 
 
-def build_search_client(
+def build_search_index(
     index_type: str,
     *,
     sections: None | dstruct.SizedDataset[dict[str, Any]],
@@ -28,7 +28,7 @@ def build_search_client(
     skip_setup: bool = False,
     barrier_fn: None | Callable[[str], None] = None,
     serve_on_gpu: bool = False,
-) -> search_server.SearchMaster:
+) -> base.SearchMaster:
     """Build a search Master client."""
     if sections is not None and vectors is not None and len(sections) != len(vectors):
         raise ValueError(f"Sections and vectors must have the same length. Found: {len(sections)} != {len(vectors)}")
@@ -43,42 +43,51 @@ def build_search_client(
             barrier_fn=barrier_fn,
             serve_on_gpu=serve_on_gpu,
         )
-    if index_type == "bm25":
+    if index_type == "elasticsearch":
         if sections is None:
-            raise ValueError("Must provide sections for `bm25` index")
-        return build_bm25_master(
+            raise ValueError("Must provide sections for `elasticsearch` index")
+        return build_elasticsearch_index(
             sections=sections,
-            config=vod_configs.Bm25FactoryConfig(**config),
+            config=vod_configs.ElasticsearchFactoryConfig(**config),
+            skip_setup=skip_setup,
+        )
+
+    if index_type == "qdrant":
+        if vectors is None:
+            raise ValueError("Must provide vectors for `qdrant` index")
+        return build_qdrant_index(
+            vectors=vectors,
+            config=vod_configs.QdrantFactoryConfig(**config),
             skip_setup=skip_setup,
         )
 
     raise ValueError(f"Unknown index type `{index_type}`")
 
 
-def build_bm25_master(
+def build_elasticsearch_index(
     sections: dstruct.SizedDataset[dict[str, Any]],
-    config: vod_configs.Bm25FactoryConfig | dict,
+    config: vod_configs.ElasticsearchFactoryConfig | dict,
     skip_setup: bool = False,
-) -> bm25_tools.Bm25Master:
+) -> es_search.ElasticSearchMaster:
     """Build a bm25 index."""
     if isinstance(config, dict):
-        config = vod_configs.Bm25FactoryConfig(**config)
+        config = vod_configs.ElasticsearchFactoryConfig(**config)
     index_fingerprint = f"{pipes.fingerprint(sections)}-{config.fingerprint()}"
     logger.info(
-        f"Init. bm25 index `{index_fingerprint}`, "
+        f"Init. elasticsearch index `{index_fingerprint}`, "
         f"text_key: `{config.text_key}`, "
         f"group_key: `{config.group_key}`"
     )
     texts = (row[config.text_key] for row in iter(sections))
     groups = (row[config.group_key] for row in iter(sections)) if config.group_key else None
     sections_ids = (row[config.section_id_key] for row in iter(sections)) if config.section_id_key else None
-    return bm25_tools.Bm25Master(
+    return es_search.ElasticSearchMaster(
         texts=texts,
         groups=groups,
         section_ids=sections_ids,
         host=config.host,
         port=config.port,
-        index_name=f"research-{index_fingerprint}",
+        index_name=f"vod-{index_fingerprint}",
         input_size=len(sections),
         persistent=config.persistent,
         es_body=config.es_body,
@@ -95,7 +104,7 @@ def build_faiss_index(
     skip_setup: bool = False,
     barrier_fn: None | Callable[[str], None] = None,
     serve_on_gpu: bool = False,
-) -> search_server.SearchMaster:
+) -> base.SearchMaster:
     """Build a faiss index."""
     if isinstance(config, dict):
         config = vod_configs.FaissFactoryConfig(**config)
@@ -114,7 +123,7 @@ def build_faiss_index(
     if not skip_setup:
         if not index_path.exists():
             logger.info(f"Building faiss index at `{index_path}`")
-            index = faiss_tools.build_faiss_index(
+            index = faiss_search.build_faiss_index(
                 vectors=vectors,
                 factory_string=config.factory,
                 faiss_metric=config.metric,
@@ -136,7 +145,7 @@ def build_faiss_index(
     if not index_path.exists():
         raise FileNotFoundError(f"{_rank_info()}Could not find faiss index at `{index_path}`.")
 
-    return faiss_tools.FaissMaster(
+    return faiss_search.FaissMaster(
         index_path=index_path,
         nprobe=config.nprobe,
         logging_level=config.logging_level,
@@ -144,6 +153,36 @@ def build_faiss_index(
         port=config.port,
         skip_setup=skip_setup,
         serve_on_gpu=serve_on_gpu,
+    )
+
+
+def build_qdrant_index(
+    vectors: dstruct.SizedDataset[np.ndarray],
+    sections: dstruct.SizedDataset[dict[str, Any]],
+    config: vod_configs.QdrantFactoryConfig | dict,
+    skip_setup: bool = False,
+) -> qdrant_search.QdrantSearchMaster:
+    """Build a bm25 index."""
+    if isinstance(config, dict):
+        config = vod_configs.QdrantFactoryConfig(**config)
+    index_fingerprint = f"{pipes.fingerprint(vectors)}-{config.fingerprint()}"
+    logger.info(
+        f"Init. Qdrant index `{index_fingerprint}`, "
+        f"vector: `{[len(vectors), *vectors[0].shape]}`, "
+        f"group_key: `{config.group_key}`"
+    )
+    groups = (row[config.group_key] for row in iter(sections)) if config.group_key else None
+    return qdrant_search.QdrantSearchMaster(
+        vectors=vectors,
+        groups=groups,
+        host=config.host,
+        port=config.port,
+        grpc_port=config.grpc_port,
+        index_name=f"vod-{index_fingerprint}",
+        persistent=config.persistent,
+        qdrant_body=config.qdrant_body,
+        exist_ok=True,
+        skip_setup=skip_setup,
     )
 
 
@@ -191,7 +230,7 @@ def build_multi_search_engine(
         if sections is None:
             raise ValueError("`sections` must be provided if `bm25_enabled`")
 
-        bm25_server = build_bm25_master(
+        bm25_server = build_elasticsearch_index(
             sections=sections,
             config=config.bm25,
             skip_setup=skip_setup,

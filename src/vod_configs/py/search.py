@@ -96,8 +96,8 @@ class FaissFactoryConfig(StrictModel):
         return pipes.fingerprint(self.dict(exclude=excludes))
 
 
-class Bm25FactoryConfig(StrictModel):
-    """Configures the building of a bm25 server."""
+class ElasticsearchFactoryConfig(StrictModel):
+    """Configures the building of an Elasticsearch server."""
 
     text_key: str = "text"
     group_key: Optional[str] = "group_hash"
@@ -109,6 +109,29 @@ class Bm25FactoryConfig(StrictModel):
 
     @pydantic.validator("es_body", pre=True)
     def _validate_es_body(cls, v: dict | None) -> dict | None:
+        if isinstance(v, omegaconf.DictConfig):
+            v = omegaconf.OmegaConf.to_container(v, resolve=True)  # type: ignore
+        return v
+
+    def fingerprint(self) -> str:
+        """Return a fingerprint for this config."""
+        excludes = {"host", "port", "persistent"}
+        return pipes.fingerprint(self.dict(exclude=excludes))
+
+
+class QdrantFactoryConfig(StrictModel):
+    """Configures the building of a Qdrant server."""
+
+    group_key: Optional[str] = "group_hash"
+    host: str = "http://localhost"
+    port: int = 6333
+    grpc_port: Optional[int] = 6334
+    persistent: bool = False
+    exist_ok: bool = True
+    qdrant_body: Optional[dict] = None
+
+    @pydantic.validator("qdrant_body", pre=True)
+    def _validate_qdrant_body(cls, v: dict | None) -> dict | None:
         if isinstance(v, omegaconf.DictConfig):
             v = omegaconf.OmegaConf.to_container(v, resolve=True)  # type: ignore
         return v
@@ -143,7 +166,7 @@ class SearchConfig(StrictModel):
     text_key: str = "text"
     group_key: str = "group_hash"
     faiss: Optional[FaissFactoryConfig] = None
-    bm25: Optional[Bm25FactoryConfig] = None
+    bm25: Optional[ElasticsearchFactoryConfig] = None
 
     @pydantic.validator("faiss", pre=True)
     def _validate_faiss(cls, v: dict | None) -> dict | None:
@@ -161,7 +184,7 @@ class SearchConfig(StrictModel):
             return None
 
         if isinstance(v, (dict, omegaconf.DictConfig)):
-            return Bm25FactoryConfig(**v).dict()
+            return ElasticsearchFactoryConfig(**v).dict()
 
         return v
 

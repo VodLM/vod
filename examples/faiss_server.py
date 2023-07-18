@@ -9,7 +9,7 @@ import numpy as np
 import rich
 import torch
 from loguru import logger
-from vod_search import faiss_tools
+from vod_search import faiss_search
 from vod_tools import arguantic
 
 
@@ -62,7 +62,7 @@ def profile_faiss_server(arguments: ProfileArgs) -> dict[str, float]:
         # Spawn a Faiss server and query it.
         log_dir = Path(tmpdir, "logs")
         log_dir.mkdir(parents=True, exist_ok=True)
-        with faiss_tools.FaissMaster(index_path, nprobe=arguments.nprobe, logging_level="critical") as faiss_master:
+        with faiss_search.FaissMaster(index_path, nprobe=arguments.nprobe, logging_level="critical") as faiss_master:
             faiss_client = faiss_master.get_client()
             # time the API
             logger.info("Timing the API (fast)")

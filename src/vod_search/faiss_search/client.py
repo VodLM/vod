@@ -11,14 +11,13 @@ import numpy as np
 import requests
 import rich
 import torch
-from vod_search import io, search_server
-from vod_search import retrieval_data_type as rtypes
+from vod_search import base, io, rdtypes
 
 # get the path to the server script
 server_run_path = Path(__file__).parent / "server.py"
 
 
-class FaissClient(search_server.SearchClient):
+class FaissClient(base.SearchClient):
     """Faiss client for interacting for spawning a Faiss server and querying it."""
 
     def __init__(
@@ -44,7 +43,9 @@ class FaissClient(search_server.SearchClient):
         response.raise_for_status()
         return "OK" in response.text
 
-    def search_py(self, query_vec: rtypes.Ts, top_k: int = 3, timeout: float = 120) -> rtypes.RetrievalBatch[rtypes.Ts]:
+    def search_py(
+        self, query_vec: rdtypes.Ts, top_k: int = 3, timeout: float = 120
+    ) -> rdtypes.RetrievalBatch[rdtypes.Ts]:
         """Search the server given a batch of vectors (slow implementation)."""
         input_type = type(query_vec)
         response = requests.post(
@@ -65,24 +66,24 @@ class FaissClient(search_server.SearchClient):
         }[input_type]
         indices = cast_fn(indices_list)
         scores = cast_fn(scores_list)
-        return rtypes.RetrievalBatch(indices=indices, scores=scores)
+        return rdtypes.RetrievalBatch(indices=indices, scores=scores)
 
     def search(
         self,
         *,
-        vector: rtypes.Ts,
+        vector: rdtypes.Ts,
         text: Optional[list[str]] = None,  # noqa: ARG
         group: Optional[list[str | int]] = None,  # noqa: ARG
         section_ids: Optional[list[list[str | int]]] = None,  # noqa: ARG
         top_k: int = 3,
         timeout: float = 120,
-    ) -> rtypes.RetrievalBatch[rtypes.Ts]:
+    ) -> rdtypes.RetrievalBatch[rdtypes.Ts]:
         """Search the server given a batch of vectors."""
         start_time = time.time()
         input_type = type(vector)
         input_type_enum, serialized_fn = {
-            torch.Tensor: (rtypes.RetrievalDataType.TORCH, io.serialize_torch_tensor),
-            np.ndarray: (rtypes.RetrievalDataType.NUMPY, io.serialize_np_array),
+            torch.Tensor: (rdtypes.RetrievalDataType.TORCH, io.serialize_torch_tensor),
+            np.ndarray: (rdtypes.RetrievalDataType.NUMPY, io.serialize_np_array),
         }[input_type]
         serialized_vectors = serialized_fn(vector)
         payload = {
@@ -111,7 +112,7 @@ class FaissClient(search_server.SearchClient):
         scores = cast_fn(scores_list)
 
         try:
-            return rtypes.RetrievalBatch(
+            return rdtypes.RetrievalBatch(
                 indices=indices,
                 scores=scores,
                 labels=None,
@@ -122,7 +123,7 @@ class FaissClient(search_server.SearchClient):
             raise exc
 
 
-class FaissMaster(search_server.SearchMaster[FaissClient]):
+class FaissMaster(base.SearchMaster[FaissClient]):
     """The Faiss master client is responsible for spawning and killing the Faiss server.
 
     ```python

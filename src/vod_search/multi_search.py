@@ -4,16 +4,15 @@ import asyncio
 from typing import Any, Optional
 
 import numpy as np
-from vod_search import retrieval_data_type as rtypes
-from vod_search import search_server
+from vod_search import base, rdtypes
 
 
-class MultiSearchClient(search_server.SearchClient):
+class MultiSearchClient(base.SearchClient):
     """A client to interact with a search server."""
 
-    clients: dict[str, search_server.SearchClient]
+    clients: dict[str, base.SearchClient]
 
-    def __init__(self, clients: dict[str, search_server.SearchClient]) -> None:
+    def __init__(self, clients: dict[str, base.SearchClient]) -> None:
         self.clients = clients
 
     @property
@@ -33,7 +32,7 @@ class MultiSearchClient(search_server.SearchClient):
         group: Optional[list[str | int]] = None,
         section_ids: Optional[list[list[str | int]]] = None,
         top_k: int = 3,
-    ) -> dict[str, rtypes.RetrievalBatch[np.ndarray]]:
+    ) -> dict[str, rdtypes.RetrievalBatch[np.ndarray]]:
         """Search the server given a batch of text and/or vectors."""
         return {
             name: client.search(
@@ -50,13 +49,13 @@ class MultiSearchClient(search_server.SearchClient):
         self,
         *,
         text: list[str],
-        vector: Optional[rtypes.Ts] = None,
+        vector: Optional[rdtypes.Ts] = None,
         group: Optional[list[str | int]] = None,
         top_k: int = 3,
-    ) -> dict[str, rtypes.RetrievalBatch[np.ndarray]]:
+    ) -> dict[str, rdtypes.RetrievalBatch[np.ndarray]]:
         """Search the server given a batch of text and/or vectors."""
 
-        def search_fn(args: dict[str, Any]) -> rtypes.RetrievalBatch[np.ndarray]:
+        def search_fn(args: dict[str, Any]) -> rdtypes.RetrievalBatch[np.ndarray]:
             client = args.pop("client")
             return client.search(**args)
 
@@ -84,9 +83,9 @@ class MultiSearchClient(search_server.SearchClient):
 class MultiSearchMaster:
     """Handle multiple search servers."""
 
-    servers: dict[str, search_server.SearchMaster]
+    servers: dict[str, base.SearchMaster]
 
-    def __init__(self, servers: dict[str, search_server.SearchMaster], skip_setup: bool = False):
+    def __init__(self, servers: dict[str, base.SearchMaster], skip_setup: bool = False):
         """Initialize the search master."""
         self.skip_setup = skip_setup
         self.servers = servers

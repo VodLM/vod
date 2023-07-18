@@ -20,8 +20,8 @@ from vod_search.rdtypes import RetrievalDataType  # noqa: E402
 
 from src import vod_configs  # noqa: E402
 from src.vod_search import io  # noqa: E402
-from src.vod_search.faiss_client import SearchFaissQuery  # noqa: E402
-from src.vod_search.faiss_client.models import (  # noqa: E402
+from src.vod_search.faiss_search import SearchFaissQuery  # noqa: E402
+from src.vod_search.faiss_search.models import (  # noqa: E402
     FaissSearchResponse,
     FastFaissSearchResponse,
     FastSearchFaissQuery,

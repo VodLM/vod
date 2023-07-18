@@ -1,3 +1,4 @@
+qdrant_storage/
 libs/
 faiss-index-benchmark/
 setup-vm-env.sh

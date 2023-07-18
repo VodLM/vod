@@ -16,8 +16,7 @@ import rich
 import rich.progress
 from elasticsearch import helpers as es_helpers
 from loguru import logger
-from vod_search import rdtypes as rtypes
-from vod_search import search_server
+from vod_search import base, rdtypes
 
 es_logger = logging.getLogger("elastic_transport")
 es_logger.setLevel(logging.WARNING)
@@ -30,7 +29,7 @@ TERMS_BOOST = 10_000  # Set this value high enough to make sure we can identify 
 EPS = 1e-5
 
 
-class ElasticsearchClient(search_server.SearchClient):
+class ElasticsearchClient(base.SearchClient):
     """ElasticSearch client for interacting for spawning an `elasticsearch` server and querying it."""
 
     requires_vectors: bool = False
@@ -76,15 +75,15 @@ class ElasticsearchClient(search_server.SearchClient):
         self,
         *,
         text: list[str],
-        vector: Optional[rtypes.Ts] = None,  # noqa: ARG
+        vector: Optional[rdtypes.Ts] = None,  # noqa: ARG
         group: Optional[list[str | int]] = None,
         section_ids: Optional[list[list[str | int]]] = None,
         top_k: int = 3,
-    ) -> rtypes.RetrievalBatch[np.ndarray]:
+    ) -> rdtypes.RetrievalBatch[np.ndarray]:
         """Search elasticsearch for the batch of text queries using `msearch`. NB: `vector` is not used here."""
         start_time = time.time()
         if self.supports_groups and group is None:
-            warnings.warn("This index supports group, but no label is provided.", stacklevel=2)
+            warnings.warn(f"This `{type(self).__name__}` supports group, but no label is provided.", stacklevel=2)
 
         if section_ids is not None and group is None:
             raise ValueError("`section_ids` is only supported when group is provided.")
@@ -144,7 +143,7 @@ class ElasticsearchClient(search_server.SearchClient):
         else:
             labels = None
 
-        return rtypes.RetrievalBatch(
+        return rdtypes.RetrievalBatch(
             indices=indices,
             scores=scores,
             labels=labels,
@@ -225,7 +224,7 @@ def _yield_input_data(
         }
 
 
-class Bm25Master(search_server.SearchMaster[ElasticsearchClient]):
+class ElasticSearchMaster(base.SearchMaster[ElasticsearchClient]):
     """Handles a BM25 search server."""
 
     _allow_existing_server: bool = True

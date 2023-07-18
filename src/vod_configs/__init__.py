@@ -15,9 +15,10 @@ from .py.models import (
     TokenizerConfig,
 )
 from .py.search import (
-    Bm25FactoryConfig,
+    ElasticsearchFactoryConfig,
     FaissFactoryConfig,
     FaissGpuConfig,
+    QdrantFactoryConfig,
     SearchConfig,
 )
 from .py.workflows import (

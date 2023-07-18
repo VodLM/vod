@@ -64,7 +64,7 @@ def benchmark_frank(args: BenchFrank) -> dict:
             config=vod_configs.SearchConfig(
                 text_key=args.group_key,
                 group_key=args.group_key,
-                bm25=vod_configs.Bm25FactoryConfig(
+                bm25=vod_configs.ElasticsearchFactoryConfig(
                     text_key=args.text_key,
                     group_key=args.group_key,
                     section_id_key=args.section_id_key,

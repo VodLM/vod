@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Optional
 
 import pydantic
-from vod_search.retrieval_data_type import RetrievalDataType
+from vod_search import rdtypes
 
 
 class FaissInitConfig(pydantic.BaseModel):
@@ -57,7 +57,7 @@ class FastSearchFaissQuery(pydantic.BaseModel):
     vectors: str = pydantic.Field(
         ..., description="A batch of serialized vectors`. Implicitly defines `np.ndarray` or `torch.Tensor`."
     )
-    array_type: RetrievalDataType = RetrievalDataType.NUMPY
+    array_type: rdtypes.RetrievalDataType = rdtypes.RetrievalDataType.NUMPY
     top_k: int = 3
 
 

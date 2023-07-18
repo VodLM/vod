@@ -11,7 +11,7 @@ import gpustat
 import numpy as np
 from loguru import logger
 from tqdm import tqdm
-from vod_search.faiss_tools import support as faiss_support
+from vod_search.faiss_search import support as faiss_support
 from vod_tools import dstruct
 
 from src import vod_configs

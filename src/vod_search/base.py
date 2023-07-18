@@ -10,8 +10,7 @@ from typing import Any, Generic, Optional, TypeVar
 
 import loguru
 from typing_extensions import Self
-
-from src.vod_search import retrieval_data_type as rtypes
+from vod_search import rdtypes
 
 
 class DoNotPickleError(Exception):
@@ -37,11 +36,11 @@ class SearchClient(abc.ABC):
         self,
         *,
         text: list[str],
-        vector: Optional[rtypes.Ts] = None,
+        vector: Optional[rdtypes.Ts] = None,
         group: Optional[list[str | int]] = None,
         section_ids: Optional[list[list[str | int]]] = None,
         top_k: int = 3,
-    ) -> rtypes.RetrievalBatch[rtypes.Ts]:
+    ) -> rdtypes.RetrievalBatch[rdtypes.Ts]:
         """Search the server given a batch of text and/or vectors."""
         raise NotImplementedError()
 
@@ -49,11 +48,11 @@ class SearchClient(abc.ABC):
         self,
         *,
         text: list[str],
-        vector: Optional[rtypes.Ts] = None,
+        vector: Optional[rdtypes.Ts] = None,
         group: Optional[list[str | int]] = None,
         section_ids: Optional[list[list[str | int]]] = None,
         top_k: int = 3,
-    ) -> rtypes.RetrievalBatch[rtypes.Ts]:
+    ) -> rdtypes.RetrievalBatch[rdtypes.Ts]:
         """Search the server given a batch of text and/or vectors."""
         return self.search(
             text=text,
