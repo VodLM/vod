@@ -22,8 +22,10 @@ qdrant_body:
   quantization_config:
     scalar:
       # https://qdrant.tech/documentation/tutorials/optimize/
+      # Scalar Quantization is faster than Product Quantization
       type: int8
       always_ram: true
   optimizers_config:
     # https://qdrant.tech/documentation/tutorials/optimize/
-    default_segment_number: ${int_div:${n_cpus:},2}
+    # Split the number of CPUs between GPUs
+    default_segment_number: ${int_div:${n_cpus:},${resources.n_devices}}
