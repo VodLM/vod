@@ -17,7 +17,7 @@
 <br/>
 
 <div align="center">
-Research paper: <a href="https://arxiv.org/abs/2210.06345">Variational Open-Domain Question Answering"</a>, ICML 2023
+Research paper: <a href="https://arxiv.org/abs/2210.06345">Variational Open-Domain Question Answering</a>, ICML 2023
 </div>
 
 <br/>
