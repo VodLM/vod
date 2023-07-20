@@ -136,7 +136,7 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                     barrier("Tuning retrieval parameters..")
                     bench_parameters = tune_parameters(
                         parameters=bench_parameters,
-                        tune=["bm25"],
+                        tune=["sparse"],
                         fabric=fabric,
                         factories=_get_dset_factories(config.dataset.get("val"), config=config.dataset),
                         vectors=vectors,

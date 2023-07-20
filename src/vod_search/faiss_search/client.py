@@ -28,6 +28,9 @@ class FaissClient(base.SearchClient):
         self.host = host
         self.port = port
 
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}[{self.url}](requires_vectors={self.requires_vectors})"
+
     @property
     def url(self) -> str:
         """Return the URL of the server."""

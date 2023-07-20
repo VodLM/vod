@@ -114,7 +114,7 @@ def instantiate_retrieval_dataloader(
         config=collate_config,
         parameters=parameters,
     )
-    dataset = _WithVectors(
+    dataset = IndexWithVectors(
         dataset=questions.data,
         vectors=questions.vectors,
         vector_key="vector",
@@ -126,7 +126,7 @@ def instantiate_retrieval_dataloader(
     return torch_data.DataLoader(dataset=dataset, collate_fn=collate_fn, **kws)  # type: ignore
 
 
-class _WithVectors(dstruct.SizedDataset[dict[str, Any]]):
+class IndexWithVectors(dstruct.SizedDataset[dict[str, Any]]):
     """A wrapper around a dataset that adds vectors to each item."""
 
     __slots__ = ("dataset", "vectors", "vector_key")

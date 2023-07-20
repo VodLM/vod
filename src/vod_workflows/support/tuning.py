@@ -16,7 +16,7 @@ from vod_workflows.utils import helpers
 
 from src import vod_configs, vod_datasets, vod_gradients, vod_search
 
-_DEFAULT_TUNE_LIST = ["bm25"]
+_DEFAULT_TUNE_LIST = ["sparse"]
 
 
 def _min_score_no_nan(score: torch.Tensor, dim: int) -> torch.Tensor:
@@ -120,8 +120,8 @@ def tune_parameters(
             vectors=task.sections.vectors,
             config=search_config,
             cache_dir=cache_dir,
-            faiss_enabled=True,
-            bm25_enabled=True,
+            dense_enabled=True,
+            sparse_enabled=True,
             serve_on_gpu=serve_on_gpu,
         ) as master:
             search_client = master.get_client()

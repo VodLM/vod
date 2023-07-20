@@ -18,7 +18,7 @@ from vod_workflows.utils import helpers
 
 from src import vod_configs, vod_datasets, vod_search
 
-_DEFAULT_OUTPUT_KEYS = ["faiss", "bm25", "score"]
+_DEFAULT_OUTPUT_KEYS = ["sparse", "dense", "score"]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -53,8 +53,8 @@ def benchmark(
         vectors=helpers.maybe_as_lazy_array(vectors.sections) if vectors is not None else None,
         config=search_config,
         cache_dir=cache_dir,
-        faiss_enabled=helpers.is_engine_enabled(parameters, "faiss"),
-        bm25_enabled=True,
+        dense_enabled=helpers.is_engine_enabled(parameters, "dense"),
+        sparse_enabled=True,
         serve_on_gpu=serve_on_gpu,
     ) as master:
         search_client = master.get_client()

@@ -55,9 +55,9 @@ class RetrievalCollate(pipes.Collate):
         config: vod_configs.RetrievalCollateConfig,
         parameters: Optional[dict | DictProxy] = None,
     ):
-        if "bm25" not in search_client.clients:
+        if "sparse" not in search_client.clients:
             raise ValueError(
-                "The `bm25` client is required to lookup positive sections. "
+                "The `sparse` client is required to lookup positive sections. "
                 "Please add it to the `search_client` argument"
             )
         self.tokenizer = tokenizer
@@ -219,12 +219,12 @@ def _multi_search(
     weights: dict[str, float],
 ) -> tuple[vod_search.RetrievalBatch, dict[str, np.ndarray]]:
     """Query a multisearch egine."""
-    if "bm25" not in clients:
-        raise ValueError("The BM25 client must be specified to lookup the positive sections.")
+    if "sparse" not in clients:
+        raise ValueError("The sparse client must be specified to lookup the positive sections.")
 
     # Create the search payloads - another payload is prepended to look up the positive sections
     lookup_payload = {
-        "client": clients["bm25"],
+        "client": clients["sparse"],
         "vector": vector,
         "text": [""] * len(text),
         "group": group,
@@ -253,8 +253,8 @@ def _multi_search(
     search_results["lookup"].scores.fill(0.0)  # Discard the scores for the lookup client
 
     # DEBUGGING - check for inf scores in the faiss results
-    if "faiss" in search_results:
-        r = search_results["faiss"]
+    if "dense" in search_results:
+        r = search_results["dense"]
         is_inf = r.scores >= FLOAT_INF_THRES
         if is_inf.any():
             rich.print(r)

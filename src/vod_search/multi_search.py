@@ -15,6 +15,9 @@ class MultiSearchClient(base.SearchClient):
     def __init__(self, clients: dict[str, base.SearchClient]) -> None:
         self.clients = clients
 
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}(clients={self.clients})"
+
     @property
     def requires_vectors(self) -> bool:
         """Whether the client requires vectors to be passed to the search method."""

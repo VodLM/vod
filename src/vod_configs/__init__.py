@@ -15,6 +15,7 @@ from .py.models import (
     TokenizerConfig,
 )
 from .py.search import (
+    FAISS_METRICS_INV,
     ElasticsearchFactoryConfig,
     FaissFactoryConfig,
     FaissGpuConfig,

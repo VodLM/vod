@@ -1,0 +1,29 @@
+backend: qdrant
+group_key: group_hash
+host: http://localhost
+port: 6333
+grpc_port: 6334
+exist_ok: true
+persistent: true
+force_single_collection: true
+search_params:
+  hnsw_ef: 256
+  exact: false
+qdrant_body:
+  shard_number: 1
+  hnsw_config:
+    # Number of edges per node in the index graph.
+    # Larger the value - more accurate the search, more space required.
+    m: 32
+    # Number of neighbours to consider during the index building.
+    # Larger the value - more accurate the search, more time required to build index.
+    ef_construct: 256
+    full_scan_threshold:
+  quantization_config:
+    scalar:
+      # https://qdrant.tech/documentation/tutorials/optimize/
+      type: int8
+      always_ram: true
+  optimizers_config:
+    # https://qdrant.tech/documentation/tutorials/optimize/
+    default_segment_number: ${n_cpus:}

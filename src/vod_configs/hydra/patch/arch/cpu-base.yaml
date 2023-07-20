@@ -23,13 +23,13 @@ batch_size:
 
 trainer:
   parameters:
-    faiss: -1.0
-    bm25: 1.0
+    dense: -1.0
+    sparse: 1.0
 
 benchmark:
   parameters:
-    faiss: -1.0
-    bm25: 1.0
+    dense: -1.0
+    sparse: 1.0
 
 fabric:
   accelerator: cpu

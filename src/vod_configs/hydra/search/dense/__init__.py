@@ -1,0 +1,1 @@
+"""Configures the search engine."""

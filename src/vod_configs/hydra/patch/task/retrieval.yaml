@@ -60,13 +60,14 @@ batch_size:
 
 trainer:
   max_steps: 200_000
-  period: 20_000
+  period: 10_000
   val_check_interval: 500
-  n_max_eval: 1_000
+  log_interval: 20
+  n_max_eval: 5_000
   pbar_keys: ["kl_data", "hitrate_3", "mrr_10"]
   parameters:
-    bm25: 1.0
-    faiss:
+    sparse: 0.5
+    dense:
       mode: linear
       start: 0
       value: 1
@@ -78,8 +79,8 @@ benchmark:
   on_init: false
   tuning: null # TODO: add tuning
   parameters:
-    faiss: 1.0
-    bm25: 1.0
+    sparse: 0.5
+    dense: 1.0
 
 collates:
   # Defines the configurations for `dataset_builder.HfBuilder._collate_config`
@@ -89,20 +90,10 @@ collates:
     support_size: 100
     prefetch_n_sections: 256 # retrieve `z` candidate sections
     do_sample: true # sample the sections from the candidate sections (randomly)
-    in_batch_negatives: true
+    in_batch_negatives: false # TODO
+    post_filter: null
   benchmark:
     n_sections: null
     prefetch_n_sections: 512
     do_sample: false
-    post_filter: ensure_match
-
-search:
-  faiss:
-    factory: OPQ32,IVFauto,PQ32x8
-    metric: inner_product
-    nprobe: 32
-    train_size: 3_000_000
-  bm25:
-    text_key: text
-    group_key: group_hash
-    persistent: true
+    post_filter: null

@@ -77,7 +77,7 @@ class BenchmarkConfig(StrictModel):
 
 
 class TrainerConfig(StrictModel):
-    """Configures a group of indexes (e.g., bm25, faiss)."""
+    """Configures the Training step."""
 
     max_steps: int = 1_000_000
     val_check_interval: int = 500

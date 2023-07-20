@@ -16,7 +16,7 @@ class SupervisedRetrievalGradients(base.Gradients):
     def __init__(
         self,
         guidance_weight: float = 0.0,
-        guidance: Literal["bm25", "zero"] = "bm25",
+        guidance: Literal["sparse", "zero"] = "sparse",
         self_supervision_weight: float = 0.0,
         anchor_weight: float = 0.0,
     ):
@@ -72,7 +72,7 @@ class SupervisedRetrievalGradients(base.Gradients):
         if self.guidance_weight > 0:
             # Guide the model towards the reference scores
             ref_score = {
-                "bm25": data.bm25,
+                "sparse": data.sparse,
                 "zero": torch.zeros_like(data.scores),
             }[self.guidance]
             guidance_loss = _compute_hubert_loss(retriever_logprobs, ref_score)
@@ -95,7 +95,7 @@ class SupervisedRetrievalGradients(base.Gradients):
             aux_losses["anchor"] = anchor_loss
 
         # 7. Compute the KL divergences between the model and the sampling distributions
-        # KL ( p_ref(z) | p_model(z)) for `p_ref` = score, bm25, faiss
+        # KL ( p_ref(z) | p_model(z)) for `p_ref` = score, sparse, dense
         if skip_diagnostics:
             kls = {}
         else:
@@ -103,8 +103,8 @@ class SupervisedRetrievalGradients(base.Gradients):
                 key: _compute_kld(retriever_logprobs, ref_scores)
                 for key, ref_scores in {
                     "score": data.scores,
-                    "bm25": data.bm25,
-                    "faiss": data.faiss,
+                    "sparse": data.sparse,
+                    "dense": data.dense,
                     "data": torch.where(data_targets > 0, 0.0, -math.inf),
                 }.items()
                 if ref_scores is not None

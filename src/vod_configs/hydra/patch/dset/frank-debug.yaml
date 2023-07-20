@@ -7,15 +7,3 @@ dataset:
     - frank.A.en-pos:val
   benchmark:
     - frank.A.en-pos:val
-
-benchmark:
-  search:
-    faiss:
-      factory: IVFauto,Flat
-      nprobe: 32
-
-search:
-  faiss:
-    factory: OPQ32_512,IVFauto,PQ32x8
-    metric: inner_product
-    nprobe: 32

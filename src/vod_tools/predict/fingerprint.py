@@ -29,17 +29,21 @@ def make_predict_fingerprint(
 
 
 def _get_model_fingerprint(model: torch.nn.Module | interfaces.ProtocolEncoder) -> str:
-    if isinstance(model, torch.nn.Module):
-        state = model.state_dict()
-        hasher = fingerprint.Hasher()
-        hasher.update(type(model).__name__)
-        for k, v in sorted(state.items(), key=lambda x: x[0]):
-            hasher.update(k)
-            u = serialize_tensor(v)
-            hasher.update(u)
-        return hasher.hexdigest()
+    try:
+        return model.get_fingerprint()  # type: ignore
+    except AttributeError:
+        if isinstance(model, torch.nn.Module):
+            state = model.state_dict()
+            hasher = fingerprint.Hasher()
+            hasher.update(type(model).__name__)
+            for k, v in sorted(state.items(), key=lambda x: x[0]):
+                hasher.update(k)
+                u = serialize_tensor(v)
+                hasher.update(u)
 
-    return fingerprint.Hasher.hash(model)
+            return hasher.hexdigest()
+
+        return fingerprint.Hasher.hash(model)
 
 
 def _get_collate_fn_fingerprint(collate_fn: pipes.Collate) -> str:

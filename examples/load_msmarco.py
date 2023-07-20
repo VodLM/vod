@@ -12,13 +12,13 @@ class Args(arguantic.Arguantic):
     """Arguments for the script."""
 
     language: str = "en"
-    local_source_path: Optional[str] = None  # "/Users/vlievin/data/remote_data/msmarco"
+    local_source_path: Optional[str] = None
     invalidate_cache: int = 0
     sample_idx: int = 42
 
 
-if __name__ == "__main__":
-    args = Args.parse()
+def run(args: Args) -> None:
+    """Showcase the `load_msmarco` function."""
     marco = vod_datasets.load_msmarco(
         language=args.language,
         invalidate_cache=bool(args.invalidate_cache),
@@ -45,3 +45,8 @@ if __name__ == "__main__":
             "section": section,
         }
     )
+
+
+if __name__ == "__main__":
+    args = Args.parse()
+    run(args)

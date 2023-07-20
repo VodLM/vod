@@ -8,5 +8,5 @@ n_max_eval: null
 checkpoint_path: ${abs_path:state.ckpt}
 pbar_keys: ['loss']
 parameters:
-  faiss: 1.0
-  bm25: 1.0
+  dense: 1.0
+  sparse: 1.0

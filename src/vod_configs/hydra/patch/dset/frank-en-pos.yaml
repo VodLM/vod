@@ -10,16 +10,3 @@ dataset:
   benchmark:
     - frank.A.en:val
     - frank.B.en:val
-
-
-search:
-  faiss:
-    factory: IVFauto,Flat
-    metric: inner_product
-    nprobe: 32
-
-
-trainer:
-  max_steps: 100_000
-  period: 20_000
-  val_check_interval: 500

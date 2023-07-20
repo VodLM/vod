@@ -69,15 +69,15 @@ class GradientInputs(pydantic.BaseModel):
         description="Retrieval scores.",
         alias="section.score",
     )
-    bm25: Optional[torch.Tensor] = pydantic.Field(
+    sparse: Optional[torch.Tensor] = pydantic.Field(
         None,
-        description="bm25 Retrieval scores.",
-        alias="section.bm25",
+        description="Sparse retrieval scores.",
+        alias="section.sparse",
     )
-    faiss: Optional[torch.Tensor] = pydantic.Field(
+    dense: Optional[torch.Tensor] = pydantic.Field(
         None,
-        description="faiss Retrieval scores.",
-        alias="section.faiss",
+        description="dense retrieval scores.",
+        alias="section.dense",
     )
 
     def pprint(self, **kwargs: Any) -> None:

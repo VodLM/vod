@@ -47,6 +47,13 @@ class ElasticsearchClient(base.SearchClient):
         self._index_name = index_name
         self.supports_groups = supports_groups
 
+    def __repr__(self) -> str:
+        return (
+            f"{type(self).__name__}[{self.url}]("
+            f"requires_vectors={self.requires_vectors}, "
+            f"index_name={self._index_name})"
+        )
+
     def ping(self) -> bool:
         """Ping the server."""
         try:

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import abc
 import copy
+import dataclasses
 import itertools
+import time
 import uuid
 import warnings
 from typing import Any, Iterable, Optional
@@ -62,6 +64,7 @@ class QdrantSearchClient(base.SearchClient):
         port: int,
         grpc_port: None | int,
         index_name: str,
+        search_params: qdrm.SearchParams,
         supports_groups: bool = True,
     ):
         self.host = host
@@ -70,6 +73,14 @@ class QdrantSearchClient(base.SearchClient):
         self._client = _init_client(self.host, self.port, self.grpc_port)
         self._index_name = index_name
         self.supports_groups = supports_groups
+        self.search_params = search_params
+
+    def __repr__(self) -> str:
+        return (
+            f"{type(self).__name__}[{self.host}:{self.port}]("
+            f"requires_vectors={self.requires_vectors}, "
+            f"index_name={self._index_name})"
+        )
 
     def size(self) -> int:
         """Return the number of vectors in the index."""
@@ -81,6 +92,8 @@ class QdrantSearchClient(base.SearchClient):
             self._client.get_collections()
             return True
         except qdrexc.UnexpectedResponse:
+            return False
+        except _InactiveRpcError:
             return False
 
     def __getstate__(self) -> dict[str, Any]:
@@ -132,6 +145,7 @@ class QdrantSearchClient(base.SearchClient):
                     vector=vector[i].tolist(),
                     filter=_get_filter(group[i]) if group is not None else None,
                     with_payload=False,
+                    params=self.search_params,
                 )
                 for i in range(len(vector))
             ],
@@ -158,6 +172,14 @@ def _search_batch_to_rdtypes(batch: list[list[qdrm.ScoredPoint]], top_k: int) ->
     )
 
 
+@dataclasses.dataclass(frozen=True)
+class IndexValidationStatus:
+    """Validation status of an index."""
+
+    valid: bool
+    message: str
+
+
 class QdrantSearchMaster(base.SearchMaster[QdrantSearchClient], abc.ABC):
     """A class that manages a search server."""
 
@@ -176,6 +198,8 @@ class QdrantSearchMaster(base.SearchMaster[QdrantSearchClient], abc.ABC):
         exist_ok: bool = True,
         skip_setup: bool = False,
         qdrant_body: Optional[dict[str, Any]] = None,
+        search_params: Optional[dict[str, Any]] = None,
+        force_single_collection: bool = True,
     ) -> None:
         super().__init__(skip_setup=skip_setup)
         self._host = host
@@ -189,6 +213,8 @@ class QdrantSearchMaster(base.SearchMaster[QdrantSearchClient], abc.ABC):
         self._persistent = persistent
         self._exist_ok = exist_ok
         self._qdrant_body = qdrant_body
+        self._search_params = qdrm.SearchParams(**(search_params or {}))
+        self._force_single_collection = force_single_collection
 
     @property
     def supports_groups(self) -> bool:
@@ -209,16 +235,26 @@ class QdrantSearchMaster(base.SearchMaster[QdrantSearchClient], abc.ABC):
             grpc_port=self._grpc_port,
             index_name=self._index_name,
             supports_groups=self.supports_groups,
+            search_params=self._search_params,
         )
 
     def _make_cmd(self) -> list[str]:
         return [
             "docker",
             "run",
-            f"-p {self._port}:{self._port}",
-            f"-p {self._grpc_port}:{self._grpc_port}",
+            "-p",
+            f"{self._port}:{self._port}",
+            "-p",
+            f"{self._grpc_port}:{self._grpc_port}",
             "qdrant/qdrant",
         ]
+
+    def _make_env(self) -> dict[str, Any]:
+        env = super()._make_env()
+        env["QDRANT__SERVICE__HTTP_PORT"] = str(self._port)
+        if self._grpc_port is not None:
+            env["QDRANT__SERVICE__GRPC_PORT"] = str(self._grpc_port)
+        return env
 
     def _on_init(self) -> None:
         client = _init_client(self._host, self._port, self._grpc_port)
@@ -226,36 +262,31 @@ class QdrantSearchMaster(base.SearchMaster[QdrantSearchClient], abc.ABC):
         if len(vshp) != 1:
             raise ValueError(f"Expected a 1D vectors, got {vshp}")
 
-        try:
-            client.get_collection(collection_name=self._index_name)
-            index_exist = True
-        except qdrexc.UnexpectedResponse as exc:
-            if exc.status_code != 404:  # noqa: PLR2004
-                raise Exception(f"Unexpected error: {exc}") from exc
-            index_exist = False
+        # Delete other collections
+        if self._force_single_collection:
+            _delete_except([self._index_name], client)
 
-        except _InactiveRpcError as exc:
-            if exc.code() != StatusCode.NOT_FOUND:
-                raise Exception(f"Unexpected error: {exc}") from exc
-            index_exist = False
-
+        # Check wheter the index exist
+        index_exist = _collection_exists(client, self._index_name)
         if index_exist and not self._exist_ok:
             raise FileNotFoundError(f"{_collection_name(self._index_name, escape_rich=False)}: already exists.")
 
         # Validate the index and delete if necessary
-        if index_exist and client.count(collection_name=self._index_name).count != len(self._vectors):
-            logger.warning(
-                f"{_collection_name(self._index_name, escape_rich=False)}: already exists, "
-                f"the number of records doesn't match. Deleting..."
-            )
-            client.delete_collection(collection_name=self._index_name)
-            index_exist = False
+        if index_exist:
+            valid_status = _validate(client, self._index_name, self._vectors, raise_if_invalid=True)
+            if not valid_status.valid:
+                logger.warning(
+                    f"{_collection_name(self._index_name, escape_rich=False)}: "
+                    f"already exists but is not valid ({valid_status.message}). "
+                )
+                client.delete_collection(collection_name=self._index_name)
+                index_exist = False
 
         if not index_exist:
+            # Create the index & Ingest the data
             body = _make_qdrant_body(vshp[-1], self._qdrant_body)
             client.create_collection(collection_name=self._index_name, **body)
 
-            # Ingest data
             with WithIndexingDisabled(client, self._index_name, delete_on_exception=True):
                 _ingest_data(
                     client=client,
@@ -264,16 +295,61 @@ class QdrantSearchMaster(base.SearchMaster[QdrantSearchClient], abc.ABC):
                     groups=self._input_groups,
                 )
 
-            with status.Status(f"{_collection_name(self._index_name)}: Counting.."):
-                count = client.count(collection_name=self._index_name).count
-                if count != len(self._vectors):
-                    raise ValueError(f"Expected {len(self._vectors)} vectors, got {count}. Something went wrong?")
+            # Validate the index
+            _validate(client, self._index_name, self._vectors, raise_if_invalid=True)
 
     def _on_exit(self) -> None:
         if not self._persistent:
             client = _init_client(self._host, self._port, self._grpc_port)
             client.delete_collection(collection_name=self._index_name)
-            return
+
+
+def _validate(
+    client: qdrant_client.QdrantClient,
+    collection_name: str,
+    vectors: dstruct.SizedDataset[np.ndarray],
+    raise_if_invalid: bool = False,
+) -> IndexValidationStatus:
+    """Validate the index."""
+    with status.Status(f"{_collection_name(collection_name)}: Validating.."):
+        while client.get_collection(collection_name=collection_name).status != qdrm.CollectionStatus.GREEN:
+            time.sleep(0.05)
+        count = client.count(collection_name=collection_name).count
+        if count != len(vectors):
+            valid_status = IndexValidationStatus(
+                valid=False,
+                message=(
+                    f"{_collection_name(collection_name, escape_rich=False)}: "
+                    f"Number of vectors doesn't match: {count} != {len(vectors)}"
+                ),
+            )
+            if raise_if_invalid:
+                raise Exception(valid_status.message)
+            return valid_status
+    return IndexValidationStatus(valid=True, message="")
+
+
+def _delete_except(exclude_list: list[str], client: qdrant_client.QdrantClient) -> None:
+    for col in client.get_collections().collections:
+        if col.name not in exclude_list:
+            logger.debug(f"Deleting collection `{col.name}`")
+            client.delete_collection(collection_name=col.name)
+
+
+def _collection_exists(client: qdrant_client.QdrantClient, collection_name: str) -> bool:
+    try:
+        client.get_collection(collection_name=collection_name)
+        index_exist = True
+    except qdrexc.UnexpectedResponse as exc:
+        if exc.status_code != 404:  # noqa: PLR2004
+            raise Exception(f"Unexpected error: {exc}") from exc
+        index_exist = False
+
+    except _InactiveRpcError as exc:
+        if exc.code() != StatusCode.NOT_FOUND:
+            raise Exception(f"Unexpected error: {exc}") from exc
+        index_exist = False
+    return index_exist
 
 
 class WithIndexingDisabled:
@@ -318,9 +394,23 @@ def _make_qdrant_body(dim: int, body: Optional[dict[str, Any]]) -> dict[str, Any
         **{
             "size": int(dim),
             "distance": qdrm.Distance.DOT,
+            "on_disk": True,
             **body.get("vectors_config", {}),
         }
     )
+    if "quantization_config" in body:
+        quant_conf = body.pop("quantization_config")
+        keys = set(quant_conf.keys())
+        if len(keys) > 1:
+            raise ValueError(f"Only one quantization method is supported, got {keys}")
+        key = keys.pop()
+        args = quant_conf[key]
+        sc_cfg, cfg = {
+            "scalar": (qdrm.ScalarQuantization, qdrm.ScalarQuantizationConfig),
+            "product": (qdrm.ProductQuantization, qdrm.ProductQuantizationConfig),
+        }[key]
+        body["quantization_config"] = sc_cfg(**{key: cfg(**args)})
+
     return body
 
 

@@ -26,6 +26,9 @@ class SearchClient(abc.ABC):
 
     requires_vectors: bool = True
 
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}(requires_vectors={self.requires_vectors})"
+
     @abc.abstractmethod
     def ping(self) -> bool:
         """Ping the server."""

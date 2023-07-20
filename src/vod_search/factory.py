@@ -10,7 +10,6 @@ import numpy as np
 import torch
 from lightning.pytorch import utilities as pl_utils
 from loguru import logger
-from vod_configs.py.search import FAISS_METRICS_INV
 from vod_search import base, es_search, faiss_search, qdrant_search
 from vod_search.multi_search import MultiSearchMaster
 from vod_tools import dstruct, pipes
@@ -55,8 +54,11 @@ def build_search_index(
     if index_type == "qdrant":
         if vectors is None:
             raise ValueError("Must provide vectors for `qdrant` index")
+        if sections is None:
+            raise ValueError("Must provide sections for `qdrant` index")
         return build_qdrant_index(
             vectors=vectors,
+            sections=sections,
             config=vod_configs.QdrantFactoryConfig(**config),
             skip_setup=skip_setup,
         )
@@ -69,7 +71,7 @@ def build_elasticsearch_index(
     config: vod_configs.ElasticsearchFactoryConfig | dict,
     skip_setup: bool = False,
 ) -> es_search.ElasticSearchMaster:
-    """Build a bm25 index."""
+    """Build a sparse elasticsearch index."""
     if isinstance(config, dict):
         config = vod_configs.ElasticsearchFactoryConfig(**config)
     index_fingerprint = f"{pipes.fingerprint(sections)}-{config.fingerprint()}"
@@ -104,7 +106,7 @@ def build_faiss_index(
     skip_setup: bool = False,
     barrier_fn: None | Callable[[str], None] = None,
     serve_on_gpu: bool = False,
-) -> base.SearchMaster:
+) -> faiss_search.FaissMaster:
     """Build a faiss index."""
     if isinstance(config, dict):
         config = vod_configs.FaissFactoryConfig(**config)
@@ -114,7 +116,7 @@ def build_faiss_index(
     logger.info(
         f"Init. faiss index `{index_fingerprint}`, "
         f"factory: `{config.factory}`, "
-        f"metric: `{FAISS_METRICS_INV[config.metric]}`, "
+        f"metric: `{vod_configs.FAISS_METRICS_INV[config.metric]}`, "
         f"train_size: `{config.train_size}`"
     )
     index_path = pathlib.Path(cache_dir, "indices", f"{index_fingerprint}.faiss")
@@ -162,7 +164,7 @@ def build_qdrant_index(
     config: vod_configs.QdrantFactoryConfig | dict,
     skip_setup: bool = False,
 ) -> qdrant_search.QdrantSearchMaster:
-    """Build a bm25 index."""
+    """Build a dense Qdrant index."""
     if isinstance(config, dict):
         config = vod_configs.QdrantFactoryConfig(**config)
     index_fingerprint = f"{pipes.fingerprint(vectors)}-{config.fingerprint()}"
@@ -181,8 +183,10 @@ def build_qdrant_index(
         index_name=f"vod-{index_fingerprint}",
         persistent=config.persistent,
         qdrant_body=config.qdrant_body,
+        search_params=config.search_params,
         exist_ok=True,
         skip_setup=skip_setup,
+        force_single_collection=config.force_single_collection,
     )
 
 
@@ -198,8 +202,8 @@ def build_multi_search_engine(
     vectors: None | dstruct.SizedDataset[np.ndarray],
     config: vod_configs.SearchConfig,
     cache_dir: str | pathlib.Path,
-    faiss_enabled: bool = True,
-    bm25_enabled: bool = True,
+    dense_enabled: bool = True,
+    sparse_enabled: bool = True,
     skip_setup: bool = False,
     barrier_fn: None | Callable[[str], None] = None,
     serve_on_gpu: bool = False,
@@ -212,35 +216,70 @@ def build_multi_search_engine(
         # Close all indices to avoid hitting memory limits
         _close_all_es_indices()
 
-    if faiss_enabled:
+    if dense_enabled:
         if vectors is None:
-            raise ValueError("`vectors` must be provided if `faiss_enabled`")
+            raise ValueError("`vectors` must be provided if `dense_enabled`")
+        if config.dense is None:
+            raise ValueError("`dense` must be provided if `dense_enabled`")
 
-        faiss_server = build_faiss_index(
+        servers["dense"] = _init_dense_search_engine(
+            sections=sections,
             vectors=vectors,
-            config=config.faiss,
+            config=config.dense,
             cache_dir=cache_dir,
             skip_setup=skip_setup,
             barrier_fn=barrier_fn,
             serve_on_gpu=serve_on_gpu,
         )
-        servers["faiss"] = faiss_server
 
-    if bm25_enabled:
+    if sparse_enabled:
         if sections is None:
-            raise ValueError("`sections` must be provided if `bm25_enabled`")
+            raise ValueError("`sections` must be provided if `sparse_enabled`")
+        if config.sparse is None:
+            raise ValueError("`sparse` must be provided if `sparse_enabled`")
 
-        bm25_server = build_elasticsearch_index(
+        sparse_server = build_elasticsearch_index(
             sections=sections,
-            config=config.bm25,
+            config=config.sparse,
             skip_setup=skip_setup,
         )
-        servers["bm25"] = bm25_server
+        servers["sparse"] = sparse_server
 
     if len(servers) == 0:
         raise ValueError("No search servers were enabled.")
 
     return MultiSearchMaster(servers=servers, skip_setup=skip_setup)
+
+
+def _init_dense_search_engine(
+    sections: None | dstruct.SizedDataset[dict[str, Any]],
+    vectors: dstruct.SizedDataset[np.ndarray],
+    config: vod_configs.FaissFactoryConfig | vod_configs.QdrantFactoryConfig,
+    cache_dir: str | pathlib.Path,
+    skip_setup: bool,
+    barrier_fn: None | Callable[[str], None],
+    serve_on_gpu: bool,
+) -> qdrant_search.QdrantSearchMaster | faiss_search.FaissMaster:
+    if isinstance(config, vod_configs.FaissFactoryConfig):
+        return build_faiss_index(
+            vectors=vectors,
+            config=config,
+            cache_dir=cache_dir,
+            skip_setup=skip_setup,
+            barrier_fn=barrier_fn,
+            serve_on_gpu=serve_on_gpu,
+        )
+    if isinstance(config, vod_configs.QdrantFactoryConfig):
+        if sections is None:
+            raise ValueError("`sections` must be provided when using `Qdrant` search engine")
+        return build_qdrant_index(
+            vectors=vectors,
+            sections=sections,
+            config=config,
+            skip_setup=skip_setup,
+        )
+
+    raise ValueError(f"Unknown dense factory config type `{type(config)}`")
 
 
 @pl_utils.rank_zero_only

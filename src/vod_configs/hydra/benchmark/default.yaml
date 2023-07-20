@@ -6,8 +6,8 @@ tuning:
   learning_rate: 1e-3
   collate_overrides: null
 parameters:
-  faiss: 1.0
-  bm25: 1.0
+  dense: 1.0
+  sparse: 1.0
 metrics:
   - "ndcg"
   - "mrr@10"

@@ -129,9 +129,17 @@ class QdrantFactoryConfig(StrictModel):
     persistent: bool = False
     exist_ok: bool = True
     qdrant_body: Optional[dict] = None
+    search_params: Optional[dict] = None
+    force_single_collection: bool = False
 
     @pydantic.validator("qdrant_body", pre=True)
     def _validate_qdrant_body(cls, v: dict | None) -> dict | None:
+        if isinstance(v, omegaconf.DictConfig):
+            v = omegaconf.OmegaConf.to_container(v, resolve=True)  # type: ignore
+        return v
+
+    @pydantic.validator("search_params", pre=True)
+    def _validate_search_params(cls, v: dict | None) -> dict | None:
         if isinstance(v, omegaconf.DictConfig):
             v = omegaconf.OmegaConf.to_container(v, resolve=True)  # type: ignore
         return v
@@ -161,32 +169,46 @@ def _get_gpu_resources(
 
 
 class SearchConfig(StrictModel):
-    """Base configuration for search engines (e.g., bm25, faiss)."""
+    """Base configuration for search engines (sparse (elasticsearch), dense (faiss, qdrant))."""
 
     text_key: str = "text"
     group_key: str = "group_hash"
-    faiss: Optional[FaissFactoryConfig] = None
-    bm25: Optional[ElasticsearchFactoryConfig] = None
+    dense: Optional[FaissFactoryConfig | QdrantFactoryConfig] = None
+    sparse: Optional[ElasticsearchFactoryConfig] = None
 
-    @pydantic.validator("faiss", pre=True)
-    def _validate_faiss(cls, v: dict | None) -> dict | None:
-        if v is None:
-            return None
+    @pydantic.validator("sparse", pre=True)
+    def _validate_sparse(cls, v: dict | None) -> ElasticsearchFactoryConfig | None:
+        if v is None or isinstance(v, ElasticsearchFactoryConfig):
+            return v
 
         if isinstance(v, (dict, omegaconf.DictConfig)):
-            return FaissFactoryConfig(**v).dict()
+            return ElasticsearchFactoryConfig(**v)
 
         return v
 
-    @pydantic.validator("bm25", pre=True)
-    def _validate_bm25(cls, v: dict | None) -> dict | None:
-        if v is None:
-            return None
+    @pydantic.validator("dense", pre=True)
+    def _validate_dense(cls, v: dict | None) -> FaissFactoryConfig | QdrantFactoryConfig | None:
+        if v is None or isinstance(v, (FaissFactoryConfig, QdrantFactoryConfig)):
+            return v
 
-        if isinstance(v, (dict, omegaconf.DictConfig)):
-            return ElasticsearchFactoryConfig(**v).dict()
+        if isinstance(v, omegaconf.DictConfig):
+            v = omegaconf.OmegaConf.to_container(v, resolve=True)  # type: ignore
 
-        return v
+        if not isinstance(v, dict):
+            raise ValueError(f"Invalid type for `dense`: {type(v)}")
+
+        try:
+            backend = v.pop("backend")
+        except KeyError as exc:
+            raise ValueError("`backend` must be set for a dense index.") from exc
+
+        if backend == "faiss":
+            return FaissFactoryConfig(**v)
+
+        if backend == "qdrant":
+            return QdrantFactoryConfig(**v)
+
+        raise ValueError(f"Unknown backend: {backend}")
 
     @classmethod
     def parse(cls: Type[Self], obj: dict | omegaconf.DictConfig) -> Self:

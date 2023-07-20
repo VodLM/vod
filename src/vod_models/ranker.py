@@ -68,6 +68,13 @@ class Ranker(torch.nn.Module):
         """Dimension of the model output."""
         return self.encoder.get_output_shape(model_output_key)  # type: ignore
 
+    def get_fingerprint(self) -> str:
+        """Return a fingerprint of the model."""
+        try:
+            self.encoder.get_fingerprint()
+        except AttributeError:
+            return pipes.fingerprint_torch_module(None, self)  # type: ignore
+
     def get_optimizer(self, module: Optional[torch.nn.Module] = None) -> torch.optim.Optimizer:
         """Configure the optimizer and the learning rate scheduler."""
         opt_model = module or self

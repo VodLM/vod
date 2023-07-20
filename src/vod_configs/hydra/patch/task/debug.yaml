@@ -1,7 +1,7 @@
 # @package _global_
 
 defaults:
-  - override /model/encoder: umt5-small
+  - override /model/encoder: mini-lm
   - _self_
 
 seed: 1
@@ -11,27 +11,18 @@ model:
     anchor_weight: 0
     self_supervision_weight: 0
     guidance_weight: 0
-    guidance: bm25
+    guidance: sparse
 
 env:
   OMP_NUM_THREADS: 8
-
-search:
-  faiss:
-    factory: Flat
-    nprobe: 32
 
 benchmark:
   n_max_eval: 100
   on_init: false
   tuning: null
   parameters:
-    bm25: 1.0
-    faiss: 0.0
-  search:
-    faiss:
-      factory: Flat
-      nprobe: 32
+    sparse: 1.0
+    dense: 1.0
 
 trainer:
   max_steps: 1000
@@ -39,8 +30,8 @@ trainer:
   val_check_interval: 5
   n_max_eval: 100
   parameters:
-    bm25: 1.0
-    faiss: 0.0
+    sparse: 0.0
+    dense: 1.0
 
 dataset:
   subset_size: 200
@@ -66,15 +57,15 @@ collates:
     support_size: 30
     prefetch_n_sections: 32
     do_sample: false
-    in_batch_negatives: true
-    post_filter: ensure_match
+    in_batch_negatives: false
+    post_filter: null
 
   benchmark:
     n_sections: 64
     max_pos_sections: 16
     prefetch_n_sections: 128
     do_sample: false
-    post_filter: ensure_match
+    post_filter: null
 
 dataloaders:
   benchmark:

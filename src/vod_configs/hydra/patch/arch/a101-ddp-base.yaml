@@ -1,0 +1,14 @@
+# @package _global_
+
+# This config is for 2xA100 GPUs (80GB)
+
+defaults:
+ - a100-ddp-base
+
+resources:
+  num_workers: 4
+
+batch_size:
+  per_device: 16
+  per_device_eval: 32
+  per_device_predict: 1024

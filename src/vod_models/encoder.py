@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import math
 import pathlib
 import warnings
@@ -8,9 +9,11 @@ from typing import Literal, Optional
 import pydantic
 import torch
 import transformers
+from datasets import fingerprint
 from torch import nn
 from typing_extensions import Self, Type, TypeAlias
 from vod_tools import interfaces
+from vod_tools.misc.tensor_tools import serialize_tensor
 
 AggMethod: TypeAlias = Literal["mean", "max", "cls", "attention"]
 
@@ -18,8 +21,16 @@ AggMethod: TypeAlias = Literal["mean", "max", "cls", "attention"]
 class TransformerEncoderConfig(pydantic.BaseModel):
     """Configuration for a transformer encoder."""
 
+    class Config:
+        """Pydantic config."""
+
+        extra = "forbid"
+        allow_mutation = False
+
     model_name: str
     vector_size: Optional[int] = None
+    vector_norm: Optional[str] = None
+    activation: Optional[str] = None
     cls_name: str = "AutoModel"
     agg: AggMethod = "mean"
     model_config: Optional[dict] = None
@@ -123,21 +134,49 @@ class EncoderPooler(nn.Module):
     def __init__(
         self,
         config: transformers.PretrainedConfig,
-        output_size: int,
+        output_size: None | int,
         agg_method: AggMethod = "mean",
+        vector_norm: None | str = None,
+        activation: None | str = None,
     ):
         super().__init__()
-        self.output_size = output_size
-        self.dense = nn.Linear(config.hidden_size, output_size)
-
-        self.activation = nn.Tanh()
         self.agg_fn = AGGREGATOR_FNS[agg_method](config)
+        if output_size is None:
+            self.output_size = config.hidden_size
+            self.dense = None
+        else:
+            self.output_size = output_size
+            self.dense = nn.Linear(config.hidden_size, self.output_size)
+
+        # Activation
+        self.activation = (
+            {
+                "relu": nn.ReLU,
+                "tanh": nn.Tanh,
+                "sigmoid": nn.Sigmoid,
+                "gelu": nn.GELU,
+            }[activation]()
+            if activation
+            else None
+        )
+
+        # Normalization
+        if vector_norm is None:
+            self.vector_norm = None
+        elif vector_norm == "l2":
+            self.vector_norm = functools.partial(torch.nn.functional.normalize, p=2)
+        else:
+            raise ValueError(f"Unknown vector norm `{vector_norm}`.")
 
     def forward(self, hidden_states: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
         """Pools the model output and project. Note that the activation is applied last."""
-        hidden_states = self.agg_fn(hidden_states, attention_mask)
-        pooled_output = self.dense(hidden_states)
-        pooled_output = self.activation(pooled_output)
+        pooled_output = self.agg_fn(hidden_states, attention_mask)
+        if self.dense:
+            pooled_output = self.dense(pooled_output)
+        if self.activation:
+            pooled_output = self.activation(pooled_output)
+        if self.vector_norm:
+            pooled_output = self.vector_norm(pooled_output)
         return pooled_output
 
 
@@ -163,11 +202,13 @@ def _translate_config(model_name: str, config: None | dict) -> dict:
 class TransformerEncoder(nn.Module, interfaces.ProtocolEncoder):
     """A transformer encoder."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         model_name: str,
         model_config: Optional[dict] = None,
         vector_size: Optional[int] = None,
+        vector_norm: Optional[str] = None,
+        activation: Optional[str] = None,
         cls_name: str = "AutoModel",
         agg: Literal["mean", "max", "cls"] = "mean",
         cache_dir: None | str | pathlib.Path = None,
@@ -177,6 +218,8 @@ class TransformerEncoder(nn.Module, interfaces.ProtocolEncoder):
             model_name=model_name,
             model_config=model_config,
             vector_size=vector_size,
+            vector_norm=vector_norm,
+            activation=activation,
             cls_name=cls_name,
             agg=agg,
         )
@@ -194,15 +237,13 @@ class TransformerEncoder(nn.Module, interfaces.ProtocolEncoder):
         if hasattr(self.backbone, "pooler"):
             self.backbone.pooler = None
 
-        # Define the output dim
-        if vector_size is None:
-            vector_size = int(self.backbone.config.hidden_size)
-
         # Projection layer
         self.pooler = EncoderPooler(
             self.backbone.config,
-            vector_size,
-            agg,
+            output_size=vector_size,
+            agg_method=agg,
+            vector_norm=vector_norm,
+            activation=activation,
         )
 
     def save(self, path: str | pathlib.Path) -> None:
@@ -235,3 +276,20 @@ class TransformerEncoder(nn.Module, interfaces.ProtocolEncoder):
     def get_output_shape(self, field: Optional[interfaces.TokenizedField] = None) -> tuple[int, ...]:  # noqa: ARG002
         """Get the output shape of the encoder. Set `-1` for unknown dimensions."""
         return (self.pooler.output_size,)
+
+    def get_fingerprint(self) -> str:
+        """Get a fingerprint of the encoder."""
+        hasher = fingerprint.Hasher()
+
+        # Config
+        hasher.update(self.config.json().encode())
+
+        # Tensors
+        state = self.state_dict()
+        hasher.update(type(self).__name__)
+        for k, v in sorted(state.items(), key=lambda x: x[0]):
+            hasher.update(k)
+            u = serialize_tensor(v)
+            hasher.update(u)
+
+        return hasher.hexdigest()

@@ -3,4 +3,5 @@ cls_name: BertModel
 model_name: bert-base-uncased
 model_config: {}
 vector_size: null
+activation: null
 agg: cls

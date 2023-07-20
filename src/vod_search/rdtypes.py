@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import abc
 import copy
+import warnings
 from abc import ABC
 from enum import Enum
 from numbers import Number
@@ -309,9 +310,11 @@ class RetrievalBatch(RetrievalData[Ts_co]):
 
     def __mul__(self, value: float) -> RetrievalBatch[Ts_co]:
         """Multiply scores by a value."""
-        return RetrievalBatch(
-            scores=self.scores * value,
-            indices=self.indices,
-            labels=self.labels,
-            meta=copy.copy(self.meta),
-        )
+        with warnings.catch_warnings():  # TODO: move this filter to a more appropriate place
+            warnings.filterwarnings("ignore", category=RuntimeWarning)
+            return RetrievalBatch(
+                scores=self.scores * value,
+                indices=self.indices,
+                labels=self.labels,
+                meta=copy.copy(self.meta),
+            )
