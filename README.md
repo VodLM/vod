@@ -33,6 +33,7 @@ from multiple search engines
 - `vod_models`: a collection of REALMs using large retrievers (T5s) and OS generative models (RWKV, LLAMA, etc.).
 
 ## Roadmap Summer 2023 ☀️
+Progress tracked in https://github.com/VodLM/vod/issues/1
 
 The repo is currently in **research preview**. This means we already have a few components in place, but we still have work to do before a wider adoption of VOD, and before training next-gen REALMS. Our objectives for this summer are:
 
@@ -60,7 +61,7 @@ If you also see great potential in combining LLMs with search components, join t
 | vod_tools       | A collection of easy-to-use tools                     |    ✅    |
 | vod_workflows   | Main recipes (training, benchmarking, indexing, etc.) |   ⚠️     |
 
-> **Note**: The code for VOD gradient and sampling methods currently lives at [VodLM/vod-gradients](https://github.com/VodLM/vod-gradients). The project is still under development and will be integrated into this repo in the next month.
+> **Note** The code for VOD gradient and sampling methods currently lives at [VodLM/vod-gradients](https://github.com/VodLM/vod-gradients). The project is still under development and will be integrated into this repo in the next month.
 
 ## Installation 📦
 
