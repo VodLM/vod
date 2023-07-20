@@ -7,7 +7,7 @@ exist_ok: true
 persistent: true
 force_single_collection: true
 search_params:
-  hnsw_ef: 256
+  hnsw_ef: 128
   exact: false
 qdrant_body:
   shard_number: 1
@@ -17,7 +17,7 @@ qdrant_body:
     m: 32
     # Number of neighbours to consider during the index building.
     # Larger the value - more accurate the search, more time required to build index.
-    ef_construct: 256
+    ef_construct: 128
     full_scan_threshold:
   quantization_config:
     scalar:
@@ -26,4 +26,4 @@ qdrant_body:
       always_ram: true
   optimizers_config:
     # https://qdrant.tech/documentation/tutorials/optimize/
-    default_segment_number: ${n_cpus:}
+    default_segment_number: ${int_div:${n_cpus:},2}

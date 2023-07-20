@@ -88,7 +88,7 @@ collates:
     n_sections: 24 # sample `x` sections from the candidate `z` sections
     max_pos_sections: 8 # include at max `y` positive sections
     support_size: 100
-    prefetch_n_sections: 256 # retrieve `z` candidate sections
+    prefetch_n_sections: 128 # retrieve `z` candidate sections
     do_sample: true # sample the sections from the candidate sections (randomly)
     in_batch_negatives: false # TODO
     post_filter: null
