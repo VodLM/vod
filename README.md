@@ -173,25 +173,22 @@ Faiss can take up to 30min to compile CUDA kernels. See [this GitHub issue](http
 
 This repo is a clean re-write of the original code [FindZebra/fz-openqa](https://github.com/FindZebra/fz-openqa) aiming at handling larger datasets, larger models and generative tasks.
 
-```json
+```
 @InProceedings{pmlr-v202-lievin23a,
-  title =   {Variational Open-Domain Question Answering},
+  title = 	 {Variational Open-Domain Question Answering},
   author =       {Li\'{e}vin, Valentin and Motzfeldt, Andreas Geert and Jensen, Ida Riis and Winther, Ole},
-  booktitle =   {Proceedings of the 40th International Conference on Machine Learning},
-  pages =   {20950--20977},
-  year =   {2023},
-  editor =   {Krause, Andreas and Brunskill, Emma and Cho, Kyunghyun and Engelhardt, Barbara and Sabato, Sivan and Scarlett, Jonathan},
-  volume =   {202},
-  series =   {Proceedings of Machine Learning Research},
-  month =   {23--29 Jul},
+  booktitle = 	 {Proceedings of the 40th International Conference on Machine Learning},
+  pages = 	 {20950--20977},
+  year = 	 {2023},
+  editor = 	 {Krause, Andreas and Brunskill, Emma and Cho, Kyunghyun and Engelhardt, Barbara and Sabato, Sivan and Scarlett, Jonathan},
+  volume = 	 {202},
+  series = 	 {Proceedings of Machine Learning Research},
+  month = 	 {23--29 Jul},
   publisher =    {PMLR},
-  pdf =   {https://proceedings.mlr.press/v202/lievin23a/lievin23a.pdf},
-  url =   {https://proceedings.mlr.press/v202/lievin23a.html},
-  abstract =   {Retrieval-augmented models have proven to be effective in natural language processing tasks, yet there remains a lack of research on their optimization using variational inference. We introduce the Variational Open-Domain (VOD) framework for end-to-end training and evaluation of retrieval-augmented models, focusing on open-domain question answering and language modelling. The VOD objective, a self-normalized estimate of the Rényi variational bound, approximates the task marginal likelihood and is evaluated under samples drawn from an auxiliary sampling distribution (cached retriever and/or approximate posterior). It remains tractable, even for retriever distributions defined on large corpora. We demonstrate VOD’s versatility by training reader-retriever BERT-sized models on multiple-choice medical exam questions. On the MedMCQA dataset, we outperform the domain-tuned Med-PaLM by +5.3% despite using 2.500$\times$ fewer parameters. Our retrieval-augmented BioLinkBERT model scored 62.9% on the MedMCQA and 55.0% on the MedQA-USMLE. Last, we show the effectiveness of our learned retriever component in the context of medical semantic search.}
+  pdf = 	 {https://proceedings.mlr.press/v202/lievin23a/lievin23a.pdf},
+  url = 	 {https://proceedings.mlr.press/v202/lievin23a.html},
+  abstract = 	 {Retrieval-augmented models have proven to be effective in natural language processing tasks, yet there remains a lack of research on their optimization using variational inference. We introduce the Variational Open-Domain (VOD) framework for end-to-end training and evaluation of retrieval-augmented models, focusing on open-domain question answering and language modelling. The VOD objective, a self-normalized estimate of the Rényi variational bound, approximates the task marginal likelihood and is evaluated under samples drawn from an auxiliary sampling distribution (cached retriever and/or approximate posterior). It remains tractable, even for retriever distributions defined on large corpora. We demonstrate VOD’s versatility by training reader-retriever BERT-sized models on multiple-choice medical exam questions. On the MedMCQA dataset, we outperform the domain-tuned Med-PaLM by +5.3% despite using 2.500$\times$ fewer parameters. Our retrieval-augmented BioLinkBERT model scored 62.9% on the MedMCQA and 55.0% on the MedQA-USMLE. Last, we show the effectiveness of our learned retriever component in the context of medical semantic search.}
 }
-
-}
-
 ```
 
 ## Sponsors 🏫
