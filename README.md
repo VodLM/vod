@@ -30,15 +30,15 @@ Research paper: <a href="https://arxiv.org/abs/2210.06345">Variational Open-Doma
 
 ## What is VOD? 🎯
 
-VOD aims at building, training and evaluating next-generation retrieval-augmented language models (REALMs). The project started with our research paper [Variational Open-Domain Question Answering](https://arxiv.org/abs/2210.06345), in which we introduce the VOD objective: a new variational objective for end-to-end training of REALMs. The original paper only explored the application of the VOD objective to multiple-choice ODQA, this project aims at exploring generative tasks.
+VOD aims at building, training and evaluating next-generation retrieval-augmented language models (REALMs). The project started with our research paper [Variational Open-Domain Question Answering](https://arxiv.org/abs/2210.06345), in which we introduce the VOD objective: a new variational objective for end-to-end training of REALMs.
 
-In this repo, we built a set of tools to make training of large generative search models possible and developper-friendly. The main modules are:
+The original paper only explored the application of the VOD objective to multiple-choice ODQA, this repo aims at exploring generative tasks (generative QA, language modelling and chat). We are building tools to make training of large generative search models possible and developper-friendly. The main modules are:
 
 - `vod_gradients`: computing the gradients for REALM and retrieval models
 - `vod_dataloaders`: efficient `torch.utils.DataLoader` with dynamic retrieval
 from multiple search engines
 - `vod_search`: a common interface to handle `sparse` and `dense` search engines ([elasticsearch](https://www.elastic.co/), [faiss](https://www.google.com/search?q=faiss&sourceid=chrome&ie=UTF-8), [Qdrant](https://qdrant.tech/))
-- `vod_models`: a collection of REALMs using large retrievers (T5s) and OS generative models (RWKV, LLAMA, etc.).
+- `vod_models`: a collection of REALMs using large retrievers (T5s) and OS generative models (RWKV, LLAMA 2, etc.).
 
 ## Roadmap Summer 2023 ☀️
 Progress tracked in https://github.com/VodLM/vod/issues/1
