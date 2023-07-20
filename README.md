@@ -14,6 +14,14 @@
 
  </div>
 
+<br/>
+
+<div align="center">
+Research paper: <a href="https://arxiv.org/abs/2210.06345">Variational Open-Domain Question Answering"</a>, ICML 2023
+</div>
+
+<br/>
+
 ## Latest News 🔥
 
 - July 19' 2023: We integrated [Qdrant](https://qdrant.tech/) as a search backend 📦
@@ -22,9 +30,9 @@
 
 ## What is VOD? 🎯
 
-VOD aims at building, training and evaluating next-generation retrieval-augmented language models (REALMs). The project started with our research paper [Variational Open-Domain Question Answering](https://arxiv.org/abs/2210.06345), in which we introduce the VOD objective: a new variational objective for end-to-end training of REALMs.
+VOD aims at building, training and evaluating next-generation retrieval-augmented language models (REALMs). The project started with our research paper [Variational Open-Domain Question Answering](https://arxiv.org/abs/2210.06345), in which we introduce the VOD objective: a new variational objective for end-to-end training of REALMs. The original paper only explored the application of the VOD objective to multiple-choice ODQA, this project aims at exploring generative tasks.
 
-This repo aims at collecting tools to make training of large generative search models possible and accessible. Developper experience is one of our top priorities. The main components of the repo are:
+In this repo, we built a set of tools to make training of large generative search models possible and developper-friendly. The main modules are:
 
 - `vod_gradients`: computing the gradients for REALM and retrieval models
 - `vod_dataloaders`: efficient `torch.utils.DataLoader` with dynamic retrieval
