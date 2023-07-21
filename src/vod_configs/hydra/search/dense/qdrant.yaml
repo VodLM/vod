@@ -10,7 +10,11 @@ search_params:
   hnsw_ef: 128
   exact: false
 qdrant_body:
-  shard_number: 1
+  # Scale the number of shards with the machine size
+  shard_number: ${resources.n_devices}
+  vectors_config:
+    distance: Dot
+    on_disk: false
   hnsw_config:
     # Number of edges per node in the index graph.
     # Larger the value - more accurate the search, more space required.
@@ -18,7 +22,6 @@ qdrant_body:
     # Number of neighbours to consider during the index building.
     # Larger the value - more accurate the search, more time required to build index.
     ef_construct: 128
-    full_scan_threshold:
   quantization_config:
     scalar:
       # https://qdrant.tech/documentation/tutorials/optimize/
@@ -28,4 +31,5 @@ qdrant_body:
   optimizers_config:
     # https://qdrant.tech/documentation/tutorials/optimize/
     # Split the number of CPUs between GPUs
-    default_segment_number: ${int_div:${n_cpus:},${resources.n_devices}}
+    default_segment_number: 2
+    memmap_threshold: null

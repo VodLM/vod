@@ -394,7 +394,6 @@ def _make_qdrant_body(dim: int, body: Optional[dict[str, Any]]) -> dict[str, Any
         **{
             "size": int(dim),
             "distance": qdrm.Distance.DOT,
-            "on_disk": True,
             **body.get("vectors_config", {}),
         }
     )
@@ -419,14 +418,15 @@ def _ingest_data(
     collection_name: str,
     vectors: dstruct.SizedDataset[np.ndarray],
     groups: Optional[Iterable[str | int]] = None,
+    batch_size: int = 1_000,
 ) -> None:
     """Ingest the data (vectors & groups) into the index."""
     groups_iter = iter(groups) if groups is not None else itertools.repeat(None)
     for j in track(
-        range(0, len(vectors), 100),
+        range(0, len(vectors), batch_size),
         description=f"{_collection_name(collection_name)}: Ingesting {human_format_nb(len(vectors))} vectors",
     ):
-        vec_chunk = vectors[j : j + 100]
+        vec_chunk = vectors[j : j + batch_size]
         if groups is None:
             payloads = None
         else:
