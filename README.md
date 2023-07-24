@@ -200,7 +200,7 @@ This repo is a clean re-write of the original code [FindZebra/fz-openqa](https:/
 }
 ```
 
-## Partnerss 🏫
+## Partners 🏫
 
 The project is currently supported by the [Technical University of Denmark (DTU)](https://www.dtu.dk/) and [Raffle.ai](https://raffle.ai).
 
