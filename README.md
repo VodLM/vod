@@ -1,6 +1,6 @@
 <div align="center">
 
-<img alt="Lightning" src="assets/vod-banner.png" width="800px" style="max-width: 100%;">
+<img alt="VOD" src="assets/vod-banner.png" width="800px" style="max-width: 100%;">
 
 <br/>
 <br/>
@@ -200,6 +200,15 @@ This repo is a clean re-write of the original code [FindZebra/fz-openqa](https:/
 }
 ```
 
-## Sponsors 🏫
+## Partnerss 🏫
 
 The project is currently supported by the [Technical University of Denmark (DTU)](https://www.dtu.dk/) and [Raffle.ai](https://raffle.ai).
+
+<div align="center">
+
+<img alt="DTU logo" src="assets/dtu-logo.png" width="40px" style="max-width: 100%;">
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+<img alt="Raffle.ai logo" src="assets/raffle-logo.png" width="120px" style="max-width: 100%;">
+
+
+</div>
