@@ -6,26 +6,11 @@ defaults:
 
 dataset:
   train:
-    # English
     - frank.A.en:train
-    - squad.en:train
-    - squad.en:val
-    # Danish
     - frank.A.da:train
-    - squad.da:train
-    - squad.da:val
-    # German
     - frank.A.de:train
-    - squad.de:train
-    - squad.de:val
-    # French
     - frank.A.fr:train
-    - squad.fr:train
-    - squad.fr:val
-    # Icelandic
     - frank.A.is:train
-    - squad.is:train
-    - squad.is:val
   validation:
     - frank.A.en:val
     - frank.A.da:val

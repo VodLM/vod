@@ -1,0 +1,4 @@
+defaults:
+  - qdrant: default
+  - elasticsearch: default
+  - faiss: default

@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-import copy
-from typing import Any, Optional
+import collections
+import re
+from typing import Any, Literal, Optional
 
 import omegaconf
 import pydantic
+from typing_extensions import Self, Type
+from vod_configs.py.search import MutliSearchFactoryConfig, MutliSearchFactoryDiff, SearchFactoryDefaults
 from vod_configs.py.utils import StrictModel
 from vod_tools.misc.config import as_pyobj_validator
-
-_DEFAULT_SPLITS = ["train", "validation"]
 
 QUESTION_TEMPLATE = "Question: {{ text }}"
 SECTION_TEMPLATE = "{% if title %}Title: {{ title }}. Document: {% endif %}{{ content }}"
@@ -17,148 +18,11 @@ DEFAULT_TEMPLATES = {
     "section": SECTION_TEMPLATE,
 }
 
-_DEFAULT_SPLITS = ["train", "validation"]
+
+DsetDescriptorRegex = re.compile(r"^(?P<name>[A-Za-z_]+)(|.(?P<subset>[A-Za-z_]+))(|:(?P<split>[A-Za-z_]+))$")
 
 
-FRANK_A_KBIDS = [
-    4,
-    9,
-    10,
-    14,
-    20,
-    26,
-    29,
-    30,
-    32,
-    76,
-    96,
-    105,
-    109,
-    130,
-    156,
-    173,
-    188,
-    195,
-    230,
-    242,
-    294,
-    331,
-    332,
-    541,
-    598,
-    1061,
-    1130,
-    1148,
-    1242,
-    1264,
-    1486,
-    1599,
-    1663,
-    1665,
-]  # noqa: E501
-FRANK_B_KBIDS = [
-    2,
-    6,
-    7,
-    11,
-    12,
-    15,
-    24,
-    25,
-    33,
-    35,
-    37,
-    80,
-    81,
-    121,
-    148,
-    194,
-    198,
-    269,
-    294,
-    334,
-    425,
-    554,
-    596,
-    723,
-    790,
-    792,
-    1284,
-    1584,
-    1589,
-]  # noqa: E501
-
-
-class NamedDset(StrictModel):
-    """A dataset name with splits."""
-
-    name: str
-    split: str
-
-    @property
-    def split_alias(self) -> str:
-        """Return a slightluy more human-readable version of the split name."""
-        aliases = {
-            "validation": "val",
-        }
-        return aliases.get(self.split, self.split)
-
-    @pydantic.validator("split", pre=True)
-    def _validate_split(cls, v: str) -> str:
-        dictionary = {
-            "train": "train",
-            "val": "validation",
-            "validation": "validation",
-            "test": "test",
-        }
-        if v not in dictionary:
-            raise ValueError(f"Invalid split name: {v}")
-        return dictionary[v]
-
-    def __hash__(self) -> int:
-        """Hash the object based on its name and split."""
-        return hash((self.name, self.split))
-
-
-def parse_named_dsets(names: str | list[str], default_splits: Optional[list[str]] = None) -> list[NamedDset]:
-    """Parse a string of dataset names.
-
-    Names are `+` separated and splits are specified with `:` and separated by `-`.
-    """
-    if default_splits is None:
-        default_splits = copy.copy(_DEFAULT_SPLITS)
-
-    if not isinstance(names, (list, omegaconf.ListConfig)):
-        names = [names]
-
-    outputs = []
-    for part in (p for parts in names for p in parts.split("+")):
-        if ":" in part:
-            name, splits = part.split(":")
-            splits = splits.split("-")
-        else:
-            name = part
-            splits = default_splits
-        for split in splits:
-            # TEMPORARY HACK
-            if "frank.A" in name:
-                frank_split = "A"
-            elif "frank.B" in name:
-                frank_split = "B"
-            else:
-                frank_split = None
-
-            if frank_split is not None and name.endswith("-kb*"):
-                kbids = {"A": FRANK_A_KBIDS, "B": FRANK_B_KBIDS}[frank_split]
-                for kbid in kbids:
-                    kb_name = name.replace("-kb*", f"-kb{kbid}")
-                    outputs.append(NamedDset(name=kb_name, split=split))
-            else:
-                outputs.append(NamedDset(name=name, split=split))
-    return outputs
-
-
-class BaseDatasetFactoryConfig(StrictModel):
+class DatasetFactoryConfig(StrictModel):
     """Defines a base configuration for a retrieval dataset builder."""
 
     templates: dict[str, str] = DEFAULT_TEMPLATES
@@ -174,7 +38,181 @@ class BaseDatasetFactoryConfig(StrictModel):
     _validate_prep_map_kwargs = pydantic.validator("prep_map_kwargs", allow_reuse=True, pre=True)(as_pyobj_validator)
 
 
-class DatasetFactoryConfig(NamedDset, BaseDatasetFactoryConfig):
-    """Defines a configuration for a retrieval dataset builder."""
+class DatasetOptions(StrictModel):
+    """Preprocessing options."""
 
-    ...
+    template: Optional[str] = pydantic.Field(
+        None,
+        description="A prompt template used at preprocessing time.",
+    )
+
+
+class DatasetConfig(pydantic.BaseModel):
+    """Defines a dataset."""
+
+    name: str = pydantic.Field(
+        ...,
+        description="Name of the dataset following the pattern `name.subset:split`.",
+    )
+    subset: Optional[str] = pydantic.Field(
+        None,
+        description="Dataset subset name",
+    )
+    split: Optional[Literal["train", "val", "test", "all"]] = pydantic.Field(
+        "all", description="Dataset split (train, etc.)"
+    )
+    parts: Optional[list[DatasetConfig]] = pydantic.Field(
+        None,
+        description="Sub datasets to be concatenated. When set to None, the dataset is a single part (itself)",
+    )
+    options: Optional[DatasetOptions] = pydantic.Field(
+        None,
+        description="Loading/preprocessing options.",
+    )
+    link: Optional[str] = pydantic.Field(None, description="Dataset to search into (descriptor)")
+    search: Optional[MutliSearchFactoryDiff] = pydantic.Field(
+        None,
+        description="Search config diffs for this dataset",
+    )
+
+    @property
+    def descriptor(self) -> str:
+        """Return the dataset descriptor (code name)."""
+        desc = self.name
+        if self.subset is not None:
+            desc += f".{self.subset}"
+
+        return f"{desc}:{self.split}"
+
+    def __hash__(self) -> int:
+        """Hash the object based on its name and split."""
+        return hash(self.descriptor)
+
+    # Validators
+    _validate_options = pydantic.validator("options", allow_reuse=True, pre=True)(as_pyobj_validator)
+
+    @pydantic.root_validator(pre=True)
+    def _validate_all(cls, values: dict) -> dict:
+        return _parse_dataset_descriptor(values)
+
+    @classmethod
+    def parse(cls: Type[Self], config_or_descriptor: str | dict) -> Self:
+        """Parse a config dictionary or dataset name into a structured config."""
+        parsed = _parse_dataset_descriptor(config_or_descriptor)
+        parts = parsed.pop("parts", None)
+        if parts:
+            if not isinstance(parts, (list, omegaconf.ListConfig)):
+                raise TypeError(f"Expected `list`, found `{type(parts)}`")
+            parsed["parts"] = [cls.parse(part) for part in parts]
+            counts = collections.Counter(parsed["parts"])
+            if max(counts.values()) > 1:
+                raise ValueError(f"Found duplicated parts: {counts}")
+        if "search" in parsed:
+            parsed["search"] = MutliSearchFactoryDiff.parse(parsed["search"])
+        return cls(**parsed)
+
+
+def _parse_dataset_descriptor(
+    config_or_name: str | dict | omegaconf.DictConfig,  # type: ignore
+) -> dict:
+    if isinstance(config_or_name, (omegaconf.DictConfig)):
+        config_or_name: dict = omegaconf.OmegaConf.to_container(config_or_name, resolve=True)  # type: ignore
+
+    if isinstance(config_or_name, str):
+        config_or_name = {"name": config_or_name}
+    if not isinstance(config_or_name, dict):
+        raise TypeError(f"config_or_name should be a dict. Found `{type(config_or_name)}`")
+
+    try:
+        name = config_or_name["name"]
+    except KeyError as exc:
+        raise KeyError(
+            f"Key `name` should be provided when parsing `DatasetConfig`. Found keys={list(config_or_name.keys())}"
+        ) from exc
+
+    parsed = DsetDescriptorRegex.match(name)
+    if parsed is None:
+        raise ValueError(f"Couldn't parse name `{name}` with pattern {DsetDescriptorRegex.pattern}")
+
+    # Filter None
+    parsed_ = {k: v for k, v in parsed.groupdict().items() if v is not None}
+    config_ = {k: v for k, v in config_or_name.items() if v is not None}
+
+    # Create the final config
+    final_config = {}
+    for key in parsed_.keys() | config_.keys():
+        parsed_value = parsed_.get(key, None)
+        config_value = config_.get(key, None)
+        final_config[key] = parsed_value or config_value
+
+    return final_config
+
+
+def _parse_list_dset_configs(x: dict | omegaconf.DictConfig | list[dict] | omegaconf.ListConfig):
+    if isinstance(x, (omegaconf.DictConfig, omegaconf.ListConfig)):
+        x = omegaconf.OmegaConf.to_container(x, resolve=True)  # type: ignore
+
+    if isinstance(x, dict):
+        return [DatasetConfig.parse(x)]
+
+    if isinstance(x, list):
+        return [DatasetConfig.parse(y) for y in x]
+
+    raise ValueError(f"Unknown type `{type(x)}`")
+
+
+class TrainDatasetsConfig(StrictModel):
+    """Defines the training datasets."""
+
+    train_queries: list[DatasetConfig]
+    val_queries: list[DatasetConfig]
+    sections: list[DatasetConfig]
+
+    # validators
+    _validate_train_queries = pydantic.validator("train_queries", allow_reuse=True, pre=True)(_parse_list_dset_configs)
+    _validate_val_queries = pydantic.validator("val_queries", allow_reuse=True, pre=True)(_parse_list_dset_configs)
+    _validate_sections = pydantic.validator("sections", allow_reuse=True, pre=True)(_parse_list_dset_configs)
+
+
+class BenchmarkDatasetsConfig(StrictModel):
+    """Defines a benchmark."""
+
+    queries: DatasetConfig
+    sections: DatasetConfig
+
+    # validators
+    _validate_queries = pydantic.validator("queries", allow_reuse=True, pre=True)(DatasetConfig.parse)
+    _validate_sections = pydantic.validator("sections", allow_reuse=True, pre=True)(DatasetConfig.parse)
+
+
+class DatasetsConfig(StrictModel):
+    """Deine all datasets, including the base search config."""
+
+    train: TrainDatasetsConfig
+    benchmark: list[BenchmarkDatasetsConfig]
+    factory: DatasetFactoryConfig
+    base_search: MutliSearchFactoryDiff
+
+    # Validators
+    _validate_train = pydantic.validator("train", allow_reuse=True, pre=True)(as_pyobj_validator)
+    _validate_factory = pydantic.validator("factory", allow_reuse=True, pre=True)(as_pyobj_validator)
+    _validate_base_search = pydantic.validator("base_search", allow_reuse=True, pre=True)(as_pyobj_validator)
+
+    @pydantic.validator("benchmark", pre=True)
+    def _validate_benchmark(cls, v):
+        if isinstance(v, (omegaconf.DictConfig, omegaconf.ListConfig)):
+            v = omegaconf.OmegaConf.to_container(v, resolve=True)  # type: ignore
+
+        if isinstance(v, dict):
+            v = [v]
+        if not isinstance(v, list):
+            raise TypeError(f"Unknown type {type(v)}")
+        return [BenchmarkDatasetsConfig(**y) for y in v]
+
+    # Utilities
+    def resolve_search_config(
+        self,
+        defaults: SearchFactoryDefaults,
+        config: None | MutliSearchFactoryDiff,
+    ) -> MutliSearchFactoryConfig:
+        return defaults + self.base_search + config

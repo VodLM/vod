@@ -140,7 +140,7 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                         fabric=fabric,
                         factories=_get_dset_factories(config.dataset.get("val"), config=config.dataset),
                         vectors=vectors,
-                        search_config=config.search,
+                        search_config=config.search_defaults,
                         collate_config=config.collates.train.copy(update=config.benchmark.tuning.collate_overrides),
                         dataloader_config=_patch_mum_worker(
                             config.dataloaders.benchmark,
@@ -183,7 +183,7 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                 train_factories=_get_dset_factories(config.dataset.get("train"), config=config.dataset),
                 val_factories=_get_dset_factories(config.dataset.get("val"), config=config.dataset),
                 tokenizer=config.tokenizer.instantiate(),
-                search_config=config.search,
+                search_config=config.search_defaults,
                 collate_config=config.collates.train,
                 train_dataloader_config=config.dataloaders.train,
                 eval_dataloader_config=config.dataloaders.eval,
@@ -250,7 +250,7 @@ def _run_benchmarks(
             logdir.mkdir(parents=True, exist_ok=True)
 
             # Create the search config
-            search_config = config.search.copy(update=config.benchmark.search)
+            search_config = config.search_defaults.copy(update=config.benchmark.search)
 
             # Run the benchmark and log the results
             metrics = benchmark(

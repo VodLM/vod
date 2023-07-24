@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import dataclasses
-import functools
 import pathlib
 from typing import Any, Literal, Optional, Union
 
@@ -16,8 +15,8 @@ from vod_tools.misc.config import as_pyobj_validator
 from vod_tools.misc.schedule import BaseSchedule, schedule_factory
 
 from .dataloaders import BaseCollateConfig, DataLoaderConfig, RetrievalCollateConfig, SamplerFactoryConfig
-from .datasets import BaseDatasetFactoryConfig, DatasetFactoryConfig, NamedDset, parse_named_dsets
-from .search import SearchConfig
+from .datasets import DatasetConfig
+from .search import SearchFactoryDefaults
 
 
 class TuningConfig(StrictModel):
@@ -195,24 +194,18 @@ class SysConfig:
         )
 
 
-class MultiDatasetFactoryConfig(BaseDatasetFactoryConfig):
+class MultiDatasetFactoryConfig(StrictModel):
     """Defines a configuration for a retrieval dataset builder."""
 
     # dataset groups
-    train: list[NamedDset]
-    validation: list[NamedDset]
-    benchmark: list[NamedDset]
+    train: list[DatasetConfig]
+    validation: list[DatasetConfig]
+    benchmark: list[DatasetConfig]
 
     # validators
-    _validate_train = pydantic.validator("train", allow_reuse=True, pre=True)(
-        functools.partial(parse_named_dsets, default_splits=["train"])
-    )
-    _validate_validation = pydantic.validator("validation", allow_reuse=True, pre=True)(
-        functools.partial(parse_named_dsets, default_splits=["validation"])
-    )
-    _validate_benchmark = pydantic.validator("benchmark", allow_reuse=True, pre=True)(
-        functools.partial(parse_named_dsets, default_splits=["test"])
-    )
+    _validate_train = pydantic.validator("train", allow_reuse=True, pre=True)(DatasetConfig.parse)
+    _validate_validation = pydantic.validator("validation", allow_reuse=True, pre=True)(DatasetConfig.parse)
+    _validate_benchmark = pydantic.validator("benchmark", allow_reuse=True, pre=True)(DatasetConfig.parse)
 
     @classmethod
     def parse(cls: Type[Self], obj: dict | omegaconf.DictConfig | Self) -> Self:
@@ -221,14 +214,6 @@ class MultiDatasetFactoryConfig(BaseDatasetFactoryConfig):
             return obj
 
         return hydra.utils.instantiate(obj)
-
-    def dataset_factory_config(self, dset: NamedDset) -> DatasetFactoryConfig:
-        """Returns the `DatasetFactoryConfig` for a given dataset."""
-        return DatasetFactoryConfig(
-            name=dset.name,
-            split=dset.split,
-            **self.dict(exclude={"train", "validation", "benchmark"}),
-        )
 
     def get(self, what: Literal["all", "train+val", "train", "val", "validation", "benchmark"]) -> set[NamedDset]:
         """Return all datasets."""
@@ -258,7 +243,7 @@ class TrainWithIndexUpdatesConfigs:
     collates: CollateConfigs
     trainer: TrainerConfig
     benchmark: BenchmarkConfig
-    search: SearchConfig
+    search_defaults: SearchFactoryDefaults
     batch_size: BatchSizeConfig
     sys: SysConfig
     dl_sampler: Optional[SamplerFactoryConfig | list[SamplerFactoryConfig]] = None
@@ -273,7 +258,7 @@ class TrainWithIndexUpdatesConfigs:
             batch_size=BatchSizeConfig.parse(config.batch_size),
             dataloaders=DataLoaderConfigs.parse(config.dataloaders),
             collates=CollateConfigs.parse(config.collates),
-            search=SearchConfig.parse(config.search),
+            search_defaults=SearchFactoryDefaults(**config.search),
             sys=SysConfig.parse(config.sys),
             dl_sampler=_parse_dl_sampler(config.dl_sampler),
             tokenizer=hydra.utils.instantiate(config.tokenizer),

@@ -3,10 +3,8 @@
 dataset:
   train:
     - frank.A.en-pos:train
-    - squad.en:train
   validation:
     - frank.A.en-pos:val
-    - squad.en:val
   benchmark:
     - frank.A.en:val
     - frank.B.en:val

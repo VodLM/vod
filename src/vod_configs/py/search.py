@@ -1,4 +1,5 @@
-from typing import Optional
+import copy
+from typing import Literal, Optional, TypeVar, Union
 
 import faiss
 import omegaconf
@@ -7,6 +8,7 @@ import torch
 from loguru import logger
 from typing_extensions import Self, Type
 from vod_configs.py.utils import StrictModel
+from vod_tools.misc.config import as_pyobj_validator
 
 from src.vod_tools import pipes
 from src.vod_tools.misc.pretty import human_format_bytes
@@ -27,6 +29,24 @@ FAISS_METRICS = {
 }
 
 FAISS_METRICS_INV = {v: k for k, v in FAISS_METRICS.items()}
+
+
+def _get_gpu_resources(
+    devices: list[int], tempmem: int = -1, log_mem_allocation: bool = False
+) -> list[GpuResources]:  # type: ignore
+    """Return a list of GPU resources."""
+    gpu_resources = []
+    ngpu = torch.cuda.device_count() if devices is None else len(devices)
+    for i in range(ngpu):
+        res = StandardGpuResources()  # type: ignore
+        res.setLogMemoryAllocations(log_mem_allocation)
+        if tempmem is not None and tempmem > 0:
+            logger.debug(f"Setting GPU:{i} temporary memory to {human_format_bytes(tempmem, 'MB')}")
+            res.setTempMemory(tempmem)
+
+        gpu_resources.append(res)
+
+    return gpu_resources
 
 
 class FaissGpuConfig(StrictModel):
@@ -71,9 +91,45 @@ class FaissGpuConfig(StrictModel):
         return _get_gpu_resources(self.devices, self.tempmem or -1)
 
 
-class FaissFactoryConfig(StrictModel):
+SearchBackends = Literal["elasticsearch", "faiss", "qdrant"]
+
+
+class BaseSearchFactoryConfig(StrictModel):
+    """Base config for all search engines."""
+
+    backend: SearchBackends = pydantic.Field(..., description="Search backend to use.")
+    text_key: str = pydantic.Field("text", description="Text field to be indexed.")
+    group_key: Optional[str] = pydantic.Field("group", description="Group field to be indexed.")
+    section_id_key: Optional[str] = pydantic.Field("id", description="Section ID field to be indexed.")
+
+
+class BaseSearchFactoryDiff(StrictModel):
+    """Relative search configs."""
+
+    backend: SearchBackends
+    text_key: Optional[str] = None
+    group_key: Optional[str] = None
+    section_id_key: Optional[str] = None
+
+
+class FaissFactoryDiff(BaseSearchFactoryDiff):
+    """Configures a relative faiss configuration."""
+
+    backend: Literal["faiss"] = "faiss"
+    factory: Optional[str] = None
+    nprobe: Optional[int] = None
+    metric: Optional[int] = None
+    train_size: Optional[int] = None
+    logging_level: Optional[str] = None
+    host: Optional[str] = None
+    port: Optional[int] = None
+    gpu: Optional[FaissGpuConfig] = None
+
+
+class FaissFactoryConfig(BaseSearchFactoryConfig):
     """Configures the building of a faiss server."""
 
+    backend: Literal["faiss"] = "faiss"
     factory: str = "Flat"
     nprobe: int = 16
     metric: int = faiss.METRIC_INNER_PRODUCT
@@ -82,6 +138,12 @@ class FaissFactoryConfig(StrictModel):
     host: str = "http://localhost"
     port: int = 7678
     gpu: Optional[FaissGpuConfig] = None
+
+    def __add__(self, diff: None | FaissFactoryDiff) -> Self:
+        if diff is None:
+            return self
+        diffs = {k: v for k, v in diff if v is not None}
+        return self.copy(update=diffs)
 
     @pydantic.validator("metric", pre=True)
     def _validate_metric(cls, v: str | int) -> int:
@@ -96,16 +158,30 @@ class FaissFactoryConfig(StrictModel):
         return pipes.fingerprint(self.dict(exclude=excludes))
 
 
-class ElasticsearchFactoryConfig(StrictModel):
+class ElasticsearchFactoryDiff(BaseSearchFactoryDiff):
+    """Configures a relative elasticsearch configuration."""
+
+    backend: Literal["elasticsearch"] = "elasticsearch"
+    host: Optional[str] = None
+    port: Optional[int] = None
+    persistent: Optional[bool] = None
+    es_body: Optional[dict] = None
+
+
+class ElasticsearchFactoryConfig(BaseSearchFactoryConfig):
     """Configures the building of an Elasticsearch server."""
 
-    text_key: str = "text"
-    group_key: Optional[str] = "group_hash"
-    section_id_key: Optional[str] = "id"
+    backend: Literal["elasticsearch"] = "elasticsearch"
     host: str = "http://localhost"
     port: int = 9200
     persistent: bool = True
     es_body: Optional[dict] = None
+
+    def __add__(self, diff: None | ElasticsearchFactoryDiff) -> Self:
+        if diff is None:
+            return self
+        diffs = {k: v for k, v in diff if v is not None}
+        return self.copy(update=diffs)
 
     @pydantic.validator("es_body", pre=True)
     def _validate_es_body(cls, v: dict | None) -> dict | None:
@@ -119,10 +195,24 @@ class ElasticsearchFactoryConfig(StrictModel):
         return pipes.fingerprint(self.dict(exclude=excludes))
 
 
-class QdrantFactoryConfig(StrictModel):
+class QdrantFactoryDiff(BaseSearchFactoryDiff):
+    """Configures a relative qdrant configuration."""
+
+    backend: Literal["qdrant"] = "qdrant"
+    host: Optional[str] = None
+    port: Optional[int] = None
+    grpc_port: Optional[int] = None
+    persistent: Optional[bool] = None
+    exist_ok: Optional[bool] = None
+    qdrant_body: Optional[dict] = None
+    search_params: Optional[dict] = None
+    force_single_collection: Optional[bool] = None
+
+
+class QdrantFactoryConfig(BaseSearchFactoryConfig):
     """Configures the building of a Qdrant server."""
 
-    group_key: Optional[str] = "group_hash"
+    backend: Literal["qdrant"] = "qdrant"
     host: str = "http://localhost"
     port: int = 6333
     grpc_port: Optional[int] = 6334
@@ -131,6 +221,12 @@ class QdrantFactoryConfig(StrictModel):
     qdrant_body: Optional[dict] = None
     search_params: Optional[dict] = None
     force_single_collection: bool = False
+
+    def __add__(self, diff: None | QdrantFactoryDiff) -> Self:
+        if diff is None:
+            return self
+        diffs = {k: v for k, v in diff if v is not None}
+        return self.copy(update=diffs)
 
     @pydantic.validator("qdrant_body", pre=True)
     def _validate_qdrant_body(cls, v: dict | None) -> dict | None:
@@ -146,71 +242,138 @@ class QdrantFactoryConfig(StrictModel):
 
     def fingerprint(self) -> str:
         """Return a fingerprint for this config."""
-        excludes = {"host", "port", "persistent"}
+        excludes = {
+            "host",
+            "port",
+            "grpc_port",
+            "persistent",
+            "force_single_collection",
+            "search_params",
+        }
         return pipes.fingerprint(self.dict(exclude=excludes))
 
 
-def _get_gpu_resources(
-    devices: list[int], tempmem: int = -1, log_mem_allocation: bool = False
-) -> list[GpuResources]:  # type: ignore
-    """Return a list of GPU resources."""
-    gpu_resources = []
-    ngpu = torch.cuda.device_count() if devices is None else len(devices)
-    for i in range(ngpu):
-        res = StandardGpuResources()  # type: ignore
-        res.setLogMemoryAllocations(log_mem_allocation)
-        if tempmem is not None and tempmem > 0:
-            logger.debug(f"Setting GPU:{i} temporary memory to {human_format_bytes(tempmem, 'MB')}")
-            res.setTempMemory(tempmem)
+SingleSearchFactoryConfig = Union[ElasticsearchFactoryConfig, FaissFactoryConfig, QdrantFactoryConfig]
+SingleSearchFactoryDiff = Union[ElasticsearchFactoryDiff, FaissFactoryDiff, QdrantFactoryDiff]
 
-        gpu_resources.append(res)
+FactoryConfigsByBackend: dict[SearchBackends, Type[BaseSearchFactoryConfig]] = {
+    "elasticsearch": ElasticsearchFactoryConfig,
+    "faiss": FaissFactoryConfig,
+    "qdrant": QdrantFactoryConfig,
+}
 
-    return gpu_resources
+FactoryDiffByBackend: dict[SearchBackends, Type[BaseSearchFactoryDiff]] = {
+    "elasticsearch": ElasticsearchFactoryDiff,
+    "faiss": FaissFactoryDiff,
+    "qdrant": QdrantFactoryDiff,
+}
 
 
-class SearchConfig(StrictModel):
-    """Base configuration for search engines (sparse (elasticsearch), dense (faiss, qdrant))."""
+class MutliSearchFactoryDiff(BaseSearchFactoryDiff):
+    """Configures a hybrid search engine."""
 
-    text_key: str = "text"
-    group_key: str = "group_hash"
-    dense: Optional[FaissFactoryConfig | QdrantFactoryConfig] = None
-    sparse: Optional[ElasticsearchFactoryConfig] = None
-
-    @pydantic.validator("sparse", pre=True)
-    def _validate_sparse(cls, v: dict | None) -> ElasticsearchFactoryConfig | None:
-        if v is None or isinstance(v, ElasticsearchFactoryConfig):
-            return v
-
-        if isinstance(v, (dict, omegaconf.DictConfig)):
-            return ElasticsearchFactoryConfig(**v)
-
-        return v
-
-    @pydantic.validator("dense", pre=True)
-    def _validate_dense(cls, v: dict | None) -> FaissFactoryConfig | QdrantFactoryConfig | None:
-        if v is None or isinstance(v, (FaissFactoryConfig, QdrantFactoryConfig)):
-            return v
-
-        if isinstance(v, omegaconf.DictConfig):
-            v = omegaconf.OmegaConf.to_container(v, resolve=True)  # type: ignore
-
-        if not isinstance(v, dict):
-            raise ValueError(f"Invalid type for `dense`: {type(v)}")
-
-        try:
-            backend = v.pop("backend")
-        except KeyError as exc:
-            raise ValueError("`backend` must be set for a dense index.") from exc
-
-        if backend == "faiss":
-            return FaissFactoryConfig(**v)
-
-        if backend == "qdrant":
-            return QdrantFactoryConfig(**v)
-
-        raise ValueError(f"Unknown backend: {backend}")
+    backend: Literal["multi"] = "multi"
+    engines: dict[str, SingleSearchFactoryDiff]
 
     @classmethod
-    def parse(cls: Type[Self], obj: dict | omegaconf.DictConfig) -> Self:
-        """Parse a config object."""
-        return cls(**obj)  # type: ignore
+    def parse(cls: Type[Self], config: dict | omegaconf.DictConfig) -> Self:  # type: ignore
+        """Parse a dictionary / omegaconf configuration into a structured dict."""
+        if "engines" in config:
+            config = config["engines"]
+        config = _parse_multi_search(config, FactoryDiffByBackend)
+
+        if len(config) == 0:
+            raise ValueError(f"Attempting to initialize a `{cls.__name__}` without engines.")
+
+        return cls(engines=config)  # type: ignore
+
+
+class MutliSearchFactoryConfig(BaseSearchFactoryConfig):
+    """Configures a hybrid search engine."""
+
+    _defaults = pydantic.PrivateAttr(None)
+
+    backend: Literal["multi"] = "multi"
+    engines: dict[str, SingleSearchFactoryConfig]
+
+    @classmethod
+    def parse(cls: Type[Self], config: dict | omegaconf.DictConfig) -> Self:  # type: ignore
+        """Parse a dictionary / omegaconf configuration into a structured dict."""
+        if "engines" in config:
+            config = config["engines"]
+        config = _parse_multi_search(config, FactoryConfigsByBackend)
+
+        if len(config) == 0:
+            raise ValueError(f"Attempting to initialize a `{cls.__name__}` without engines.")
+
+        return cls(engines=config)  # type: ignore
+
+    def __add__(self, diff: None | MutliSearchFactoryDiff) -> Self:
+        if diff is None:
+            return self
+        new_engines = copy.copy(self.engines)
+        for key, engine in diff.engines.items():
+            if self.engines[key].backend == engine.backend:
+                new_engines[key] = self.engines[key] + engine  # type: ignore
+            elif self._defaults is not None:
+                default_engine = getattr(self._defaults, engine.backend)
+                new_engines[key] = default_engine + engine
+            else:
+                raise ValueError("`_defaults` was never set.")
+
+        return self.copy(update={"engines": new_engines})
+
+
+class SearchFactoryDefaults(StrictModel):
+    """Default configurations for the search engine backend."""
+
+    elasticsearch: ElasticsearchFactoryConfig = ElasticsearchFactoryConfig()
+    faiss: FaissFactoryConfig = FaissFactoryConfig()
+    qdrant: QdrantFactoryConfig = QdrantFactoryConfig()
+
+    # validators
+    _validate_elasticsearch = pydantic.validator("elasticsearch", allow_reuse=True, pre=True)(as_pyobj_validator)
+    _validate_faiss = pydantic.validator("faiss", allow_reuse=True, pre=True)(as_pyobj_validator)
+    _validate_qdrant = pydantic.validator("qdrant", allow_reuse=True, pre=True)(as_pyobj_validator)
+
+    # methods
+    def __add__(self, diff: MutliSearchFactoryDiff) -> MutliSearchFactoryConfig:
+        engine_factories = {}
+        for key, cfg_diff in diff.engines.items():
+            default_config = getattr(self, cfg_diff.backend)
+            engine_factories[key] = default_config + cfg_diff
+
+        cfg = MutliSearchFactoryConfig(engines=engine_factories)
+        cfg._defaults = self  # <- save the defaults for better resolution of diffs
+        return cfg
+
+
+T = TypeVar("T")
+K = TypeVar("K")
+
+
+def _parse_multi_search(
+    config: dict | omegaconf.DictConfig,  # type: ignore
+    sub_cls_by_backend: dict[K, Type[T]],
+) -> dict[K, T]:  # type: ignore
+    """Parse a dictionary / omegaconf configuration into a structured dict."""
+    if isinstance(config, omegaconf.DictConfig):
+        config: dict = omegaconf.OmegaConf.to_container(config, resolve=True)  # type: ignore
+
+    formatted_config = {}
+    for engine_name, cfg in config.items():
+        try:
+            backend = cfg["backend"]
+        except KeyError as exc:
+            raise KeyError(
+                f"Backend must be configured. Found configuration keys `{list(cfg.keys())}`. Missing=`backend`"
+            ) from exc
+        try:
+            sub_cls = sub_cls_by_backend[backend]
+        except KeyError as exc:
+            raise KeyError(f"Unknown backend `{backend}`. Known backends: {list(sub_cls_by_backend.keys())}") from exc
+
+        # Instantiate the specific engine
+        formatted_config[engine_name] = sub_cls(**cfg)
+
+    return formatted_config

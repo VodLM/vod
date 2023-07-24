@@ -6,10 +6,13 @@ from .py.dataloaders import (
     SamplerFactoryConfig,
 )
 from .py.datasets import (
-    BaseDatasetFactoryConfig,
+    BenchmarkDatasetsConfig,
+    DatasetConfig,
     DatasetFactoryConfig,
-    NamedDset,
-    parse_named_dsets,
+    DatasetOptions,
+    DatasetsConfig,
+    DsetDescriptorRegex,
+    TrainDatasetsConfig,
 )
 from .py.models import (
     TokenizerConfig,
@@ -19,8 +22,10 @@ from .py.search import (
     ElasticsearchFactoryConfig,
     FaissFactoryConfig,
     FaissGpuConfig,
+    MutliSearchFactoryConfig,
     QdrantFactoryConfig,
-    SearchConfig,
+    SearchBackends,
+    SearchFactoryDefaults,
 )
 from .py.workflows import (
     BatchSizeConfig,
