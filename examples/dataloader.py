@@ -64,7 +64,7 @@ def run(args: Args) -> None:
     model = fabric.setup_module(model)
 
     # 2. Load the dataset (we are working on extending this interface to external datasets)
-    dset_factory = vod_datasets.DatasetFactory.from_config({"name": args.dset, "split": args.split})
+    dset_factory = vod_datasets.RetrievalDatasetFactory.from_config({"name": args.dset, "split": args.split})
     questions = dset_factory.get_qa_split()
     sections = dset_factory.get_sections()
     if args.subset_size > 0:

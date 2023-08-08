@@ -27,6 +27,9 @@ packages = [
   { from = "src", include = "vod_cli" },
 ]
 
+[build-system]
+build-backend = "poetry.core.masonry.api"
+
 
 [tool.poetry.scripts]
 train = 'vod_cli.train:run'
@@ -78,9 +81,6 @@ optional = true
 
 [tool.poetry.group.cuda.dependencies]
 faiss-gpu = { platform = "linux", version = ">=1.7.2" } # <-- or build it using `build-faiss.sh`
-
-[build-system]
-build-backend = "poetry.core.masonry.api"
 
 [tool.black]
 line-length = 120

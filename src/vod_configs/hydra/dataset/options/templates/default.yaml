@@ -1,0 +1,2 @@
+queries: "Q: {{ query }}"
+sections: "{% if title %}Title: {{ title }}. {% endif %}D: {{ content }}"

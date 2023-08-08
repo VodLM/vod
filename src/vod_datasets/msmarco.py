@@ -19,7 +19,6 @@ from rich.progress import track
 from .base import (
     DATASETS_CACHE_PATH,
     QueryModel,
-    RetrievalDataset,
     SectionModel,
     SilentHuggingfaceDecorator,
     init_gcloud_filesystem,
@@ -28,7 +27,7 @@ from .base import (
 MS_MARCO_KB_ID = 100_000
 
 
-class MsmarcoRetrievalDataset(RetrievalDataset):
+class MsmarcoRetrievalDataset:
     """MS MARCO dataset for retrieval."""
 
     ...

@@ -336,6 +336,11 @@ class SearchFactoryDefaults(StrictModel):
     _validate_faiss = pydantic.validator("faiss", allow_reuse=True, pre=True)(as_pyobj_validator)
     _validate_qdrant = pydantic.validator("qdrant", allow_reuse=True, pre=True)(as_pyobj_validator)
 
+    @classmethod
+    def parse(cls: Type[Self], config: dict | omegaconf.DictConfig) -> Self:  # type: ignore
+        """Parse a dictionary / omegaconf configuration into a structured dict."""
+        return cls(**config)
+
     # methods
     def __add__(self, diff: MutliSearchFactoryDiff) -> MutliSearchFactoryConfig:
         engine_factories = {}

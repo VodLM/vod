@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import functools
 import pathlib
+import sys
 from typing import Any, Iterable, Optional, TypeVar
 
 import lightning as L
@@ -34,6 +35,9 @@ def train_with_index_updates(  # noqa: C901, PLR0915
     barrier = functools.partial(helpers.barrier_fn, fabric=fabric)
     if isinstance(config, omegaconf.DictConfig):
         config = vod_configs.TrainWithIndexUpdatesConfigs.parse(config)
+
+    rich.print(config)
+    sys.exit()
 
     # Define the index update steps and the `PeriodicStoppingCallback` callback.
     update_steps = _infer_update_steps(config.trainer.max_steps, config.trainer.period)
@@ -91,6 +95,9 @@ def train_with_index_updates(  # noqa: C901, PLR0915
         bench_parameters = config.benchmark.parameters
         run_benchmarks = state.period > 0 or config.benchmark.on_init
 
+        # Debug
+        rich.print(config.dataset)
+
         # wrap everything in a temporary directory to avoid filling up the disk.
         # The temporary directory will be deleted at the end of each period except the first one
         # as dataset vectors won't change when using the same seed/model.
@@ -99,16 +106,13 @@ def train_with_index_updates(  # noqa: C901, PLR0915
             delete_existing=False,
             persist=state.period == 0,  # keep the cache for the first period
         ) as cache_dir:
-            factories = _get_dset_factories(
-                config.dataset.get("all" if run_benchmarks else "train+val"),
-                config=config.dataset,
-            )
+            factories = config.dataset.get_factories("all" if run_benchmarks else "train+val")
             # pre-process all datasets on global zero, this is done implicitely when loading a dataset
             if pidx == 0:
                 if fabric.is_global_zero:
                     for key, factory in factories.items():
                         logger.debug(f"Pre-processing `{key}` ...")
-                        factory.get_qa_split()
+                        factory.get_queries()
                         factory.get_sections()
                 barrier("Pre-processing done.")
 
@@ -138,7 +142,7 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                         parameters=bench_parameters,
                         tune=["sparse"],
                         fabric=fabric,
-                        factories=_get_dset_factories(config.dataset.get("val"), config=config.dataset),
+                        factories=config.dataset.get_factories("benchmark"),
                         vectors=vectors,
                         search_config=config.search_defaults,
                         collate_config=config.collates.train.copy(update=config.benchmark.tuning.collate_overrides),
@@ -180,8 +184,8 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                 scheduler=scheduler,
                 fabric=fabric,
                 vectors=vectors,  # type: ignore
-                train_factories=_get_dset_factories(config.dataset.get("train"), config=config.dataset),
-                val_factories=_get_dset_factories(config.dataset.get("val"), config=config.dataset),
+                train_factories=config.dataset.get_factories("train"),
+                val_factories=config.dataset.get_factories("val"),
                 tokenizer=config.tokenizer.instantiate(),
                 search_config=config.search_defaults,
                 collate_config=config.collates.train,
@@ -236,7 +240,7 @@ def _run_benchmarks(
     state: helpers.TrainerState,
     parameters: dict[str, float],
     cache_dir: pathlib.Path,
-    factories: dict[K, vod_datasets.DatasetFactory],
+    factories: dict[K, vod_datasets.RetrievalDatasetFactory],
     vectors: dict[K, None | helpers.PrecomputedDsetVectors],
 ) -> None:
     # if helpers.is_engine_enabled(parameters, "faiss"):
@@ -344,9 +348,9 @@ def _infer_accumulate_grad_batches(fabric: L.Fabric, config: vod_configs.BatchSi
 def _get_dset_factories(
     dsets: Iterable[vod_configs.NamedDset],
     config: vod_configs.MultiDatasetFactoryConfig,
-) -> dict[vod_configs.NamedDset, vod_datasets.DatasetFactory]:
+) -> dict[vod_configs.NamedDset, vod_datasets.RetrievalDatasetFactory]:
     return {
-        dset_cfg: vod_datasets.DatasetFactory.from_config(
+        dset_cfg: vod_datasets.RetrievalDatasetFactory.from_config(
             config.dataset_factory_config(dset_cfg),
         )
         for dset_cfg in dsets

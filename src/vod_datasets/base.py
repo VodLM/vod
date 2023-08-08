@@ -13,23 +13,11 @@ RAFFLE_PATH = str(pathlib.Path("~/.raffle").expanduser())
 DATASETS_CACHE_PATH = str(pathlib.Path(RAFFLE_PATH, "datasets"))
 
 
-class RetrievalDataset(pydantic.BaseModel):
-    """A base retrieval dataset."""
-
-    class Config:
-        """Pydantic configuration."""
-
-        arbitrary_types_allowed = True
-
-    qa_splits: datasets.DatasetDict
-    sections: datasets.Dataset
-
-
 class QueryModel(pydantic.BaseModel):
     """A base query data model."""
 
     id: int
-    text: str
+    query: str
     data_source: str
     section_ids: list[int]
     kb_id: int
@@ -45,7 +33,7 @@ class QueryModel(pydantic.BaseModel):
 class SectionModel(pydantic.BaseModel):
     """A base section data model."""
 
-    content: str
+    section: str
     title: str
     id: int
     kb_id: int
@@ -110,3 +98,14 @@ def init_gcloud_filesystem() -> fsspec.AbstractFileSystem:
     except KeyError as exc:
         raise RuntimeError("Missing `GCLOUD_PROJECT_ID` environment variables. ") from exc
     return gcsfs.GCSFileSystem(token=token, project=project)
+
+
+def _fetch_queries_split(queries: datasets.DatasetDict, split: None | str) -> datasets.Dataset | datasets.DatasetDict:
+    if split is None or split in {"all"}:
+        return queries
+
+    normalized_split = {
+        "val": "validation",
+    }.get(split, split)
+
+    return queries[normalized_split]

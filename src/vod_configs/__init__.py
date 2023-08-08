@@ -6,12 +6,12 @@ from .py.dataloaders import (
     SamplerFactoryConfig,
 )
 from .py.datasets import (
-    BenchmarkDatasetsConfig,
-    DatasetConfig,
-    DatasetFactoryConfig,
+    BaseDatasetConfig,
     DatasetOptions,
     DatasetsConfig,
     DsetDescriptorRegex,
+    QueriesDatasetConfig,
+    SectionsDatasetConfig,
     TrainDatasetsConfig,
 )
 from .py.models import (
@@ -32,7 +32,6 @@ from .py.workflows import (
     BenchmarkConfig,
     CollateConfigs,
     DataLoaderConfigs,
-    MultiDatasetFactoryConfig,
     SysConfig,
     TrainerConfig,
     TrainWithIndexUpdatesConfigs,

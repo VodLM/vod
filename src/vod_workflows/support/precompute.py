@@ -20,7 +20,7 @@ def _get_key(x: tuple) -> str:
 
 
 def compute_vectors(
-    factories: dict[K, vod_datasets.DatasetFactory],
+    factories: dict[K, vod_datasets.RetrievalDatasetFactory],
     *,
     ranker: vod_models.Ranker,
     tokenizer: transformers.PreTrainedTokenizerBase,
@@ -56,7 +56,7 @@ def compute_vectors(
 
 
 def compute_dataset_vectors(
-    factory: vod_datasets.DatasetFactory | dstruct.SizedDataset[dict[str, Any]],
+    factory: vod_datasets.RetrievalDatasetFactory | dstruct.SizedDataset[dict[str, Any]],
     *,
     ranker: vod_models.Ranker,
     fabric: L.Fabric,
@@ -72,7 +72,7 @@ def compute_dataset_vectors(
     barrier_fn = functools.partial(helpers.barrier_fn, fabric=fabric)
 
     # construct the dataset
-    if isinstance(factory, vod_datasets.DatasetFactory):
+    if isinstance(factory, vod_datasets.RetrievalDatasetFactory):
         dataset = factory(what=field)
         locator = f"{factory.name}:{factory.split}({field})"
     else:

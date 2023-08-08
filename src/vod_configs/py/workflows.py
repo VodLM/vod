@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import pathlib
-from typing import Any, Literal, Optional, Union
+from typing import Any, Optional, Union
 
 import hydra
 import omegaconf
@@ -15,8 +15,7 @@ from vod_tools.misc.config import as_pyobj_validator
 from vod_tools.misc.schedule import BaseSchedule, schedule_factory
 
 from .dataloaders import BaseCollateConfig, DataLoaderConfig, RetrievalCollateConfig, SamplerFactoryConfig
-from .datasets import DatasetConfig
-from .search import SearchFactoryDefaults
+from .datasets import DatasetsConfig
 
 
 class TuningConfig(StrictModel):
@@ -194,56 +193,16 @@ class SysConfig:
         )
 
 
-class MultiDatasetFactoryConfig(StrictModel):
-    """Defines a configuration for a retrieval dataset builder."""
-
-    # dataset groups
-    train: list[DatasetConfig]
-    validation: list[DatasetConfig]
-    benchmark: list[DatasetConfig]
-
-    # validators
-    _validate_train = pydantic.validator("train", allow_reuse=True, pre=True)(DatasetConfig.parse)
-    _validate_validation = pydantic.validator("validation", allow_reuse=True, pre=True)(DatasetConfig.parse)
-    _validate_benchmark = pydantic.validator("benchmark", allow_reuse=True, pre=True)(DatasetConfig.parse)
-
-    @classmethod
-    def parse(cls: Type[Self], obj: dict | omegaconf.DictConfig | Self) -> Self:
-        """Parse a benchmark config."""
-        if isinstance(obj, cls):
-            return obj
-
-        return hydra.utils.instantiate(obj)
-
-    def get(self, what: Literal["all", "train+val", "train", "val", "validation", "benchmark"]) -> set[NamedDset]:
-        """Return all datasets."""
-        known_groups = {
-            "all": self.train + self.validation + self.benchmark,
-            "train+val": self.train + self.validation,
-            "train": self.train,
-            "val": self.validation,
-            "validation": self.validation,
-            "benchmark": self.benchmark,
-        }
-        try:
-            groups = known_groups[what]
-        except KeyError as exc:
-            raise ValueError(f"Invalid group: {what}. Valid groups are: {list(known_groups.keys())}") from exc
-
-        return set(groups)
-
-
 @dataclasses.dataclass
 class TrainWithIndexUpdatesConfigs:
     """Models the configuration for a workflow that trains a model and periodically indexes the data."""
 
-    dataset: MultiDatasetFactoryConfig
+    dataset: DatasetsConfig
     tokenizer: TokenizerConfig
     dataloaders: DataLoaderConfigs
     collates: CollateConfigs
     trainer: TrainerConfig
     benchmark: BenchmarkConfig
-    search_defaults: SearchFactoryDefaults
     batch_size: BatchSizeConfig
     sys: SysConfig
     dl_sampler: Optional[SamplerFactoryConfig | list[SamplerFactoryConfig]] = None
@@ -252,13 +211,12 @@ class TrainWithIndexUpdatesConfigs:
     def parse(cls: Type[Self], config: DictConfig) -> Self:
         """Parse an omegaconf config into a TrainWithIndexConfigs instance."""
         return cls(
-            dataset=MultiDatasetFactoryConfig.parse(config.dataset),
+            dataset=DatasetsConfig.parse(config.dataset),
             trainer=TrainerConfig.parse(config.trainer),
             benchmark=BenchmarkConfig.parse(config.benchmark),
             batch_size=BatchSizeConfig.parse(config.batch_size),
             dataloaders=DataLoaderConfigs.parse(config.dataloaders),
             collates=CollateConfigs.parse(config.collates),
-            search_defaults=SearchFactoryDefaults(**config.search),
             sys=SysConfig.parse(config.sys),
             dl_sampler=_parse_dl_sampler(config.dl_sampler),
             tokenizer=hydra.utils.instantiate(config.tokenizer),

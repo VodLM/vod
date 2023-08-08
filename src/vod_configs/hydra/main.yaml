@@ -1,7 +1,6 @@
 defaults:
   - dataset: retrieval
   - dl_sampler: none
-  - search_defaults: default
   - model: default
   - tokenizer: default
   - trainer: default

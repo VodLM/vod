@@ -2,8 +2,8 @@
 
 dataset:
   train:
-    - frank.A.en-pos:train
+    - frank.A.en:train
   validation:
-    - frank.A.en-pos:val
+    - frank.A.en:val
   benchmark:
-    - frank.A.en-pos:val
+    - frank.A.en:val

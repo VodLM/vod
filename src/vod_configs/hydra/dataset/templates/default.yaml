@@ -1,2 +1,0 @@
-question: "Q: {{ text }}"
-section: "{% if title %}Title: {{ title }}. {% endif %}D: {{ content }}"

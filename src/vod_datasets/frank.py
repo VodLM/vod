@@ -1,42 +1,40 @@
 from __future__ import annotations
 
 import collections
-import enum
+import dataclasses
 import functools
 import json
 import pathlib
+import re
 import shutil
 from os import PathLike
 from pathlib import Path
-from typing import Any, Iterable, Optional, Union
+from typing import Any, Iterable, Optional
 
 import datasets
 import fsspec
 import loguru
 import pydantic
 import rich
+import vod_configs
 from rich.progress import track
 
 from .base import (
     DATASETS_CACHE_PATH,
     QueryModel,
-    RetrievalDataset,
     SectionModel,
     SilentHuggingfaceDecorator,
+    _fetch_queries_split,
     init_gcloud_filesystem,
 )
 
-
-class FrankSplitName(enum.Enum):
-    """The Frank dataset splits."""
-
-    A = "A"
-    B = "B"
+FrankDsetNamePattern = re.compile(r"^(?P<name>[frank]+)(_(?P<frank_split>[A-Za-z_]))$")
 
 
 class FrankSectionModel(SectionModel):
     """A Frank section."""
 
+    section: str = pydantic.Field(..., alias="content")
     kb_id: int = pydantic.Field(..., alias="knowledge_base_id")
     answer_id: int
 
@@ -44,17 +42,20 @@ class FrankSectionModel(SectionModel):
 class FrankQueryModel(QueryModel):
     """A Frank query."""
 
-    text: str = pydantic.Field(..., alias="question")
+    query: str = pydantic.Field(..., alias="question")
     category: Optional[str] = None
     label_method_type: Optional[str] = None
     answer_id: int
     kb_id: int = pydantic.Field(..., alias="knowledge_base_id")
 
 
-class HfFrankPart(RetrievalDataset):
+@dataclasses.dataclass
+class HfFrankPart:
     """A part of the Frank dataset (A or B)."""
 
-    split: FrankSplitName
+    qa_splits: datasets.DatasetDict
+    sections: datasets.Dataset
+    split: str
 
     def __add__(self, other: "HfFrankPart") -> "HfFrankPart":
         """Merge two parts of the Frank dataset."""
@@ -90,30 +91,30 @@ def _iter_examples_from_json(
 @SilentHuggingfaceDecorator()
 def _download_and_parse_frank(
     language: str,
-    split: FrankSplitName,
+    split: str,
     version: int = 0,
     only_positive_sections: bool = False,
 ) -> HfFrankPart:
     fs = init_gcloud_filesystem()
     if only_positive_sections:
         if language == "da":
-            path = f"raffle-datasets-1/datasets/frank/{language}/da_frank_V{version}{split.value}/"
+            path = f"raffle-datasets-1/datasets/frank/{language}/da_frank_V{version}{split}/"
         else:
-            path = f"raffle-datasets-1/datasets/frank/{language}/translated_da_frank_V{version}{split.value}/"
+            path = f"raffle-datasets-1/datasets/frank/{language}/translated_da_frank_V{version}{split}/"
         loguru.logger.debug(f"Reading Frank from {path} using {fs}")
         if not fs.exists(path):
             raise FileNotFoundError(f"Path {path} does not exist on storage {fs}.")
         return _pase_frank_dir(path, split, language=language, fs=fs)  # type: ignore
 
     if language == "da":
-        path = f"raffle-datasets-1/datasets/frank/{language}/da_frank_V{version}{split.value}/kb_indexes/"
+        path = f"raffle-datasets-1/datasets/frank/{language}/da_frank_V{version}{split}/kb_indexes/"
     else:
-        path = f"raffle-datasets-1/datasets/frank/{language}/translated_da_frank_V{version}{split.value}/kb_indexes/"
+        path = f"raffle-datasets-1/datasets/frank/{language}/translated_da_frank_V{version}{split}/kb_indexes/"
     loguru.logger.debug(f"Reading Frank from {path} using {fs}")
     if not fs.exists(path):
         raise FileNotFoundError(f"Path {path} does not exist on storage {fs}.")
     full_frank_split = None
-    for part_path in track(fs.ls(path), description=f"Processing Frank {split.value}"):
+    for part_path in track(fs.ls(path), description=f"Processing Frank {split}"):
         if not fs.exists(Path(part_path, "sections.json")):
             rich.print(f"Skipping {part_path} (no sections.json)")
             continue
@@ -123,7 +124,7 @@ def _download_and_parse_frank(
         else:
             full_frank_split += frank_part
     if full_frank_split is None:
-        raise ValueError(f"Frank {split.value} is empty.")
+        raise ValueError(f"Frank {split} is empty.")
     return full_frank_split
 
 
@@ -160,7 +161,7 @@ def _pase_frank_dir(local_frank_path: str, split: str, language: str, *, fs: fss
             yield row.dict()
 
     # generate sections
-    sections = datasets.Dataset.from_generator(gen_sections)
+    sections: datasets.Dataset = datasets.Dataset.from_generator(gen_sections)  # type: ignore
 
     # build `answer2section`
     answer2section: dict[int, set[int]] = collections.defaultdict(set)
@@ -188,7 +189,7 @@ def _pase_frank_dir(local_frank_path: str, split: str, language: str, *, fs: fss
 def _make_local_sync_path(
     cache_dir: str | pathlib.Path,
     language: str,
-    split: FrankSplitName,
+    split: str,
     version: int,
     only_positive_sections: bool = False,
 ) -> tuple[pathlib.Path, pathlib.Path]:
@@ -196,64 +197,59 @@ def _make_local_sync_path(
         cache_dir, "raffle_datasets", "frank", language, "only-positives" if only_positive_sections else "full"
     )
     return (
-        pathlib.Path(base_path, f"frank_V{version}{split.value}_qa_splits.hf"),
-        pathlib.Path(base_path, f"frank_V{version}{split.value}_sections.hf"),
+        pathlib.Path(base_path, f"frank_V{version}{split}_qa_splits.hf"),
+        pathlib.Path(base_path, f"frank_V{version}{split}_sections.hf"),
     )
 
 
-def load_frank(  # noqa: C901
-    language: str = "en",
-    subset_name: Union[str, FrankSplitName] = "A",
-    version: int = 0,
-    cache_dir: Optional[Union[str, pathlib.Path]] = None,
-    keep_in_memory: Optional[bool] = None,
+def load_frank(
+    config: vod_configs.BaseDatasetConfig,
+    *,
     only_positive_sections: bool = False,
-    invalidate_cache: bool = False,
-    kb_id: Optional[int] = None,
-) -> HfFrankPart:
+    version: int = 0,
+) -> datasets.Dataset | datasets.DatasetDict:
     """Load the Frank dataset."""
-    if cache_dir is None:
-        cache_dir = pathlib.Path(DATASETS_CACHE_PATH)
-    if isinstance(subset_name, str):
-        subset_name = FrankSplitName(subset_name)
+    cache_dir = pathlib.Path(config.options.cache_dir or DATASETS_CACHE_PATH)
 
-    # define the local paths
+    # Parse the frank split
+    parsed_named = FrankDsetNamePattern.match(config.name)
+    if parsed_named is None or "frank_split" not in parsed_named.groupdict():
+        raise ValueError(f"Failed to parse Frank name `{config.name}` using pattern `{FrankDsetNamePattern.pattern}`")
+    frank_split = parsed_named.groupdict()["frank_split"].upper()
+
+    # Check the language (split)
+    if config.subset is None:
+        raise ValueError(f"Split must be configured. Config={config}")
+
+    # Define the local paths
     qa_splits_path, sections_paths = _make_local_sync_path(
         cache_dir,
-        language=language,
-        split=subset_name,
+        language=config.subset,
+        split=frank_split,
         version=version,
         only_positive_sections=only_positive_sections,
     )
-    if invalidate_cache:
+    if config.options.invalidate_cache:
         loguru.logger.debug(f"Invalidating cache `{qa_splits_path}` and `{sections_paths}`")
         if qa_splits_path.exists():
             shutil.rmtree(qa_splits_path)
         if sections_paths.exists():
             shutil.rmtree(sections_paths)
 
-    # if not downloaded, download, process and save to disk
+    # If not downloaded, download, process and save to disk
     if not qa_splits_path.exists() or not sections_paths.exists():
-        frank_split = _download_and_parse_frank(language, subset_name, version, only_positive_sections)
+        frank_split = _download_and_parse_frank(config.subset, frank_split, version, only_positive_sections)
         frank_split.qa_splits.save_to_disk(str(qa_splits_path))
         frank_split.sections.save_to_disk(str(sections_paths))
 
-    dset = HfFrankPart(
-        split=subset_name,
-        qa_splits=datasets.DatasetDict.load_from_disk(str(qa_splits_path), keep_in_memory=keep_in_memory),
-        sections=datasets.Dataset.load_from_disk(str(sections_paths), keep_in_memory=keep_in_memory),
-    )
+    if isinstance(config, vod_configs.SectionsDatasetConfig):
+        return datasets.Dataset.load_from_disk(str(sections_paths))
 
-    if kb_id is not None:
-        dset.qa_splits = dset.qa_splits.filter(functools.partial(_filter_by_kbid, kb_id=kb_id), num_proc=4)
-        for split, d in dset.qa_splits.items():
-            if len(d) == 0:
-                raise ValueError(f"Split {split} is empty after filtering by kb_id={kb_id}")
-        dset.sections = dset.sections.filter(functools.partial(_filter_by_kbid, kb_id=kb_id), num_proc=4)
-        if len(dset.sections) == 0:
-            raise ValueError(f"Sections is empty after filtering by kb_id={kb_id}")
+    if isinstance(config, vod_configs.QueriesDatasetConfig):
+        queries = datasets.DatasetDict.load_from_disk(str(qa_splits_path))
+        return _fetch_queries_split(queries, split=config.split)
 
-    return dset
+    raise TypeError(f"Unexpected config type {type(config)}")
 
 
 def _filter_by_kbid(row: dict, idx: Optional[int] = None, *, kb_id: int) -> bool:  # noqa: ARG001

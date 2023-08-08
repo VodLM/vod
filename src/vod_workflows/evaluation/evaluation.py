@@ -32,7 +32,7 @@ class ToDiskConfig:
 @torch.no_grad()
 @pl_utils.rank_zero_only
 def benchmark(
-    factory: vod_datasets.DatasetFactory,
+    factory: vod_datasets.RetrievalDatasetFactory,
     *,
     vectors: None | helpers.PrecomputedDsetVectors,
     tokenizer: transformers.PreTrainedTokenizer | transformers.PreTrainedTokenizerFast,
@@ -62,7 +62,7 @@ def benchmark(
         # Instantiate the dataloader
         dataloader = helpers.instantiate_retrieval_dataloader(
             questions=helpers.DsetWithVectors.cast(
-                data=factory.get_qa_split(),
+                data=factory.get_queries(),
                 vectors=vectors.questions if vectors is not None else None,
             ),
             sections=helpers.DsetWithVectors.cast(

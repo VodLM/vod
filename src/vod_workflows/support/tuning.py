@@ -89,7 +89,7 @@ def tune_parameters(
     tune: None | list[str] = None,
     *,
     fabric: L.Fabric,
-    factories: dict[K, vod_datasets.DatasetFactory],
+    factories: dict[K, vod_datasets.RetrievalDatasetFactory],
     vectors: dict[K, helpers.PrecomputedDsetVectors],
     search_config: vod_configs.SearchConfig,
     collate_config: vod_configs.RetrievalCollateConfig,
@@ -210,7 +210,7 @@ class TuningTask:
 
 
 def _make_tuning_task(
-    factories: dict[K, vod_datasets.DatasetFactory],
+    factories: dict[K, vod_datasets.RetrievalDatasetFactory],
     vectors: dict[K, helpers.PrecomputedDsetVectors],
 ) -> TuningTask:
     """Create the `RetrievalTask` from the training and validation factories."""
@@ -227,7 +227,7 @@ def _make_tuning_task(
     return TuningTask(
         questions=helpers.concatenate_datasets(
             [
-                helpers.DsetWithVectors.cast(data=factory.get_qa_split(), vectors=_vec(key, "question"))
+                helpers.DsetWithVectors.cast(data=factory.get_queries(), vectors=_vec(key, "question"))
                 for key, factory in factories.items()
             ]
         ),

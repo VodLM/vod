@@ -51,8 +51,8 @@ def index_and_train(
     scheduler: typing.Optional[torch.optim.lr_scheduler._LRScheduler] = None,
     trainer_state: helpers.TrainerState,
     fabric: L.Fabric,
-    train_factories: dict[K, vod_datasets.DatasetFactory],
-    val_factories: dict[K, vod_datasets.DatasetFactory],
+    train_factories: dict[K, vod_datasets.RetrievalDatasetFactory],
+    val_factories: dict[K, vod_datasets.RetrievalDatasetFactory],
     vectors: dict[K, None | helpers.PrecomputedDsetVectors],
     tokenizer: transformers.PreTrainedTokenizer | transformers.PreTrainedTokenizerFast,
     search_config: vod_configs.SearchConfig,
@@ -442,8 +442,8 @@ def _pbar_info(
 
 
 def _make_retrieval_task(
-    train_factories: dict[K, vod_datasets.DatasetFactory],
-    val_factories: dict[K, vod_datasets.DatasetFactory],
+    train_factories: dict[K, vod_datasets.RetrievalDatasetFactory],
+    val_factories: dict[K, vod_datasets.RetrievalDatasetFactory],
     vectors: dict[K, helpers.PrecomputedDsetVectors | None],
 ) -> RetrievalTask:
     """Create the `RetrievalTask` from the training and validation factories."""
@@ -462,13 +462,13 @@ def _make_retrieval_task(
     return RetrievalTask(
         train_questions=helpers.concatenate_datasets(
             [
-                helpers.DsetWithVectors.cast(data=factory.get_qa_split(), vectors=_vec(key, "question"))
+                helpers.DsetWithVectors.cast(data=factory.get_queries(), vectors=_vec(key, "question"))
                 for key, factory in train_factories.items()
             ]
         ),
         val_questions=helpers.concatenate_datasets(
             [
-                helpers.DsetWithVectors.cast(data=factory.get_qa_split(), vectors=_vec(key, "question"))
+                helpers.DsetWithVectors.cast(data=factory.get_queries(), vectors=_vec(key, "question"))
                 for key, factory in val_factories.items()
             ]
         ),

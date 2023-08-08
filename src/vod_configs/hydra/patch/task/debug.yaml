@@ -34,11 +34,9 @@ trainer:
     dense: 1.0
 
 dataset:
-  subset_size: 200
-  filter_unused_sections: false
-  train: frank.A.en-pos:train
-  validation: frank.A.en-pos:val
-  benchmark: frank.A.en-pos:val
+  factory:
+    subset_size: 200
+    filter_unused_sections: true
 
 batch_size:
   effective: 16

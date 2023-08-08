@@ -12,19 +12,16 @@ from typing import Any, Callable, Optional, Protocol, TypeVar
 import datasets
 import lightning as L
 import numpy as np
-import rich
 import torch
 import transformers
 from lightning.fabric import wrappers as fabric_wrappers
 from loguru import logger
-from torch import distributed as torch_distributed
 from torch.utils import data as torch_data
 from typing_extensions import Self, Type
 from vod_tools import dstruct, pipes
 from vod_tools.misc.schedule import BaseSchedule
-from vod_tools.pipes.hashing import fingerprint_torch_module
 
-from src import vod_configs, vod_dataloaders, vod_models, vod_search
+from src import vod_configs, vod_dataloaders, vod_search
 
 T = TypeVar("T")
 
@@ -127,7 +124,7 @@ def instantiate_retrieval_dataloader(
 
 
 class IndexWithVectors(dstruct.SizedDataset[dict[str, Any]]):
-    """A wrapper around a dataset that adds vectors to each item."""
+    """A wrapper around a dataset that adds vectors to each accessed item."""
 
     __slots__ = ("dataset", "vectors", "vector_key")
 
@@ -254,42 +251,3 @@ def _gen_dummy_batch(bs: int = 8, r: int = 0) -> dict[str, torch.Tensor]:
         "section.input_ids": r + torch.randint(0, 100, (bs, 8, 10)),
         "section.attention_mask": torch.ones((bs, 8, 10), dtype=torch.long),
     }
-
-
-def _test_model_backward(fabric: L.Fabric, ranker: vod_models.Ranker, header: str = "", silent: bool = True) -> None:
-    if torch_distributed.is_initialized():
-        ranker.zero_grad()
-        dummy_batch = _gen_dummy_batch(bs=8, r=fabric.global_rank)
-        dummy_batch = fabric.to_device(dummy_batch)
-        if not silent:
-            rich.print({k: v.float().mean().item() for k, v in dummy_batch.items()})
-        output = ranker(dummy_batch)
-        output["loss"] = output["hq"].mean() - output["hd"].mean()
-        if not silent:
-            rich.print(output)
-        loss = output["loss"]
-        loss.backward()
-
-        if not silent:
-            rich.print(
-                {
-                    "what": "DUMMY_TEST",
-                    "rank": fabric.global_rank,
-                    "head_hash": fingerprint_torch_module(None, ranker.encoder.projection),  # noqa: F821
-                    "head_weight": ranker.encoder.projection[-1].weight.mean().item(),
-                    "head_weight_grad": ranker.encoder.projection[-1].weight.grad.mean().item(),
-                    "require_backward_grad_sync": ranker._forward_module.require_backward_grad_sync,
-                }
-            )
-
-        g = ranker.encoder.projection[-1].weight.grad
-        tensor_list = [torch.zeros_like(g) for _ in range(fabric.world_size)]
-        torch_distributed.all_gather(
-            tensor_list,
-            g,
-        )
-
-        for t in tensor_list:
-            if not torch.allclose(t, tensor_list[0]):
-                rich.print(f"[bold red]====== FAILURE {header} | {fabric.global_rank} ===[/]")
-                raise ValueError(f"Gradients are not synchronized on {fabric.global_rank}")

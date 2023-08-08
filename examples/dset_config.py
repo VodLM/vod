@@ -16,8 +16,10 @@ if __name__ == "__main__":
                     "link": "frank_a_sections.en:all",
                 },
                 {
-                    "name": "squad.en:val",
-                    "link": "squad_sections.en:all",
+                    "name": "msmarco",
+                    "subset": "en",
+                    "split": "all",
+                    "link": "my-wiki.multi",
                 },
             ],
             "val_queries": [
@@ -33,7 +35,17 @@ if __name__ == "__main__":
                     },
                 },
                 {
-                    "name": "frank_a_sections.en:train",
+                    "name": "my-wiki.multi",
+                    "parts": [
+                        "wiki.en",
+                        "wiki.fr",
+                    ],
+                    "search": {
+                        "dense": {
+                            "backend": "faiss",
+                            "factory": "PQ32_512,IVFauto,PQ32",
+                        },
+                    },
                 },
             ],
         },
@@ -45,7 +57,10 @@ if __name__ == "__main__":
         ],
         "base_search": {
             "engines": {
-                "dense": {"backend": "faiss"},
+                "dense": {
+                    "backend": "faiss",
+                    "factory": "Flat",
+                },
                 "sparse": {
                     "backend": "elasticsearch",
                 },
@@ -56,7 +71,7 @@ if __name__ == "__main__":
     model = vod_configs.DatasetsConfig(**cfg)
     rich.print(model)
 
-    rich.print("=======")
+    rich.print("======= RESOLVED CONFIG ========")
     for section in model.train.sections:
         resolved_config = model.resolve_search_config(defaults, section.search)
         rich.print(resolved_config)

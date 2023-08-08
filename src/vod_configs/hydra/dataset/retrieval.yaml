@@ -1,44 +1,42 @@
 defaults:
-  - templates: default
+  - search_defaults: default
+  - options: default
   - _self_
 
-_target_: vod_configs.MultiDatasetFactoryConfig
+# Base search
+search:
+  engines:
+    dense:
+      backend: qdrant
+    sparse:
+      backend: elasticsearch
 
-# dataset groups
-train:
-  train_queries:
-    - name: frank_A.en:train
-      link: frank_A_sections.en:train
-    - name: squad.en:train
-      link: squad_sections.en:all
-  val_queries:
-    - name: frank_A.en:train
-      link: frank_A_sections.en:train
+# Train/val splits
+training:
+  queries:
+    train:
+      - name: frank_A.en:train
+        link: frank_A.en
+      - name: squad.en:train
+        link: squad.en
+    val:
+      - name: frank_A.en:train
+        link: frank_A.en
+
   sections:
-    - name: frank_A_sections.en:train
-      search:
-        dense:
-          backend: qdrant
-    - name: squad.en:all
-      search:
-        dense:
-          backend: faiss
+    sections:
+      - name: frank_A.en:train
+        search:
+          dense:
+            backend: qdrant
+      - name: squad.en:all
+        search:
+          dense:
+            backend: faiss
+
+# Benchmarks
 benchmark:
   - queries: frank_A.en:val
-    sections: frank_A_sections.en
+    sections: frank_A.en
   - queries: frank_B.en:val
-    sections: frank_B_sections.en:val
-
-# Default search
-search:
-  dense:
-    backend: qdrant
-  sparse:
-    backend: elasticsearch
-
-# dataset factory config
-factory:
-  subset_size: null
-  min_section_tokens: null
-  prep_map_kwargs:
-    num_proc: ${resources.num_proc}
+    sections: frank_B.en

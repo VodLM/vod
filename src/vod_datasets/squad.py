@@ -8,8 +8,6 @@ from typing import Any, Optional
 import datasets
 from vod_tools.pipes.utils.misc import pack_examples
 
-from .base import RetrievalDataset
-
 SQUAD_KB_ID = 200_000
 
 
@@ -17,7 +15,7 @@ def _add_row_idx(_: dict, idx: int) -> dict[str, int]:
     return {"id": idx}
 
 
-class SquadRetrievalDataset(RetrievalDataset):
+class SquadRetrievalDataset:
     """The Squad dataset for retrieval."""
 
     ...

@@ -17,7 +17,6 @@ import pydantic
 from .base import (
     DATASETS_CACHE_PATH,
     QueryModel,
-    RetrievalDataset,
     SectionModel,
     SilentHuggingfaceDecorator,
     init_gcloud_filesystem,
@@ -26,7 +25,7 @@ from .base import (
 RAFFLE_SQUAD_KB_ID = 200_001
 
 
-class RaffleSquad(RetrievalDataset):
+class RaffleSquad:
     """A Raffle-hanlded SQuAD dataset."""
 
 

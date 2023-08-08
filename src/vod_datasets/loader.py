@@ -1,173 +1,194 @@
 from __future__ import annotations
 
 import functools
-import pathlib
-import re
-from typing import Any, Literal, Optional, TypeVar
+import hashlib
+import pickle
+from typing import Any, Optional, Protocol, Type
 
 import datasets
+import numpy as np
 import pydantic
-from typing_extensions import Self, Type
+import vod_configs
+from vod_tools import pipes
 
-from .base import RetrievalDataset
+from .base import QueryModel, SectionModel
 from .frank import load_frank
 from .msmarco import load_msmarco
 from .raffle_squad import load_raffle_squad
 
-
-class DatasetConfigOptions(pydantic.BaseModel):
-    """Extra options for a dataset."""
-
-    only_positive_sections: bool = False
-    kb_id: Optional[int] = None
-
-    @classmethod
-    def from_list(cls: Type[Self], options: list[str]) -> Self:
-        """Parse a list of options."""
-        re_pattern = re.compile(r"kb(?P<kb_id>\d+)")
-        matched_kb_id = None
-        for option in options:
-            match = re_pattern.match(option)
-            if match is not None:
-                matched_kb_id = int(match.group("kb_id"))
-                break
-        return cls(only_positive_sections="pos" in options, kb_id=matched_kb_id)
+_N_VALID_SAMPLES = 10
 
 
-class DatasetLoaderConfig(pydantic.BaseModel):
-    """Defines a dataset."""
+class LoaderProtocol(Protocol):
+    """A protocol for loaders."""
 
-    name: str
-    subset_name: Optional[str]
-    language: Literal[  # Supported languages
-        "da",
-        "de",
-        "en",
-        "fi",
-        "fr",
-        "is",
-        "it",
-        "nl",
-        "pl",
-        "sv",
-    ]
-    options: DatasetConfigOptions
-
-    @pydantic.validator("options", pre=True)
-    def _parse_options(cls: Type[Self], options: list[str]) -> DatasetConfigOptions:  # type: ignore
-        return DatasetConfigOptions.from_list(options)
-
-    @classmethod
-    def parse_id(cls: Type[Self], name: str) -> Self:
-        """Parse a dataset name."""
-        name, *options = name.split("-")
-        pattern = re.compile(r"^(?P<name>[a-z]+)(\.(?P<subset_name>[A-Z]))?(\.(?P<language>[a-z]{2}))?$")
-        match = pattern.match(name)
-        if match is None:
-            raise ValueError(f"Failed to parse {name}")
-        return cls(
-            name=match.group("name"),
-            subset_name=match.group("subset_name"),
-            language=match.group("language"),
-            options=options,
-        )
-
-    def flat_dict(self) -> dict[str, str | bool]:
-        """Return a flat dictionary representation of the config."""
-        data = {
-            **self.dict(exclude={"options"}),
-            **self.options.dict(),
-        }
-
-        return {k: v for k, v in data.items() if v is not None}
-
-
-class RetrievalDatasetLoader:
-    """A Factory for loading datasets."""
-
-    def __init__(
+    def __call__(
         self,
-        name: str,
-        invalidate_cache: bool = False,
-        keep_in_memory: bool = False,
-        cache_dir: Optional[str | pathlib.Path] = None,
-    ):
-        self.config = DatasetLoaderConfig.parse_id(name)
-        self.invalidate_cache = invalidate_cache
-        self.keep_in_memory = keep_in_memory
-        self.cache_dir = cache_dir
-
-    def __call__(self) -> RetrievalDataset:
-        """Load the dataset."""
-        loader = {
-            "frank": load_frank,
-            "msmarco": load_msmarco,
-            "squad": load_raffle_squad,
-        }[self.config.name]
-
-        return loader(
-            subset_name=self.config.subset_name,
-            language=self.config.language,
-            only_positive_sections=self.config.options.only_positive_sections,
-            cache_dir=self.cache_dir,
-            invalidate_cache=self.invalidate_cache,
-            keep_in_memory=self.keep_in_memory,
-            kb_id=self.config.options.kb_id,
-        )
+        config: vod_configs.BaseDatasetConfig,
+    ) -> datasets.Dataset | datasets.DatasetDict:
+        """Load the dataset and return a HF dataset."""
+        ...
 
 
-def _get_unique_values(dset: datasets.Dataset, column: str, chunk: int = 1_000) -> set[Any]:
-    values = set()
-    for i in range(0, len(dset), chunk):
-        rows = dset[i : i + chunk]
-        values.update(set(rows[column]))
-
-    return values
-
-
-DorDD = TypeVar("DorDD", datasets.Dataset, datasets.DatasetDict)
+LOADERS = {
+    "frank_a": load_frank,
+    "frank_b": load_frank,
+    "squad": load_raffle_squad,
+    "msmarco": load_msmarco,
+}
 
 
-def _add_dset_idx(_: dict, dset_idx: int, key: str = "dset_idx") -> dict:
-    return {key: dset_idx}
+def _load_dataset(
+    config: vod_configs.BaseDatasetConfig, loaders: Optional[dict[str, LoaderProtocol]] = None
+) -> datasets.Dataset:
+    """Load a dataset based on a config."""
+    loaders = {**LOADERS, **(loaders or {})}
+    loader = loaders[config.name]
+    dset = loader(config)
 
-
-def _get_fingerprints(dset: datasets.Dataset | datasets.DatasetDict) -> str | dict[str, str]:
+    # Concatenate splits
     if isinstance(dset, datasets.DatasetDict):
-        return {k: v._fingerprint for k, v in dset.items()}
+        dset = datasets.concatenate_datasets([dset[k] for k in sorted(dset)])
 
-    return dset._fingerprint
+    return dset
 
 
-class ConcatenatedDatasetLoader:
-    """A class to concatenate multiple datasets together."""
+def load_queries(
+    config: vod_configs.QueriesDatasetConfig,
+    loaders: Optional[dict[str, LoaderProtocol]] = None,
+) -> datasets.Dataset:
+    """Load a queries dataset."""
+    dset = _load_dataset(config, loaders=loaders)
+    _validate(dset, QueryModel)
+    dset = _preprocess_queries(dset, config=config, locator=f"{config.descriptor}(queries)")
+    return dset
 
-    def __init__(self, loaders: list[RetrievalDatasetLoader]):
-        self.loaders = loaders
 
-    def __call__(self) -> RetrievalDataset:
-        """Load the datasets and concatenate them together."""
-        dsets = [loader() for loader in self.loaders]
+def load_sections(
+    config: vod_configs.SectionsDatasetConfig,
+    loaders: Optional[dict[str, LoaderProtocol]] = None,
+) -> datasets.Dataset:
+    """Load a sections dataset."""
+    dset = _load_dataset(config, loaders=loaders)
+    _validate(dset, SectionModel)
+    dset = _preprocess_sections(dset, config=config, locator=f"{config.descriptor}(sections)")
+    return dset
 
-        # check there is no overlap in the kb_ids between the datasets
-        kb_ids = [_get_unique_values(dset.sections, "kb_id") for dset in dsets]
-        if len(set.union(*kb_ids)) != sum(len(ids) for ids in kb_ids):
-            raise ValueError("There is overlap in the `kb_ids`")
 
-        # add the dataset idx to the questions
-        # todo: don't add this manually, instead add a `dataset_name` column in the loader.
-        for idx, dset in enumerate(dsets):
-            fn = functools.partial(_add_dset_idx, dset_idx=idx, key="dset_idx")
-            dset.sections = dset.sections.map(fn, desc="Adding `dset_idx` to sections", num_proc=4)
-            dset.qa_splits = dset.qa_splits.map(fn, desc="Adding `dset_idx` to questions", num_proc=4)
+def _preprocess_queries(
+    dset: datasets.Dataset,
+    config: vod_configs.BaseDatasetConfig,
+    locator: str,
+) -> datasets.Dataset:
+    dset = dset.map(
+        pipes.Partial(
+            pipes.template_pipe,
+            template=config.options.templates.queries,
+            input_keys=["query", "language", "kb_id"],
+            output_key="text",
+        ),
+        **_prep_map_kwargs(config.options.prep_map_kwargs, desc=f"{locator}: Preprocessing questions"),
+    )
 
-        # concatenate all sections
-        all_sections = datasets.concatenate_datasets([dset.sections for dset in dsets])
+    return _shared_preprocessing(dset, config, locator)
 
-        # concatenate all qa splits
-        all_qa_splits = {}
-        for split in {split for dset in dsets for split in dset.qa_splits}:
-            split_dsets = [dset.qa_splits[split] for dset in dsets if split in dset.qa_splits]
-            all_qa_splits[split] = datasets.concatenate_datasets(split_dsets)
 
-        return RetrievalDataset(sections=all_sections, qa_splits=datasets.DatasetDict(all_qa_splits))
+def _preprocess_sections(
+    dset: datasets.Dataset,
+    config: vod_configs.BaseDatasetConfig,
+    locator: str,
+) -> datasets.Dataset:
+    dset = dset.map(
+        pipes.Partial(
+            pipes.template_pipe,
+            template=config.options.templates.sections,
+            input_keys=["title", "section", "language", "kb_id"],
+            output_key="text",
+        ),
+        **_prep_map_kwargs(config.options.prep_map_kwargs, desc=f"{locator}: Preprocessing sections"),
+    )
+    return _shared_preprocessing(dset, config, locator)
+
+
+def _shared_preprocessing(
+    dset: datasets.Dataset, config: vod_configs.BaseDatasetConfig, locator: str
+) -> datasets.Dataset:
+    dset = _compute_group_hashes(
+        dset,
+        keys=config.options.group_keys,
+        output_key=config.options.group_hash_key,
+        **_prep_map_kwargs(config.options.prep_map_kwargs, desc=f"{locator}: Computing group hashes", batched=False),
+    )
+    dset = _take_subset(dset, config.options.subset_size)
+    dset = _add_extras_attributes(dset, config, locator)
+    return dset
+
+
+def _add_extras(row: dict[str, Any], *args: Any, extras: dict[str, Any], **kwds: Any) -> dict[str, Any]:  # noqa: ARG001
+    return extras
+
+
+def _add_extras_attributes(
+    dataset: datasets.Dataset,
+    config: vod_configs.BaseDatasetConfig,
+    locator: str,
+) -> datasets.Dataset:
+    """Add a descriptor to the dataset."""
+    xtras = {"dset_uid": config.descriptor}
+    if isinstance(config, vod_configs.QueriesDatasetConfig):
+        xtras["link"] = config.link  # type: ignore
+
+    return dataset.map(
+        functools.partial(_add_extras, extras=xtras),
+        **_prep_map_kwargs({}, desc=f"{locator}: adding extras attributess", batched=False),
+    )
+
+
+def _prep_map_kwargs(base: dict[str, Any], **overrides: Any) -> dict[str, Any]:
+    always_on = {"batched": True, "with_indices": True}
+    return {**base, **always_on, **overrides}
+
+
+def _take_subset(dset: datasets.Dataset, subset_size: None | int) -> datasets.Dataset:
+    """Take a subset of the dataset."""
+    if subset_size is None:
+        return dset
+
+    rgn = np.random.RandomState(0)
+
+    # sample the subsets
+    ids = rgn.choice(list(range(len(dset))), size=subset_size, replace=False)
+    return dset.select(ids)
+
+
+def _validate(dset: datasets.Dataset, model: Type[pydantic.BaseModel]) -> None:
+    for i in range(_N_VALID_SAMPLES):
+        row = dset[i]
+        model(**row)
+
+
+class KeyHasher:
+    """Hash key values into a single `int64`."""
+
+    def __init__(self, keys: list[str], output_key: str = "group_hash") -> None:
+        self.keys = keys
+        self.output_key = output_key
+
+    def __call__(self, row: dict[str, Any], idx: Optional[int] = None, **kwds: Any) -> dict[str, Any]:  # noqa: ARG002
+        """Hash the keys."""
+        subrow = [(k, row[k]) for k in sorted(self.keys)]
+        h = hashlib.sha256(pickle.dumps(subrow, 1))
+        obj_hash = h.hexdigest()
+        np_int_hash = np.int64(int(obj_hash, 16) % np.iinfo(np.int64).max)
+        return {self.output_key: np_int_hash}
+
+
+def _compute_group_hashes(
+    dataset: datasets.Dataset,
+    keys: list[str],
+    output_key: str,
+    **kws: Any,
+) -> datasets.Dataset:
+    """Compute group hashes based on some list of `keys`."""
+    hasher = KeyHasher(keys=keys, output_key=output_key)
+    return dataset.map(hasher, **kws)
