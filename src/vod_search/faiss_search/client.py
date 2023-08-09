@@ -78,6 +78,7 @@ class FaissClient(base.SearchClient):
         text: Optional[list[str]] = None,  # noqa: ARG
         group: Optional[list[str | int]] = None,  # noqa: ARG
         section_ids: Optional[list[list[str | int]]] = None,  # noqa: ARG
+        shard: Optional[list[str]] = None,  # noqa: ARG
         top_k: int = 3,
         timeout: float = 120,
     ) -> rdtypes.RetrievalBatch[rdtypes.Ts]:
@@ -136,7 +137,7 @@ class FaissMaster(base.SearchMaster[FaissClient]):
     ```
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         index_path: str | Path,
         nprobe: int = 8,
@@ -144,9 +145,10 @@ class FaissMaster(base.SearchMaster[FaissClient]):
         host: str = "http://localhost",
         port: int = 7678,
         skip_setup: bool = False,
+        free_resources: bool = False,
         serve_on_gpu: bool = False,
     ):
-        super().__init__(skip_setup=skip_setup)
+        super().__init__(skip_setup=skip_setup, free_resources=free_resources)
         self.index_path = Path(index_path)
         self.nprobe = nprobe
         self.logging_level = logging_level

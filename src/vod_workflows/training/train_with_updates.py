@@ -15,7 +15,6 @@ from vod_tools import cache_manager, pipes
 from vod_tools.misc.pretty import print_metric_groups
 from vod_workflows.evaluation.evaluation import ToDiskConfig, benchmark
 from vod_workflows.support.precompute import compute_vectors
-from vod_workflows.support.tuning import tune_parameters
 from vod_workflows.training.training import index_and_train
 from vod_workflows.utils import helpers, io, logging
 
@@ -36,15 +35,6 @@ def train_with_index_updates(  # noqa: C901, PLR0915
     if isinstance(config, omegaconf.DictConfig):
         config = vod_configs.TrainWithIndexUpdatesConfigs.parse(config)
 
-    rich.print(config)
-    sys.exit()
-
-    # Define the index update steps and the `PeriodicStoppingCallback` callback.
-    update_steps = _infer_update_steps(config.trainer.max_steps, config.trainer.period)
-    logger.info(f"The search index will be updated at steps: {_pretty_steps(update_steps)}")
-    if len(update_steps) == 0:
-        raise ValueError("No index update steps were defined.")
-
     # Setting up the optimizer
     optimizer = ranker.get_optimizer()
     scheduler = ranker.get_scheduler(helpers.unwrap_optimizer(optimizer))
@@ -52,8 +42,9 @@ def train_with_index_updates(  # noqa: C901, PLR0915
     # Define the trainer State
     state = helpers.TrainerState(
         step=0,
-        period=0,
+        pidx=0,
         epoch=0,
+        period=config.trainer.period,
         period_max_steps=None,
         max_steps=config.trainer.max_steps,
         log_interval=config.trainer.log_interval,
@@ -79,41 +70,32 @@ def train_with_index_updates(  # noqa: C901, PLR0915
     # Setup Fabric model & optimizer
     ranker, optimizer = fabric.setup(ranker, optimizer)
 
+    # Get the tokenizer
+    tokenizer = config.tokenizer.instantiate()
+
     # Train the model for each period
     barrier("Training starting..")
-    for pidx, (start_step, end_step) in enumerate(zip(update_steps, update_steps[1:] + [None])):
-        if end_step is not None and state.step > end_step:
-            logger.info(f"Skipping period {pidx + 1}/{len(update_steps)} (step {start_step} -> {end_step})")
-            continue
-
-        # Update the Trainer state
-        state.period = pidx
-        state.period_max_steps = end_step
-
+    for pidx in _iter_periods(state):
         # fetch the parameters for this period
         train_parameters = state.get_parameters()
         bench_parameters = config.benchmark.parameters
-        run_benchmarks = state.period > 0 or config.benchmark.on_init
-
-        # Debug
-        rich.print(config.dataset)
+        run_benchmarks = pidx > 0 or config.benchmark.on_init
 
         # wrap everything in a temporary directory to avoid filling up the disk.
         # The temporary directory will be deleted at the end of each period except the first one
         # as dataset vectors won't change when using the same seed/model.
         with cache_manager.CacheManager(
-            pathlib.Path(config.sys.cache_dir, f"train-with-updates-{state.period}"),
+            pathlib.Path(config.sys.cache_dir, f"train-with-updates-{state.pidx}"),
             delete_existing=False,
-            persist=state.period == 0,  # keep the cache for the first period
+            persist=state.pidx == 0,  # keep the cache for the first period
         ) as cache_dir:
-            factories = config.dataset.get_factories("all" if run_benchmarks else "train+val")
-            # pre-process all datasets on global zero, this is done implicitely when loading a dataset
-            if pidx == 0:
-                if fabric.is_global_zero:
-                    for key, factory in factories.items():
-                        logger.debug(f"Pre-processing `{key}` ...")
-                        factory.get_queries()
-                        factory.get_sections()
+            all_dset_configs = list(config.dataset.get_dataset_configs(split="all" if run_benchmarks else "train+val"))
+            # pre-process all datasets on rank zero on each node,
+            # loading & preprocessing happens implicitely when loading a dataset
+            if state.pidx == 0:
+                if fabric.local_rank == 0:
+                    for cfg in all_dset_configs:
+                        vod_datasets.load_dataset(cfg)
                 barrier("Pre-processing done.")
 
             # pre-compute the vectors for each dataset, this is deactivated when faiss is not in use
@@ -121,44 +103,26 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                 run_benchmarks and helpers.is_engine_enabled(bench_parameters, "faiss")
             ):
                 # Compute the vectors
-                vectors = compute_vectors(
-                    factories,
-                    ranker=ranker,
-                    tokenizer=config.tokenizer.instantiate(),
-                    fabric=fabric,
-                    cache_dir=cache_dir,
-                    collate_config=config.collates.predict,
-                    dataloader_config=config.dataloaders.predict,
-                )
+                vectors = {
+                    cfg: compute_vectors(
+                        vod_datasets.load_dataset(cfg),
+                        ranker=ranker,
+                        tokenizer=tokenizer,
+                        fabric=fabric,
+                        cache_dir=cache_dir,
+                        collate_config=config.collates.predict,
+                        dataloader_config=config.dataloaders.predict,
+                        field=cfg.field,
+                        locator=cfg.descriptor,
+                    )
+                    for cfg in all_dset_configs
+                }
             else:
                 logger.info("Faiss engine is disabled. Skipping vector pre-computation.")
-                vectors = {dset: None for dset in factories}
+                vectors = None
 
             # Tune the parameters and benchmark the ranker on each dataset separately
             if run_benchmarks:
-                if config.benchmark.tuning is not None and bench_parameters.get("faiss", -1) > 0:
-                    barrier("Tuning retrieval parameters..")
-                    bench_parameters = tune_parameters(
-                        parameters=bench_parameters,
-                        tune=["sparse"],
-                        fabric=fabric,
-                        factories=config.dataset.get_factories("benchmark"),
-                        vectors=vectors,
-                        search_config=config.search_defaults,
-                        collate_config=config.collates.train.copy(update=config.benchmark.tuning.collate_overrides),
-                        dataloader_config=_patch_mum_worker(
-                            config.dataloaders.benchmark,
-                            fabric=fabric,
-                            overrides={"batch_size": config.benchmark.tuning.batch_size},
-                        ),
-                        cache_dir=cache_dir,
-                        serve_on_gpu=True,
-                        tuning_steps=config.benchmark.tuning.steps,
-                        learning_rate=config.benchmark.tuning.learning_rate,
-                        tokenizer=config.tokenizer.instantiate(),
-                    )
-                    logger.info(f"Tuned parameters: {bench_parameters}")
-
                 barrier("Running benchmarks..")
                 _run_benchmarks(
                     fabric=fabric,
@@ -166,18 +130,27 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                     state=state,
                     parameters=bench_parameters,
                     cache_dir=cache_dir,
-                    factories=factories,
-                    vectors=vectors,
+                    tasks=[
+                        helpers.RetrievalTask(
+                            queries=[bench.queries],
+                            sections=[bench.sections],
+                            vectors=vectors,
+                        )
+                        for bench in config.dataset.benchmark
+                    ],
+                    tokenizer=tokenizer,
                 )
                 barrier("Completed benchmarks.")
 
-            if end_step is None:
+            sys.exit()  # TODO
+
+            if state.period_max_steps is None:
                 # If there is no defined `end_step`, we reached the end of the training
                 continue
 
             # training for the current period.
             # We use a `StopAtTrainer` to stop the training at the end of the current period (max `end_step`).
-            logger.info(f"Starting training period {1+state.period}")
+            logger.info(f"Starting training period {1+state.pidx}")
             state = index_and_train(
                 ranker=ranker,
                 optimizer=optimizer,
@@ -186,7 +159,7 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                 vectors=vectors,  # type: ignore
                 train_factories=config.dataset.get_factories("train"),
                 val_factories=config.dataset.get_factories("val"),
-                tokenizer=config.tokenizer.instantiate(),
+                tokenizer=tokenizer,
                 search_config=config.search_defaults,
                 collate_config=config.collates.train,
                 train_dataloader_config=config.dataloaders.train,
@@ -198,12 +171,12 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                 checkpoint_path=config.trainer.checkpoint_path,
                 on_first_batch_fn=functools.partial(
                     _on_first_batch_fn,
-                    tokenizer=config.tokenizer.instantiate(),
+                    tokenizer=tokenizer,
                     output_file=pathlib.Path(f"{state.step}-training-batch.txt"),
                 ),
                 pbar_keys=config.trainer.pbar_keys,
             )
-            logger.success(f"Completed training period {1+state.period}")
+            logger.success(f"Completed training period {1+state.pidx}")
             barrier("Period completed.")
 
         # Reset the scheduler for the next period
@@ -234,35 +207,32 @@ def _on_first_batch_fn(
 
 
 def _run_benchmarks(
+    tasks: list[helpers.RetrievalTask],
     *,
     fabric: L.Fabric,
     config: vod_configs.TrainWithIndexUpdatesConfigs,
     state: helpers.TrainerState,
     parameters: dict[str, float],
     cache_dir: pathlib.Path,
-    factories: dict[K, vod_datasets.RetrievalDatasetFactory],
-    vectors: dict[K, None | helpers.PrecomputedDsetVectors],
+    tokenizer: transformers.PreTrainedTokenizer | transformers.PreTrainedTokenizerFast,
 ) -> None:
     # if helpers.is_engine_enabled(parameters, "faiss"):
     # ranker.to("cpu")  # <-- free GPU memory # see: https://github.com/Lightning-AI/lightning/issues/17937
     if fabric.is_global_zero:
-        logger.info(f"Running benchmarks ... (period={1+state.period})")
-        for j, dset in enumerate(config.dataset.benchmark):
-            bench_loc = f"{dset.name}:{dset.split_alias}"
+        logger.info(f"Running benchmarks ... (period={1+state.pidx})")
+        for j, task in enumerate(tasks):
+            queries_loc = "+".join([q.descriptor for q in task.queries])
+            sections_loc = "+".join([s.descriptor for s in task.sections])
+            bench_loc = f"{queries_loc} <- {sections_loc}"
             logger.info(f"{1+j}/{len(config.dataset.benchmark)} - Benchmarking `{bench_loc}` ...")
-            logdir = pathlib.Path("benchmarks", f"{bench_loc}-{state.period}-{state.step}")
+            logdir = pathlib.Path("benchmarks", f"{bench_loc}-{state.pidx}-{state.step}")
             logdir.mkdir(parents=True, exist_ok=True)
-
-            # Create the search config
-            search_config = config.search_defaults.copy(update=config.benchmark.search)
 
             # Run the benchmark and log the results
             metrics = benchmark(
-                factory=factories[dset],
-                vectors=vectors[dset],
-                tokenizer=config.tokenizer.instantiate(),
+                task=task,
+                tokenizer=tokenizer,
                 metrics=config.benchmark.metrics,
-                search_config=search_config,
                 collate_config=config.collates.benchmark,
                 dataloader_config=_patch_mum_worker(
                     config.dataloaders.benchmark,
@@ -278,8 +248,8 @@ def _run_benchmarks(
                 ),
             )
             if metrics is not None:
-                header = f"{dset.name}:{dset.split_alias} - Period {state.period + 1}"
-                _log_print_metrics(fabric=fabric, state=state, dset=dset, metrics=metrics, header=header)
+                header = f"{bench_loc} - Period {state.pidx + 1}"
+                _log_print_metrics(fabric=fabric, state=state, locator=queries_loc, metrics=metrics, header=header)
             logger.info(f"{1+j}/{len(config.dataset.benchmark)} - saved to `{logdir.absolute()}`")
 
 
@@ -300,18 +270,19 @@ def _log_print_metrics(
     *,
     fabric: L.Fabric,
     state: helpers.TrainerState,
-    dset: vod_configs.NamedDset,
+    locator: str,
     metrics: dict[str, float],
     header: str,
 ) -> None:
+    locator = locator.replace(":", "/")
     logging.log(
-        {f"{dset.name}/{dset.split_alias}/{k}": v for k, v in metrics.items()},
+        {f"{locator}/{k}": v for k, v in metrics.items()},
         loggers=fabric.loggers,
         header=header,
         step=state.step,
     )
     print_metric_groups(
-        {f"{dset.name}/{dset.split_alias}/{k}": v for k, v in metrics.items() if "diagnostics" not in k},
+        {f"{locator}/{k}": v for k, v in metrics.items() if "diagnostics" not in k},
         header=header,
     )
 
@@ -345,16 +316,22 @@ def _infer_accumulate_grad_batches(fabric: L.Fabric, config: vod_configs.BatchSi
     return accumulation_steps
 
 
-def _get_dset_factories(
-    dsets: Iterable[vod_configs.NamedDset],
-    config: vod_configs.MultiDatasetFactoryConfig,
-) -> dict[vod_configs.NamedDset, vod_datasets.RetrievalDatasetFactory]:
-    return {
-        dset_cfg: vod_datasets.RetrievalDatasetFactory.from_config(
-            config.dataset_factory_config(dset_cfg),
-        )
-        for dset_cfg in dsets
-    }
+def _iter_periods(trainer_state: helpers.TrainerState) -> Iterable[int]:
+    rich.print(trainer_state)
+    update_steps = _infer_update_steps(trainer_state.max_steps, trainer_state.period)
+    logger.info(f"The search index will be updated at steps: {_pretty_steps(update_steps)}")
+    if len(update_steps) == 0:
+        raise ValueError("No index update steps were defined.")
+
+    for pidx, (start_step, end_step) in enumerate(zip(update_steps, update_steps[1:] + [None])):
+        if end_step is not None and trainer_state.step > end_step:  # type: ignore
+            logger.info(f"Skipping period {pidx + 1}/{len(update_steps)} (step {start_step} -> {end_step})")
+            continue
+
+        # Update the Trainer state
+        trainer_state.pidx = pidx
+        trainer_state.period_max_steps = end_step  # type: ignore
+        yield pidx
 
 
 def _infer_update_steps(total_number_of_steps: int, update_freq: int | list[int]) -> list[int]:

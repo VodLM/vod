@@ -49,7 +49,7 @@ dataloaders:
 collates:
   # Defines the configurations for `dataset_builder.HfBuilder._collate_config`
   predict:
-    question_max_length: 128
+    query_max_length: 128
     section_max_length: 200
   train:
     # Configuration for the training/evaluation `Collate`
@@ -61,7 +61,7 @@ collates:
     do_sample: false
     in_batch_negatives: false
     prep_num_proc: ${resources.num_proc}
-    question_max_length: ${collates.predict.question_max_length}
+    query_max_length: ${collates.predict.query_max_length}
     section_max_length:  ${collates.predict.section_max_length}
   benchmark:
     # Configuration for the benchmark eval. `Collate`
@@ -73,5 +73,5 @@ collates:
     do_sample: false
     in_batch_negatives: false
     prep_num_proc: ${resources.num_proc}
-    question_max_length: ${collates.predict.question_max_length}
+    query_max_length: ${collates.predict.query_max_length}
     section_max_length:  ${collates.predict.section_max_length}

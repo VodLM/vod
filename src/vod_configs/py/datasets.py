@@ -2,16 +2,33 @@ from __future__ import annotations
 
 import collections
 import re
-from typing import Any, Literal, Optional, TypeVar
+from typing import Any, Iterable, Literal, Optional, TypeVar
 
+import datasets
 import omegaconf
 import pydantic
+import vod_datasets
 from typing_extensions import Self, Type
-from vod_configs.py.search import MutliSearchFactoryConfig, MutliSearchFactoryDiff, SearchFactoryDefaults
-from vod_configs.py.utils import StrictModel
 from vod_tools.misc.config import as_pyobj_validator
 
+from .search import MutliSearchFactoryConfig, MutliSearchFactoryDiff, SearchFactoryDefaults
+from .utils import StrictModel
+
 DsetDescriptorRegex = re.compile(r"^(?P<name>[A-Za-z_]+)(|.(?P<subset>[A-Za-z_]+))(|:(?P<split>[A-Za-z_]+))$")
+
+
+class AllowMutations:
+    """Context manager to allow mutations on a pydantic model."""
+
+    def __init__(self, model: pydantic.BaseModel) -> None:
+        self.model = model
+        self._mutate = model.Config.allow_mutation
+
+    def __enter__(self) -> None:
+        self.model.Config.allow_mutation = True
+
+    def __exit__(self, *args: Any) -> None:
+        self.model.Config.allow_mutation = self._mutate
 
 
 class Templates(StrictModel):
@@ -36,7 +53,7 @@ class DatasetOptionsDiff(StrictModel):
 
     # validators
     _validate_prep_map_kwargs = pydantic.validator("prep_map_kwargs", allow_reuse=True, pre=True)(as_pyobj_validator)
-    _validate_prep_map_kwargs = pydantic.validator("templates", allow_reuse=True, pre=True)(as_pyobj_validator)
+    _validate_templates = pydantic.validator("templates", allow_reuse=True, pre=True)(as_pyobj_validator)
 
 
 class DatasetOptions(StrictModel):
@@ -58,14 +75,17 @@ class DatasetOptions(StrictModel):
 
     # validators
     _validate_prep_map_kwargs = pydantic.validator("prep_map_kwargs", allow_reuse=True, pre=True)(as_pyobj_validator)
-    _validate_prep_map_kwargs = pydantic.validator("templates", allow_reuse=True, pre=True)(as_pyobj_validator)
+    _validate_templates = pydantic.validator("templates", allow_reuse=True, pre=True)(as_pyobj_validator)
 
     def __add__(self, other: None | DatasetOptionsDiff) -> DatasetOptions:
         """Add two options."""
         if other is None:
             return self
-        other_non_nans = {k: v for k, v in other.dict().items() if v is not None} if other else {}
-        return self.copy(update=other_non_nans)
+        attrs = other.dict(exclude_none=True)
+        if "templates" in attrs:
+            attrs["templates"] = Templates(**attrs["templates"])
+        new_self = self.copy(update=attrs)
+        return new_self
 
 
 class BaseDatasetConfig(StrictModel):
@@ -79,9 +99,7 @@ class BaseDatasetConfig(StrictModel):
         None,
         description="Dataset subset name",
     )
-    split: Optional[Literal["train", "val", "test", "all"]] = pydantic.Field(
-        None, description="Dataset split (train, etc.)"
-    )
+    split: Literal["train", "val", "test", "all"] = pydantic.Field("all", description="Dataset split (train, etc.)")
     parts: Optional[list[BaseDatasetConfig]] = pydantic.Field(
         None,
         description="Sub datasets to be concatenated. When set to None, the dataset is a single part (itself)",
@@ -89,6 +107,10 @@ class BaseDatasetConfig(StrictModel):
     options: DatasetOptions = pydantic.Field(
         DatasetOptions(),
         description="Loading/preprocessing options.",
+    )
+    field: Literal["query", "section"] = pydantic.Field(
+        None,
+        description="Field name (used as attribute prefix - e.g., `section.input_ids`).",
     )
 
     @property
@@ -147,12 +169,21 @@ class BaseDatasetConfig(StrictModel):
 class QueriesDatasetConfig(BaseDatasetConfig):
     """Defines a query dataset."""
 
+    field: Literal["query"] = "query"
     link: Optional[str] = pydantic.Field(None, description="Dataset to search into (descriptor)")
+
+    @pydantic.validator("link", pre=True)
+    def _validate_link(cls, value: Optional[str]) -> Optional[str]:
+        if isinstance(value, str) and ":" not in value:
+            return f"{value}:all"
+
+        return None
 
 
 class SectionsDatasetConfig(BaseDatasetConfig):
     """Defines a section dataset."""
 
+    field: Literal["section"] = "section"
     search: Optional[MutliSearchFactoryConfig] = pydantic.Field(
         None,
         description="Search config diffs for this dataset",
@@ -283,16 +314,26 @@ class TrainDatasetsConfig(StrictModel):
         if "options" in config:
             base_options = base_options + DatasetOptionsDiff(**config["options"])
 
+        sections = SectionsConfig.parse(
+            config["sections"],
+            base_options=base_options,
+            base_search=base_search,
+        )
+
+        queries = TrainValQueriesConfig.parse(
+            config["queries"],
+            base_options=base_options,
+        )
+
+        # Implicitely link the queries to the sections when there is only one section dataset
+        if len(sections.sections) == 1:
+            for query in queries.train + queries.val:
+                with AllowMutations(query):
+                    query.link = sections.sections[0].descriptor
+
         return cls(
-            queries=TrainValQueriesConfig.parse(
-                config["queries"],
-                base_options=base_options,
-            ),
-            sections=SectionsConfig.parse(
-                config["sections"],
-                base_options=base_options,
-                base_search=base_search,
-            ),
+            queries=queries,
+            sections=sections,
         )
 
 
@@ -314,16 +355,25 @@ class BenchmarkDatasetConfig(StrictModel):
         if "options" in config:
             base_options = base_options + DatasetOptionsDiff(**config["options"])
 
+        sections = SectionsDatasetConfig.parse(
+            config["sections"],
+            base_options=base_options,
+            base_search=base_search,
+        )
+
+        queries = QueriesDatasetConfig.parse(
+            config["queries"],
+            base_options=base_options,
+        )
+
+        # Implicitely link the queries to the sections when there is only one section dataset
+        with AllowMutations(queries):
+            queries.Config.allow_mutation = True
+            queries.link = sections.descriptor
+
         return cls(
-            queries=QueriesDatasetConfig.parse(
-                config["queries"],
-                base_options=base_options,
-            ),
-            sections=SectionsDatasetConfig.parse(
-                config["sections"],
-                base_options=base_options,
-                base_search=base_search,
-            ),
+            queries=queries,
+            sections=sections,
         )
 
 
@@ -365,3 +415,39 @@ class DatasetsConfig(StrictModel):
                 for cfg in config["benchmark"]
             ],
         )
+
+    def get_dataset_configs(  # noqa: C901
+        self,
+        what: None | Literal["all", "queries", "sections"] = None,
+        split: None | Literal["all", "train", "val", "train+val", "benchmark"] = None,
+    ) -> Iterable[BaseDatasetConfig]:
+        """Iterate over the dataset configs."""
+        what = what or "all"
+        split = split or "all"
+        if split in ["train", "train+val", "all"]:
+            if what in ["all", "queries"]:
+                yield from self.training.queries.train
+            if what in ["all", "sections"]:
+                yield from self.training.sections.sections
+
+        if split in ["val", "train+val", "all"]:
+            if what in ["all", "queries"]:
+                yield from self.training.queries.val
+            if what in ["all", "sections"]:
+                yield from self.training.sections.sections
+
+        if split in ["benchmark", "all"]:
+            for benchmark in self.benchmark:
+                if what in ["all", "queries"]:
+                    yield benchmark.queries
+                if what in ["all", "sections"]:
+                    yield benchmark.sections
+
+    def load_datasets(
+        self,
+        what: None | Literal["all", "queries", "sections"] = None,
+        split: None | Literal["all", "train", "val", "train+val", "benchmark"] = None,
+    ) -> Iterable[datasets.Dataset]:
+        """Load the datasets."""
+        for config in self.get_dataset_configs(what=what, split=split):
+            yield vod_datasets.load_dataset(config)

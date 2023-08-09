@@ -15,9 +15,9 @@ import datasets
 import fsspec
 import loguru
 import pydantic
-import rich
-import vod_configs
 from rich.progress import track
+
+from src import vod_configs
 
 from .base import (
     DATASETS_CACHE_PATH,
@@ -116,7 +116,7 @@ def _download_and_parse_frank(
     full_frank_split = None
     for part_path in track(fs.ls(path), description=f"Processing Frank {split}"):
         if not fs.exists(Path(part_path, "sections.json")):
-            rich.print(f"Skipping {part_path} (no sections.json)")
+            loguru.logger.debug(f"Skipping {part_path} (no sections.json)")
             continue
         frank_part = _pase_frank_dir(part_path, split, language=language, fs=fs)  # type: ignore
         if full_frank_split is None:
@@ -157,8 +157,8 @@ def _pase_frank_dir(local_frank_path: str, split: str, language: str, *, fs: fss
 
     def gen_sections() -> Iterable[dict[str, Any]]:
         for section in _iter_examples_from_json(sections_path, fs=fs):
-            row = FrankSectionModel(language=language, **section)
-            yield row.dict()
+            struct_row = FrankSectionModel(language=language, **section)
+            yield struct_row.dict()
 
     # generate sections
     sections: datasets.Dataset = datasets.Dataset.from_generator(gen_sections)  # type: ignore
@@ -238,9 +238,9 @@ def load_frank(
 
     # If not downloaded, download, process and save to disk
     if not qa_splits_path.exists() or not sections_paths.exists():
-        frank_split = _download_and_parse_frank(config.subset, frank_split, version, only_positive_sections)
-        frank_split.qa_splits.save_to_disk(str(qa_splits_path))
-        frank_split.sections.save_to_disk(str(sections_paths))
+        frank_dset = _download_and_parse_frank(config.subset, frank_split, version, only_positive_sections)
+        frank_dset.qa_splits.save_to_disk(str(qa_splits_path))
+        frank_dset.sections.save_to_disk(str(sections_paths))
 
     if isinstance(config, vod_configs.SectionsDatasetConfig):
         return datasets.Dataset.load_from_disk(str(sections_paths))

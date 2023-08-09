@@ -8,7 +8,7 @@ import torch
 class FieldType(enum.Enum):
     """Enum for token fields."""
 
-    QUESTION: str = "question"  # type: ignore
+    QUERY: str = "query"  # type: ignore
     SECTION: str = "section"  # type: ignore
 
 

@@ -41,7 +41,7 @@ class RetrievalCollate(pipes.Collate):
     """
 
     tokenizer: transformers.PreTrainedTokenizerBase
-    search_client: vod_search.MultiSearchClient
+    search_client: vod_search.HybridSearchClient
     post_filter: Optional[PostFilter]
     sections: dstruct.SizedDataset[dict[str, Any]]
     config: vod_configs.RetrievalCollateConfig
@@ -50,7 +50,7 @@ class RetrievalCollate(pipes.Collate):
         self,
         *,
         tokenizer: transformers.PreTrainedTokenizerBase,
-        search_client: vod_search.MultiSearchClient,
+        search_client: vod_search.HybridSearchClient,
         sections: dstruct.SizedDataset[dict[str, Any]],
         config: vod_configs.RetrievalCollateConfig,
         parameters: Optional[dict | DictProxy] = None,
@@ -58,7 +58,7 @@ class RetrievalCollate(pipes.Collate):
         if "sparse" not in search_client.clients:
             raise ValueError(
                 "The `sparse` client is required to lookup positive sections. "
-                "Please add it to the `search_client` argument"
+                "Please add it to the `search_client` instance"
             )
         self.tokenizer = tokenizer
         self.search_client = search_client
@@ -79,7 +79,7 @@ class RetrievalCollate(pipes.Collate):
         self.post_filter = post_filter
 
         # Validate the parameters
-        client_names = set(self.search_client.clients.keys())
+        client_names = set(search_client.clients.keys())
         missing_clients = client_names - set(self.parameters.keys())
         if len(missing_clients):
             logger.warning(
@@ -199,6 +199,7 @@ class RetrievalCollate(pipes.Collate):
         # Async search the query text using `search_client.async_search`
         return _multi_search(
             text=query_text,
+            shards=batch["link"],
             vector=query_vectors,
             group=query_group_ids,
             query_section_ids=batch[self.config.section_id_keys.query],
@@ -211,6 +212,7 @@ class RetrievalCollate(pipes.Collate):
 def _multi_search(
     *,
     text: list[str],
+    shards: list[str],
     vector: Optional[np.ndarray] = None,
     group: Optional[list[str]] = None,
     query_section_ids: list[list[str | int]],
@@ -219,7 +221,7 @@ def _multi_search(
     weights: dict[str, float],
 ) -> tuple[vod_search.RetrievalBatch, dict[str, np.ndarray]]:
     """Query a multisearch egine."""
-    if "sparse" not in clients:
+    if "sparse" not in clients.keys():
         raise ValueError("The sparse client must be specified to lookup the positive sections.")
 
     # Create the search payloads - another payload is prepended to look up the positive sections
@@ -229,6 +231,7 @@ def _multi_search(
         "text": [""] * len(text),
         "group": group,
         "section_ids": query_section_ids,
+        "shard": shards,
         "top_k": top_k,
     }
     client_names = list(clients.keys())
@@ -238,6 +241,7 @@ def _multi_search(
             "vector": vector,
             "text": text,
             "group": group,
+            "shard": shards,
             "top_k": top_k,
         }
         for name in client_names
@@ -290,19 +294,13 @@ def _multi_search(
 
 
 async def _execute_search(payloads: list[dict[str, Any]]) -> list[vod_search.RetrievalBatch]:
-    def search_fn(args: dict[str, Any]) -> vod_search.RetrievalBatch[np.ndarray]:
-        client = args.pop("client")
-        return client.search(**args)
+    """Execute the search asynchronously."""
 
-    loop = asyncio.get_event_loop()
-    futures = [
-        loop.run_in_executor(
-            None,
-            search_fn,
-            payload,
-        )
-        for payload in payloads
-    ]
+    async def _async_search_one(args: dict[str, Any]) -> vod_search.RetrievalBatch[np.ndarray]:
+        client = args.pop("client")
+        return await client.async_search(**args)
+
+    futures = [_async_search_one(payload) for payload in payloads]
     return await asyncio.gather(*futures)
 
 
@@ -377,7 +375,7 @@ def _tokenize_fields(
         tokenizer=tokenizer,
         text_key="text",
         prefix_key="question.",
-        max_length=config.question_max_length,
+        max_length=config.query_max_length,
         truncation=True,
         padding="max_length",
     )

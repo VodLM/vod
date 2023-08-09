@@ -8,8 +8,9 @@ from typing import Any, Optional, Protocol, Type
 import datasets
 import numpy as np
 import pydantic
-import vod_configs
 from vod_tools import pipes
+
+from src import vod_configs
 
 from .base import QueryModel, SectionModel
 from .frank import load_frank
@@ -73,6 +74,15 @@ def load_sections(
     _validate(dset, SectionModel)
     dset = _preprocess_sections(dset, config=config, locator=f"{config.descriptor}(sections)")
     return dset
+
+
+def load_dataset(config: vod_configs.BaseDatasetConfig) -> datasets.Dataset:
+    """Load a dataset."""
+    if isinstance(config, vod_configs.QueriesDatasetConfig):
+        return load_queries(config)
+    if isinstance(config, vod_configs.SectionsDatasetConfig):
+        return load_sections(config)
+    raise TypeError(f"Unexpected config type `{type(config)}`")
 
 
 def _preprocess_queries(

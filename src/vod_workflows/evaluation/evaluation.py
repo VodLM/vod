@@ -6,12 +6,14 @@ import json
 import pathlib
 from typing import Any, Iterable, Optional
 
+import datasets
 import numpy as np
 import torch
 import transformers
 from lightning.pytorch import utilities as pl_utils
 from loguru import logger
 from vod_models.monitor import RetrievalMetricCollection
+from vod_tools import dstruct
 from vod_tools.misc.config import flatten_dict
 from vod_tools.misc.progress import IterProgressBar
 from vod_workflows.utils import helpers
@@ -32,12 +34,10 @@ class ToDiskConfig:
 @torch.no_grad()
 @pl_utils.rank_zero_only
 def benchmark(
-    factory: vod_datasets.RetrievalDatasetFactory,
+    task: helpers.RetrievalTask,
     *,
-    vectors: None | helpers.PrecomputedDsetVectors,
     tokenizer: transformers.PreTrainedTokenizer | transformers.PreTrainedTokenizerFast,
     metrics: Iterable[str],
-    search_config: vod_configs.SearchConfig,
     collate_config: vod_configs.RetrievalCollateConfig,
     dataloader_config: vod_configs.DataLoaderConfig,
     cache_dir: pathlib.Path,
@@ -48,26 +48,38 @@ def benchmark(
     to_disk_config: Optional[ToDiskConfig] = None,
 ) -> dict[str, float]:
     """Run benchmarks on a retrieval task."""
-    with vod_search.build_multi_search_engine(
-        sections=factory.get_sections(),  # type: ignore
-        vectors=helpers.maybe_as_lazy_array(vectors.sections) if vectors is not None else None,
-        config=search_config,
+    with vod_search.build_hybrid_search_engine(
+        shard_names=[cfg.descriptor for cfg in task.sections],
+        sections=[vod_datasets.load_sections(cfg) for cfg in task.sections],  # type: ignore
+        vectors=[dstruct.as_lazy_array(task.vectors[d]) for d in task.sections]
+        if task.vectors
+        else None,  # type: ignore
+        configs=[cfg.search for cfg in task.sections],  # type: ignore
         cache_dir=cache_dir,
         dense_enabled=helpers.is_engine_enabled(parameters, "dense"),
         sparse_enabled=True,
         serve_on_gpu=serve_on_gpu,
+        free_resources=True,
     ) as master:
         search_client = master.get_client()
 
         # Instantiate the dataloader
         dataloader = helpers.instantiate_retrieval_dataloader(
-            questions=helpers.DsetWithVectors.cast(
-                data=factory.get_queries(),
-                vectors=vectors.questions if vectors is not None else None,
+            queries=helpers.DsetWithVectors.cast(
+                data=datasets.concatenate_datasets([vod_datasets.load_queries(cfg) for cfg in task.queries]),
+                vectors=dstruct.ConcatenatedSizedDataset(
+                    [dstruct.as_lazy_array(task.vectors[d]) for d in task.queries]
+                    if task.vectors
+                    else None  # type: ignore
+                ),
             ),
             sections=helpers.DsetWithVectors.cast(
-                data=factory.get_sections(),
-                vectors=vectors.sections if vectors is not None else None,
+                data=datasets.concatenate_datasets([vod_datasets.load_sections(cfg) for cfg in task.sections]),
+                vectors=dstruct.ConcatenatedSizedDataset(
+                    [dstruct.as_lazy_array(task.vectors[d]) for d in task.sections]
+                    if task.vectors
+                    else None  # type: ignore
+                ),
             ),
             tokenizer=tokenizer,
             search_client=search_client,
@@ -81,6 +93,7 @@ def benchmark(
         cfg = {"compute_on_cpu": True, "dist_sync_on_step": True, "sync_on_compute": False}
         monitors = {key: RetrievalMetricCollection(metrics=metrics, **cfg) for key in output_keys}
         diagnostics = collections.defaultdict(list)
+        queries_descriptior = "+".join(cfg.descriptor for cfg in task.queries)
 
         try:
             with IterProgressBar() as pbar:
@@ -91,7 +104,7 @@ def benchmark(
                 ptask = pbar.add_task(
                     "Benchmarking",
                     total=ntotal,
-                    info=f"{factory.config.name}:{factory.config.split}",
+                    info=f"{queries_descriptior}",
                 )
                 for i, batch in enumerate(dataloader):
                     if i >= ntotal:

@@ -1,37 +1,46 @@
 from __future__ import annotations
 
 import collections
+import dataclasses
 import functools
 import json
 import pathlib
 import shutil
 from os import PathLike
 from pathlib import Path
-from typing import Any, Iterable, Optional, Union
+from typing import Any, Iterable, Optional
 
 import datasets
 import fsspec
 import loguru
 import pydantic
 
+from src import vod_configs
+
 from .base import (
     DATASETS_CACHE_PATH,
     QueryModel,
     SectionModel,
     SilentHuggingfaceDecorator,
+    _fetch_queries_split,
     init_gcloud_filesystem,
 )
 
 RAFFLE_SQUAD_KB_ID = 200_001
 
 
+@dataclasses.dataclass
 class RaffleSquad:
     """A Raffle-hanlded SQuAD dataset."""
+
+    qa_splits: datasets.DatasetDict
+    sections: datasets.Dataset
 
 
 class SquadSectionModel(SectionModel):
     """A Frank section."""
 
+    section: str = pydantic.Field(..., alias="content")
     kb_id: int = RAFFLE_SQUAD_KB_ID
     answer_id: int
 
@@ -39,7 +48,7 @@ class SquadSectionModel(SectionModel):
 class SquadQueryModel(QueryModel):
     """A Frank query."""
 
-    text: str = pydantic.Field(..., alias="question")
+    query: str = pydantic.Field(..., alias="question")
     category: Optional[str] = None
     label_method_type: Optional[str] = None
     answer_id: int
@@ -137,21 +146,16 @@ def _make_local_sync_path(cache_dir: str | pathlib.Path, language: str) -> tuple
 
 
 def load_raffle_squad(
-    language: str = "en",
-    cache_dir: Optional[Union[str, pathlib.Path]] = None,
-    keep_in_memory: Optional[bool] = None,
-    invalidate_cache: bool = False,
-    subset_name: Optional[str] = None,  # noqa: ARG001
-    only_positive_sections: Optional[bool] = None,  # noqa: ARG001
-    kb_id: Optional[int] = None,  # noqa: ARG001
-) -> RaffleSquad:
+    config: vod_configs.BaseDatasetConfig,
+) -> datasets.Dataset | datasets.DatasetDict:
     """Load the Frank dataset."""
-    if cache_dir is None:
-        cache_dir = pathlib.Path(DATASETS_CACHE_PATH)
+    cache_dir = pathlib.Path(config.options.cache_dir or DATASETS_CACHE_PATH)
+    if config.subset is None:
+        raise ValueError(f"Subset must be configured. Config={config}")
 
     # define the local paths
-    qa_splits_path, sections_paths = _make_local_sync_path(cache_dir, language=language)
-    if invalidate_cache:
+    qa_splits_path, sections_paths = _make_local_sync_path(cache_dir, language=config.subset)
+    if config.options.invalidate_cache:
         loguru.logger.debug(f"Invalidating cache `{qa_splits_path}` and `{sections_paths}`")
         if qa_splits_path.exists():
             shutil.rmtree(qa_splits_path)
@@ -160,11 +164,14 @@ def load_raffle_squad(
 
     # if not downloaded, download, process and save to disk
     if not qa_splits_path.exists() or not sections_paths.exists():
-        frank_split = _download_and_parse_squad(language)
+        frank_split = _download_and_parse_squad(config.subset)
         frank_split.qa_splits.save_to_disk(str(qa_splits_path))
         frank_split.sections.save_to_disk(str(sections_paths))
 
-    return RaffleSquad(
-        qa_splits=datasets.DatasetDict.load_from_disk(str(qa_splits_path), keep_in_memory=keep_in_memory),
-        sections=datasets.Dataset.load_from_disk(str(sections_paths), keep_in_memory=keep_in_memory),
-    )
+    if isinstance(config, vod_configs.SectionsDatasetConfig):
+        return datasets.Dataset.load_from_disk(str(sections_paths))
+    if isinstance(config, vod_configs.QueriesDatasetConfig):
+        queries = datasets.DatasetDict.load_from_disk(str(qa_splits_path))
+        return _fetch_queries_split(queries, split=config.split)
+
+    raise TypeError(f"Unexpected config type {type(config)}")

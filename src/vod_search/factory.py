@@ -4,17 +4,17 @@ import os
 import pathlib
 from typing import Any, Callable
 
-import elasticsearch
 import faiss
 import numpy as np
 import torch
-from lightning.pytorch import utilities as pl_utils
 from loguru import logger
 from vod_search import base, es_search, faiss_search, qdrant_search
-from vod_search.multi_search import MultiSearchMaster
 from vod_tools import dstruct, pipes
 
 from src import vod_configs
+
+from .hybrid_search import HyrbidSearchMaster
+from .sharded_search import ShardedSearchMaster
 
 
 def build_search_index(
@@ -27,6 +27,7 @@ def build_search_index(
     skip_setup: bool = False,
     barrier_fn: None | Callable[[str], None] = None,
     serve_on_gpu: bool = False,
+    free_resources: bool = False,
 ) -> base.SearchMaster:
     """Build a search Master client."""
     if sections is not None and vectors is not None and len(sections) != len(vectors):
@@ -41,6 +42,7 @@ def build_search_index(
             skip_setup=skip_setup,
             barrier_fn=barrier_fn,
             serve_on_gpu=serve_on_gpu,
+            free_resources=free_resources,
         )
     if index_type == "elasticsearch":
         if sections is None:
@@ -49,6 +51,7 @@ def build_search_index(
             sections=sections,
             config=vod_configs.ElasticsearchFactoryConfig(**config),
             skip_setup=skip_setup,
+            free_resources=free_resources,
         )
 
     if index_type == "qdrant":
@@ -61,6 +64,7 @@ def build_search_index(
             sections=sections,
             config=vod_configs.QdrantFactoryConfig(**config),
             skip_setup=skip_setup,
+            free_resources=free_resources,
         )
 
     raise ValueError(f"Unknown index type `{index_type}`")
@@ -70,6 +74,7 @@ def build_elasticsearch_index(
     sections: dstruct.SizedDataset[dict[str, Any]],
     config: vod_configs.ElasticsearchFactoryConfig | dict,
     skip_setup: bool = False,
+    free_resources: bool = False,
 ) -> es_search.ElasticSearchMaster:
     """Build a sparse elasticsearch index."""
     if isinstance(config, dict):
@@ -95,6 +100,7 @@ def build_elasticsearch_index(
         es_body=config.es_body,
         exist_ok=True,
         skip_setup=skip_setup,
+        free_resources=free_resources,
     )
 
 
@@ -106,6 +112,7 @@ def build_faiss_index(
     skip_setup: bool = False,
     barrier_fn: None | Callable[[str], None] = None,
     serve_on_gpu: bool = False,
+    free_resources: bool = False,
 ) -> faiss_search.FaissMaster:
     """Build a faiss index."""
     if isinstance(config, dict):
@@ -155,6 +162,7 @@ def build_faiss_index(
         port=config.port,
         skip_setup=skip_setup,
         serve_on_gpu=serve_on_gpu,
+        free_resources=free_resources,
     )
 
 
@@ -163,6 +171,7 @@ def build_qdrant_index(
     sections: dstruct.SizedDataset[dict[str, Any]],
     config: vod_configs.QdrantFactoryConfig | dict,
     skip_setup: bool = False,
+    free_resources: bool = False,
 ) -> qdrant_search.QdrantSearchMaster:
     """Build a dense Qdrant index."""
     if isinstance(config, dict):
@@ -187,6 +196,7 @@ def build_qdrant_index(
         exist_ok=True,
         skip_setup=skip_setup,
         force_single_collection=config.force_single_collection,
+        free_resources=free_resources,
     )
 
 
@@ -196,59 +206,95 @@ def _rank_info() -> str:
     return winfo
 
 
-def build_multi_search_engine(
+def _infer_offsets(x: list[dstruct.SizedDataset[Any]]) -> list[int]:
+    """Infer the offsets of a list of SizedDatasets."""
+    if len(x) == 0:
+        return []
+    return [0, *np.cumsum([len(d) for d in x])[:-1]]
+
+
+def build_hybrid_search_engine(  # noqa: C901, PLR0912
     *,
-    sections: None | dstruct.SizedDataset[dict[str, Any]],
-    vectors: None | dstruct.SizedDataset[np.ndarray],
-    config: vod_configs.SearchConfig,
+    shard_names: list[str],
+    sections: None | list[dstruct.SizedDataset[dict[str, Any]]],
+    vectors: None | list[dstruct.SizedDataset[np.ndarray]],
+    configs: list[vod_configs.MutliSearchFactoryConfig],
     cache_dir: str | pathlib.Path,
     dense_enabled: bool = True,
     sparse_enabled: bool = True,
     skip_setup: bool = False,
     barrier_fn: None | Callable[[str], None] = None,
     serve_on_gpu: bool = False,
-    close_existing_es_indices: bool = True,
-) -> MultiSearchMaster:
+    free_resources: bool = True,
+) -> HyrbidSearchMaster:
     """Build a hybrid search engine."""
-    servers = {}
+    if sections is not None:
+        offsets = _infer_offsets(sections)
+    elif vectors is not None:
+        offsets = _infer_offsets(vectors)
+    else:
+        raise ValueError("Must provide either `sections` or `vectors`")
 
-    if close_existing_es_indices:
-        # Close all indices to avoid hitting memory limits
-        _close_all_es_indices()
-
+    servers: dict[str, ShardedSearchMaster] = {}
     if dense_enabled:
-        if vectors is None:
-            raise ValueError("`vectors` must be provided if `dense_enabled`")
-        if config.dense is None:
-            raise ValueError("`dense` must be provided if `dense_enabled`")
+        dense_shards: dict[str, base.SearchMaster] = {}
+        offsets_dict: dict[str, int] = {}
+        for i, shard_name in enumerate(shard_names):
+            offsets_dict[shard_name] = offsets[i]
+            if vectors is None:
+                raise ValueError("`vectors` must be provided if `dense_enabled`")
+            if configs[i].engines.get("dense", None) is None:
+                raise ValueError("`dense` must be provided if `dense_enabled`")
 
-        servers["dense"] = _init_dense_search_engine(
-            sections=sections,
-            vectors=vectors,
-            config=config.dense,
-            cache_dir=cache_dir,
+            dense_shards[shard_name] = _init_dense_search_engine(
+                sections=sections[i] if sections is not None else None,
+                vectors=vectors[i],
+                config=configs[i].engines["dense"],  # type: ignore
+                cache_dir=cache_dir,
+                skip_setup=skip_setup,
+                barrier_fn=barrier_fn,
+                serve_on_gpu=serve_on_gpu,
+                free_resources=False,  # <- let the HyrbidSearchMaster handle this
+            )
+        servers["dense"] = ShardedSearchMaster(
+            shards=dense_shards,
+            offsets=offsets_dict,
             skip_setup=skip_setup,
-            barrier_fn=barrier_fn,
-            serve_on_gpu=serve_on_gpu,
+            free_resources=False,  # <- let the HyrbidSearchMaster handle this
         )
 
     if sparse_enabled:
-        if sections is None:
-            raise ValueError("`sections` must be provided if `sparse_enabled`")
-        if config.sparse is None:
-            raise ValueError("`sparse` must be provided if `sparse_enabled`")
+        sparse_shards: dict[str, base.SearchMaster] = {}
+        offsets_dict: dict[str, int] = {}
+        for i, shard_name in enumerate(shard_names):
+            offsets_dict[shard_name] = offsets[i]
+            if sections is None:
+                raise ValueError("`sections` must be provided if `sparse_enabled`")
+            if configs[i].engines.get("sparse", None) is None:
+                raise ValueError("`sparse` must be provided if `sparse_enabled`")
 
-        sparse_server = build_elasticsearch_index(
-            sections=sections,
-            config=config.sparse,
+            sparse_shards[shard_name] = build_elasticsearch_index(
+                sections=sections[i],
+                config=configs[i].engines["sparse"],  # type: ignore
+                skip_setup=skip_setup,
+                free_resources=False,  # <- let the HyrbidSearchMaster handle this
+            )
+
+        servers["sparse"] = ShardedSearchMaster(
+            shards=sparse_shards,
+            offsets=offsets_dict,
             skip_setup=skip_setup,
+            free_resources=False,  # <- let the HyrbidSearchMaster handle this
         )
-        servers["sparse"] = sparse_server
 
     if len(servers) == 0:
         raise ValueError("No search servers were enabled.")
 
-    return MultiSearchMaster(servers=servers, skip_setup=skip_setup)
+    return HyrbidSearchMaster(
+        servers=servers,  # type: ignore
+        skip_setup=skip_setup,
+        free_resources=free_resources,
+    )
 
 
 def _init_dense_search_engine(
@@ -259,6 +305,7 @@ def _init_dense_search_engine(
     skip_setup: bool,
     barrier_fn: None | Callable[[str], None],
     serve_on_gpu: bool,
+    free_resources: bool = False,
 ) -> qdrant_search.QdrantSearchMaster | faiss_search.FaissMaster:
     if isinstance(config, vod_configs.FaissFactoryConfig):
         return build_faiss_index(
@@ -268,6 +315,7 @@ def _init_dense_search_engine(
             skip_setup=skip_setup,
             barrier_fn=barrier_fn,
             serve_on_gpu=serve_on_gpu,
+            free_resources=free_resources,
         )
     if isinstance(config, vod_configs.QdrantFactoryConfig):
         if sections is None:
@@ -277,26 +325,7 @@ def _init_dense_search_engine(
             sections=sections,
             config=config,
             skip_setup=skip_setup,
+            free_resources=free_resources,
         )
 
-    raise ValueError(f"Unknown dense factory config type `{type(config)}`")
-
-
-@pl_utils.rank_zero_only
-def _close_all_es_indices(es_url: str = "http://localhost:9200") -> None:
-    """Close all `elasticsearch` indices."""
-    logger.warning(f"Closing all ES indices at `{es_url}`")
-    try:
-        es = elasticsearch.Elasticsearch(es_url)
-        for index_name in es.indices.get(index="*"):
-            if index_name.startswith("."):
-                continue
-            logger.debug(f"Found ES index `{index_name}`")
-            try:
-                if es.indices.exists(index=index_name):
-                    logger.info(f"Closing ES index {index_name}")
-                    es.indices.close(index=index_name)
-            except Exception as exc:
-                logger.warning(f"Could not close index {index_name}: {exc}")
-    except Exception as exc:
-        logger.warning(f"Could not connect to ES: {exc}")
+    raise TypeError(f"Unknown dense factory config type `{type(config)}`")

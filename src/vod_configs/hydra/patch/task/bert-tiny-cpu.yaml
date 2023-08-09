@@ -22,5 +22,5 @@ builder:
     validation: null
     test: null
   subset_size: null
-  question_max_length: null
+  query_max_length: null
   section_max_length: 220

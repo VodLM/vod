@@ -98,7 +98,7 @@ def run(args: Args) -> None:
         section_vectors = predict_fn(dataset=sections)  # type: ignore
 
         # 4. Spin up a hybrid search engine
-        with vod_search.build_multi_search_engine(
+        with vod_search.build_hybrid_search_engine(
             sections=sections,  # type: ignore
             vectors=dstruct.as_lazy_array(section_vectors),
             config=vod_configs.SearchConfig(

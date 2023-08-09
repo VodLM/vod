@@ -12,6 +12,7 @@ from typing import Any, Iterable, Optional
 import numba
 import numpy as np
 import qdrant_client
+import rich
 from grpc import StatusCode
 from grpc._channel import _InactiveRpcError
 from loguru import logger
@@ -20,7 +21,6 @@ from qdrant_client.http import models as qdrm
 from rich import status
 from rich.markup import escape
 from rich.progress import track
-from typing_extensions import Self
 from vod_search import base, rdtypes
 from vod_tools import dstruct
 from vod_tools.misc.pretty import human_format_nb
@@ -114,6 +114,7 @@ class QdrantSearchClient(base.SearchClient):
         vector: Optional[rdtypes.Ts],
         group: Optional[list[str | int]] = None,
         section_ids: Optional[list[list[str | int]]] = None,  # noqa: ARG002
+        shard: Optional[list[str]] = None,  # noqa: ARG002
         top_k: int = 3,
     ) -> rdtypes.RetrievalBatch[rdtypes.Ts]:
         """Search the server given a batch of text and/or vectors."""
@@ -199,9 +200,10 @@ class QdrantSearchMaster(base.SearchMaster[QdrantSearchClient], abc.ABC):
         skip_setup: bool = False,
         qdrant_body: Optional[dict[str, Any]] = None,
         search_params: Optional[dict[str, Any]] = None,
-        force_single_collection: bool = True,
+        free_resources: bool = False,
+        force_single_collection: bool = False,
     ) -> None:
-        super().__init__(skip_setup=skip_setup)
+        super().__init__(skip_setup=skip_setup, free_resources=free_resources)
         self._host = host
         self._port = port
         self._grpc_port = grpc_port
@@ -220,12 +222,6 @@ class QdrantSearchMaster(base.SearchMaster[QdrantSearchClient], abc.ABC):
     def supports_groups(self) -> bool:
         """Whether the index supports labels."""
         return self._input_groups is not None
-
-    def __enter__(self) -> Self:
-        """Start the server."""
-        if not self.skip_setup:
-            self._setup()
-        return self
 
     def get_client(self) -> QdrantSearchClient:
         """Return a client to the server."""
@@ -285,9 +281,10 @@ class QdrantSearchMaster(base.SearchMaster[QdrantSearchClient], abc.ABC):
         if not index_exist:
             # Create the index & Ingest the data
             body = _make_qdrant_body(vshp[-1], self._qdrant_body)
-            client.create_collection(collection_name=self._index_name, **body)
+            rich.print(f">> [magenta bold]Creating collection: {self._index_name}")
+            client.recreate_collection(collection_name=self._index_name, **body)
 
-            with WithIndexingDisabled(client, self._index_name, delete_on_exception=True):
+            with DisableIndexing(client, self._index_name, delete_on_exception=True):
                 _ingest_data(
                     client=client,
                     collection_name=self._index_name,
@@ -302,6 +299,13 @@ class QdrantSearchMaster(base.SearchMaster[QdrantSearchClient], abc.ABC):
         if not self._persistent:
             client = _init_client(self._host, self._port, self._grpc_port)
             client.delete_collection(collection_name=self._index_name)
+
+    def _free_resources(self) -> None:
+        client = _init_client(self._host, self._port, self._grpc_port)
+        with status.Status(f"{_collection_name(self._index_name)}: Deleting other indices.."):
+            _delete_except([self._index_name], client)
+            while not self.get_client().ping():
+                time.sleep(0.05)
 
 
 def _validate(
@@ -343,16 +347,18 @@ def _collection_exists(client: qdrant_client.QdrantClient, collection_name: str)
     except qdrexc.UnexpectedResponse as exc:
         if exc.status_code != 404:  # noqa: PLR2004
             raise Exception(f"Unexpected error: {exc}") from exc
+        rich.print(exc)
         index_exist = False
 
     except _InactiveRpcError as exc:
         if exc.code() != StatusCode.NOT_FOUND:
             raise Exception(f"Unexpected error: {exc}") from exc
+        rich.print(exc)
         index_exist = False
     return index_exist
 
 
-class WithIndexingDisabled:
+class DisableIndexing:
     """Temporarily disable indexing."""
 
     _opt_config: None | qdrm.OptimizersConfig

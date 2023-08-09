@@ -15,28 +15,28 @@ search:
 training:
   queries:
     train:
-      - name: frank_A.en:train
-        link: frank_A.en
+      - name: frank_a.en:train
+        link: frank_a.en
       - name: squad.en:train
         link: squad.en
     val:
-      - name: frank_A.en:train
-        link: frank_A.en
+      - name: frank_a.en:train
+        link: frank_a.en
 
   sections:
     sections:
-      - name: frank_A.en:train
+      - name: frank_a.en
         search:
           dense:
             backend: qdrant
-      - name: squad.en:all
+      - name: squad.en
         search:
           dense:
             backend: faiss
 
 # Benchmarks
 benchmark:
-  - queries: frank_A.en:val
-    sections: frank_A.en
-  - queries: frank_B.en:val
-    sections: frank_B.en
+  - queries: frank_a.en:val
+    sections: frank_a.en
+  - queries: frank_b.en:val
+    sections: frank_b.en

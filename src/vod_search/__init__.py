@@ -12,16 +12,16 @@ from .es_search import (
 from .factory import (
     build_elasticsearch_index,
     build_faiss_index,
-    build_multi_search_engine,
+    build_hybrid_search_engine,
     build_search_index,
 )
 from .faiss_search import (
     FaissClient,
     FaissMaster,
 )
-from .multi_search import (
-    MultiSearchClient,
-    MultiSearchMaster,
+from .hybrid_search import (
+    HybridSearchClient,
+    HyrbidSearchMaster,
 )
 from .qdrant_search import (
     QdrantSearchClient,
@@ -31,4 +31,8 @@ from .rdtypes import (
     RetrievalBatch,
     RetrievalData,
     RetrievalSample,
+)
+from .sharded_search import (
+    ShardedSearchClient,
+    ShardedSearchMaster,
 )

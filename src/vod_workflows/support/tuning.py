@@ -89,9 +89,8 @@ def tune_parameters(
     tune: None | list[str] = None,
     *,
     fabric: L.Fabric,
-    factories: dict[K, vod_datasets.RetrievalDatasetFactory],
-    vectors: dict[K, helpers.PrecomputedDsetVectors],
-    search_config: vod_configs.SearchConfig,
+    queries_configs: vod_configs.QueriesDatasetConfig,
+    vectors: dict[vod_configs.BaseDatasetConfig, helpers.PrecomputedDsetVectors],
     collate_config: vod_configs.RetrievalCollateConfig,
     dataloader_config: vod_configs.DataLoaderConfig,
     cache_dir: pathlib.Path,
@@ -115,7 +114,7 @@ def tune_parameters(
             vectors=vectors,
         )
 
-        with vod_search.build_multi_search_engine(
+        with vod_search.build_hybrid_search_engine(
             sections=task.sections.data,
             vectors=task.sections.vectors,
             config=search_config,
@@ -128,7 +127,7 @@ def tune_parameters(
 
             # instantiate the dataloader
             dataloader = helpers.instantiate_retrieval_dataloader(
-                questions=task.questions,
+                queries=task.questions,
                 sections=task.sections,
                 tokenizer=tokenizer,
                 search_client=search_client,

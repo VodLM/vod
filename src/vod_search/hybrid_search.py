@@ -7,7 +7,7 @@ import numpy as np
 from vod_search import base, rdtypes
 
 
-class MultiSearchClient(base.SearchClient):
+class HybridSearchClient(base.SearchClient):
     """A client to interact with a search server."""
 
     clients: dict[str, base.SearchClient]
@@ -34,6 +34,7 @@ class MultiSearchClient(base.SearchClient):
         vector: Optional[np.ndarray] = None,
         group: Optional[list[str | int]] = None,
         section_ids: Optional[list[list[str | int]]] = None,
+        shard: Optional[list[str]] = None,
         top_k: int = 3,
     ) -> dict[str, rdtypes.RetrievalBatch[np.ndarray]]:
         """Search the server given a batch of text and/or vectors."""
@@ -43,6 +44,7 @@ class MultiSearchClient(base.SearchClient):
                 text=text,
                 group=group,
                 section_ids=section_ids,
+                shard=shard,
                 top_k=top_k,
             )
             for name, client in self.clients.items()
@@ -54,6 +56,7 @@ class MultiSearchClient(base.SearchClient):
         text: list[str],
         vector: Optional[rdtypes.Ts] = None,
         group: Optional[list[str | int]] = None,
+        shard: Optional[list[str]] = None,
         top_k: int = 3,
     ) -> dict[str, rdtypes.RetrievalBatch[np.ndarray]]:
         """Search the server given a batch of text and/or vectors."""
@@ -73,6 +76,7 @@ class MultiSearchClient(base.SearchClient):
                     "vector": vector,
                     "text": text,
                     "group": group,
+                    "shard": shard,
                     "top_k": top_k,
                 },
             )
@@ -83,28 +87,44 @@ class MultiSearchClient(base.SearchClient):
         return dict(zip(names, results))
 
 
-class MultiSearchMaster:
+class HyrbidSearchMaster(base.SearchMaster):
     """Handle multiple search servers."""
 
     servers: dict[str, base.SearchMaster]
 
-    def __init__(self, servers: dict[str, base.SearchMaster], skip_setup: bool = False):
+    def __init__(
+        self,
+        servers: dict[str, base.SearchMaster],
+        skip_setup: bool = False,
+        free_resources: bool = False,
+    ):
         """Initialize the search master."""
         self.skip_setup = skip_setup
         self.servers = servers
+        self.free_resources = free_resources
 
-    def __enter__(self) -> MultiSearchMaster:
+    def __enter__(self) -> HyrbidSearchMaster:
         """Start the servers."""
+        if self.free_resources:
+            self._free_resources()
+
         for server in self.servers.values():
             server.__enter__()
 
         return self
+
+    def _make_cmd(self) -> list[str]:
+        raise NotImplementedError(f"{type(self).__name__} does not implement `_make_cmd`")
 
     def __exit__(self, *args, **kwargs) -> None:  # noqa: ANN, ARG
         """Stop the servers."""
         for server in self.servers.values():
             server.__exit__(*args, **kwargs)
 
-    def get_client(self) -> MultiSearchClient:
+    def get_client(self) -> HybridSearchClient:
         """Get the client for interacting with the Faiss server."""
-        return MultiSearchClient(clients={name: server.get_client() for name, server in self.servers.items()})
+        return HybridSearchClient(clients={name: server.get_client() for name, server in self.servers.items()})
+
+    def _free_resources(self) -> None:
+        for server in self.servers.values():
+            server._free_resources()

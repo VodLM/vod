@@ -85,6 +85,7 @@ class ElasticsearchClient(base.SearchClient):
         vector: Optional[rdtypes.Ts] = None,  # noqa: ARG
         group: Optional[list[str | int]] = None,
         section_ids: Optional[list[list[str | int]]] = None,
+        shard: Optional[list[str]] = None,  # noqa: ARG002
         top_k: int = 3,
     ) -> rdtypes.RetrievalBatch[np.ndarray]:
         """Search elasticsearch for the batch of text queries using `msearch`. NB: `vector` is not used here."""
@@ -249,10 +250,11 @@ class ElasticSearchMaster(base.SearchMaster[ElasticsearchClient]):
         persistent: bool = False,
         exist_ok: bool = False,
         skip_setup: bool = False,
+        free_resources: bool = False,
         es_body: Optional[dict] = None,
         **proc_kwargs: Any,
     ):
-        super().__init__(skip_setup=skip_setup)
+        super().__init__(skip_setup=skip_setup, free_resources=free_resources)
         self._host = host
         self._port = port
         self._proc_kwargs = proc_kwargs
@@ -317,6 +319,9 @@ class ElasticSearchMaster(base.SearchMaster[ElasticsearchClient]):
         """Get a client to the search server."""
         return ElasticsearchClient(self.url, index_name=self._index_name, supports_groups=self.supports_groups)
 
+    def _free_resources(self) -> None:
+        _close_all_es_indices(self.url)
+
 
 def maybe_ingest_data(
     stream: Iterable[dict[str, Any]],
@@ -365,3 +370,22 @@ async def _async_maybe_ingest_data(
         except Exception as e:
             await client.indices.delete(index=index_name)
             raise e
+
+
+def _close_all_es_indices(es_url: str = "http://localhost:9200") -> None:
+    """Close all `elasticsearch` indices."""
+    logger.warning(f"Closing all ES indices at `{es_url}`")
+    try:
+        client = es.Elasticsearch(es_url)
+        for index_name in client.indices.get(index="*"):
+            if index_name.startswith("."):
+                continue
+            logger.debug(f"Found ES index `{index_name}`")
+            try:
+                if client.indices.exists(index=index_name):
+                    logger.info(f"Closing ES index {index_name}")
+                    client.indices.close(index=index_name)
+            except Exception as exc:
+                logger.warning(f"Could not close index {index_name}: {exc}")
+    except Exception as exc:
+        logger.warning(f"Could not connect to ES: {exc}")

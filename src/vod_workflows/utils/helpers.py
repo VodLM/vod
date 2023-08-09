@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-import collections
 import contextlib
 import dataclasses
 import functools
-import os
 import typing
 from multiprocessing.managers import DictProxy
-from typing import Any, Callable, Optional, Protocol, TypeVar
+from typing import Any, Callable, Generic, Optional, Protocol, TypeVar
 
-import datasets
+import datasets  # noqa: E402
 import lightning as L
 import numpy as np
 import torch
@@ -18,12 +16,22 @@ from lightning.fabric import wrappers as fabric_wrappers
 from loguru import logger
 from torch.utils import data as torch_data
 from typing_extensions import Self, Type
-from vod_tools import dstruct, pipes
+from vod_tools import dstruct
 from vod_tools.misc.schedule import BaseSchedule
 
 from src import vod_configs, vod_dataloaders, vod_search
 
 T = TypeVar("T")
+K = TypeVar("K")
+
+
+@dataclasses.dataclass
+class RetrievalTask(Generic[K]):
+    """A retrieval task with queries, sections and the config required to build a search engine."""
+
+    queries: list[vod_configs.QueriesDatasetConfig]
+    sections: list[vod_configs.SectionsDatasetConfig]
+    vectors: None | dict[vod_configs.BaseDatasetConfig, dstruct.TensorStoreFactory]
 
 
 def none_ok(func: Callable[..., T]) -> Callable[..., Optional[T]]:
@@ -94,10 +102,10 @@ class DsetWithVectors:
 
 def instantiate_retrieval_dataloader(
     *,
-    questions: DsetWithVectors,
+    queries: DsetWithVectors,
     sections: DsetWithVectors,
     tokenizer: transformers.PreTrainedTokenizer | transformers.PreTrainedTokenizerFast,
-    search_client: vod_search.MultiSearchClient,
+    search_client: vod_search.ShardedMultiSearchClient,
     collate_config: vod_configs.RetrievalCollateConfig,
     dataloader_config: vod_configs.DataLoaderConfig,
     parameters: Optional[dict | DictProxy],
@@ -112,13 +120,13 @@ def instantiate_retrieval_dataloader(
         parameters=parameters,
     )
     dataset = IndexWithVectors(
-        dataset=questions.data,
-        vectors=questions.vectors,
+        dataset=queries.data,
+        vectors=queries.vectors,
         vector_key="vector",
     )
     kws = dataloader_config.dict()
     if dl_sampler is not None:
-        kws["sampler"] = dl_sampler(questions.data)
+        kws["sampler"] = dl_sampler(queries.data)
         kws["shuffle"] = False
     return torch_data.DataLoader(dataset=dataset, collate_fn=collate_fn, **kws)  # type: ignore
 
@@ -149,31 +157,6 @@ class IndexWithVectors(dstruct.SizedDataset[dict[str, Any]]):
         if self.vectors is not None:
             item[self.vector_key] = self.vectors[index]
         return item
-
-
-def concatenate_datasets(dsets: typing.Iterable[DsetWithVectors]) -> DsetWithVectors:
-    """Concatenate datasets and remove duplicates."""
-    dsets_by_fingerprint = collections.defaultdict(list)
-    for dset in dsets:
-        fgn = pipes.fingerprint(dset.data)
-        dsets_by_fingerprint[fgn].append(dset)
-
-    # sort them by fingerprint
-    dsets_by_fingerprint = collections.OrderedDict(sorted(dsets_by_fingerprint.items(), key=lambda x: x[0]))
-
-    # log the fingerprints with their datasets
-    rank = os.getenv("RANK", None)
-    winfo = f"[{rank}] " if rank is not None else ""
-    for fgn, dsets in dsets_by_fingerprint.items():
-        logger.debug(f"{winfo}Gathered ({fgn}) : {[str(d) for d in dsets]}")
-
-    # concatenate the datasets
-    unique_dsets = [dsets[0] for dsets in dsets_by_fingerprint.values()]
-    vecs = [dset.vectors for dset in unique_dsets if dset.vectors is not None]
-    return DsetWithVectors(
-        data=_concat_data([dset.data for dset in unique_dsets]),
-        vectors=_concat_data(vecs) if vecs else None,
-    )
 
 
 D = TypeVar("D", bound=typing.Union[dstruct.SizedDataset, datasets.Dataset])
@@ -207,7 +190,8 @@ class TrainerState:
 
     step: int
     epoch: int
-    period: int
+    pidx: int
+    period: int | list[int]
     period_max_steps: Optional[int]
     max_steps: int
     parameters: dict[str, BaseSchedule] = dataclasses.field(default_factory=dict)

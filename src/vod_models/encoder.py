@@ -4,7 +4,7 @@ import functools
 import math
 import pathlib
 import warnings
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 import pydantic
 import torch
@@ -293,3 +293,21 @@ class TransformerEncoder(nn.Module, interfaces.ProtocolEncoder):
             hasher.update(u)
 
         return hasher.hexdigest()
+
+
+class TransformerEncoderDebug(TransformerEncoder):
+    """A transformer encoder restricted to the embedding layer only."""
+
+    def __init__(self, *args: Any, **kwds: Any):
+        super().__init__(*args, **kwds)
+        self.backbone = self.backbone.embeddings
+
+    def forward(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+        field: Optional[interfaces.FieldType] = None,  # noqa: ARG002
+    ) -> torch.Tensor:
+        """Embed/encode a tokenized field into a vector."""
+        embeddings = self.backbone(input_ids)
+        return self.pooler(embeddings, attention_mask)

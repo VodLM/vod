@@ -246,6 +246,20 @@ class RetrievalSample(RetrievalData[Ts_co]):
         )
 
 
+def stack_samples(samples: Iterable[RetrievalSample[Ts_co]]) -> RetrievalBatch[Ts_co]:
+    """Stack a list of samples into a batch."""
+    scores = [sample.scores for sample in samples]
+    indices = [sample.indices for sample in samples]
+    labels = [sample.labels for sample in samples]
+    if any(lbl is None for lbl in labels):
+        labels = None
+    return RetrievalBatch(
+        scores=_stack_arrays(scores),
+        indices=_stack_arrays(indices),
+        labels=_stack_arrays(labels) if labels is not None else None,
+    )
+
+
 class RetrievalBatch(RetrievalData[Ts_co]):
     """A batch of search results."""
 

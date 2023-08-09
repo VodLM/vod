@@ -134,7 +134,7 @@ class Ranker(torch.nn.Module):
 
     def encode(self, batch: dict, **kwargs: Any) -> dict[str, torch.Tensor]:
         """Computes the embeddings for the query and the document."""
-        mapping = {"question": "hq", "section": "hd"}
+        mapping = {"query": "hq", "section": "hd"}
         output = {}
         for field, key in mapping.items():
             fields = self._fetch_fields(batch, field)
@@ -142,9 +142,7 @@ class Ranker(torch.nn.Module):
                 continue
             output[key] = self._forward_field(fields, interfaces.FieldType(field))
         if len(output) == 0:
-            raise ValueError(
-                f"No fields to process. " f"Batch keys = {batch.keys()}. Expected fields = {mapping.keys()}."
-            )
+            raise ValueError(f"No fields to process. Batch keys = {batch.keys()}. Expected fields = {mapping.keys()}.")
 
         return output
 

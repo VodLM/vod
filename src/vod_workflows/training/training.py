@@ -22,7 +22,7 @@ from vod_tools import dstruct, pipes
 from vod_tools.misc.progress import IterProgressBar
 from vod_workflows.utils import helpers, io
 
-from src import vod_configs, vod_dataloaders, vod_datasets, vod_models, vod_search
+from src import vod_configs, vod_dataloaders, vod_models, vod_search
 
 K = typing.TypeVar("K")
 
@@ -51,11 +51,11 @@ def index_and_train(
     scheduler: typing.Optional[torch.optim.lr_scheduler._LRScheduler] = None,
     trainer_state: helpers.TrainerState,
     fabric: L.Fabric,
-    train_factories: dict[K, vod_datasets.RetrievalDatasetFactory],
-    val_factories: dict[K, vod_datasets.RetrievalDatasetFactory],
-    vectors: dict[K, None | helpers.PrecomputedDsetVectors],
+    train_queries: list[vod_configs.QueriesDatasetConfig],
+    val_queries: list[vod_configs.QueriesDatasetConfig],
+    sections: list[vod_configs.SectionsDatasetConfig],
+    vectors: None | dict[vod_configs.BaseDatasetConfig, dstruct.TensorStoreFactory],
     tokenizer: transformers.PreTrainedTokenizer | transformers.PreTrainedTokenizerFast,
-    search_config: vod_configs.SearchConfig,
     collate_config: vod_configs.RetrievalCollateConfig,
     train_dataloader_config: vod_configs.DataLoaderConfig,
     eval_dataloader_config: vod_configs.DataLoaderConfig,
@@ -78,16 +78,16 @@ def index_and_train(
     if fabric.is_global_zero:
         rich.print(task)
 
-    # parameters
+    # Parameters
     parameters = mp.Manager().dict()
     parameters.update(trainer_state.get_parameters())
 
-    # free GPU resources see: https://github.com/Lightning-AI/lightning/issues/17937
+    # Free GPU resources see: https://github.com/Lightning-AI/lightning/issues/17937
     # if helpers.is_engine_enabled(parameters, "faiss"):
     #     ranker.to("cpu")
 
     barrier_fn("Init search engines..")
-    with vod_search.build_multi_search_engine(
+    with vod_search.sharded_search_engine(
         sections=task.sections.data,
         vectors=task.sections.vectors,
         config=search_config,
@@ -113,7 +113,7 @@ def index_and_train(
             dl_sampler=dl_sampler,
         )
 
-        # patching dataloaders with `Fabric` methods
+        # Patching dataloaders with `Fabric` methods
         train_dl, val_dl = fabric.setup_dataloaders(
             *(
                 init_dataloader(**cfg)  # type: ignore
@@ -126,8 +126,8 @@ def index_and_train(
             move_to_device=True,
         )
 
-        # train the ranker
-        barrier_fn(f"Starting training period {1+trainer_state.period}")
+        # Train the ranker
+        barrier_fn(f"Starting training period {1+trainer_state.pidx}")
         trainer_state = _training_loop(
             ranker=ranker,
             optimizer=optimizer,
@@ -141,7 +141,7 @@ def index_and_train(
             pbar_keys=pbar_keys,
             parameters=parameters,
         )
-        barrier_fn(f"Completed period {1+trainer_state.period}")
+        barrier_fn(f"Completed period {1+trainer_state.pidx}")
 
     return trainer_state
 
@@ -172,7 +172,7 @@ def _training_loop(  # noqa: C901, PLR0915
         n_train_steps, n_val_steps = _infer_num_steps(trainer_state, fabric, val_dl)
         with IterProgressBar(disable=not fabric.is_global_zero) as pbar:
             train_pbar = pbar.add_task(
-                f"Period {1+trainer_state.period}",
+                f"Period {1+trainer_state.pidx}",
                 total=n_train_steps,
                 info=_pbar_info(trainer_state, keys=pbar_keys),
             )
@@ -264,7 +264,7 @@ def _training_loop(  # noqa: C901, PLR0915
                                     trainer_state=trainer_state,
                                 )
 
-                        # start the chono
+                        # Start the chono
                         if chrono is None:
                             chrono = Chrono()
                         chrono.start()
@@ -273,7 +273,7 @@ def _training_loop(  # noqa: C901, PLR0915
                 trainer_state.epoch += 1
     except KeyboardInterrupt:
         logger.warning(
-            f"Training period {1+trainer_state.period} (step={trainer_state.step}) "
+            f"Training period {1+trainer_state.pidx} (step={trainer_state.step}) "
             f"interrupted by user (KeyboardInterrupt)."
         )
 
@@ -439,43 +439,3 @@ def _pbar_info(
         desc = f"[yellow]{' '.join(suppl)}[/yellow] • {desc}"
 
     return desc
-
-
-def _make_retrieval_task(
-    train_factories: dict[K, vod_datasets.RetrievalDatasetFactory],
-    val_factories: dict[K, vod_datasets.RetrievalDatasetFactory],
-    vectors: dict[K, helpers.PrecomputedDsetVectors | None],
-) -> RetrievalTask:
-    """Create the `RetrievalTask` from the training and validation factories."""
-
-    def _vec(key: K, field: typing.Literal["question", "section"]) -> None | dstruct.TensorStoreFactory:
-        """Safely fetch the relevant `vector` from the `PrecomputedDsetVectors` structure."""
-        x = vectors[key]
-        if x is None:
-            return None
-        if field == "question":
-            return x.questions
-        if field == "section":
-            return x.sections
-        raise ValueError(f"Unknown field: {field}")
-
-    return RetrievalTask(
-        train_questions=helpers.concatenate_datasets(
-            [
-                helpers.DsetWithVectors.cast(data=factory.get_queries(), vectors=_vec(key, "question"))
-                for key, factory in train_factories.items()
-            ]
-        ),
-        val_questions=helpers.concatenate_datasets(
-            [
-                helpers.DsetWithVectors.cast(data=factory.get_queries(), vectors=_vec(key, "question"))
-                for key, factory in val_factories.items()
-            ]
-        ),
-        sections=helpers.concatenate_datasets(
-            [
-                helpers.DsetWithVectors.cast(data=factory.get_sections(), vectors=_vec(key, "section"))
-                for key, factory in {**train_factories, **val_factories}.items()
-            ]
-        ),
-    )

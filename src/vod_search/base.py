@@ -42,6 +42,7 @@ class SearchClient(abc.ABC):
         vector: Optional[rdtypes.Ts] = None,
         group: Optional[list[str | int]] = None,
         section_ids: Optional[list[list[str | int]]] = None,
+        shard: Optional[list[str]] = None,
         top_k: int = 3,
     ) -> rdtypes.RetrievalBatch[rdtypes.Ts]:
         """Search the server given a batch of text and/or vectors."""
@@ -54,6 +55,7 @@ class SearchClient(abc.ABC):
         vector: Optional[rdtypes.Ts] = None,
         group: Optional[list[str | int]] = None,
         section_ids: Optional[list[list[str | int]]] = None,
+        shard: Optional[list[str]] = None,
         top_k: int = 3,
     ) -> rdtypes.RetrievalBatch[rdtypes.Ts]:
         """Search the server given a batch of text and/or vectors."""
@@ -62,6 +64,7 @@ class SearchClient(abc.ABC):
             vector=vector,
             group=group,
             section_ids=section_ids,
+            shard=shard,
             top_k=top_k,
         )
 
@@ -76,12 +79,20 @@ class SearchMaster(Generic[Sc], abc.ABC):
     _server_proc: Optional[subprocess.Popen] = None
     _allow_existing_server: bool = False
     skip_setup: bool
+    free_resources: bool
 
-    def __init__(self, skip_setup: bool = False) -> None:
+    def __init__(
+        self,
+        skip_setup: bool = False,
+        free_resources: bool = False,
+    ) -> None:
         self.skip_setup = skip_setup
+        self.free_resources = free_resources
 
     def __enter__(self) -> "Self":
         """Start the server."""
+        if self.free_resources:
+            self._free_resources()
         if not self.skip_setup:
             self._setup()
         return self
@@ -95,6 +106,9 @@ class SearchMaster(Generic[Sc], abc.ABC):
         self._on_exit()
         if self._server_proc is not None:
             self._server_proc.terminate()
+
+    def _free_resources(self) -> None:
+        pass
 
     def _on_init(self) -> None:
         pass

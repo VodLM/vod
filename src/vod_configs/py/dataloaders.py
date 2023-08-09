@@ -29,7 +29,7 @@ class DataLoaderConfig(StrictModel):
 class BaseCollateConfig(StrictModel):
     """Defines a base configuration for the collate function."""
 
-    question_max_length: int = 512
+    query_max_length: int = 512
     section_max_length: int = 512
 
 
