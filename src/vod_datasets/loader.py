@@ -31,7 +31,7 @@ class LoaderProtocol(Protocol):
         ...
 
 
-LOADERS = {
+LOADERS: dict[str, LoaderProtocol] = {
     "frank_a": load_frank,
     "frank_b": load_frank,
     "squad": load_raffle_squad,

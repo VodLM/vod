@@ -1,9 +1,29 @@
 # @package _global_
 
 dataset:
-  train:
-    - frank.A.en:train
-  validation:
-    - frank.A.en:val
+  # Base search
+  search:
+    engines:
+      dense:
+        backend: qdrant
+      sparse:
+        backend: elasticsearch
+
+  # Train/val splits
+  training:
+    queries:
+      train:
+        - name: frank_a.en:train
+          link: frank_a.en
+      val:
+        - name: frank_a.en:train
+          link: frank_a.en
+
+    sections:
+      sections:
+        - frank_a.en
+
+  # Benchmarks
   benchmark:
-    - frank.A.en:val
+    - queries: frank_a.en:val
+      sections: frank_a.en

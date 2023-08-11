@@ -2,14 +2,17 @@ from __future__ import annotations
 
 import abc
 import copy
+import math
 import warnings
 from abc import ABC
 from enum import Enum
 from numbers import Number
 from typing import Any, Callable, Generic, Iterable, Optional, TypeVar, Union
 
+import numba
 import numpy as np
 import torch
+from numba.typed import List
 from typing_extensions import Type, TypeAlias
 
 
@@ -246,20 +249,6 @@ class RetrievalSample(RetrievalData[Ts_co]):
         )
 
 
-def stack_samples(samples: Iterable[RetrievalSample[Ts_co]]) -> RetrievalBatch[Ts_co]:
-    """Stack a list of samples into a batch."""
-    scores = [sample.scores for sample in samples]
-    indices = [sample.indices for sample in samples]
-    labels = [sample.labels for sample in samples]
-    if any(lbl is None for lbl in labels):
-        labels = None
-    return RetrievalBatch(
-        scores=_stack_arrays(scores),
-        indices=_stack_arrays(indices),
-        labels=_stack_arrays(labels) if labels is not None else None,
-    )
-
-
 class RetrievalBatch(RetrievalData[Ts_co]):
     """A batch of search results."""
 
@@ -332,3 +321,41 @@ class RetrievalBatch(RetrievalData[Ts_co]):
                 labels=self.labels,
                 meta=copy.copy(self.meta),
             )
+
+
+@numba.njit(cache=True)
+def _write_array(arr: np.ndarray, writes: list[np.ndarray]) -> None:
+    for j in numba.prange(len(writes)):
+        y = writes[j]
+        arr[j, : len(y)] = y
+
+
+def _stack_np_1darrays(arrays: list[np.ndarray], fill_values: Any) -> np.ndarray:  # noqa: ANN401
+    """Stack a list of 1D arrays into a 2D array."""
+    if not isinstance(arrays, list):
+        raise TypeError(f"Expected a list, but got {type(arrays)}")
+    if not all(isinstance(arr, np.ndarray) for arr in arrays):
+        raise TypeError(f"Expected a list of numpy arrays, but got {type(arrays)}")
+
+    # Array size
+    batch_size, max_len = max(len(arr) for arr in arrays), len(arrays)
+
+    # Create a new array and fill it with the fill value
+    output = np.full((max_len, batch_size), fill_values, dtype=arrays[0].dtype)
+    _write_array(output, List(arrays))
+
+    return output
+
+
+def stack_samples(samples: Iterable[RetrievalSample[np.ndarray]]) -> RetrievalBatch[np.ndarray]:
+    """Stack a list of samples into a batch."""
+    scores = [sample.scores for sample in samples]
+    indices = [sample.indices for sample in samples]
+    labels = [sample.labels for sample in samples]
+    if any(lbl is None for lbl in labels):
+        labels = None
+    return RetrievalBatch(
+        scores=_stack_np_1darrays(scores, fill_values=-math.inf),
+        indices=_stack_np_1darrays(indices, fill_values=-1),
+        labels=_stack_np_1darrays(labels, -1) if labels is not None else None,
+    )

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import socket
 import sys
 import time
 from copy import copy
@@ -127,6 +128,13 @@ class FaissClient(base.SearchClient):
             raise exc
 
 
+def _find_free_port() -> int:
+    """Find a free port."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("", 0))
+        return s.getsockname()[1]
+
+
 class FaissMaster(base.SearchMaster[FaissClient]):
     """The Faiss master client is responsible for spawning and killing the Faiss server.
 
@@ -143,7 +151,7 @@ class FaissMaster(base.SearchMaster[FaissClient]):
         nprobe: int = 8,
         logging_level: str = "DEBUG",
         host: str = "http://localhost",
-        port: int = 7678,
+        port: int = -1,
         skip_setup: bool = False,
         free_resources: bool = False,
         serve_on_gpu: bool = False,
@@ -153,6 +161,8 @@ class FaissMaster(base.SearchMaster[FaissClient]):
         self.nprobe = nprobe
         self.logging_level = logging_level
         self.host = host
+        if port == -1:
+            port = _find_free_port()
         self.port = port
         self.serve_on_gpu = serve_on_gpu
 
@@ -199,3 +209,8 @@ class FaissMaster(base.SearchMaster[FaissClient]):
     def service_info(self) -> str:
         """Return the name of the service."""
         return f"FaissServer[{self.url}]"
+
+    @property
+    def service_name(self) -> str:
+        """Return the name of the service."""
+        return super().service_name + f"-{self.port}"

@@ -30,6 +30,5 @@ qdrant_body:
       always_ram: true
   optimizers_config:
     # https://qdrant.tech/documentation/tutorials/optimize/
-    # Split the number of CPUs between GPUs
     default_segment_number: 2
     memmap_threshold: null

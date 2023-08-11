@@ -6,7 +6,6 @@ import json
 import pathlib
 from typing import Any, Iterable, Optional
 
-import datasets
 import numpy as np
 import torch
 import transformers
@@ -59,27 +58,18 @@ def benchmark(
         dense_enabled=helpers.is_engine_enabled(parameters, "dense"),
         sparse_enabled=True,
         serve_on_gpu=serve_on_gpu,
-        free_resources=True,
     ) as master:
         search_client = master.get_client()
 
         # Instantiate the dataloader
         dataloader = helpers.instantiate_retrieval_dataloader(
             queries=helpers.DsetWithVectors.cast(
-                data=datasets.concatenate_datasets([vod_datasets.load_queries(cfg) for cfg in task.queries]),
-                vectors=dstruct.ConcatenatedSizedDataset(
-                    [dstruct.as_lazy_array(task.vectors[d]) for d in task.queries]
-                    if task.vectors
-                    else None  # type: ignore
-                ),
+                data=[vod_datasets.load_queries(cfg) for cfg in task.queries],
+                vectors=[task.vectors[d] for d in task.queries] if task.vectors else None,
             ),
             sections=helpers.DsetWithVectors.cast(
-                data=datasets.concatenate_datasets([vod_datasets.load_sections(cfg) for cfg in task.sections]),
-                vectors=dstruct.ConcatenatedSizedDataset(
-                    [dstruct.as_lazy_array(task.vectors[d]) for d in task.sections]
-                    if task.vectors
-                    else None  # type: ignore
-                ),
+                data=[vod_datasets.load_sections(cfg) for cfg in task.sections],
+                vectors=[task.vectors[d] for d in task.sections] if task.vectors else None,
             ),
             tokenizer=tokenizer,
             search_client=search_client,

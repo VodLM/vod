@@ -35,7 +35,7 @@ class Templates(StrictModel):
     """Prompt templates."""
 
     queries: str = r"Q: {{ query }}"
-    sections: str = r"{% if title %}Title: {{ title }}. {% endif %}D: {{ content }}"
+    sections: str = r"{% if title %}Title: {{ title }}. {% endif %}D: {{ section }}"
 
 
 class DatasetOptionsDiff(StrictModel):
@@ -98,6 +98,10 @@ class BaseDatasetConfig(StrictModel):
     subset: Optional[str] = pydantic.Field(
         None,
         description="Dataset subset name",
+    )
+    path: Optional[str] = pydantic.Field(
+        None,
+        description="Path to the dataset loader.",
     )
     split: Literal["train", "val", "test", "all"] = pydantic.Field("all", description="Dataset split (train, etc.)")
     parts: Optional[list[BaseDatasetConfig]] = pydantic.Field(

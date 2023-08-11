@@ -6,6 +6,7 @@ from typing import Any, Callable
 
 import faiss
 import numpy as np
+import rich
 import torch
 from loguru import logger
 from vod_search import base, es_search, faiss_search, qdrant_search
@@ -225,9 +226,16 @@ def build_hybrid_search_engine(  # noqa: C901, PLR0912
     skip_setup: bool = False,
     barrier_fn: None | Callable[[str], None] = None,
     serve_on_gpu: bool = False,
-    free_resources: bool = True,
+    free_resources: None | bool = None,
 ) -> HyrbidSearchMaster:
     """Build a hybrid search engine."""
+    if free_resources is None:
+        free_resources = eval(os.environ.get("FREE_SEARCH_RESOURCES", "True"))
+        free_resources = bool(free_resources)
+    if skip_setup:
+        free_resources = False
+
+    rich.print(f"[magenta bold]!!! free_resources: {free_resources}")
     if sections is not None:
         offsets = _infer_offsets(sections)
     elif vectors is not None:

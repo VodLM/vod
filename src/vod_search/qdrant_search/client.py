@@ -12,12 +12,12 @@ from typing import Any, Iterable, Optional
 import numba
 import numpy as np
 import qdrant_client
-import rich
 from grpc import StatusCode
 from grpc._channel import _InactiveRpcError
 from loguru import logger
 from qdrant_client.http import exceptions as qdrexc
 from qdrant_client.http import models as qdrm
+from qdrant_client.qdrant_remote import QdrantRemote
 from rich import status
 from rich.markup import escape
 from rich.progress import track
@@ -281,7 +281,6 @@ class QdrantSearchMaster(base.SearchMaster[QdrantSearchClient], abc.ABC):
         if not index_exist:
             # Create the index & Ingest the data
             body = _make_qdrant_body(vshp[-1], self._qdrant_body)
-            rich.print(f">> [magenta bold]Creating collection: {self._index_name}")
             client.recreate_collection(collection_name=self._index_name, **body)
 
             with DisableIndexing(client, self._index_name, delete_on_exception=True):
@@ -336,8 +335,15 @@ def _validate(
 def _delete_except(exclude_list: list[str], client: qdrant_client.QdrantClient) -> None:
     for col in client.get_collections().collections:
         if col.name not in exclude_list:
-            logger.debug(f"Deleting collection `{col.name}`")
+            logger.debug(f"Qdrant: Deleting collection {_get_client_url(client)}/{col.name}`")
             client.delete_collection(collection_name=col.name)
+
+
+def _get_client_url(client: qdrant_client.QdrantClient) -> str:
+    if isinstance(client._client, QdrantRemote):
+        return f"{client._client._host}:{client._client._port}"
+
+    return "local"
 
 
 def _collection_exists(client: qdrant_client.QdrantClient, collection_name: str) -> bool:
@@ -347,13 +353,11 @@ def _collection_exists(client: qdrant_client.QdrantClient, collection_name: str)
     except qdrexc.UnexpectedResponse as exc:
         if exc.status_code != 404:  # noqa: PLR2004
             raise Exception(f"Unexpected error: {exc}") from exc
-        rich.print(exc)
         index_exist = False
 
     except _InactiveRpcError as exc:
         if exc.code() != StatusCode.NOT_FOUND:
             raise Exception(f"Unexpected error: {exc}") from exc
-        rich.print(exc)
         index_exist = False
     return index_exist
 

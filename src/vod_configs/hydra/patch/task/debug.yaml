@@ -30,13 +30,20 @@ trainer:
   val_check_interval: 5
   n_max_eval: 100
   parameters:
-    sparse: 0.0
+    sparse: 1.0
     dense: 1.0
 
-# dataset:
-#   options:
-#     subset_size: 200
-#     filter_unused_sections: true
+dataset:
+  search_defaults:
+    faiss:
+      factory: Flat
+      gpu: null
+  benchmark:
+  - queries: frank_a.en:val
+    sections: frank_a.en
+  # options:
+  #   subset_size: 1000
+  #   filter_unused_sections: true
 
 batch_size:
   effective: 16

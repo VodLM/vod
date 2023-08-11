@@ -83,13 +83,35 @@ class DsetWithVectors:
     def cast(
         cls: Type[Self],
         *,
-        data: dstruct.SizedDataset[dict[str, Any]] | datasets.Dataset,
-        vectors: None | np.ndarray | dstruct.TensorStoreFactory | np.ndarray | dstruct.SizedDataset[np.ndarray],
+        data: dstruct.SizedDataset[dict[str, Any]]
+        | datasets.Dataset
+        | list[datasets.Dataset]
+        | list[dstruct.SizedDataset[dict[str, Any]]],
+        vectors: None
+        | np.ndarray
+        | dstruct.TensorStoreFactory
+        | dstruct.SizedDataset[np.ndarray]
+        | list[dstruct.TensorStoreFactory]
+        | list[dstruct.SizedDataset[np.ndarray]]
+        | list[np.ndarray] = None,
     ) -> Self:
         """Cast a dataset and vectors to the correct type."""
+        if isinstance(data, datasets.Dataset):
+            pass
+        elif isinstance(data, list) and all(isinstance(d, datasets.Dataset) for d in data):
+            data = datasets.concatenate_datasets(data)  # type: ignore
+        else:
+            dstruct.ConcatenatedSizedDataset(data)  # type: ignore
+
+        if vectors is not None:
+            if isinstance(vectors, list):
+                vectors = dstruct.ConcatenatedSizedDataset([dstruct.as_lazy_array(v) for v in vectors])
+            else:
+                vectors = dstruct.as_lazy_array(vectors)
+
         return cls(
             data=data,  # type: ignore
-            vectors=dstruct.as_lazy_array(vectors) if vectors is not None else None,
+            vectors=vectors,
         )
 
     def __str__(self) -> str:

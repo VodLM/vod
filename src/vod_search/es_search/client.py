@@ -114,7 +114,11 @@ class ElasticsearchClient(base.SearchClient):
         # TODO: efficient implementation
 
         # compute the max length of the hits
-        max_hits = max(len(response["hits"]["hits"]) for response in responses["responses"])
+        try:
+            max_hits = max(len(response["hits"]["hits"]) for response in responses["responses"])
+        except KeyError:
+            rich.print(responses)
+            raise
 
         # process the responses
         indices, scores = [], []
@@ -374,18 +378,16 @@ async def _async_maybe_ingest_data(
 
 def _close_all_es_indices(es_url: str = "http://localhost:9200") -> None:
     """Close all `elasticsearch` indices."""
-    logger.warning(f"Closing all ES indices at `{es_url}`")
     try:
         client = es.Elasticsearch(es_url)
         for index_name in client.indices.get(index="*"):
             if index_name.startswith("."):
                 continue
-            logger.debug(f"Found ES index `{index_name}`")
             try:
                 if client.indices.exists(index=index_name):
-                    logger.info(f"Closing ES index {index_name}")
+                    logger.debug(f"Elasticsearch: closing index `{es_url}/{index_name}`")
                     client.indices.close(index=index_name)
             except Exception as exc:
-                logger.warning(f"Could not close index {index_name}: {exc}")
+                logger.warning(f"Could not close index `{index_name}`: {exc}")
     except Exception as exc:
         logger.warning(f"Could not connect to ES: {exc}")

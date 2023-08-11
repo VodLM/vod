@@ -22,7 +22,7 @@ from vod_tools import dstruct, pipes
 from vod_tools.misc.progress import IterProgressBar
 from vod_workflows.utils import helpers, io
 
-from src import vod_configs, vod_dataloaders, vod_models, vod_search
+from src import vod_configs, vod_dataloaders, vod_datasets, vod_models, vod_search
 
 K = typing.TypeVar("K")
 
@@ -69,28 +69,40 @@ def index_and_train(
     """Index the sections and train the ranker."""
     barrier_fn = functools.partial(helpers.barrier_fn, fabric=fabric)
 
-    # Gather datasets and their corresponding vectors
-    task = _make_retrieval_task(
-        train_factories=train_factories,
-        val_factories=val_factories,
-        vectors=vectors,
-    )
-    if fabric.is_global_zero:
-        rich.print(task)
-
     # Parameters
     parameters = mp.Manager().dict()
     parameters.update(trainer_state.get_parameters())
 
-    # Free GPU resources see: https://github.com/Lightning-AI/lightning/issues/17937
-    # if helpers.is_engine_enabled(parameters, "faiss"):
-    #     ranker.to("cpu")
+    # Wrap queries with vectorss
+    train_queries_ = helpers.DsetWithVectors.cast(
+        data=[vod_datasets.load_queries(cfg) for cfg in train_queries],
+        vectors=[vectors[d] for d in train_queries] if vectors else None,
+    )
+    val_queries_ = helpers.DsetWithVectors.cast(
+        data=[vod_datasets.load_queries(cfg) for cfg in val_queries],
+        vectors=[vectors[d] for d in val_queries] if vectors else None,
+    )
+    sections_ = helpers.DsetWithVectors.cast(
+        data=[vod_datasets.load_sections(cfg) for cfg in sections],
+        vectors=[vectors[d] for d in sections] if vectors else None,
+    )
+
+    if fabric.is_global_zero:
+        rich.print(
+            {
+                "train_queries": train_queries_,
+                "val_queries": val_queries_,
+                "sections": sections_,
+                "parameters": dict(parameters),
+            }
+        )
 
     barrier_fn("Init search engines..")
-    with vod_search.sharded_search_engine(
-        sections=task.sections.data,
-        vectors=task.sections.vectors,
-        config=search_config,
+    with vod_search.build_hybrid_search_engine(
+        shard_names=[cfg.descriptor for cfg in sections],
+        sections=[vod_datasets.load_sections(cfg) for cfg in sections],  # type: ignore
+        vectors=[dstruct.as_lazy_array(vectors[d]) for d in sections] if vectors else None,  # type: ignore
+        configs=[cfg.search for cfg in sections],  # type: ignore
         cache_dir=cache_dir,
         dense_enabled=helpers.is_engine_enabled(parameters, "faiss"),
         sparse_enabled=True,
@@ -105,7 +117,7 @@ def index_and_train(
         logger.debug("Instantiating dataloader..")
         init_dataloader = functools.partial(
             helpers.instantiate_retrieval_dataloader,
-            sections=task.sections,
+            sections=sections_,
             tokenizer=tokenizer,
             search_client=search_client,
             collate_config=collate_config,
@@ -118,8 +130,8 @@ def index_and_train(
             *(
                 init_dataloader(**cfg)  # type: ignore
                 for cfg in (
-                    {"questions": task.train_questions, "dataloader_config": train_dataloader_config},
-                    {"questions": task.val_questions, "dataloader_config": eval_dataloader_config},
+                    {"queries": train_queries_, "dataloader_config": train_dataloader_config},
+                    {"queries": val_queries_, "dataloader_config": eval_dataloader_config},
                 )
             ),
             use_distributed_sampler=dl_sampler is None,
@@ -157,7 +169,7 @@ def _training_loop(  # noqa: C901, PLR0915
     scheduler: typing.Optional[torch.optim.lr_scheduler._LRScheduler] = None,
     checkpoint_path: None | str = None,
     on_first_batch_fn: None | OnFirstBatchCallback = None,
-    pbar_keys: None | typing.List[str] = None,
+    pbar_keys: None | list[str] = None,
     parameters: None | DictProxy = None,
 ) -> helpers.TrainerState:
     _check_ranker_and_optimizer(ranker, optimizer)
