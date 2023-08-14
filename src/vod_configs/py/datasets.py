@@ -22,20 +22,47 @@ class AllowMutations:
 
     def __init__(self, model: pydantic.BaseModel) -> None:
         self.model = model
-        self._mutate = model.Config.allow_mutation
+        self._mutate = model.Config.allow_mutation  # type: ignore
 
     def __enter__(self) -> None:
-        self.model.Config.allow_mutation = True
+        self.model.Config.allow_mutation = True  # type: ignore
 
     def __exit__(self, *args: Any) -> None:
-        self.model.Config.allow_mutation = self._mutate
+        self.model.Config.allow_mutation = self._mutate  # type: ignore
 
 
 class Templates(StrictModel):
     """Prompt templates."""
 
-    queries: str = r"Q: {{ query }}"
-    sections: str = r"{% if title %}Title: {{ title }}. {% endif %}D: {{ content }}"
+    queries: str = pydantic.Field(
+        r"Q: {{ query }}",
+        description="Template formatting queries before encoding for retrieval.",
+    )
+    answer: str = pydantic.Field(
+        r"A: {{ answer }}",
+        description="Template formatting answers before encoding for retrieval.",
+    )
+    sections: str = pydantic.Field(
+        r"D: {{ content }}",
+        description="Template formatting documents before encoding for retrieval.",
+    )
+    prompt: str = pydantic.Field(
+        None,
+        description="Template formatting the prompt for generative language models. A template may include instructions, few shot examples, and specific context and questions appropriate for a given task.",
+    )
+    prompt_response: str = pydantic.Field(
+        None,
+        description="Template formatting a decired prompt responses before decoding for a generative task",
+    )
+
+    @property
+    def input_variables(cls) -> set[str]:
+        """Return the input variables."""
+        variables = set()
+        for attribute_value in cls.__dict__.values():
+            matches = re.findall(r"{{\s*(.*?)\s*}}", attribute_value)
+            variables.update(matches)
+        return variables
 
 
 class DatasetOptionsDiff(StrictModel):
@@ -59,7 +86,6 @@ class DatasetOptionsDiff(StrictModel):
 class DatasetOptions(StrictModel):
     """Preprocessing options."""
 
-    templates: Templates = pydantic.Field(Templates(), description="A prompt template used at preprocessing time.")
     cache_dir: Optional[str] = pydantic.Field(None, description="Cache directory.")
     invalidate_cache: bool = pydantic.Field(False, description="Whether to delete an existing cached dataset.")
     prep_map_kwargs: dict[str, Any] = pydantic.Field({}, description="Kwargs for `datasets.map(...)`.")
@@ -81,10 +107,10 @@ class DatasetOptions(StrictModel):
         """Add two options."""
         if other is None:
             return self
-        attrs = other.dict(exclude_none=True)
+        attrs = other.model_dump(exclude_none=True)
         if "templates" in attrs:
             attrs["templates"] = Templates(**attrs["templates"])
-        new_self = self.copy(update=attrs)
+        new_self = self.model_copy(update=attrs)
         return new_self
 
 
@@ -92,18 +118,22 @@ class BaseDatasetConfig(StrictModel):
     """Defines a dataset."""
 
     name: str = pydantic.Field(
-        ...,
+        None,
         description="Name of the dataset, or descriptor with pattern `name.subset:split`.",
     )
-    subset: Optional[str] = pydantic.Field(
+    path: str = pydantic.Field(
         None,
-        description="Dataset subset name",
+        description="Path to the dataset (overrides `name`)",
     )
-    split: Literal["train", "val", "test", "all"] = pydantic.Field("all", description="Dataset split (train, etc.)")
-    parts: Optional[list[BaseDatasetConfig]] = pydantic.Field(
-        None,
-        description="Sub datasets to be concatenated. When set to None, the dataset is a single part (itself)",
+    subsets: list[str] = pydantic.Field(
+        default=[],
+        description="A list of subset names to load.",
     )
+    splits: list[str] = pydantic.Field(
+        default=[],
+        description="A list of splits to load.",
+    )
+    templates: Templates = pydantic.Field(Templates(), description="A set of templates used at preprocessing time.")
     options: DatasetOptions = pydantic.Field(
         DatasetOptions(),
         description="Loading/preprocessing options.",
@@ -114,13 +144,13 @@ class BaseDatasetConfig(StrictModel):
     )
 
     @property
-    def descriptor(self) -> str:
+    def descriptor(cls) -> str:
         """Return the dataset descriptor `name.subset:split`."""
-        desc = self.name
-        if self.subset is not None:
-            desc += f".{self.subset}"
+        desc = cls.name
+        if cls.subsets is not None:
+            desc += f".{cls.subsets}"
 
-        return f"{desc}:{self.split}"
+        return f"{desc}:{cls.splits}"
 
     def __hash__(self) -> int:
         """Hash the object based on its name and split."""
@@ -132,6 +162,58 @@ class BaseDatasetConfig(StrictModel):
     @pydantic.root_validator(pre=True)
     def _validate_all(cls, values: dict) -> dict:
         return _parse_dataset_descriptor(values)
+
+    @pydantic.field_validator("name", "path", mode="before")
+    def validate_name_or_path(cls, value: str) -> str:
+        """Validate the dataset name or path."""
+        if cls.name is None:
+            cls.name = value
+        try:
+            cls._availble_subsets = datasets.get_dataset_config_names(value)
+            cls._availble_splits = datasets.get_dataset_split_names(value, cls._availble_subsets[0])
+        except FileNotFoundError as e:
+            raise ValueError(f"Dataset {value} not found") from e
+
+        return value
+
+    @pydantic.field_validator("subsets")
+    def validate_subset(cls, value: list[str]) -> list[str]:
+        """Validate the dataset subsets."""
+        if not value:
+            return cls._availble_subsets
+
+        invalid_subsets = set(value) - set(cls._availble_subsets)
+        if invalid_subsets:
+            raise ValueError(
+                f"Subsets {list(invalid_subsets)} not available for dataset. Available subsets: {cls._availble_subsets}"
+            )
+        return value
+
+    @pydantic.field_validator("splits")
+    def validate_splits(cls, value: list[str]) -> list[str]:
+        """Validate the dataset splits."""
+        if not value:
+            return cls._availble_splits
+
+        invalid_splits = set(value) - set(cls._availble_splits)
+        if invalid_splits:
+            raise ValueError(
+                f"Splits {list(invalid_splits)} not available for dataset. Available splits: {cls._availble_splits}"
+            )
+
+        return value
+
+    @pydantic.model_validator(mode="after")
+    def validate_templates(cls) -> "BaseDatasetConfig":
+        """Validate the templates."""
+        ds_builder = datasets.load_dataset_builder(cls.name, cls._availble_subsets[-1])
+        available_fields = ds_builder.info.features.keys()
+
+        invalid_fields = set(cls.templates.input_variables) - set(available_fields)
+        if invalid_fields:
+            raise ValueError(f"Invalid fields {invalid_fields} in Templates. Available fields: {available_fields}")
+
+        return cls
 
     @classmethod
     def parse(
