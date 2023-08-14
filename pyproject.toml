@@ -61,7 +61,7 @@ cython = "^0.29.33"
 elasticsearch = "^8.6.2"
 gcsfs = "^2023.3.0"
 richuru = "^0.1.1"
-pydantic = "^1"
+pydantic = "^2"
 numpy = "^1.24" # <-- setting this for numba
 numba = "^0.57.1"
 
