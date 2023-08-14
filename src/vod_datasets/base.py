@@ -1,27 +1,41 @@
-from __future__ import annotations
+from __future__ import annotations  # noqa: I001
 
 import os
 import pathlib
-from typing import Any, Callable, T
+from uuid import uuid4
 
 import datasets
 import fsspec
 import gcsfs
 import pydantic
 
+from vod_configs.py.utils import StrictModel
+
 RAFFLE_PATH = str(pathlib.Path("~/.raffle").expanduser())
 DATASETS_CACHE_PATH = str(pathlib.Path(RAFFLE_PATH, "datasets"))
 
 
-class QueryModel(pydantic.BaseModel):
+class QueryModel(StrictModel):
     """A base query data model."""
 
-    id: int
-    query: str
-    data_source: str
-    section_ids: list[int]
-    kb_id: int
-    language: str
+    id: int = pydantic.Field(default_factory=uuid4, description="The unique identifier for the query.")
+    query: str = pydantic.Field(
+        ...,
+        alias="question",
+        description="The text of the question or query. This input text is used for a Language Model to process.",
+    )
+    answer: list = pydantic.Field(
+        default=[],
+        description="The generated response or answer text that a Language Model should associate to a given query. Required for generative tasks, optional for retrieval and ranking tasks.",  # noqa: E501
+    )
+    section_ids: list[int] = pydantic.Field(
+        default=[], description="A list of IDs representing sections that contain the proper response to a query."
+    )
+    kb_id: int = pydantic.Field(
+        default=-1,
+        description="An optional ID representing a subset within the knowledge base used for searching with filtering when retrieving context for a query.",
+    )
+    language: str = pydantic.Field(..., description="The written language of the query, specified as a string.")
 
     @pydantic.validator("section_ids")
     def _validate_section_ids(cls, section_ids: list[int]) -> list[int]:
@@ -30,14 +44,19 @@ class QueryModel(pydantic.BaseModel):
         return section_ids
 
 
-class SectionModel(pydantic.BaseModel):
+class SectionModel(StrictModel):
     """A base section data model."""
 
-    section: str
-    title: str
-    id: int
-    kb_id: int
-    language: str
+    content: str = pydantic.Field(..., description="The main textual content of the section.")
+    title: str = pydantic.Field(default=None, description="The title of the section, if available.")
+    id: int = pydantic.Field(..., description="The unique identifier for the section.")
+    kb_id: int = pydantic.Field(
+        default=-1,
+        description="An optional ID representing the subset within the knowledge base to which the section belongs.",
+    )
+    language: str = pydantic.Field(
+        ..., description="The written language of the section's content, specified as a string."
+    )
 
     @pydantic.validator("title", pre=True, always=True)
     def _validate_title(cls, title: None | str) -> str:
@@ -45,46 +64,6 @@ class SectionModel(pydantic.BaseModel):
             return ""
 
         return title
-
-
-class SilentHuggingface:
-    """Silent `transformers` and `datasets` logging and progress bar."""
-
-    def __init__(self, disable_progress_bar: bool = True, disable_logging: bool = True):
-        self.disable_progress_bar = disable_progress_bar
-        self.disable_logging = disable_logging
-
-    def __enter__(self) -> None:
-        """Disable logging and progress bar."""
-        if self.disable_logging:
-            self._old_logging_level = datasets.utils.logging.get_verbosity()
-            datasets.utils.logging.set_verbosity(datasets.logging.CRITICAL)
-        if self.disable_progress_bar:
-            datasets.disable_progress_bar()
-
-    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:  # noqa: ANN401
-        """Re-enable logging and progress bar."""
-        if self.disable_logging:
-            datasets.utils.logging.set_verbosity(self._old_logging_level)
-        if self.disable_progress_bar:
-            datasets.enable_progress_bar()
-
-
-class SilentHuggingfaceDecorator:
-    """Decorator to silence `transformers` and `datasets` logging and progress bar."""
-
-    def __init__(self, disable_progress_bar: bool = True, disable_logging: bool = True):
-        self.disable_progress_bar = disable_progress_bar
-        self.disable_logging = disable_logging
-
-    def __call__(self, func: Callable[..., T]) -> Callable[..., T]:
-        """Decorate a function so HF is silents."""
-
-        def wrapper(*args: Any, **kwargs: Any) -> T:
-            with SilentHuggingface(self.disable_progress_bar, self.disable_logging):
-                return func(*args, **kwargs)
-
-        return wrapper
 
 
 def init_gcloud_filesystem() -> fsspec.AbstractFileSystem:
