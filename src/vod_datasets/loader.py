@@ -3,63 +3,50 @@ from __future__ import annotations
 import functools
 import hashlib
 import pickle
-from typing import Any, Optional, Protocol, Type
+from typing import Any, Optional, Type
 
 import datasets
+import loguru
 import numpy as np
 import pydantic
 from vod_tools import pipes
 
 from src import vod_configs
 
+from .adapter import find_adapter
 from .base import QueryModel, SectionModel
-from .frank import load_frank
-from .msmarco import load_msmarco
-from .raffle_squad import load_raffle_squad
 
 _N_VALID_SAMPLES = 10
 
 
-class LoaderProtocol(Protocol):
-    """A protocol for loaders."""
+def _load_dataset(config: vod_configs.BaseDatasetConfig) -> datasets.Dataset | datasets.DatasetDict:
+    """Load the dataset, process it according to the prompt template and return a HF dataset."""
+    loguru.logger.info(
+        "Loading the dataset `{name}` including the subsets `{subsets}` and splits `{splits}`.",
+        name=config.name,
+        subsets=config.subsets,
+        splits=config.splits,
+    )
+    loaded_datasets = []
+    for subset_name in config.subsets:
+        subset_dataset = datasets.load_dataset(config.name, subset_name)
+        loaded_datasets.append(subset_dataset)
 
-    def __call__(
-        self,
-        config: vod_configs.BaseDatasetConfig,
-    ) -> datasets.Dataset | datasets.DatasetDict:
-        """Load the dataset and return a HF dataset."""
-        ...
+    combined_dataset = datasets.DatasetDict()
+    for split_name in config.splits:
+        split_datasets = [individual_dataset[split_name] for individual_dataset in loaded_datasets]
+        combined_dataset[split_name] = datasets.concatenate_datasets(split_datasets)
 
-
-LOADERS = {
-    "frank_a": load_frank,
-    "frank_b": load_frank,
-    "squad": load_raffle_squad,
-    "msmarco": load_msmarco,
-}
-
-
-def _load_dataset(
-    config: vod_configs.BaseDatasetConfig, loaders: Optional[dict[str, LoaderProtocol]] = None
-) -> datasets.Dataset:
-    """Load a dataset based on a config."""
-    loaders = {**LOADERS, **(loaders or {})}
-    loader = loaders[config.name]
-    dset = loader(config)
-
-    # Concatenate splits
-    if isinstance(dset, datasets.DatasetDict):
-        dset = datasets.concatenate_datasets([dset[k] for k in sorted(dset)])
-
-    return dset
+    return combined_dataset
 
 
 def load_queries(
     config: vod_configs.QueriesDatasetConfig,
-    loaders: Optional[dict[str, LoaderProtocol]] = None,
 ) -> datasets.Dataset:
     """Load a queries dataset."""
-    dset = _load_dataset(config, loaders=loaders)
+    dset = _load_dataset(config)
+    adapter = find_adapter(dset[0])
+    dset = adapter.translate_dset(dset)
     _validate(dset, QueryModel)
     dset = _preprocess_queries(dset, config=config, locator=f"{config.descriptor}(queries)")
     return dset
@@ -67,10 +54,11 @@ def load_queries(
 
 def load_sections(
     config: vod_configs.SectionsDatasetConfig,
-    loaders: Optional[dict[str, LoaderProtocol]] = None,
 ) -> datasets.Dataset:
     """Load a sections dataset."""
-    dset = _load_dataset(config, loaders=loaders)
+    dset = _load_dataset(config)
+    adapter = find_adapter(dset[0])
+    dset = adapter.translate_dset(dset)
     _validate(dset, SectionModel)
     dset = _preprocess_sections(dset, config=config, locator=f"{config.descriptor}(sections)")
     return dset
