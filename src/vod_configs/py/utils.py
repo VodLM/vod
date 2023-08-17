@@ -7,5 +7,6 @@ class StrictModel(pydantic.BaseModel):
     class Config:
         """Pydantic configuration."""
 
-        extra = "forbid"
-        allow_mutation = False
+        extra = "ignore"
+        frozen = False  # before named "allow_mutation=True"
+        from_attributes = True
