@@ -26,6 +26,7 @@ from .py.search import (
     QdrantFactoryConfig,
     SearchBackends,
     SearchFactoryDefaults,
+    SingleSearchFactoryConfig,
 )
 from .py.workflows import (
     BatchSizeConfig,

@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import copy
 import os
 import pathlib
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 import faiss
+import lightning as L
 import numpy as np
 import torch
 from loguru import logger
 from vod_search import base, es_search, faiss_search, qdrant_search
+from vod_search.socket import find_available_port
 from vod_tools import dstruct, pipes
 
 from src import vod_configs
@@ -213,6 +216,23 @@ def _infer_offsets(x: list[dstruct.SizedDataset[Any]]) -> list[int]:
     return [0, *np.cumsum([len(d) for d in x])[:-1]]
 
 
+def _resolve_ports(
+    config: vod_configs.MutliSearchFactoryConfig,
+    fabric: Optional[L.Fabric],
+) -> vod_configs.MutliSearchFactoryConfig:
+    """Resolve missing ports."""
+    engines: dict[str, vod_configs.SingleSearchFactoryConfig] = copy.copy(config.engines)
+    for key, engine in engines.items():
+        if engine.port < 0:
+            new_port = find_available_port()
+            if fabric is not None:
+                # Sync the port across all ranks
+                new_port = fabric.broadcast(new_port, 0)
+            engines[key] = engine.copy(update={"port": new_port})
+
+    return config.copy(update={"engines": engines})
+
+
 def build_hybrid_search_engine(  # noqa: C901, PLR0912
     *,
     shard_names: list[str],
@@ -225,9 +245,23 @@ def build_hybrid_search_engine(  # noqa: C901, PLR0912
     skip_setup: bool = False,
     barrier_fn: None | Callable[[str], None] = None,
     serve_on_gpu: bool = False,
-    free_resources: bool = True,
+    free_resources: None | bool = None,
+    fabric: None | L.Fabric = None,
+    resolve_ports: bool = True,
 ) -> HyrbidSearchMaster:
     """Build a hybrid search engine."""
+    if free_resources is None:
+        free_resources = eval(os.environ.get("FREE_SEARCH_RESOURCES", "True"))
+        free_resources = bool(free_resources)
+    if skip_setup:
+        free_resources = False
+
+    # Resolve missing ports
+    if resolve_ports:
+        if fabric is None:
+            logger.debug("No fabric provided. Ports will not be synced across ranks.")
+        configs = [_resolve_ports(config, fabric=fabric) for config in configs]
+
     if sections is not None:
         offsets = _infer_offsets(sections)
     elif vectors is not None:

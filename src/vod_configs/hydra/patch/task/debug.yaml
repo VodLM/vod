@@ -30,13 +30,40 @@ trainer:
   val_check_interval: 5
   n_max_eval: 100
   parameters:
-    sparse: 0.0
+    sparse: 1.0
     dense: 1.0
 
-# dataset:
-#   options:
-#     subset_size: 200
-#     filter_unused_sections: true
+dataset:
+  search_defaults:
+    faiss:
+      factory: Flat
+      gpu: null
+  training:
+    queries:
+      train:
+        - name: squad.en:train
+          link: squad.en
+      val:
+        - name: squad.fr:train
+          link: squad.fr
+
+    sections:
+      sections:
+        - name: squad.en
+          search:
+            dense:
+              backend: qdrant
+        - name: squad.fr
+          search:
+            dense:
+              backend: faiss
+
+  # Benchmarks
+  benchmark:
+    - queries: squad.en:test
+      sections: squad.en
+    - queries: squad.fr:test
+      sections: squad.fr
 
 batch_size:
   effective: 16

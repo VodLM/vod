@@ -136,7 +136,7 @@ class FaissFactoryConfig(BaseSearchFactoryConfig):
     train_size: Optional[int] = None
     logging_level: str = "DEBUG"
     host: str = "http://localhost"
-    port: int = 7678
+    port: int = -1
     gpu: Optional[FaissGpuConfig] = None
 
     def __add__(self, diff: None | FaissFactoryDiff) -> Self:

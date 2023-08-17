@@ -36,7 +36,7 @@ class RetrievalCollate(pipes.Collate):
         2. post-filter
         3. sample the sections
         4. fetch the content of each section from the huggingface `datasets.Dataset`
-        5. tokenize the sections & questions
+        5. tokenize the sections & querys
         6. cast & return the batch (`torch.Tensor`)
     """
 
@@ -139,7 +139,7 @@ class RetrievalCollate(pipes.Collate):
 
         # Tokenize the sections and add them to the output
         with BlockTimer(name="diagnostics.tokenize_time", output=diagnostics):
-            tokenized_questions, tokenized_sections = _tokenize_fields(
+            tokenized_querys, tokenized_sections = _tokenize_fields(
                 batch,
                 flat_sections_content,
                 sections=sections,
@@ -147,7 +147,7 @@ class RetrievalCollate(pipes.Collate):
                 config=self.config,
             )
 
-        # Get question/section attributes (e.g., group_hash, kb_id, etc.)
+        # Get query/section attributes (e.g., group_hash, kb_id, etc.)
         attributes = _get_attributes_as_torch(
             batch,
             flat_sections_content,
@@ -156,7 +156,7 @@ class RetrievalCollate(pipes.Collate):
         )
 
         # Debugging: proportion of in-domain sections (same group hash)
-        q_group_hash = attributes["question.group_hash"][:, None]
+        q_group_hash = attributes["query.group_hash"][:, None]
         s_group_hash = attributes["section.group_hash"]
         if s_group_hash.ndim == 1:
             s_group_hash = s_group_hash[None, :]
@@ -166,7 +166,7 @@ class RetrievalCollate(pipes.Collate):
         # Build the batch
         diagnostics["diagnostics.collate_time"] = time.perf_counter() - start_time
         batch = {
-            **tokenized_questions,
+            **tokenized_querys,
             **tokenized_sections,
             **_sampled_sections_to_dict(sections, sampled_raw, prefix="section.", as_torch=True),
             **attributes,
@@ -254,7 +254,13 @@ def _multi_search(
 
     # Unpack the results
     search_results = dict(zip(["lookup"] + client_names, search_results))
-    search_results["lookup"].scores.fill(0.0)  # Discard the scores for the lookup client
+
+    # Discard the scores for the lookup client, discard the labels for all other clients
+    search_results["lookup"].scores.fill(0.0)
+    for name, result in search_results.items():
+        if name == "lookup":
+            continue
+        result.labels = None
 
     # DEBUGGING - check for inf scores in the faiss results
     if "dense" in search_results:
@@ -343,9 +349,11 @@ def _sampled_sections_to_dict(
     if as_torch:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=UserWarning)
-            # cast to torch tensors
-            output = {k: torch.from_numpy(v) for k, v in output.items()}
-            output[f"{prefix}label"] = output[f"{prefix}label"].to(torch.bool)
+            fns = {
+                f"{prefix}score": lambda x: torch.from_numpy(x).to(torch.float32),
+                f"{prefix}label": lambda x: torch.from_numpy(x).to(torch.bool),
+            }
+            output = {k: fns.get(k, torch.from_numpy)(v) for k, v in output.items()}
 
     return output  # type: ignore
 
@@ -369,18 +377,18 @@ def _tokenize_fields(
     )
     tokenized_sections = {k: v.view(*sections.indices.shape, -1) for k, v in tokenized_sections.items()}
 
-    # Tokenize the questions
-    tokenized_question = pipes.torch_tokenize_pipe(
+    # Tokenize the querys
+    tokenized_query = pipes.torch_tokenize_pipe(
         batch,
         tokenizer=tokenizer,
         text_key="text",
-        prefix_key="question.",
+        prefix_key="query.",
         max_length=config.query_max_length,
         truncation=True,
         padding="max_length",
     )
 
-    return tokenized_question, tokenized_sections
+    return tokenized_query, tokenized_sections
 
 
 def _get_attributes_as_torch(
@@ -391,19 +399,26 @@ def _get_attributes_as_torch(
     config: vod_configs.RetrievalCollateConfig,
 ) -> dict[str, Any]:
     as_tensor = functools.partial(cast_as_tensor, dtype=torch.long, replace={None: -1})
-    extras_keys_ops = {"id": as_tensor, "answer_id": as_tensor, "kb_id": as_tensor, "group_hash": as_tensor}
+    extras_keys_ops = {
+        "id": as_tensor,
+        "answer_id": as_tensor,
+        "kb_id": as_tensor,
+        "group_hash": as_tensor,
+        "link": lambda x: x,
+        "dset_uid": lambda x: x,
+    }
 
-    # Handle question attributes
-    question_extras = {}
+    # Handle query attributes
+    query_extras = {}
     for k, fn in extras_keys_ops.items():
         if k not in batch:
             continue
-        question_extras[f"question.{k}"] = fn(batch[k])
+        query_extras[f"query.{k}"] = fn(batch[k])
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         query_section_ids = torch.nested.nested_tensor(batch[config.section_id_keys.query])
-        question_extras["question.section_ids"] = torch.nested.to_padded_tensor(query_section_ids, padding=-1)
+        query_extras["query.section_ids"] = torch.nested.to_padded_tensor(query_section_ids, padding=-1)
 
     # Handle section attributes
     sections_extras = {}
@@ -413,9 +428,22 @@ def _get_attributes_as_torch(
         v = fn(flat_sections_content[k])
         if isinstance(v, torch.Tensor):
             v = v.view(sections_shape)
+        elif isinstance(v, np.ndarray):
+            v = v.reshape(sections_shape)
+        elif isinstance(v, list):
+            v = _reshape_flat_list(v, sections_shape)
         sections_extras[f"section.{k}"] = v
 
-    return {**question_extras, **sections_extras}
+    return {**query_extras, **sections_extras}
+
+
+def _reshape_flat_list(lst: list[T], shape: tuple[int, int]) -> list[list[T]]:
+    """Reshape a list."""
+    if len(shape) != 2:  # noqa: PLR2004
+        raise ValueError(f"Expected a 2D shape. Found {shape}")
+    if math.prod(shape) != len(lst):
+        raise ValueError(f"Expected a list of length {math.prod(shape)}. Found {len(lst)}")
+    return [lst[i : i + shape[1]] for i in range(0, len(lst), shape[1])]
 
 
 def _gather_in_batch_negatives(

@@ -30,7 +30,7 @@ es_body:
     # Replicas are copies of the shards and provide reliability if a node is lost
     number_of_replicas: 0
     # Shards are used to parallelize work on an index
-    number_of_shards: ${resources.n_devices} # <- scale the shards to the number of devices
+    number_of_shards: 1
     similarity:
       default:
         # texts which touch on several topics often benefit by choosing a larger b

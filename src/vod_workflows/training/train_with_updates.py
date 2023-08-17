@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import functools
 import pathlib
-import sys
 from typing import Any, Iterable, Optional, TypeVar
 
 import lightning as L
@@ -142,8 +141,6 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                 )
                 barrier("Completed benchmarks.")
 
-            sys.exit()  # TODO
-
             if state.period_max_steps is None:
                 # If there is no defined `end_step`, we reached the end of the training
                 continue
@@ -157,10 +154,10 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                 scheduler=scheduler,
                 fabric=fabric,
                 vectors=vectors,  # type: ignore
-                train_factories=config.dataset.get_factories("train"),
-                val_factories=config.dataset.get_factories("val"),
+                train_queries=config.dataset.training.queries.train,
+                val_queries=config.dataset.training.queries.val,
+                sections=config.dataset.training.sections.sections,
                 tokenizer=tokenizer,
-                search_config=config.search_defaults,
                 collate_config=config.collates.train,
                 train_dataloader_config=config.dataloaders.train,
                 eval_dataloader_config=config.dataloaders.eval,
@@ -317,7 +314,6 @@ def _infer_accumulate_grad_batches(fabric: L.Fabric, config: vod_configs.BatchSi
 
 
 def _iter_periods(trainer_state: helpers.TrainerState) -> Iterable[int]:
-    rich.print(trainer_state)
     update_steps = _infer_update_steps(trainer_state.max_steps, trainer_state.period)
     logger.info(f"The search index will be updated at steps: {_pretty_steps(update_steps)}")
     if len(update_steps) == 0:

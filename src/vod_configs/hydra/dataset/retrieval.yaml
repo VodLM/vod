@@ -22,6 +22,9 @@ training:
     val:
       - name: frank_a.en:train
         link: frank_a.en
+    options:
+      subset_size: 200
+      filter_unused_sections: true
 
   sections:
     sections:

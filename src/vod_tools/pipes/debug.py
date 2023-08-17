@@ -303,9 +303,9 @@ def pprint_retrieval_batch(  # noqa: C901, PLR0915
         return x
 
     tree = rich.tree.Tree(header, guide_style="dim")
-    question_keys = ["id", "section_ids", "answer_id", "kb_id", "language", "group_hash"]
-    question_keys = [f"question.{key}" for key in question_keys]
-    section_keys = ["id", "answer_id", "kb_id", "score", "label", "language", "group_hash"]
+    query_keys = ["id", "section_ids", "answer_id", "kb_id", "language", "group_hash", "link"]
+    query_keys = [f"query.{key}" for key in query_keys]
+    section_keys = ["id", "answer_id", "kb_id", "score", "label", "language", "group_hash", "dset_uid"]
     section_keys = [f"section.{key}" for key in section_keys]
     need_expansion = [
         "section.input_ids",
@@ -318,15 +318,15 @@ def pprint_retrieval_batch(  # noqa: C901, PLR0915
         "section.group_hash",
     ]
 
-    # Fetch the questions
+    # Fetch the querys
     batch = copy.copy(batch)  # noqa: F821
-    question_input_ids = batch["question.input_ids"]
+    query_input_ids = batch["query.input_ids"]
 
     # Fetch and expand section attributes if needed
     if batch["section.input_ids"].ndim == 2:  # noqa: PLR2004
         for k, v in batch.items():
             if k in need_expansion:
-                batch[k] = v[None, :].expand(len(question_input_ids), *(-1 for _ in v.shape))
+                batch[k] = v[None, :].expand(len(query_input_ids), *(-1 for _ in v.shape))
     elif batch["section.input_ids"].ndim == 3:  # noqa: PLR2004
         ...
     else:
@@ -335,17 +335,17 @@ def pprint_retrieval_batch(  # noqa: C901, PLR0915
         )
     section_input_ids = batch["section.input_ids"]
 
-    for i, q_ids in enumerate(question_input_ids):
-        question = tokenizer.decode(q_ids, **kwargs)
-        question_data = {
-            **{key: str(_format(batch[key][i])) for key in question_keys if key in batch},
-            "question.content": _safe_yaml(question),
+    for i, q_ids in enumerate(query_input_ids):
+        query = tokenizer.decode(q_ids, **kwargs)
+        query_data = {
+            **{key: str(_format(batch[key][i])) for key in query_keys if key in batch},
+            "query.content": _safe_yaml(query),
         }
-        question_data_str = yaml.dump(question_data, sort_keys=False)
-        question_node = rich.syntax.Syntax(question_data_str, "yaml", indent_guides=False, word_wrap=True)
-        question_tree = rich.tree.Tree(question_node, guide_style="dim")
+        query_data_str = yaml.dump(query_data, sort_keys=False)
+        query_node = rich.syntax.Syntax(query_data_str, "yaml", indent_guides=False, word_wrap=True)
+        query_tree = rich.tree.Tree(query_node, guide_style="dim")
 
-        # sort the questions by positive label (first), then higher score (second)
+        # sort the querys by positive label (first), then higher score (second)
         _indices_i = range(len(batch["section.label"][i]))
         _labels_i = [float(x > 0) for x in batch["section.label"][i]]
         sort_scores = _cleanup_scores(batch["section.score"][i])
@@ -363,11 +363,11 @@ def pprint_retrieval_batch(  # noqa: C901, PLR0915
             section_node = rich.syntax.Syntax(section_data_str, "yaml", indent_guides=False, word_wrap=True)
             node_style = "bold cyan" if section_data.get("section.label", False) else "white"
 
-            question_tree.add(section_node, style=node_style)
+            query_tree.add(section_node, style=node_style)
             if max_sections is not None and count >= max_sections:
                 break
 
-        tree.add(question_tree)
+        tree.add(query_tree)
 
     if output_file is not None:
         with pathlib.Path(output_file).open("w") as f:

@@ -1,6 +1,8 @@
 backend: faiss
 factory: OPQ32_512,IVFauto,PQ32x8
 metric: inner_product
+host: http://localhost
+port: -1
 nprobe: 16
 train_size: null
 gpu:

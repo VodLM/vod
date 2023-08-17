@@ -1,7 +1,7 @@
-# install nvidia drivers (GCP)
+# Install nvidia drivers (GCP)
 # sudo /opt/deeplearning/install-driver.sh
 
-# check if CentOS(yum) or Debian(apt) based
+# Check if CentOS(yum) or Debian(apt) based
 if [ -f /etc/debian_version ]; then
     echo "Debian based"
     PKGMD="apt-get"
@@ -18,28 +18,26 @@ else
 fi
 
 # Test
-strings /usr/lib/x86_64-linux-gnu/libstdc++.so.6 | grep GLIBCXX # GLIBCXX_3.4.30
+strings /usr/lib/x86_64-linux-gnu/libstdc++.so.6 | grep GLIBCXX # check for `GLIBCXX_3.4.30`
 
-
-
-# oh my zsh
+# Oh my zsh
 sudo chsh -s $(which zsh) $(whoami)
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
 
-# enable scrolling
+# Enable scrolling
 echo "termcapinfo xterm* ti@:te@" >>~/.screenrc
 
 
-# install CUDA | find your version at `https://developer.nvidia.com/cuda-downloads`
+# Install CUDA | find your version at `https://developer.nvidia.com/cuda-downloads`
 wget https://developer.download.nvidia.com/compute/cuda/12.1.1/local_installers/cuda_12.1.1_530.30.02_linux.run
 sudo sh cuda_12.1.1_530.30.02_linux.run
 
-# install mamba
+# Install mamba
 curl -L -O "https://github.com/conda-forge/miniforge/releases/latest/download/Mambaforge-$(uname)-$(uname -m).sh"
 bash Mambaforge-$(uname)-$(uname -m).sh
 mamba init
 
-# setup mamba env
+# Setup mamba env
 mamba create --name vod python=3.10
 echo 'mamba activate vod' >>~/.zshrc
 source ~/.zshrc
@@ -47,7 +45,7 @@ mamba install -y -c nvidia cuda
 mamba install -y -c conda-forge cudnn cudatoolkit
 pip install pip poetry gpustat nvitop
 
-# install and setup elasticsearch
+# Install and setup elasticsearch
 if [[ $PKGMD != "apt-get" ]]; then
     wget https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-8.7.1-x86_64.rpm
     wget https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-8.7.1-x86_64.rpm.sha512
@@ -60,16 +58,16 @@ else
     sudo apt-get update
     sudo apt-get install elasticsearch
 
-# setup elasticsearch config: open file and comment out the security stuff
+# (Optional) Setup elasticsearch config: open file and comment out the security stuff
 sudo nano /etc/elasticsearch/elasticsearch.yml
-# setup elasticsearch jvm: limit the virtual memory to 320GB
+# Setup elasticsearch jvm: limit the virtual memory to 320GB
 es_opts='
--Xms64g
--Xmx320g
+-Xms32g
+-Xmx64g
 '
 sudo echo "$es_opts" | sudo tee /etc/elasticsearch/jvm.options.d/cfg.options
 
-# start ES
+# Start ES as a service
 sudo systemctl daemon-reload
 sudo systemctl enable elasticsearch.service
 sudo systemctl stop elasticsearch.service
@@ -84,3 +82,11 @@ nano ~/.raffle/.env # <- Copy the rest of your env variables here >
 line='export $(grep -v "^#" ~/.raffle/.env | xargs)'
 echo $line >>~/.zshrc
 source ~/.zshrc
+
+
+# Start Qdrant (Docker)
+docker run -p 6333:6333 -p 6334:6334 \
+    --detach \
+    --restart always \
+    -v $(pwd)/qdrant_storage:/qdrant/storage \
+    qdrant/qdrant:latest

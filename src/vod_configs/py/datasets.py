@@ -115,9 +115,20 @@ class BaseDatasetConfig(StrictModel):
         default=None,
         description="Path to the dataset (overrides `name`)",
     )
+<<<<<<< HEAD
     subsets: list[str] = pydantic.Field(
         default=[],
         description="A list of subset names to load.",
+=======
+    split: Literal["train", "val", "test", "all"] = pydantic.Field("all", description="Dataset split (train, etc.)")
+    path: Optional[str] = pydantic.Field(
+        None,
+        description="Path to the dataset loader.",
+    )
+    parts: Optional[list[BaseDatasetConfig]] = pydantic.Field(
+        None,
+        description="Sub datasets to be concatenated. When set to None, the dataset is a single part (itself)",
+>>>>>>> main
     )
     splits: list[str] = pydantic.Field(
         default=[],

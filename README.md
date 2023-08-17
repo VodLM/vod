@@ -11,8 +11,7 @@
 <a href="https://pytorchlightning.ai/"><img alt="Lightning" src="https://img.shields.io/badge/-Lightning-792ee5?style=for-the-badge&logo=pytorchlightning&logoColor=white"></a>
 <a href="https://hydra.cc/"><img alt="Config: hydra" src="https://img.shields.io/badge/config-hydra-89b8cd?style=for-the-badge&labelColor=gray"></a>
 <a href="https://black.readthedocs.io/en/stable/"><img alt="Code style: black" src="https://img.shields.io/badge/code%20style-black-black.svg?style=for-the-badge&labelColor=gray"></a>
-
- </div>
+</div>
 
 <br/>
 
@@ -41,7 +40,8 @@ from multiple search engines
 - `vod_models`: a collection of REALMs using large retrievers (T5s) and OS generative models (RWKV, LLAMA 2, etc.).
 
 ## Roadmap Summer 2023 ☀️
-Progress tracked in https://github.com/VodLM/vod/issues/1
+
+Progress tracked in <https://github.com/VodLM/vod/issues/1>
 
 The repo is currently in **research preview**. This means we already have a few components in place, but we still have work to do before a wider adoption of VOD, and before training next-gen REALMS. Our objectives for this summer are:
 
@@ -111,7 +111,7 @@ poetry run train
 ```
 
 <details>
-<summary>Arguments & config files</summary>
+<summary>🔧 Arguments & config files</summary>
 
 The `train` endpoint uses `hydra` to parse arguments and configure the run.
 See `configs/main.yaml` for the default configuration. You can override any of the default values by passing them as arguments to the `train` endpoint. For example, to train a model with a different encoder, use:
@@ -128,10 +128,82 @@ poetry run train +patch/task=retrieval +patch/arch=ddp-base
 
 </details>
 
+## Technical details
+
+<details>
+<summary>🐙 Multiple datasets & Sharded search</summary>
+
+VOD is built for multi-dataset training. Youn can multiple training/validation/test datasets, each poiting to a different corpus. Each corpus can be augmented with a specific search backend. For instance this config allows using `Qdrant` as a backend for the `squad` sections and `QuALITY` contexts while using `faiss` to index Wikipedia.
+
+```yaml
+# Base search backends
+search:
+  engines:
+    dense:
+      backend: qdrant
+    sparse:
+      backend: elasticsearch
+
+# Training loop
+training:
+  queries:
+    train:
+      # SQuAD questions <- SQuAD contexts
+      - name: squad.en:train
+        link: squad.en
+      # QuALITY questions <- QuALITY long contexts split into sections
+      - name: quality.en:train
+        link: quality.en
+      # MMLU questions <- Wikipedia
+      - name: mmlu.en:train
+        lint: wiki.en
+      # NaturalQuestions <- Wikipedia
+      - name: nq.en:train
+        link: wiki.en
+    val:
+      - name: squad.en:val
+        link: squad.en
+      - name: quality.en:val
+        link: quality.en
+      - name: mmlu.en:val
+        lint: wiki.en
+      - name: nq.en:val
+        link: wiki.en
+
+  sections:
+    sections:
+      - name: squad.en
+      - name: quality.en
+      - name: wiki.en
+        search:
+          dense:
+            backend: faiss
+            factory: IVF1024,Flat
+
+# Benchmark - list of evaluation tasks
+benchmark:
+  - queries: squad.en:test
+    sections: squad.en
+  - queries: quality.en:test
+    sections: quality.en
+  - queries: mmlu.en:test
+    sections: mmlu.en
+  - queries: nq.en:test
+    sections: wiki.en
+```
+
+VOD implement a hybrid sharded search engine. This means that for each indexed corpus, VOD fits multiple search engines (e.g., Elasticsearch + Qdrant). At query time, data points are dispatched to each shard (corpus) based on the `dataset.link` attribute.
+
+<div align="center">
+<img alt="Sharded search" src="assets/sharded-search.png" width="800px" style="max-width: 100%;">
+</div>
+
+</details>
+
 ## Tips and Tricks 🦊
 
 <details>
-  <summary>Setup a Mamba environment and build faiss-gpu</summary>
+  <summary>🐍 Setup a Mamba environment and build faiss-gpu</summary>
 
 ```bash
 # install mamba
@@ -146,7 +218,7 @@ bash build-faiss.sh
 </details>
 
 <details>
-  <summary>Poetry install troubleshooting guide</summary>
+  <summary>🧙‍♂️ Poetry install troubleshooting guide</summary>
 
 ```shell
 # in case of `InitError` (on GCP): run the following
@@ -158,7 +230,7 @@ poetry install
 </details>
 
 <details>
-  <summary>Handle faiss segmentation fault on cpu</summary>
+  <summary>💥 Handle faiss segmentation fault on cpu</summary>
 
 ```shell
 # faiss segmentation fault
@@ -170,7 +242,7 @@ conda install -c pytorch faiss-cpu
 </details>
 
 <details>
-  <summary>Slow faiss initialization on GPU</summary>
+  <summary>🐢 Slow faiss initialization on GPU</summary>
 
 Faiss can take up to 30min to compile CUDA kernels. See [this GitHub issue](https://github.com/facebookresearch/faiss/issues/1177).
 
@@ -184,19 +256,19 @@ This repo is a clean re-write of the original code [FindZebra/fz-openqa](https:/
 
 ```
 @InProceedings{pmlr-v202-lievin23a,
-  title = 	 {Variational Open-Domain Question Answering},
+  title =   {Variational Open-Domain Question Answering},
   author =       {Li\'{e}vin, Valentin and Motzfeldt, Andreas Geert and Jensen, Ida Riis and Winther, Ole},
-  booktitle = 	 {Proceedings of the 40th International Conference on Machine Learning},
-  pages = 	 {20950--20977},
-  year = 	 {2023},
-  editor = 	 {Krause, Andreas and Brunskill, Emma and Cho, Kyunghyun and Engelhardt, Barbara and Sabato, Sivan and Scarlett, Jonathan},
-  volume = 	 {202},
-  series = 	 {Proceedings of Machine Learning Research},
-  month = 	 {23--29 Jul},
+  booktitle =   {Proceedings of the 40th International Conference on Machine Learning},
+  pages =   {20950--20977},
+  year =   {2023},
+  editor =   {Krause, Andreas and Brunskill, Emma and Cho, Kyunghyun and Engelhardt, Barbara and Sabato, Sivan and Scarlett, Jonathan},
+  volume =   {202},
+  series =   {Proceedings of Machine Learning Research},
+  month =   {23--29 Jul},
   publisher =    {PMLR},
-  pdf = 	 {https://proceedings.mlr.press/v202/lievin23a/lievin23a.pdf},
-  url = 	 {https://proceedings.mlr.press/v202/lievin23a.html},
-  abstract = 	 {Retrieval-augmented models have proven to be effective in natural language processing tasks, yet there remains a lack of research on their optimization using variational inference. We introduce the Variational Open-Domain (VOD) framework for end-to-end training and evaluation of retrieval-augmented models, focusing on open-domain question answering and language modelling. The VOD objective, a self-normalized estimate of the Rényi variational bound, approximates the task marginal likelihood and is evaluated under samples drawn from an auxiliary sampling distribution (cached retriever and/or approximate posterior). It remains tractable, even for retriever distributions defined on large corpora. We demonstrate VOD’s versatility by training reader-retriever BERT-sized models on multiple-choice medical exam questions. On the MedMCQA dataset, we outperform the domain-tuned Med-PaLM by +5.3% despite using 2.500$\times$ fewer parameters. Our retrieval-augmented BioLinkBERT model scored 62.9% on the MedMCQA and 55.0% on the MedQA-USMLE. Last, we show the effectiveness of our learned retriever component in the context of medical semantic search.}
+  pdf =   {https://proceedings.mlr.press/v202/lievin23a/lievin23a.pdf},
+  url =   {https://proceedings.mlr.press/v202/lievin23a.html},
+  abstract =   {Retrieval-augmented models have proven to be effective in natural language processing tasks, yet there remains a lack of research on their optimization using variational inference. We introduce the Variational Open-Domain (VOD) framework for end-to-end training and evaluation of retrieval-augmented models, focusing on open-domain question answering and language modelling. The VOD objective, a self-normalized estimate of the Rényi variational bound, approximates the task marginal likelihood and is evaluated under samples drawn from an auxiliary sampling distribution (cached retriever and/or approximate posterior). It remains tractable, even for retriever distributions defined on large corpora. We demonstrate VOD’s versatility by training reader-retriever BERT-sized models on multiple-choice medical exam questions. On the MedMCQA dataset, we outperform the domain-tuned Med-PaLM by +5.3% despite using 2.500$\times$ fewer parameters. Our retrieval-augmented BioLinkBERT model scored 62.9% on the MedMCQA and 55.0% on the MedQA-USMLE. Last, we show the effectiveness of our learned retriever component in the context of medical semantic search.}
 }
 ```
 

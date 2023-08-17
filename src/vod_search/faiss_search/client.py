@@ -12,6 +12,7 @@ import requests
 import rich
 import torch
 from vod_search import base, io, rdtypes
+from vod_search.socket import find_available_port
 
 # get the path to the server script
 server_run_path = Path(__file__).parent / "server.py"
@@ -143,7 +144,7 @@ class FaissMaster(base.SearchMaster[FaissClient]):
         nprobe: int = 8,
         logging_level: str = "DEBUG",
         host: str = "http://localhost",
-        port: int = 7678,
+        port: int = 6637,
         skip_setup: bool = False,
         free_resources: bool = False,
         serve_on_gpu: bool = False,
@@ -153,6 +154,8 @@ class FaissMaster(base.SearchMaster[FaissClient]):
         self.nprobe = nprobe
         self.logging_level = logging_level
         self.host = host
+        if port < 0:
+            port = find_available_port()
         self.port = port
         self.serve_on_gpu = serve_on_gpu
 
@@ -199,3 +202,8 @@ class FaissMaster(base.SearchMaster[FaissClient]):
     def service_info(self) -> str:
         """Return the name of the service."""
         return f"FaissServer[{self.url}]"
+
+    @property
+    def service_name(self) -> str:
+        """Return the name of the service."""
+        return super().service_name + f"-{self.port}"
