@@ -2,7 +2,7 @@ from __future__ import annotations  # noqa: I001
 
 import os
 import pathlib
-from uuid import uuid4
+import uuid
 
 import datasets
 import fsspec
@@ -18,13 +18,19 @@ DATASETS_CACHE_PATH = str(pathlib.Path(RAFFLE_PATH, "datasets"))
 class QueryModel(StrictModel):
     """A base query data model."""
 
-    id: int = pydantic.Field(default_factory=uuid4, description="The unique identifier for the query.")
+    id: str = pydantic.Field(
+        default=uuid.uuid4().hex,
+        description="The unique identifier for the query.",
+    )
     query: str = pydantic.Field(
         ...,
-        alias="question",
         description="The text of the question or query. This input text is used for a Language Model to process.",
     )
-    answer: list = pydantic.Field(
+    choices: list[str] = pydantic.Field(
+        default=[],
+        description="A list of strings representing the possible answers to the query. Required for retrieval and ranking tasks, optional for generative tasks.",  # noqa: E501
+    )
+    answer: list[str] = pydantic.Field(
         default=[],
         description="The generated response or answer text that a Language Model should associate to a given query. Required for generative tasks, optional for retrieval and ranking tasks.",  # noqa: E501
     )
@@ -33,9 +39,11 @@ class QueryModel(StrictModel):
     )
     kb_id: int = pydantic.Field(
         default=-1,
-        description="An optional ID representing a subset within the knowledge base used for searching with filtering when retrieving context for a query.",
+        description="An optional ID representing a subset within the knowledge base used for searching with filtering when retrieving context for a query.",  # noqa: E501
     )
-    language: str = pydantic.Field(..., description="The written language of the query, specified as a string.")
+    language: str = pydantic.Field(
+        default="en", description="The written language of the query, specified as a string."
+    )
 
     @pydantic.validator("section_ids")
     def _validate_section_ids(cls, section_ids: list[int]) -> list[int]:
