@@ -23,7 +23,6 @@ from .base import (
     DATASETS_CACHE_PATH,
     QueryModel,
     SectionModel,
-    SilentHuggingfaceDecorator,
     _fetch_queries_split,
     init_gcloud_filesystem,
 )
@@ -88,7 +87,6 @@ def _iter_examples_from_json(
         yield example
 
 
-@SilentHuggingfaceDecorator()
 def _download_and_parse_frank(
     language: str,
     split: str,

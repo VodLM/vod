@@ -20,7 +20,6 @@ from .base import (
     DATASETS_CACHE_PATH,
     QueryModel,
     SectionModel,
-    SilentHuggingfaceDecorator,
     init_gcloud_filesystem,
 )
 
@@ -80,7 +79,6 @@ def _gen_queries(*, qrels: dict[int, Iterable[int]], language: str, queries_tabl
         ).dict()
 
 
-@SilentHuggingfaceDecorator()
 def _download_and_parse_questions(language: str = "en", local_path: Optional[str] = None) -> datasets.DatasetDict:
     if language != "en":
         raise NotImplementedError("Only English MSMARCO is supported")
@@ -143,7 +141,6 @@ def _download_and_parse_questions(language: str = "en", local_path: Optional[str
     return datasets.DatasetDict(qa_splits)
 
 
-@SilentHuggingfaceDecorator()
 def _download_and_parse_sections(language: str = "en", local_path: Optional[str] = None) -> datasets.Dataset:
     if language != "en":
         raise NotImplementedError("Only English MSMARCO is supported")
