@@ -4,7 +4,7 @@
 
 defaults:
   # HF transformer model name
-  - override /model/encoder: mt5-base
+  - override /model/encoder: bert-base
   # LR scheduler
   - override /model/scheduler: linear
   # Fabric Strategy
@@ -17,10 +17,18 @@ resources:
 
 batch_size:
   effective: 32
-  per_device: 4
+  per_device: 2
   per_device_eval: 8
   per_device_predict: 512
+
+model:
+  compile_encoder: false
 
 fabric:
   precision: 32
   accelerator: gpu
+
+dataset:
+  search_defaults:
+    faiss:
+      gpu: null

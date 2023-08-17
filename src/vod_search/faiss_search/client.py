@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import socket
 import sys
 import time
 from copy import copy
@@ -13,6 +12,7 @@ import requests
 import rich
 import torch
 from vod_search import base, io, rdtypes
+from vod_search.socket import find_available_port
 
 # get the path to the server script
 server_run_path = Path(__file__).parent / "server.py"
@@ -128,13 +128,6 @@ class FaissClient(base.SearchClient):
             raise exc
 
 
-def _find_free_port() -> int:
-    """Find a free port."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("", 0))
-        return s.getsockname()[1]
-
-
 class FaissMaster(base.SearchMaster[FaissClient]):
     """The Faiss master client is responsible for spawning and killing the Faiss server.
 
@@ -151,7 +144,7 @@ class FaissMaster(base.SearchMaster[FaissClient]):
         nprobe: int = 8,
         logging_level: str = "DEBUG",
         host: str = "http://localhost",
-        port: int = -1,
+        port: int = 6637,
         skip_setup: bool = False,
         free_resources: bool = False,
         serve_on_gpu: bool = False,
@@ -161,8 +154,8 @@ class FaissMaster(base.SearchMaster[FaissClient]):
         self.nprobe = nprobe
         self.logging_level = logging_level
         self.host = host
-        if port == -1:
-            port = _find_free_port()
+        if port < 0:
+            port = find_available_port()
         self.port = port
         self.serve_on_gpu = serve_on_gpu
 

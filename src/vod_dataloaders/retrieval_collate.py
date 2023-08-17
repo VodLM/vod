@@ -349,9 +349,11 @@ def _sampled_sections_to_dict(
     if as_torch:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=UserWarning)
-            # cast to torch tensors
-            output = {k: torch.from_numpy(v) for k, v in output.items()}
-            output[f"{prefix}label"] = output[f"{prefix}label"].to(torch.bool)
+            fns = {
+                f"{prefix}score": lambda x: torch.from_numpy(x).to(torch.float32),
+                f"{prefix}label": lambda x: torch.from_numpy(x).to(torch.bool),
+            }
+            output = {k: fns.get(k, torch.from_numpy)(v) for k, v in output.items()}
 
     return output  # type: ignore
 

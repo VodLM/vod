@@ -108,6 +108,7 @@ def index_and_train(
         sparse_enabled=True,
         skip_setup=not fabric.is_global_zero,
         barrier_fn=barrier_fn,
+        fabric=fabric,
         serve_on_gpu=serve_on_gpu,
     ) as master:
         barrier_fn("Initiating dataloaders")

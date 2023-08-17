@@ -5,7 +5,7 @@ port: 6333
 grpc_port: 6334
 exist_ok: true
 persistent: true
-force_single_collection: true
+force_single_collection: false
 search_params:
   hnsw_ef: 128
   exact: false

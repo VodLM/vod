@@ -38,12 +38,32 @@ dataset:
     faiss:
       factory: Flat
       gpu: null
+  training:
+    queries:
+      train:
+        - name: squad.en:train
+          link: squad.en
+      val:
+        - name: squad.fr:train
+          link: squad.fr
+
+    sections:
+      sections:
+        - name: squad.en
+          search:
+            dense:
+              backend: qdrant
+        - name: squad.fr
+          search:
+            dense:
+              backend: faiss
+
+  # Benchmarks
   benchmark:
-  - queries: frank_a.en:val
-    sections: frank_a.en
-  # options:
-  #   subset_size: 1000
-  #   filter_unused_sections: true
+    - queries: squad.en:test
+      sections: squad.en
+    - queries: squad.fr:test
+      sections: squad.fr
 
 batch_size:
   effective: 16

@@ -12,6 +12,7 @@ from typing import Any, Iterable, Optional
 import numba
 import numpy as np
 import qdrant_client
+import rich
 from grpc import StatusCode
 from grpc._channel import _InactiveRpcError
 from loguru import logger
@@ -260,6 +261,7 @@ class QdrantSearchMaster(base.SearchMaster[QdrantSearchClient], abc.ABC):
 
         # Delete other collections
         if self._force_single_collection:
+            rich.print(f"[bold green] Force single collection for {_get_client_url(client)}")
             _delete_except([self._index_name], client)
 
         # Check wheter the index exist
@@ -302,6 +304,7 @@ class QdrantSearchMaster(base.SearchMaster[QdrantSearchClient], abc.ABC):
     def _free_resources(self) -> None:
         client = _init_client(self._host, self._port, self._grpc_port)
         with status.Status(f"{_collection_name(self._index_name)}: Deleting other indices.."):
+            rich.print(f"[bold green] Free resources for {_get_client_url(client)}")
             _delete_except([self._index_name], client)
             while not self.get_client().ping():
                 time.sleep(0.05)

@@ -99,11 +99,11 @@ class BaseDatasetConfig(StrictModel):
         None,
         description="Dataset subset name",
     )
+    split: Literal["train", "val", "test", "all"] = pydantic.Field("all", description="Dataset split (train, etc.)")
     path: Optional[str] = pydantic.Field(
         None,
         description="Path to the dataset loader.",
     )
-    split: Literal["train", "val", "test", "all"] = pydantic.Field("all", description="Dataset split (train, etc.)")
     parts: Optional[list[BaseDatasetConfig]] = pydantic.Field(
         None,
         description="Sub datasets to be concatenated. When set to None, the dataset is a single part (itself)",
