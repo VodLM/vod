@@ -3,20 +3,18 @@ from __future__ import annotations
 import functools
 import hashlib
 import pickle
-from typing import Any, Optional, Type
+from typing import Any, Optional
 
 import datasets
 import loguru
 import numpy as np
-import pydantic
 from vod_tools import pipes
 
 from src import vod_configs
 
 from .adapter import find_adapter
-from .base import QueryModel, SectionModel
 
-_N_VALID_SAMPLES = 10
+datasets.disable_progress_bar()
 
 
 def _load_dataset(config: vod_configs.BaseDatasetConfig) -> datasets.Dataset | datasets.DatasetDict:
@@ -28,39 +26,37 @@ def _load_dataset(config: vod_configs.BaseDatasetConfig) -> datasets.Dataset | d
         splits=config.splits,
     )
     loaded_datasets = []
-    for subset_name in config.subsets:
-        subset_dataset = datasets.load_dataset(config.name, subset_name)
-        loaded_datasets.append(subset_dataset)
+    for split in config.splits:
+        loaded_subsets = [datasets.load_dataset(config.name, subset, split=split) for subset in config.subsets]
+        loaded_datasets.append(loaded_subsets)
+        loguru.logger.info("Loaded split {split} for `{dataset}`.", dataset=config.name, split=split)
 
     combined_dataset = datasets.DatasetDict()
-    for split_name in config.splits:
-        split_datasets = [individual_dataset[split_name] for individual_dataset in loaded_datasets]
-        combined_dataset[split_name] = datasets.concatenate_datasets(split_datasets)
+    for i, split in enumerate(config.splits):
+        combined_dataset[split] = datasets.concatenate_datasets(loaded_datasets[i])
 
     return combined_dataset
 
 
 def load_queries(
-    config: vod_configs.QueriesDatasetConfig,
-) -> datasets.Dataset:
+    config: vod_configs.BaseDatasetConfig,
+) -> datasets.DatasetDict:
     """Load a queries dataset."""
     dset = _load_dataset(config)
-    adapter = find_adapter(dset[0])
-    dset = adapter.translate_dset(dset)
-    _validate(dset, QueryModel)
-    dset = _preprocess_queries(dset, config=config, locator=f"{config.descriptor}(queries)")
+    adapter = find_adapter(dset)
+    dset = adapter.translate(dset)
+    # dset = _preprocess_queries(dset, config=config, locator=f"{config.descriptor}(queries)")
     return dset
 
 
 def load_sections(
-    config: vod_configs.SectionsDatasetConfig,
-) -> datasets.Dataset:
+    config: vod_configs.BaseDatasetConfig,
+) -> datasets.DatasetDict:
     """Load a sections dataset."""
     dset = _load_dataset(config)
-    adapter = find_adapter(dset[0])
-    dset = adapter.translate_dset(dset)
-    _validate(dset, SectionModel)
-    dset = _preprocess_sections(dset, config=config, locator=f"{config.descriptor}(sections)")
+    adapter = find_adapter(dset)
+    dset = adapter.translate(dset)
+    # dset = _preprocess_sections(dset, config=config, locator=f"{config.descriptor}(sections)")
     return dset
 
 
@@ -81,7 +77,7 @@ def _preprocess_queries(
     dset = dset.map(
         pipes.Partial(
             pipes.template_pipe,
-            template=config.options.templates.queries,
+            template=config.templates.queries,
             input_keys=["query", "language", "kb_id"],
             output_key="text",
         ),
@@ -99,7 +95,7 @@ def _preprocess_sections(
     dset = dset.map(
         pipes.Partial(
             pipes.template_pipe,
-            template=config.options.templates.sections,
+            template=config.templates.sections,
             input_keys=["title", "section", "language", "kb_id"],
             output_key="text",
         ),
@@ -157,12 +153,6 @@ def _take_subset(dset: datasets.Dataset, subset_size: None | int) -> datasets.Da
     # sample the subsets
     ids = rgn.choice(list(range(len(dset))), size=subset_size, replace=False)
     return dset.select(ids)
-
-
-def _validate(dset: datasets.Dataset, model: Type[pydantic.BaseModel]) -> None:
-    for i in range(_N_VALID_SAMPLES):
-        row = dset[i]
-        model(**row)
 
 
 class KeyHasher:
