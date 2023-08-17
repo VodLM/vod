@@ -1,0 +1,4 @@
+defaults:
+  - mini-lm
+  - _self_
+model_name: sentence-transformers/paraphrase-MiniLM-L3-v2

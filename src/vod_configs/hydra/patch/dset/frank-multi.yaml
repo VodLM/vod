@@ -1,0 +1,79 @@
+# @package _global_
+
+defaults:
+  - override /dataset/templates: encode_lang
+  - _self_
+
+dataset:
+  # Base search
+  search:
+    engines:
+      dense:
+        backend: qdrant
+      sparse:
+        backend: elasticsearch
+
+  # Train/val splits
+  training:
+    queries:
+      train:
+        - name: frank_a.en:train
+          link: frank_a.en
+        - name: squad.en:train
+          link: squad.en
+        - name: frank_a.da:train
+          link: frank_a.da
+        - name: squad.da:train
+          link: squad.da
+        - name: frank_a.de:train
+          link: frank_a.de
+        - name: squad.de:train
+          link: squad.de
+        - name: frank_a.fr:train
+          link: frank_a.fr
+        - name: squad.fr:train
+          link: squad.fr
+        - name: frank_a.is:train
+          link: frank_a.is
+      val:
+        - name: frank_a.en:train
+          link: frank_a.en
+        - name: frank_a.da:train
+          link: frank_a.da
+        - name: frank_a.de:train
+          link: frank_a.de
+        - name: frank_a.fr:train
+          link: frank_a.fr
+        - name: frank_a.is:train
+          link: frank_a.is
+
+    sections:
+      sections:
+        - frank_a.en
+        - squad.en
+        - frank_a.da
+        - squad.da
+        - frank_a.de
+        - squad.de
+        - frank_a.fr
+        - squad.fr
+        - frank_a.is
+        - squad.is
+
+
+  # Benchmarks
+  benchmark:
+    - queries: frank_a.en:val
+      sections: frank_a.en
+    - queries: frank_a.da:val
+      sections: frank_a.da
+    - queries: frank_b.en:val
+      sections: frank_b.en
+    - queries: frank_b.da:val
+      sections: frank_b.da
+    - queries: frank_b.de:val
+      sections: frank_b.de
+    - queries: frank_b.fr:val
+      sections: frank_b.fr
+    - queries: frank_b.is:val
+      sections: frank_b.is

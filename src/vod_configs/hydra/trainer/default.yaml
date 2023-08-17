@@ -1,0 +1,12 @@
+_target_: vod_configs.TrainerConfig
+max_steps: 1_000_000
+val_check_interval: 500
+log_interval: 10
+period: 3000
+gradient_clip_val: 1.0
+n_max_eval: null
+checkpoint_path: ${abs_path:state.ckpt}
+pbar_keys: ['loss']
+parameters:
+  dense: 1.0
+  sparse: 1.0

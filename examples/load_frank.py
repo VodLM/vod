@@ -1,50 +1,32 @@
 from __future__ import annotations
 
 import rich
+import vod_configs
+from vod_tools import arguantic
 
-from raffle_ds_research.tools import arguantic, raffle_datasets
+from src import vod_datasets
 
 
 class Args(arguantic.Arguantic):
     """Arguments for the script."""
 
+    name: str = "frank_a"
     language: str = "en"
-    split: str = "A"
-    version: int = 0
-    invalidate_cache: int = 1
-    sample_idx: int = 42
+    split: str = "all"
+
+
+def run(args: Args) -> None:
+    """Showcase the `load_frank` function."""
+    dset = vod_datasets.load_queries(
+        vod_configs.QueriesDatasetConfig(
+            name=args.name,
+            subset=args.language,
+            split=args.split,
+        )
+    )
+    rich.print(dset)
 
 
 if __name__ == "__main__":
     args = Args.parse()
-
-    frank = raffle_datasets.load_frank(
-        language=args.language,
-        subset_name=args.split,
-        version=args.version,
-        only_positive_sections=True,
-        invalidate_cache=bool(args.invalidate_cache),
-    )
-    rich.print({"frank_only_positives": frank})
-    rich.print(frank.qa_splits["train"][0])
-    n_sections_small = len(frank.sections)
-
-    frank = raffle_datasets.load_frank(
-        language=args.language,
-        subset_name=args.split,
-        version=args.version,
-        only_positive_sections=False,
-        invalidate_cache=bool(args.invalidate_cache),
-    )
-    rich.print({"frank_full": frank})
-    n_sections_full = len(frank.sections)
-
-    rich.print(f"Fraction of sections in the small version: {n_sections_small / n_sections_full:.2%}")
-
-    for split, questions in frank.qa_splits.items():
-        n_questions_with_single_section = sum(len(question["section_ids"]) == 1 for question in questions)
-        rich.print(
-            f"   {split}: {n_questions_with_single_section / len(questions):.2%} questions with a single section"
-        )
-
-    rich.print({f"training-question-{args.sample_idx}": frank.qa_splits["train"][0]})
+    run(args)

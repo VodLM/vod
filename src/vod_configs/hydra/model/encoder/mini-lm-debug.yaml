@@ -1,0 +1,5 @@
+defaults:
+  - mini-lm
+  - _self_
+_target_: vod_models.TransformerEncoderDebug
+model_name: sentence-transformers/paraphrase-MiniLM-L3-v2

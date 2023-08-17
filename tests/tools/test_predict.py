@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import dataclasses
+import functools
+import tempfile
 from pathlib import Path
 from typing import Any, Iterable, Optional, Type, TypeVar
 
+import lightning as L
 import numpy as np
 import pytest
 import tensorstore
 import torch
-
-from raffle_ds_research.tools import predict
+from vod_tools import predict
 
 T = TypeVar("T")
 
@@ -67,13 +69,19 @@ def _collate(examples: Iterable[dict[str, Any]], **kwargs: Any) -> dict[str, Any
     return {"x": x}
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 @pytest.mark.parametrize("model_output_key", [None, "y", "y.vector"])
 def test_predict(tmpdir: str | Path, data: VectorDataset, model_output_key: Optional[str]) -> None:
     """Test that the prediction works as expected."""
     model = Array(y=data.y, output_key=model_output_key)
+    fabric = L.Fabric()
+    model = fabric.setup_module(model)
 
-    stores = predict(
-        {"train": data, "valid": data},
+    # create the predict function
+    predict_fn = functools.partial(
+        predict.predict,
+        data,
+        fabric=L.Fabric(),
         cache_dir=tmpdir,
         model=model,
         model_output_key=model_output_key,
@@ -81,9 +89,32 @@ def test_predict(tmpdir: str | Path, data: VectorDataset, model_output_key: Opti
         loader_kwargs={"batch_size": 10, "num_workers": 0},
     )
 
-    store: tensorstore.TensorStore = stores["valid"].open()
+    stores = {}
+    for key in ["try", "first", "second"]:
+        if key == "try":
+            with pytest.raises(FileNotFoundError):
+                stores[key] = predict_fn(
+                    open_mode="r",  # try to read: expect to fail
+                )
+            continue
+        stores[key] = predict_fn(
+            open_mode="x" if key == "first" else "r",  # write at first pass, then only read
+        )
+        if not stores[key].exists():
+            raise FileNotFoundError(f"Store {key} was not created.")
+
+    store: tensorstore.TensorStore = stores["first"].open()
 
     # test that the store is correct
     y_retrieved = store[:].read().result()
     for i in range(len(data)):
         assert np.allclose(y_retrieved[i], data.y[i])  # noqa: S101
+
+
+if __name__ == "__main__":
+    with tempfile.TemporaryDirectory() as tmpdir:
+        test_predict(
+            str(tmpdir),
+            data=VectorDataset.from_config(dset_size=1_000, vector_size=32, seed=1),
+            model_output_key=None,
+        )

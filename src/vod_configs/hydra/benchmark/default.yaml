@@ -1,0 +1,19 @@
+on_init: false
+n_max_eval: 1_000
+tuning:
+  steps: 1000
+  batch_size: 100
+  learning_rate: 1e-3
+  collate_overrides: null
+parameters:
+  dense: 1.0
+  sparse: 1.0
+metrics:
+  - "ndcg"
+  - "mrr@10"
+  - "mrr@100"
+  - "hitrate@01"
+  - "hitrate@03"
+  - "hitrate@10"
+  - "hitrate@100"
+  - "recall@50"

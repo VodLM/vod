@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
-from raffle_ds_research.tools import dstruct
+from vod_tools import dstruct
 
 
 @pytest.fixture

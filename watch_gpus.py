@@ -7,7 +7,7 @@ from typing import Optional
 import gpustat
 import loguru
 
-from raffle_ds_research.tools import arguantic
+from src.vod_tools import arguantic
 
 
 class Arguments(arguantic.Arguantic):

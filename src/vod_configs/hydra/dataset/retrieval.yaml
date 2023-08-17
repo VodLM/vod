@@ -1,0 +1,45 @@
+defaults:
+  - search_defaults: default
+  - options: default
+  - _self_
+
+# Base search
+search:
+  engines:
+    dense:
+      backend: qdrant
+    sparse:
+      backend: elasticsearch
+
+# Train/val splits
+training:
+  queries:
+    train:
+      - name: frank_a.en:train
+        link: frank_a.en
+      - name: squad.en:train
+        link: squad.en
+    val:
+      - name: frank_a.en:train
+        link: frank_a.en
+    options:
+      subset_size: 200
+      filter_unused_sections: true
+
+  sections:
+    sections:
+      - name: frank_a.en
+        search:
+          dense:
+            backend: qdrant
+      - name: squad.en
+        search:
+          dense:
+            backend: faiss
+
+# Benchmarks
+benchmark:
+  - queries: frank_a.en:val
+    sections: frank_a.en
+  - queries: frank_b.en:val
+    sections: frank_b.en

@@ -1,0 +1,35 @@
+# @package _global_
+
+dataset:
+  # Base search
+  search:
+    engines:
+      dense:
+        backend: faiss
+        factory: IVFauto,Flat
+      sparse:
+        backend: elasticsearch
+
+  # Train/val splits
+  training:
+    queries:
+      train:
+        - name: frank_a.en:train
+          link: frank_a.en
+        - name: squad.en:train
+          link: squad.en
+      val:
+        - name: frank_a.en:train
+          link: frank_a.en
+
+    sections:
+      sections:
+        - frank_a.en
+        - squad.en
+
+  # Benchmarks
+  benchmark:
+    - queries: frank_a.en:val
+      sections: frank_a.en
+    - queries: frank_b.en:val
+      sections: frank_b.en

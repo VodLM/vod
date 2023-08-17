@@ -1,0 +1,14 @@
+# @package _global_
+
+# This config is for >=4xA100 GPUs (40GB)
+
+defaults:
+  - ddp-base
+  # HF transformer model name
+  - override /model/encoder: mt5-large
+
+batch_size:
+  effective: 32
+  per_device: 2
+  per_device_eval: 4
+  per_device_predict: 512

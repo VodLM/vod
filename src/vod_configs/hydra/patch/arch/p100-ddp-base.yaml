@@ -1,0 +1,34 @@
+# @package _global_
+
+# This config is for 4xA100 GPUs (40GB)
+
+defaults:
+  # HF transformer model name
+  - override /model/encoder: bert-base
+  # LR scheduler
+  - override /model/scheduler: linear
+  # Fabric Strategy
+  - override /fabric/strategy: ddp
+
+resources:
+  num_workers: 2
+  num_proc: 16
+  omp_threads: ${int_div:${n_cpus:},2}
+
+batch_size:
+  effective: 32
+  per_device: 2
+  per_device_eval: 8
+  per_device_predict: 512
+
+model:
+  compile_encoder: false
+
+fabric:
+  precision: 32
+  accelerator: gpu
+
+dataset:
+  search_defaults:
+    faiss:
+      gpu: null

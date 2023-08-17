@@ -1,0 +1,8 @@
+defaults:
+  - templates: default
+
+subset_size: null
+filter_unused_sections: false
+min_section_tokens: null
+prep_map_kwargs:
+  num_proc: ${resources.num_proc}
