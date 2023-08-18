@@ -17,12 +17,10 @@ import pydantic
 
 from src import vod_configs
 
-from .base import (
+from .models import (
     DATASETS_CACHE_PATH,
     QueryModel,
     SectionModel,
-    _fetch_queries_split,
-    init_gcloud_filesystem,
 )
 
 RAFFLE_SQUAD_KB_ID = 200_001

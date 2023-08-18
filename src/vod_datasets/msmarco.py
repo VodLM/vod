@@ -16,11 +16,10 @@ import loguru
 import pydantic
 from rich.progress import track
 
-from .base import (
+from .models import (
     DATASETS_CACHE_PATH,
     QueryModel,
     SectionModel,
-    init_gcloud_filesystem,
 )
 
 MS_MARCO_KB_ID = 100_000

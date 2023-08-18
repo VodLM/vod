@@ -19,12 +19,10 @@ from rich.progress import track
 
 from src import vod_configs
 
-from .base import (
+from .models import (
     DATASETS_CACHE_PATH,
     QueryModel,
     SectionModel,
-    _fetch_queries_split,
-    init_gcloud_filesystem,
 )
 
 FrankDsetNamePattern = re.compile(r"^(?P<name>[frank]+)(_(?P<frank_split>[A-Za-z_]))$")

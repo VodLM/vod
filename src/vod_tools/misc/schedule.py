@@ -12,7 +12,7 @@ class BaseSchedule(pydantic.BaseModel):
         """Pydantic config."""
 
         extra = "forbid"
-        allow_mutation = False
+        frozen = False
 
     value: float
     start: float

@@ -28,7 +28,7 @@ class Args(arguantic.Arguantic):
 
     dset: str = "squad.en"
     split: str = "validation"
-    model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
+    name_or_path: str = "sentence-transformers/all-MiniLM-L6-v2"
     batch_size: int = 32
     num_workers: int = 1
     subset_size: int = 1_000
@@ -37,9 +37,9 @@ class Args(arguantic.Arguantic):
 class Encoder(torch.nn.Module):
     """Transformer Encoder."""
 
-    def __init__(self, model_name: str):
+    def __init__(self, name_or_path: str):
         super().__init__()
-        self.backbone = transformers.AutoModel.from_pretrained(model_name)
+        self.backbone = transformers.AutoModel.from_pretrained(name_or_path)
 
     def forward(self, batch: dict) -> torch.Tensor:
         """Forward pass of the model, returns the embeddings of the [CLS] token."""
@@ -55,8 +55,8 @@ class Encoder(torch.nn.Module):
 @torch.inference_mode()
 def run(args: Args) -> None:
     """Embed a dataset, spin a hybrid search service, and build a retrieval dataloader."""
-    tokenizer = transformers.AutoTokenizer.from_pretrained(args.model_name)
-    model = Encoder(args.model_name)
+    tokenizer = transformers.AutoTokenizer.from_pretrained(args.name_or_path)
+    model = Encoder(args.name_or_path)
 
     # 1. Instantiate Fabric
     fabric = L.Fabric()

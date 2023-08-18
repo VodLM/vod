@@ -12,10 +12,6 @@ from vod_tools import pipes
 
 from src import vod_configs
 
-from .adapter import find_adapter
-
-datasets.disable_progress_bar()
-
 
 def _load_dataset(config: vod_configs.BaseDatasetConfig) -> datasets.Dataset | datasets.DatasetDict:
     """Load the dataset, process it according to the prompt template and return a HF dataset."""
@@ -43,8 +39,7 @@ def load_queries(
 ) -> datasets.DatasetDict:
     """Load a queries dataset."""
     dset = _load_dataset(config)
-    adapter = find_adapter(dset)
-    dset = adapter.translate(dset)
+    dset = rosetta.translate(dset, output="query")
     # dset = _preprocess_queries(dset, config=config, locator=f"{config.descriptor}(queries)")
     return dset
 
@@ -54,8 +49,7 @@ def load_sections(
 ) -> datasets.DatasetDict:
     """Load a sections dataset."""
     dset = _load_dataset(config)
-    adapter = find_adapter(dset)
-    dset = adapter.translate(dset)
+    dset = rosetta.translate(dset, output="section")
     # dset = _preprocess_sections(dset, config=config, locator=f"{config.descriptor}(sections)")
     return dset
 

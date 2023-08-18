@@ -44,7 +44,7 @@ class BenchmarkConfig(StrictModel):
         """Pydantic configuration."""
 
         extra = "forbid"
-        allow_mutation = False
+        frozen = False
 
     on_init: bool = False
     n_max_eval: Optional[int] = None

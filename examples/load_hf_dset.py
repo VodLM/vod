@@ -26,6 +26,7 @@ DATASET_CONFIGS = {
     },
     "nq_open": {
         "name": "nq_open",
+        "link": "wikipedia.20200501.en:validation",
         "splits": ["validation"],
     },
     "trivia_qa": {
@@ -33,30 +34,32 @@ DATASET_CONFIGS = {
         "subsets": ["rc.wikipedia"],
         "splits": ["test"],
     },
+    "wiki": {
+        "name": "wikipedia",
+        "subsets": ["20200501.en"],
+        "splits": ["validation"],
+        # "fraction": "0.1%",
+    },
 }
 
 
 class Args(arguantic.Arguantic):
     """Arguments for the script."""
 
-    config_name: str = "trivia_qa"
+    name: str = "squad"
 
 
 def run(args: Args) -> None:
     """Showcase the `load_frank` function."""
-    config = DATASET_CONFIGS.get(args.config_name)
+    try:
+        config = DATASET_CONFIGS[args.name]
+    except KeyError as exc:
+        raise KeyError(f"Configuration for `{args.name}` not found!") from exc
 
-    if not config:
-        rich.print(f"Configuration for {args.config_name} not found!")
-        return
+    dset = vod_datasets.load_queries(vod_configs.BaseDatasetConfig(**config))
+    rich.print(dset)
 
-    dset = vod_datasets.load_queries(
-        vod_configs.BaseDatasetConfig(
-            name=config.get("name"),
-            subsets=config.get("subsets", []),
-            splits=config.get("splits", []),
-        )
-    )
+    dset = vod_datasets.load_sections(vod_configs.BaseDatasetConfig(**config))
     rich.print(dset)
 
 

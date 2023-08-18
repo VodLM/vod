@@ -12,7 +12,7 @@ class FaissInitConfig(pydantic.BaseModel):
     class Config:
         """pydantic config."""
 
-        allow_mutation = False
+        frozen = False
         extra = "forbid"
 
     index_path: str
@@ -25,7 +25,7 @@ class InitResponse(pydantic.BaseModel):
     class Config:
         """pydantic config."""
 
-        allow_mutation = False
+        frozen = False
         extra = "forbid"
 
     success: bool
@@ -38,7 +38,7 @@ class SearchFaissQuery(pydantic.BaseModel):
     class Config:
         """pydantic config."""
 
-        allow_mutation = False
+        frozen = False
         extra = "forbid"
 
     vectors: list = pydantic.Field(..., description="A batch of vectors. Implicitly defines `list[list[float]]`.")
@@ -51,7 +51,7 @@ class FastSearchFaissQuery(pydantic.BaseModel):
     class Config:
         """pydantic config."""
 
-        allow_mutation = False
+        frozen = False
         extra = "forbid"
 
     vectors: str = pydantic.Field(
@@ -67,7 +67,7 @@ class FaissSearchResponse(pydantic.BaseModel):
     class Config:
         """pydantic config."""
 
-        allow_mutation = False
+        frozen = False
         extra = "forbid"
 
     scores: list = pydantic.Field(..., description="A batch of scores. Implicitly defines `list[list[float]]`.")
@@ -80,7 +80,7 @@ class FastFaissSearchResponse(pydantic.BaseModel):
     class Config:
         """pydantic config."""
 
-        allow_mutation = False
+        frozen = False
         extra = "forbid"
 
     scores: str

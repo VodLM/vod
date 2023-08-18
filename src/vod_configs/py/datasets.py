@@ -72,10 +72,22 @@ class DatasetOptionsDiff(StrictModel):
 class DatasetOptions(StrictModel):
     """Preprocessing options."""
 
-    cache_dir: Optional[str] = pydantic.Field(default=None, description="Cache directory.")
-    invalidate_cache: bool = pydantic.Field(default=False, description="Whether to delete an existing cached dataset.")
-    prep_map_kwargs: dict[str, Any] = pydantic.Field(default={}, description="Kwargs for `datasets.map(...)`.")
-    subset_size: Optional[int] = pydantic.Field(default=None, description="Take a subset of the dataset.")
+    cache_dir: Optional[str] = pydantic.Field(
+        default=None,
+        description="Cache directory.",
+    )
+    invalidate_cache: bool = pydantic.Field(
+        default=False,
+        description="Whether to delete an existing cached dataset.",
+    )
+    prep_map_kwargs: dict[str, Any] = pydantic.Field(
+        default={},
+        description="Kwargs for `datasets.map(...)`.",
+    )
+    subset_size: Optional[int] = pydantic.Field(
+        default=None,
+        description="Take a subset of the dataset.",
+    )
     filter_unused_sections: bool = pydantic.Field(
         default=False, description="Filter out sections that are not used in the QA split."
     )
@@ -113,28 +125,28 @@ class BaseDatasetConfig(StrictModel):
     )
     path: str = pydantic.Field(
         default=None,
-        description="Path to the dataset (overrides `name`)",
+        description="Path to the dataset loader (overrides `name`)",
     )
-<<<<<<< HEAD
     subsets: list[str] = pydantic.Field(
         default=[],
         description="A list of subset names to load.",
-=======
-    split: Literal["train", "val", "test", "all"] = pydantic.Field("all", description="Dataset split (train, etc.)")
-    path: Optional[str] = pydantic.Field(
-        None,
-        description="Path to the dataset loader.",
+    )
+    split: Literal["train", "val", "test", "all"] = pydantic.Field(
+        "all",
+        description="Dataset split (train, etc.)",
     )
     parts: Optional[list[BaseDatasetConfig]] = pydantic.Field(
         None,
         description="Sub datasets to be concatenated. When set to None, the dataset is a single part (itself)",
->>>>>>> main
     )
     splits: list[str] = pydantic.Field(
         default=[],
         description="A list of splits to load.",
     )
-    templates: Templates = pydantic.Field(Templates(), description="A set of templates used at preprocessing time.")
+    templates: Templates = pydantic.Field(
+        Templates(),
+        description="A set of templates used at preprocessing time.",
+    )
     options: DatasetOptions = pydantic.Field(
         DatasetOptions(),
         description="Loading/preprocessing options.",
@@ -173,7 +185,6 @@ class BaseDatasetConfig(StrictModel):
         return data
 
     @pydantic.field_validator("name")
-    @classmethod
     def validate_dset_exists(cls, value: str) -> str:
         """Validate the dataset exists."""
         # Assuming datasets.get_dataset_config_names and datasets.get_dataset_split_names are accessible
@@ -185,7 +196,7 @@ class BaseDatasetConfig(StrictModel):
         return value
 
     @pydantic.model_validator(mode="after")
-    def validate_subset(self) -> "BaseDatasetConfig":
+    def validate_subset(self) -> Self:
         """Validate the dataset subsets."""
         self._available_subsets = datasets.get_dataset_config_names(self.name)
         self._available_splits = datasets.get_dataset_split_names(self.name, self._available_subsets[0])
@@ -457,7 +468,7 @@ class BenchmarkDatasetConfig(StrictModel):
 
         # Implicitely link the queries to the sections when there is only one section dataset
         with AllowMutations(queries):
-            queries.Config.allow_mutation = True
+            queries.Config.frozen = True
             queries.link = sections.descriptor
 
         return cls(

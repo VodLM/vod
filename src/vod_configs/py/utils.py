@@ -8,5 +8,5 @@ class StrictModel(pydantic.BaseModel):
         """Pydantic configuration."""
 
         extra = "ignore"
-        frozen = False  # before named "allow_mutation=True"
+        frozen = False  # before named "frozen=True"
         from_attributes = True

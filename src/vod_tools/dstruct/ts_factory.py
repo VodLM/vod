@@ -19,7 +19,7 @@ class TensorStoreKvStoreConfig(BaseModel):
     class Config:
         """pydantic config for TensorStoreKvStoreConfig."""
 
-        allow_mutation = False
+        frozen = False
         extra = pydantic.Extra.forbid
 
     driver: Literal["file"]
@@ -36,7 +36,7 @@ class TensorStoreFactory(BaseModel):
     class Config:
         """pydantic config for TensorStoreFactory."""
 
-        allow_mutation = False
+        frozen = False
         extra = pydantic.Extra.forbid
 
     driver: Literal["n5", "zarr"]

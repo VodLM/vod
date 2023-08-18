@@ -25,7 +25,7 @@ class TransformerEncoderConfig(pydantic.BaseModel):
         """Pydantic config."""
 
         extra = "forbid"
-        allow_mutation = False
+        frozen = False
 
     model_name: str
     vector_size: Optional[int] = None
