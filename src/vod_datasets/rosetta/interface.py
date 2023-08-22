@@ -25,7 +25,7 @@ class RetrievalDataset(typing.Generic[T]):
         return getattr(self, idx)
 
 
-def translate(data: datasets.Dataset, output: ModelType, num_proc: int = 4) -> datasets.Dataset:
+def transform(data: datasets.Dataset | datasets.DatasetDict, output: ModelType, num_proc: int = 4) -> datasets.Dataset | datasets.DatasetDict:
     """Translate a Huggingface daatset."""
     row = get_first_row(data)
     adapter: None | typing.Type[Adapter] = find_adapter(row, output="query_with_context")
@@ -66,7 +66,7 @@ def _assign_section_ids(row: dict, idx: int, *, section_lookup: dict[str, int]) 
 
 
 def _make_retrieval_dataset(
-    data: datasets.Dataset,
+    data: datasets.Dataset | datasets.DatasetDict,
     num_proc: int = 4,
 ) -> RetrievalDataset[datasets.Dataset]:
     """Preprocess the data into a retrieval dataset."""
