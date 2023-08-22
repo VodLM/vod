@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Literal, Optional
+from typing import Any, Literal, Optional, Type
 
 import pydantic
 
@@ -14,6 +14,7 @@ class BaseSchedule(pydantic.BaseModel):
         extra = "forbid"
         allow_mutation = False
 
+    mode: str
     value: float
     start: float
     period: int
@@ -64,12 +65,14 @@ class ConstantSchedule(BaseSchedule):
         return self.value
 
 
-def schedule_factory(*, mode: Literal["constant", "linear"], **kwargs: Any) -> BaseSchedule:
+SCHEDULES: list[Type[BaseSchedule]] = [
+    LinearSchedule,
+    StepSchedule,
+    ConstantSchedule,
+]
+SCHEDULES_MAP = {s.model_fields["mode"].default: s for s in SCHEDULES}
+
+
+def schedule_factory(*, mode: Literal["constant", "linear", "step"], **kwargs: Any) -> BaseSchedule:
     """Return a schedule factor."""
-    if mode == "constant":
-        return ConstantSchedule(**kwargs)
-    if mode == "linear":
-        return LinearSchedule(**kwargs)
-    if mode == "step":
-        return StepSchedule(**kwargs)
-    raise ValueError(f"Invalid mode: {mode}")
+    return SCHEDULES_MAP[mode](**kwargs)

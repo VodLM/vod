@@ -17,7 +17,7 @@ from loguru import logger
 from torch.utils import data as torch_data
 from typing_extensions import Self, Type
 from vod_tools import dstruct
-from vod_tools.misc.schedule import BaseSchedule
+from vod_tools.misc.schedule import BaseSchedule, schedule_factory
 
 from src import vod_configs, vod_dataloaders, vod_search
 
@@ -127,7 +127,7 @@ def instantiate_retrieval_dataloader(
     queries: DsetWithVectors,
     sections: DsetWithVectors,
     tokenizer: transformers.PreTrainedTokenizer | transformers.PreTrainedTokenizerFast,
-    search_client: vod_search.ShardedMultiSearchClient,
+    search_client: vod_search.HybridSearchClient,
     collate_config: vod_configs.RetrievalCollateConfig,
     dataloader_config: vod_configs.DataLoaderConfig,
     parameters: Optional[dict | DictProxy],
@@ -206,7 +206,7 @@ def barrier_fn(name: str, fabric: L.Fabric) -> None:
     logger.log("PASS", f"barrier:pass: `{name}`")
 
 
-@dataclasses.dataclass(frozen=False)
+@dataclasses.dataclass
 class TrainerState:
     """Holds the state of the trainer."""
 
@@ -226,6 +226,17 @@ class TrainerState:
     def get_parameters(self) -> dict[str, float]:
         """Return the parameters for a given step."""
         return {k: v(self.step) for k, v in self.parameters.items()}
+
+    def __getstate__(self) -> dict[str, Any]:
+        """Return the state of the object."""
+        state = dataclasses.asdict(self)
+        state["parameters"] = {k: v.model_dump() for k, v in self.parameters.items()}
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        """Set the state of the object."""
+        state["parameters"] = {k: schedule_factory(**v) for k, v in state["parameters"].items()}
+        self.__dict__.update(state)
 
 
 class _OptimizerWrapper(Protocol):
