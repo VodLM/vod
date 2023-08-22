@@ -9,9 +9,10 @@ from datasets.fingerprint import Hasher, hashregister
 from hydra.utils import instantiate
 from loguru import logger
 from omegaconf import DictConfig
-from transformers import pytorch_utils, trainer_pt_utils  # type: ignore
+from transformers import modeling_outputs, pytorch_utils, trainer_pt_utils
+from vod_models import vod_encoder  # type: ignore
 from vod_models.monitor import RetrievalMonitor
-from vod_tools import interfaces, pipes
+from vod_tools import pipes
 
 from src import vod_gradients
 
@@ -23,15 +24,18 @@ def _maybe_instantiate(conf_or_obj: Union[Any, DictConfig], **kwargs: Any) -> ob
     return None
 
 
+FIELD_MAPPING: dict[vod_encoder.VodEncoderInputType, str] = {"query": "hq", "section": "hd"}
+
+
 class Ranker(torch.nn.Module):
     """Deep ranking model using a Transformer encoder as a backbone."""
 
     _output_size: int
-    encoder: interfaces.ProtocolEncoder
+    encoder: vod_encoder.VodEncoder
 
     def __init__(  # noqa: PLR0913
         self,
-        encoder: interfaces.ProtocolEncoder,
+        encoder: vod_encoder.VodEncoder,
         gradients: vod_gradients.Gradients,
         optimizer: Optional[dict | DictConfig | functools.partial] = None,
         scheduler: Optional[dict | DictConfig | functools.partial] = None,
@@ -66,12 +70,12 @@ class Ranker(torch.nn.Module):
 
     def get_output_shape(self, model_output_key: Optional[str] = None) -> tuple[int, ...]:  # noqa: ARG002
         """Dimension of the model output."""
-        return self.encoder.get_output_shape(model_output_key)  # type: ignore
+        return self.encoder.get_output_shape()
 
     def get_fingerprint(self) -> str:
         """Return a fingerprint of the model."""
         try:
-            self.encoder.get_fingerprint()
+            return self.encoder.get_fingerprint()
         except AttributeError:
             return pipes.fingerprint_torch_module(None, self)  # type: ignore
 
@@ -114,18 +118,19 @@ class Ranker(torch.nn.Module):
 
         return self.scheduler_cls(optimizer)
 
-    def _forward_field(self, batch: dict, field: Optional[interfaces.FieldType] = None) -> torch.Tensor:
+    def _forward_field(self, batch: dict, field: Optional[vod_encoder.VodEncoderInputType] = None) -> torch.Tensor:
         input_ids = batch["input_ids"]
         attention_mask = batch["attention_mask"]
         original_shape = input_ids.shape
         input_ids = input_ids.view(-1, original_shape[-1])
         attention_mask = attention_mask.view(-1, original_shape[-1])
-        embedding = self.encoder(input_ids, attention_mask, field=field)
+        output: modeling_outputs.BaseModelOutputWithPooling = self.encoder(input_ids, attention_mask, input_type=field)
+        embedding = output.pooler_output
         embedding = embedding.view(*original_shape[:-1], -1)
         return embedding
 
     @staticmethod
-    def _fetch_fields(batch: dict, field: str) -> Optional[dict[str, torch.Tensor]]:
+    def _fetch_field_attrs(batch: dict, field: str) -> Optional[dict[str, torch.Tensor]]:
         keys = ["input_ids", "attention_mask"]
         keys_map = {f"{field}.{key}": key for key in keys}
         if not all(key in batch for key in keys_map):
@@ -134,15 +139,18 @@ class Ranker(torch.nn.Module):
 
     def encode(self, batch: dict, **kwargs: Any) -> dict[str, torch.Tensor]:
         """Computes the embeddings for the query and the document."""
-        mapping = {"query": "hq", "section": "hd"}
         output = {}
-        for field, key in mapping.items():
-            fields = self._fetch_fields(batch, field)
+        for field, key in FIELD_MAPPING.items():
+            fields = self._fetch_field_attrs(batch, field)
             if fields is None:
                 continue
-            output[key] = self._forward_field(fields, interfaces.FieldType(field))
+            output[key] = self._forward_field(fields, field)
+
+        # Output validation
         if len(output) == 0:
-            raise ValueError(f"No fields to process. Batch keys = {batch.keys()}. Expected fields = {mapping.keys()}.")
+            raise ValueError(
+                f"No fields to process. Batch keys = {batch.keys()}. Expected fields = {FIELD_MAPPING.keys()}."
+            )
 
         return output
 

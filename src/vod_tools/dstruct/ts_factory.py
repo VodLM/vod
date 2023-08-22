@@ -25,7 +25,7 @@ class TensorStoreKvStoreConfig(BaseModel):
     driver: Literal["file"]
     path: str
 
-    @pydantic.validator("path", pre=True)
+    @pydantic.field_validator("path", mode="before")
     def _validate_path(cls, value: str | Path) -> str:
         return str(Path(value).expanduser().absolute())
 
@@ -87,7 +87,7 @@ class TensorStoreFactory(BaseModel):
         cfg_path = _factory_cfg_path(path)
         cfg_path.parent.mkdir(parents=True, exist_ok=True)
         with open(cfg_path, "w") as f:
-            f.write(store_factory.json(indent=2))
+            f.write(store_factory.model_dump_json(indent=2))
 
         return store_factory
 
@@ -96,7 +96,7 @@ class TensorStoreFactory(BaseModel):
         """Instantiate a `TensorStoreFactory` from a path."""
         cfg_path = _factory_cfg_path(path)
         with open(cfg_path, "r") as f:
-            return cls.parse_raw(f.read())
+            return cls.model_validate_json(f.read())
 
 
 def _factory_cfg_path(path: pathlib.Path | str) -> pathlib.Path:
@@ -105,4 +105,4 @@ def _factory_cfg_path(path: pathlib.Path | str) -> pathlib.Path:
 
 @datasets.fingerprint.hashregister(TensorStoreFactory)
 def _hash_store_factory_lazy_array(hasher: datasets.fingerprint.Hasher, obj: TensorStoreFactory) -> str:
-    return hasher.hash(obj.json())
+    return hasher.hash(obj.model_dump_json())

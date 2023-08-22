@@ -1,5 +1,6 @@
 defaults:
   - mini-lm
   - _self_
-_target_: vod_models.TransformerEncoderDebug
-model_name: sentence-transformers/paraphrase-MiniLM-L3-v2
+_target_: vod_models.VodDebugEncoder.from_pretrained_backbone
+name_or_path: sentence-transformers/paraphrase-MiniLM-L3-v2
+

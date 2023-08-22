@@ -1,6 +1,7 @@
 defaults:
   - bert-base
   - _self_
-model_name: t5-base
-cls_name: T5EncoderModel
-agg: mean
+name_or_path: t5-base
+backbone_cls: T5EncoderModel
+pooler_config:
+  agg_method: mean
