@@ -16,7 +16,7 @@ ModelType = typing.Literal["query_with_context", "query", "section"]
 class QueryModel(pydantic.BaseModel):
     """A base query data model."""
 
-    id: str = pydantic.Field(
+    id: typing.Union[str, int] = pydantic.Field(
         default=uuid.uuid4().hex,
         description="The unique identifier for the query.",
     )
@@ -55,8 +55,8 @@ class QueryModel(pydantic.BaseModel):
 class SectionModel(pydantic.BaseModel):
     """A base section data model."""
 
-    id: int = pydantic.Field(
-        ...,
+    id: typing.Union[str, int] = pydantic.Field(
+        default=uuid.uuid4().hex,
         description="The unique identifier for the section.",
     )
     section: str = pydantic.Field(
