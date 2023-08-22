@@ -7,38 +7,42 @@ from vod_tools import arguantic
 from src import vod_datasets
 
 DATASET_CONFIGS = {
-    "ms_marco": {
-        "name": "ms_marco",
+    "msmarco": {
+        "identifier": "msmarco",
+        "name_or_path": "ms_marco",
         "subsets": ["v2.1"],
-        "splits": ["test"],
+        "split": "test",
     },
     "mmlu": {
-        "name": "cais/mmlu",
+        "identifier": "mmlu",
+        "name_or_path": "cais/mmlu",
         "subsets": ["astronomy", "prehistory"],
-        "splits": ["dev"],
+        "split": "dev",
     },
     "squad": {
-        "name": "squad_v2",
-        "splits": ["validation"],
+        "identifier": "squad",
+        "name_or_path": "squad_v2",
+        "split": "validation",
     },
     "quality": {
-        "name": "emozilla/quality",
+        "identifier": "quality",
+        "name_or_path": "emozilla/quality",
     },
-    "nq_open": {
-        "name": "nq_open",
-        "link": "wikipedia.20200501.en:validation",
-        "splits": ["validation"],
+    "nqopen": {
+        "identifier": "nqopen",
+        "name_or_path": "nq_open",
+        "split": "validation",
     },
     "trivia_qa": {
-        "name": "trivia_qa",
+        "identifier": "trivia",
+        "name_or_path": "trivia_qa",
         "subsets": ["rc.wikipedia"],
-        "splits": ["test"],
+        "split": "test",
     },
     "wiki": {
         "name": "wikipedia",
-        "subsets": ["20200501.en"],
-        "splits": ["validation"],
-        # "fraction": "0.1%",
+        "subsets": ["20220301.simple"],
+        "splits": "train",
     },
 }
 
