@@ -21,7 +21,7 @@ dotenv.load_dotenv(str(Path(__file__).parent / ".predict.env"))
 class Args(arguantic.Arguantic):
     """Arguments for the script."""
 
-    model_name: str = "google/bert_uncased_L-4_H-256_A-4"
+    name_or_path: str = "google/bert_uncased_L-4_H-256_A-4"
     split: str = "train[:1%]"
 
 
