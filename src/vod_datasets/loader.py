@@ -8,30 +8,38 @@ from typing import Any, Optional
 import datasets
 import loguru
 import numpy as np
+from vod_datasets import rosetta
 from vod_tools import pipes
 
 from src import vod_configs
 
+def combine_datasets(dataset_list: list[datasets.Dataset | datasets.DatasetDict]) -> datasets.Dataset | datasets.DatasetDict:
+    """Combine a list of datasets into a single dataset."""
+
+    # If all items are of type Dataset
+    if all(isinstance(ds, datasets.Dataset) for ds in dataset_list):
+        return datasets.concatenate_datasets(dataset_list) # type: ignore
+
+    # If all items are of type DatasetDict
+    elif all(isinstance(ds, datasets.DatasetDict) for ds in dataset_list):
+        combined_dict = datasets.DatasetDict()
+        for ds in dataset_list:
+            for key, value in ds.items(): # type: ignore
+                if key in combined_dict:
+                    combined_dict[key] = datasets.concatenate_datasets([combined_dict[key], value])
+                else:
+                    combined_dict[key] = value
+        return combined_dict
+
+    # If there's a mix of Dataset and DatasetDict
+    else:
+        raise NotImplementedError("Combining a mix of Dataset and DatasetDict is not yet supported.")
 
 def _load_dataset(config: vod_configs.BaseDatasetConfig) -> datasets.Dataset | datasets.DatasetDict:
     """Load the dataset, process it according to the prompt template and return a HF dataset."""
-    loguru.logger.info(
-        "Loading the dataset `{name}` including the subsets `{subsets}` and splits `{splits}`.",
-        name=config.name,
-        subsets=config.subsets,
-        splits=config.splits,
-    )
-    loaded_datasets = []
-    for split in config.splits:
-        loaded_subsets = [datasets.load_dataset(config.name, subset, split=split) for subset in config.subsets]
-        loaded_datasets.append(loaded_subsets)
-        loguru.logger.info("Loaded split {split} for `{dataset}`.", dataset=config.name, split=split)
-
-    combined_dataset = datasets.DatasetDict()
-    for i, split in enumerate(config.splits):
-        combined_dataset[split] = datasets.concatenate_datasets(loaded_datasets[i])
-
-    return combined_dataset
+    loguru.logger.info("Loading the dataset: `{descriptor}`", descriptor=config.descriptor)
+    loaded_subsets = [datasets.load_dataset(config.name_or_path, subset, split=config.split) for subset in config.subsets]
+    return combine_datasets(loaded_subsets) # type: ignore
 
 
 def load_queries(
@@ -39,7 +47,7 @@ def load_queries(
 ) -> datasets.DatasetDict:
     """Load a queries dataset."""
     dset = _load_dataset(config)
-    dset = rosetta.translate(dset, output="query")
+    dset = rosetta.transform(dset, output="query")
     # dset = _preprocess_queries(dset, config=config, locator=f"{config.descriptor}(queries)")
     return dset
 
@@ -49,7 +57,7 @@ def load_sections(
 ) -> datasets.DatasetDict:
     """Load a sections dataset."""
     dset = _load_dataset(config)
-    dset = rosetta.translate(dset, output="section")
+    dset = rosetta.transform(dset, output="section")
     # dset = _preprocess_sections(dset, config=config, locator=f"{config.descriptor}(sections)")
     return dset
 
