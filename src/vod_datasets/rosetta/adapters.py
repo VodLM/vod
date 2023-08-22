@@ -10,6 +10,7 @@ from vod_datasets.models import ModelType, QueryModel, QueryWithContextModel, Se
 from vod_datasets.rosetta.input_models import (
     AliasQueryModel,
     AliasQueryWithContextModel,
+    AliasSectionModel,
     AnswerDictQueryModel,
     AnswerDictQueryWithContextModel,
     MultipleChoiceQueryModel,
@@ -83,7 +84,7 @@ class IdentityAdapter(Adapter[Om, Om]):
     @classmethod
     def translate_row(cls: typing.Type[Self], row: dict[str, typing.Any]) -> Om:
         """Placeholder for translating a row."""
-        return cls.output_model(**row)
+        return cls.output_model(**row).model_dump()
 
     @classmethod
     def translate_dset(cls: typing.Type[Self], dset: datasets.Dataset, **kwargs: typing.Any) -> datasets.Dataset:
@@ -91,7 +92,7 @@ class IdentityAdapter(Adapter[Om, Om]):
         return dset
 
 
-class IdentityQueryAdapter(Adapter[QueryModel, QueryModel]):
+class IdentityQueryAdapter(IdentityAdapter):
     """An identity adapter for queries."""
 
     input_model = QueryModel
@@ -103,6 +104,7 @@ class IdentitySectionAdapter(Adapter[SectionModel, SectionModel]):
 
     input_model = SectionModel
     output_model = SectionModel
+
 
 
 class IdentityQueryWithContextAdapter(Adapter[QueryWithContextModel, QueryWithContextModel]):
@@ -168,6 +170,13 @@ class AnswerDictQueryWithContextAdapter(Adapter[AnswerDictQueryWithContextModel,
 class AliasAdapter(Adapter[Im, Om]):
     """An adatper to rename input columns."""
 
+
+    @classmethod
+    def can_handle(cls: type[Self], row: dict[str, typing.Any]) -> bool:
+        cls._validate_fields()
+        cls._get_alias_mapping(list(row.keys()))
+        return super().can_handle(row)
+
     @classmethod
     def translate_row(cls: typing.Type[Self], row: dict[str, typing.Any]) -> Om:
         """Translate a row."""
@@ -177,31 +186,46 @@ class AliasAdapter(Adapter[Im, Om]):
     @classmethod
     def translate_dset(cls: typing.Type[Self], dset: datasets.Dataset, **kwargs: typing.Any) -> datasets.Dataset:
         """Translating a dataset."""
-        if set(cls.input_model.model_fields) != set(cls.output_model.model_fields):
-            raise ValueError(
-                f"Input and output models do not have the same fields. "
-                f"Input: `{cls.input_model.model_fields.keys()}`. "
-                f"Output: `{cls.output_model.model_fields.keys()}`."
-            )
-        mapping = {}
+        return dset.rename_columns(cls._get_alias_mapping(dset.column_names))
+    
+    @classmethod
+    def _validate_fields(cls: typing.Type[Self]) -> None:
+        """Validate the class."""        
+        missing_in_output = set(cls.input_model.model_fields) - set(cls.output_model.model_fields)
+        extra_in_output = set(cls.output_model.model_fields) - set(cls.input_model.model_fields)
+        if missing_in_output or extra_in_output:
+                missing_msg = f"Missing in output: `{', '.join(missing_in_output)}`" if missing_in_output else ""
+                extra_msg = f"Extra in output: `{', '.join(extra_in_output)}`" if extra_in_output else ""
+                error_msg = "Input and output models do not have the same fields. " + " ".join(filter(None, [missing_msg, extra_msg]))
+                
+                raise ValueError(error_msg)
+
+    @classmethod
+    def _get_alias_mapping(cls: typing.Type[Self], column_names: list[str]) -> dict[str, str]:
+        # Build the mapping
+        alias_mapping = {}
         for key, field in cls.input_model.model_fields.items():
-            if field.alias is not None:
-                if isinstance(field.alias, pydantic.AliasChoices):
-                    for alias in field.alias.choices:
-                        mapping[alias] = key
-                else:
-                    mapping[field.alias] = key
-
-        if len(mapping) == 0:
-            raise ValueError("No fields to rename. Make sure to define aliases in the input model.")
-
-        return dset.rename_columns(mapping)
+            if field.validation_alias:
+                for alias in field.validation_alias.choices:  # type: ignore
+                    if alias in column_names:
+                        alias_mapping[alias] = key # type: ignore
+        if not alias_mapping:
+            raise ValueError(f"Could not find any aliases for {cls.input_model.__name__}")
+        
+        return alias_mapping
 
 
 class RenameQueryAdapter(AliasAdapter[AliasQueryModel, QueryModel]):
     """An adapter for multiple-choice datasets."""
 
     input_model = AliasQueryModel
+    output_model = QueryModel
+
+
+class RenameSectionAdapter(AliasAdapter[AliasSectionModel, QueryModel]):
+    """An adapter for multiple-choice datasets."""
+
+    input_model = AliasSectionModel
     output_model = QueryModel
 
 
@@ -253,8 +277,8 @@ def find_adapter(row: dict[str, typing.Any], output: ModelType, verbose: bool = 
         if v.can_handle(row):
             translated_row = v.translate_row(row)
             if verbose:
-                console.print(dict_to_rich_table(row, "Original Row"))
-                console.print(dict_to_rich_table(translated_row.model_dump(), "Translated Row"))
+                console.print(dict_to_rich_table(row, "Input Model"))
+                console.print(dict_to_rich_table(translated_row.model_dump(), "Output Model"))
             return v
 
     return None
