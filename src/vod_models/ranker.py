@@ -31,11 +31,11 @@ class Ranker(torch.nn.Module):
     """Deep ranking model using a Transformer encoder as a backbone."""
 
     _output_size: int
-    encoder: vod_encoder.VodEncoder
+    encoder: vod_encoder.VodBaseEncoder
 
     def __init__(  # noqa: PLR0913
         self,
-        encoder: vod_encoder.VodEncoder,
+        encoder: vod_encoder.VodBaseEncoder,
         gradients: vod_gradients.Gradients,
         optimizer: Optional[dict | DictConfig | functools.partial] = None,
         scheduler: Optional[dict | DictConfig | functools.partial] = None,

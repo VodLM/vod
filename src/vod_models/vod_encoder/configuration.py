@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import copy
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 import transformers
 from typing_extensions import Literal, TypeAlias
 
 AggMethod: TypeAlias = Literal["mean", "max", "cls", "none"]
-
 VodEncoderInputType: TypeAlias = Literal["query", "section"]
 
 
@@ -43,36 +41,57 @@ class VodPoolerConfig:
         }
 
 
-class VodEncoderConfig(transformers.PretrainedConfig):
+class VodEncoderConfigMixin:
     """Configuration for a VOD encoder."""
 
-    backbone: transformers.BertConfig | transformers.T5Config | transformers.RobertaConfig
+    model_type: str
     pooler: VodPoolerConfig
 
-    def __init__(
-        self,
-        backbone: None | dict | transformers.BertConfig | transformers.T5Config | transformers.RobertaConfig = None,
-        pooler: None | VodPoolerConfig = None,
-        **kwargs: Any,
-    ) -> None:
+    def __init__(self, pooler: Optional[VodPoolerConfig] = None, **kwargs: Any) -> None:
         super().__init__(**kwargs)
-        if backbone is None:
-            backbone = transformers.BertConfig()
-        elif isinstance(backbone, dict):
-            backbone = copy.deepcopy(backbone)
-            name_or_path = backbone.pop("_name_or_path")
-            backbone = transformers.AutoConfig.from_pretrained(name_or_path, **backbone)
-        self.backbone = backbone  # type: ignore
-
         if pooler is None:
             pooler = VodPoolerConfig()
-        elif isinstance(pooler, dict):
+        if isinstance(pooler, dict):
             pooler = VodPoolerConfig(**pooler)
+        if not isinstance(pooler, VodPoolerConfig):
+            raise TypeError(f"Expected pooler to be a `VodPoolerConfig`, got `{type(pooler)}`")
         self.pooler = pooler
 
     def to_dict(self) -> dict[str, Any]:
         """Convert config to dict."""
-        return {
-            "backbone": self.backbone.to_dict(),
-            "pooler": self.pooler.to_dict(),
-        }
+        if not isinstance(self, transformers.PretrainedConfig):
+            raise TypeError(f"Expected self to be a transformers.PretrainedConfig, got {type(self)}")
+        output = super().to_dict()  # type: ignore
+        try:
+            output["pooler"] = self.pooler.to_dict()
+        except AttributeError:
+            output["pooler"] = self.pooler
+        return output
+
+
+class VodBertEncoderConfig(VodEncoderConfigMixin, transformers.BertConfig):
+    """Configuration for a VOD encoder."""
+
+    model_type = "vod_bert_encoder"
+    ...
+
+
+class VodT5EncoderConfig(VodEncoderConfigMixin, transformers.T5Config):
+    """Configuration for a VOD encoder."""
+
+    model_type = "vod_t5_encoder"
+    ...
+
+
+class VodRobertaEncoderconfig(VodEncoderConfigMixin, transformers.RobertaConfig):
+    """Configuration for a VOD encoder."""
+
+    model_type = "vod_roberta_encoder"
+    ...
+
+
+VodEncoderConfig = Union[
+    VodBertEncoderConfig,
+    VodT5EncoderConfig,
+    VodRobertaEncoderconfig,
+]

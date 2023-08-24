@@ -1,7 +1,8 @@
 defaults:
   - bert-base
   - _self_
-name_or_path: t5-base
-backbone_cls: T5EncoderModel
-pooler_config:
+
+_target_: vod_models.VodT5Encoder.from_pretrained
+pretrained_model_name_or_path: t5-base
+pooler:
   agg_method: mean

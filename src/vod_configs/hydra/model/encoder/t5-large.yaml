@@ -1,4 +1,4 @@
 defaults:
   - t5-base
   - _self_
-name_or_path: t5-large
+pretrained_model_name_or_path: t5-large

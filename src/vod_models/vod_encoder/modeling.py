@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import abc
 import functools
 import io
 import json
-from typing import Any, Callable, Generic, Optional, TypeVar
+from typing import Any, Callable, Generic, Optional
 
 import numpy as np
 import torch
@@ -11,9 +12,17 @@ import transformers
 import xxhash
 from torch import nn
 from transformers import modeling_outputs
-from typing_extensions import Self, Type
+from typing_extensions import Type, TypeVar
 
-from .configuration import AggMethod, VodEncoderConfig, VodEncoderInputType, VodPoolerConfig
+from .configuration import (
+    AggMethod,
+    VodBertEncoderConfig,
+    VodEncoderConfig,
+    VodEncoderInputType,
+    VodPoolerConfig,
+    VodRobertaEncoderconfig,
+    VodT5EncoderConfig,
+)
 
 
 def _serialize_tensor(x: torch.Tensor | np.ndarray) -> bytes:
@@ -112,8 +121,10 @@ class VodPooler(torch.nn.Module):
     norm_fn: Optional[Callable[[torch.Tensor], torch.Tensor]]
     output_vector_size: int
 
-    def __init__(self, config: VodPoolerConfig, backbone_output_size: int):
+    def __init__(self, config: dict | VodPoolerConfig, backbone_output_size: int):
         super().__init__()
+        if isinstance(config, dict):
+            config = VodPoolerConfig(**config)
         self.backbone_output_size = backbone_output_size
         self.aggregator = AGGREGATORS[config.agg_method]()
         if config.projection_size is None:
@@ -164,52 +175,28 @@ class VodPooler(torch.nn.Module):
         return (self.output_vector_size,)
 
 
-Bck = TypeVar("Bck", bound=transformers.PreTrainedModel)
+Cfg = TypeVar("Cfg", bound=VodEncoderConfig)
 
 
-def _translate_config(model_name: str, config: None | dict) -> dict:
-    """Translate the config to a format that transformers can understand."""
-    if config is None:
-        return {}
+class VodEncoderBase(Generic[Cfg], transformers.PreTrainedModel, abc.ABC):
+    """A VOD transformer encoder."""
 
-    config = config.copy()
-    if "bert" in model_name and "dropout" in config:
-        dropout_prob = config.pop("dropout")
-        config["hidden_dropout_prob"] = dropout_prob
-        config["attention_probs_dropout_prob"] = dropout_prob
-        return config
-
-    if "t5" in model_name and "dropout" in config:
-        dropout_prob = config.pop("dropout")
-        config["dropout_rate"] = dropout_prob
-
-    return config
-
-
-class VodEncoder(Generic[Bck], transformers.PreTrainedModel, torch.nn.Module):
-    """A transformer encoder."""
-
-    config_class = VodEncoderConfig
-    backbone: Bck
+    config_class: Type[Cfg]
     pooler: VodPooler
 
-    def __init__(
-        self,
-        config: VodEncoderConfig,
-        backbone: Optional[Bck] = None,
-    ):
-        super().__init__(config)
-        self.backbone = backbone or transformers.AutoModel.from_config(config.backbone)  # type: ignore
-        self.pooler = VodPooler(config.pooler, self.backbone.config.hidden_size)
+    def __init__(self, config: Cfg, **kwargs: Any) -> None:
+        super().__init__(config, **kwargs)
+        self.pooler = VodPooler(config.pooler, self.config.hidden_size)
 
     def _backbone_forward(
         self,
         input_ids: Optional[torch.Tensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
+        input_type: Optional[VodEncoderInputType] = None,  # noqa: ARG002
         **kwargs: Any,
     ) -> modeling_outputs.BaseModelOutput:
         """Forward the input through the backbone."""
-        return self.backbone.forward(
+        return super().forward(
             input_ids=input_ids,
             attention_mask=attention_mask,
             **kwargs,
@@ -260,42 +247,62 @@ class VodEncoder(Generic[Bck], transformers.PreTrainedModel, torch.nn.Module):
     @property
     def base_name_or_path(self) -> str:
         """The name of the base model."""
-        return self.backbone.config.name_or_path
-
-    @classmethod
-    def from_pretrained_backbone(
-        cls: Type[Self],
-        name_or_path: str,
-        pooler_config: Optional[dict | VodPoolerConfig] = None,
-        backbone_cls: Optional[str | Type[transformers.PreTrainedModel]] = None,
-        **kwargs: Any,
-    ) -> Self:
-        """Instantiate a new model from a pretrained backbone."""
-        _b_cls = backbone_cls or transformers.AutoModel
-        if isinstance(_b_cls, str):
-            _b_cls = getattr(transformers, _b_cls)
-        kwargs = _translate_config(name_or_path, kwargs)
-        backbone: transformers.PreTrainedModel = _b_cls.from_pretrained(name_or_path, **kwargs)  # type: ignore
-        pooler_config = pooler_config or VodPoolerConfig()
-        config = cls.config_class(backbone=backbone.config, pooler=pooler_config)  # type: ignore
-        return cls(config=config, backbone=backbone)
+        return self.config.name_or_path
 
 
-VodEncoder.register_for_auto_class()
-VodEncoder.register_for_auto_class("AutoModel")
+class VodBertEncoder(VodEncoderBase[VodBertEncoderConfig], transformers.BertModel):
+    """A BERT encoder."""
+
+    config_class = VodBertEncoderConfig
 
 
-class VodDebugEncoder(VodEncoder):
-    """A lightweight encoder that can be used for debugging."""
+VodBertEncoderConfig.register_for_auto_class()
+VodBertEncoder.register_for_auto_class("AutoModel")
+transformers.AutoConfig.register("vod_bert_encoder", VodBertEncoderConfig)
+transformers.AutoModel.register(VodBertEncoderConfig, VodBertEncoder)
+
+
+class VodT5Encoder(VodEncoderBase[VodT5EncoderConfig], transformers.T5EncoderModel):
+    """A T5 encoder."""
+
+    config_class = VodT5EncoderConfig
+
+
+VodT5EncoderConfig.register_for_auto_class()
+VodT5Encoder.register_for_auto_class("AutoModel")
+transformers.AutoConfig.register("vod_t5_encoder", VodT5EncoderConfig)
+transformers.AutoModel.register(VodT5EncoderConfig, VodT5Encoder)
+
+
+class VodRobertaEncoder(VodEncoderBase[VodRobertaEncoderconfig], transformers.RobertaModel):
+    """A Roberta encoder."""
+
+    config_class = VodRobertaEncoderconfig
+
+
+VodRobertaEncoderconfig.register_for_auto_class()
+VodRobertaEncoder.register_for_auto_class("AutoModel")
+transformers.AutoConfig.register("vod_roberta_encoder", VodRobertaEncoderconfig)
+transformers.AutoModel.register(VodRobertaEncoderconfig, VodRobertaEncoder)
+
+
+class EmbeddingOnlyMixin(VodEncoderBase):
+    """Mixin for embedding-only encoders."""
 
     def _backbone_forward(
-        self,
+        self: VodEncoderBase,
         input_ids: Optional[torch.Tensor] = None,
         attention_mask: Optional[torch.Tensor] = None,  # noqa: ARG002
+        input_type: Optional[VodEncoderInputType] = None,  # noqa: ARG002
         **kwargs: Any,
     ) -> modeling_outputs.BaseModelOutput:
         """Forward the through the embedding layer."""
-        output = self.backbone.embeddings(input_ids=input_ids)
+        try:
+            output = self.embeddings(input_ids=input_ids)  # type: ignore
+        except AttributeError as exc:
+            raise AttributeError(
+                f"Expected self (type={type(self).__name__}) to have an `embeddings` attribute."
+            ) from exc
         return modeling_outputs.BaseModelOutput(
             last_hidden_state=output,
             hidden_states=None,
@@ -303,5 +310,28 @@ class VodDebugEncoder(VodEncoder):
         )
 
 
-VodDebugEncoder.register_for_auto_class()
-VodDebugEncoder.register_for_auto_class("AutoModel")
+class VodBertEncoderDebug(EmbeddingOnlyMixin, VodBertEncoder):
+    """A BERT encoder for debugging."""
+
+    ...
+
+
+VodBertEncoderDebug.register_for_auto_class()
+
+
+class VodT5EncoderDebug(EmbeddingOnlyMixin, VodT5Encoder):
+    """A T5 encoder for debugging."""
+
+    ...
+
+
+VodT5EncoderDebug.register_for_auto_class()
+
+
+class VodRobertaEncoderDebug(EmbeddingOnlyMixin, VodRobertaEncoder):
+    """A Roberta encoder for debugging."""
+
+    ...
+
+
+VodRobertaEncoderDebug.register_for_auto_class()

@@ -1,7 +1,7 @@
-_target_: vod_models.VodEncoder.from_pretrained_backbone
-name_or_path: bert-base-uncased
-backbone_cls: BertModel
-pooler_config:
+_target_: vod_models.VodBertEncoder.from_pretrained
+pretrained_model_name_or_path: bert-base-uncased
+pooler:
+  _target_: builtins.dict
   projection_size: null
   output_norm: null
   output_activation: null

@@ -18,8 +18,8 @@ class Arguantic(pydantic.BaseModel):
     def parse(cls: Type[Self]) -> Self:
         """Parse arguments using `argparse`."""
         parser = argparse.ArgumentParser()
-        for field in cls.__fields__.values():
-            parser.add_argument(f"--{field.name}", type=field.type_, default=field.default)
+        for name, field in cls.model_fields.items():
+            parser.add_argument(f"--{name}", type=field.annotation or str, default=field.default)
 
         args = parser.parse_args()
         return cls(**vars(args))
