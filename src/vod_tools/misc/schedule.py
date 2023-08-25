@@ -15,7 +15,7 @@ class BaseSchedule(pydantic.BaseModel):
         allow_mutation = False
 
     mode: str
-    value: float
+    value: float = 1.0
     start: float
     period: int
     offset: int = 0
@@ -73,6 +73,6 @@ SCHEDULES: list[Type[BaseSchedule]] = [
 SCHEDULES_MAP = {s.model_fields["mode"].default: s for s in SCHEDULES}
 
 
-def schedule_factory(*, mode: Literal["constant", "linear", "step"], **kwargs: Any) -> BaseSchedule:
+def schedule_factory(*, mode: Literal["constant", "linear", "step"] = "constant", **kwargs: Any) -> BaseSchedule:
     """Return a schedule factor."""
     return SCHEDULES_MAP[mode](**kwargs)

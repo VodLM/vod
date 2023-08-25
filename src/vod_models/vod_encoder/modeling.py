@@ -139,26 +139,24 @@ class VodPooler(torch.nn.Module):
             self.projection = nn.Linear(self.backbone_output_size, self.output_vector_size)
 
         # Activation
-        self.activation = (
-            {
+        if config.output_activation is None:
+            self.activation = None
+        else:
+            self.activation = {
                 "relu": nn.ReLU,
                 "tanh": nn.Tanh,
                 "sigmoid": nn.Sigmoid,
                 "gelu": nn.GELU,
             }[config.output_activation]()
-            if config.output_activation
-            else None
-        )
 
         # Normalization
-        self.norm_fn = (
-            {
+        if config.output_norm is None:
+            self.norm_fn = None
+        else:
+            self.norm_fn = {
                 "l2": functools.partial(torch.nn.functional.normalize, p=2),
                 "l1": functools.partial(torch.nn.functional.normalize, p=1),
             }[config.output_norm]
-            if config.output_norm
-            else None
-        )
 
     def forward(self, hidden_states: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
         """Pools the model output and project. Note that the activation is applied last."""
@@ -210,7 +208,7 @@ class VodEncoderBase(Generic[Cfg], transformers.PreTrainedModel, abc.ABC):
         self,
         input_ids: Optional[torch.Tensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
-        return_dict: Optional[bool] = None,
+        return_dict: Optional[bool] = False,
         input_type: Optional[VodEncoderInputType] = None,  # noqa: ARG002
         **kwargs: Any,
     ) -> dict | modeling_outputs.BaseModelOutputWithPooling:
