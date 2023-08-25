@@ -62,16 +62,17 @@ def _compute_fingerprint(model: transformers.PreTrainedModel) -> str:
     return hasher.hexdigest()
 
 
-class Aggregator(nn.Module):
+class Aggregator(abc.ABC, nn.Module):
     """Base class for aggregators."""
 
     def __init__(self) -> None:
         super().__init__()
         self._dtype_marker = torch.nn.Parameter(torch.tensor(0.0), requires_grad=False)
 
+    @abc.abstractmethod
     def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         """Summarize a sequence of hidden states into a single one."""
-        raise NotImplementedError()
+        ...
 
 
 class MeanAgg(Aggregator):
@@ -288,7 +289,7 @@ transformers.AutoConfig.register("vod_roberta_encoder", VodRobertaEncoderconfig)
 transformers.AutoModel.register(VodRobertaEncoderconfig, VodRobertaEncoder)
 
 
-class EmbeddingOnlyMixin(VodEncoderBase):
+class EmbeddingOnlyOverride(VodEncoderBase):
     """Mixin for embedding-only encoders."""
 
     def _backbone_forward(
@@ -312,7 +313,7 @@ class EmbeddingOnlyMixin(VodEncoderBase):
         )
 
 
-class VodBertEncoderDebug(EmbeddingOnlyMixin, VodBertEncoder):
+class VodBertEncoderDebug(EmbeddingOnlyOverride, VodBertEncoder):
     """A BERT encoder for debugging."""
 
     ...
@@ -321,7 +322,7 @@ class VodBertEncoderDebug(EmbeddingOnlyMixin, VodBertEncoder):
 VodBertEncoderDebug.register_for_auto_class()
 
 
-class VodT5EncoderDebug(EmbeddingOnlyMixin, VodT5Encoder):
+class VodT5EncoderDebug(EmbeddingOnlyOverride, VodT5Encoder):
     """A T5 encoder for debugging."""
 
     ...
@@ -330,7 +331,7 @@ class VodT5EncoderDebug(EmbeddingOnlyMixin, VodT5Encoder):
 VodT5EncoderDebug.register_for_auto_class()
 
 
-class VodRobertaEncoderDebug(EmbeddingOnlyMixin, VodRobertaEncoder):
+class VodRobertaEncoderDebug(EmbeddingOnlyOverride, VodRobertaEncoder):
     """A Roberta encoder for debugging."""
 
     ...

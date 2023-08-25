@@ -41,7 +41,7 @@ class VodPoolerConfig:
         }
 
 
-class VodEncoderConfigMixin:
+class VodEncoderConfigExtension:
     """Configuration for a VOD encoder."""
 
     model_type: str
@@ -69,21 +69,21 @@ class VodEncoderConfigMixin:
         return output
 
 
-class VodBertEncoderConfig(VodEncoderConfigMixin, transformers.BertConfig):
+class VodBertEncoderConfig(VodEncoderConfigExtension, transformers.BertConfig):
     """Configuration for a VOD encoder."""
 
     model_type = "vod_bert_encoder"
     ...
 
 
-class VodT5EncoderConfig(VodEncoderConfigMixin, transformers.T5Config):
+class VodT5EncoderConfig(VodEncoderConfigExtension, transformers.T5Config):
     """Configuration for a VOD encoder."""
 
     model_type = "vod_t5_encoder"
     ...
 
 
-class VodRobertaEncoderconfig(VodEncoderConfigMixin, transformers.RobertaConfig):
+class VodRobertaEncoderconfig(VodEncoderConfigExtension, transformers.RobertaConfig):
     """Configuration for a VOD encoder."""
 
     model_type = "vod_roberta_encoder"
