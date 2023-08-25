@@ -65,6 +65,10 @@ def _compute_fingerprint(model: transformers.PreTrainedModel) -> str:
 class Aggregator(nn.Module):
     """Base class for aggregators."""
 
+    def __init__(self) -> None:
+        super().__init__()
+        self._dtype_marker = torch.nn.Parameter(torch.tensor(0.0), requires_grad=False)
+
     def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         """Summarize a sequence of hidden states into a single one."""
         raise NotImplementedError()
@@ -75,8 +79,8 @@ class MeanAgg(Aggregator):
 
     def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:  # noqa: ARG
         sum_mask = mask.sum(dim=-1, keepdim=True)
-        x_mean = x.sum(dim=-2) / sum_mask.float()
-        return torch.where(sum_mask > 0, x_mean, 0.0)
+        x_mean = x.sum(dim=-2) / sum_mask.to(self._dtype_marker.dtype)
+        return x_mean.masked_fill(sum_mask <= 0, 0.0)
 
 
 class ClsAgg(Aggregator):
