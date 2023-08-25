@@ -70,6 +70,7 @@ def run(args: Args) -> None:
 
     # Load model
     model = transformers.AutoModel.from_pretrained(local_path, trust_remote_code=True)
+    model.eval()
     tokenizer = transformers.AutoTokenizer.from_pretrained(local_path)
     rich.print(f"Model: {type(model)}")
     rich.print(f"Number of parameters: {sum(p.numel() for p in model.parameters())/1e6:.2f}M")
@@ -82,36 +83,16 @@ def run(args: Args) -> None:
         "[Lang=fr] Q: Quelle est la capitale de la France?",
         "[Lang=en] Q: What is computer science?",
         "[Lang=fr] Q: Qu'est-ce que l'informatique?",
-        "[Lang=en] Q: What are your opening hours?",
-        "[Lang=fr] Q: Quels sont vos horaires d'ouverture?",
+        "[Lang=en] Q: hours",
+        "[Lang=fr] Q: horaires",
     ]
-    labels = torch.tensor(
-        [
-            0,
-            1,
-            3,
-            4,
-            6,
-        ]
-    )
-    mask = torch.tensor(
-        [
-            [1, 0, 1, 0, 1, 0, 1, 0],
-            [0, 1, 0, 1, 0, 1, 0, 1],
-            [1, 0, 1, 0, 1, 0, 1, 0],
-            [0, 1, 0, 1, 0, 1, 0, 1],
-            [1, 0, 1, 0, 1, 0, 1, 0],
-            [0, 1, 0, 1, 0, 1, 0, 1],
-        ],
-        dtype=torch.bool,
-    )
     sections = [
         "[Lang=en] Title: Paris| D: Paris is the capital and most populous city of France, with an estimated population of 2,175,601 residents as of 2018, in an area of more than 105 square kilometres (41 square miles).",  # noqa: E501
         "[Lang=fr] Title: Paris| D: Paris est la capitale de la France et le chef-lieu de la région d’Île-de-France. La ville se situe au cœur d’un vaste bassin sédimentaire aux sols fertiles et au climat tempéré, le bassin parisien, sur une boucle de la Seine, entre les confluents de celle-ci avec la Marne et l’Oise.",  # noqa: E501
         "[Lang=en] Title: Computer science| D: Computer science is the study of algorithmic processes, computational machines and computation itself.",  # noqa: E501
         "[Lang=fr] Title: Informatique| D: L’informatique est un domaine d’activité scientifique, technique et industriel concernant le traitement automatique de l’information par l’exécution de programmes informatiques par des machines : des systèmes embarqués, des ordinateurs, des robots, des automates, etc.",  # noqa: E501
-        "[Lang=en] Title: Opening hours| D: Opening hours are the times during which an establishment such as a store, business, or school is open.",  # noqa: E501
-        "[Lang=fr] Title: Horaires d'ouverture| D: Les horaires d'ouverture sont les heures pendant lesquelles un établissement tel qu'un magasin, une entreprise ou une école est ouvert.",  # noqa: E501
+        "[Lang=en] Title: Opening hours| D: The opening hours are: 08:00-12:00 and 14:00-18:00.",  # noqa: E501
+        "[Lang=fr] Title: Horaires d'ouverture| D: Les horaires d'ouverture sont: 08:00-12:00 et 14:00-18:00.",  # noqa: E501
         "[Lang=en] Title: France| D: France, officially the French Republic, is a country whose territory consists of metropolitan France in Western Europe and several overseas regions and territories.",  # noqa: E501
         "[Lang=fr] Title: France| D: La France, en forme longue depuis 1875 la République française, est un État souverain transcontinental dont le territoire métropolitain est situé en Europe de l’Ouest.",  # noqa: E501
     ]
@@ -122,7 +103,7 @@ def run(args: Args) -> None:
             2,
             3,
             4,
-            6,
+            5,
         ]
     )
     mask = torch.tensor(
