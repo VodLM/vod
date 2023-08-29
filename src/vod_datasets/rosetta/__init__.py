@@ -1,2 +1,2 @@
-from .adapters import Adapter, find_adapter, get_first_row
+from .adapters.adapter import Adapter
 from .interface import transform

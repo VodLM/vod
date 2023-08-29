@@ -26,7 +26,7 @@ LoaderKwargs: TypeAlias = Union[dict[str, Any], DictConfig, vod_configs.DataLoad
 class DataLoaderForPredictKwargs(vod_configs.DataLoaderConfig):
     """Confiuguration for `torch.utils.data.Dataloader` for predictions."""
 
-    @pydantic.validator("shuffle", pre=True)
+    @pydantic.field_validator("shuffle", mode="before")
     def _force_shuffle(cls, value: bool) -> bool:
         if value:
             logger.debug("Shuffle is set to True. This is unnecessary for predictions. Forcing `shuffle` to False.")

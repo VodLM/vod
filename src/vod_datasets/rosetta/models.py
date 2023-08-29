@@ -10,26 +10,19 @@ import pydantic
 VOD_CACHE_DIR = str(pathlib.Path(os.environ.get("VOD_CACHE_DIR", "~/.cache/vod")).expanduser())
 DATASETS_CACHE_PATH = str(pathlib.Path(VOD_CACHE_DIR, "datasets"))
 
-ModelType = typing.Literal["query_with_context", "query", "section"]
+ModelType = typing.Literal["queries_with_context", "queries", "sections"]
 
 
 class QueryModel(pydantic.BaseModel):
     """A base query data model."""
 
-    id: typing.Union[str, int] = pydantic.Field(
+    id: str = pydantic.Field(
         default=uuid.uuid4().hex,
         description="The unique identifier for the query.",
     )
     query: str = pydantic.Field(
         ...,
         description="The text of the question or query. This input text is used for a Language Model to process.",
-    )
-    choices: list[str] = pydantic.Field(
-        default=[],
-        description=(
-            "A list of strings representing the possible answers to the query. "
-            "Required for retrieval and ranking tasks, optional for generative tasks."
-        ),
     )
     answer: list[str] = pydantic.Field(
         default=[],
@@ -38,12 +31,19 @@ class QueryModel(pydantic.BaseModel):
             "Required for generative tasks, optional for retrieval and ranking tasks."
         ),
     )
-    section_ids: list[int] = pydantic.Field(
+    choices: list[str] = pydantic.Field(
         default=[],
-        description="A list of IDs representing sections that contain the proper response to a query.",
+        description=(
+            "A list of strings representing the possible answers to the query. "
+            "Required for retrieval and ranking tasks, optional for generative tasks."
+        ),
     )
-    subset_id: int = pydantic.Field(
-        default=-1,
+    section_ids: list[str] = pydantic.Field(
+        default=[],
+        description="A list of labels `section.uid`.",
+    )
+    subset_ids: list[str] = pydantic.Field(
+        default=[],
         description="An optional ID representing a subset of data",
     )
     language: str = pydantic.Field(
@@ -55,11 +55,11 @@ class QueryModel(pydantic.BaseModel):
 class SectionModel(pydantic.BaseModel):
     """A base section data model."""
 
-    id: typing.Union[str, int] = pydantic.Field(
+    id: str = pydantic.Field(
         default=uuid.uuid4().hex,
         description="The unique identifier for the section.",
     )
-    section: str = pydantic.Field(
+    content: str = pydantic.Field(
         ...,
         description="The main textual content of the section.",
     )
@@ -67,8 +67,8 @@ class SectionModel(pydantic.BaseModel):
         default=None,
         description="The title of the section, if available.",
     )
-    subset_id: int = pydantic.Field(
-        default=-1,
+    subset_id: typing.Optional[str] = pydantic.Field(
+        default=None,
         description="An optional ID representing a target subset of sections.",
     )
     language: str = pydantic.Field(
@@ -77,5 +77,21 @@ class SectionModel(pydantic.BaseModel):
     )
 
 
-class QueryWithContextModel(QueryModel, SectionModel):
+class QueryWithContextsModel(QueryModel):
     """A query with context."""
+
+    contexts: list[str] = pydantic.Field(
+        ...,
+        description="The main textual content of the section.",
+    )
+    titles: typing.Optional[list[str]] = pydantic.Field(
+        default=None,
+        description="The title of the section, if available.",
+    )
+
+    @pydantic.model_validator(mode="after")
+    def _validate_context_and_titles(self) -> "QueryWithContextsModel":
+        """Validate the context and titles."""
+        if self.titles is not None and len(self.titles) != len(self.contexts):
+            raise ValueError("The number of titles must match the number of contexts.")
+        return self

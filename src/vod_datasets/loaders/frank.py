@@ -16,19 +16,15 @@ import fsspec
 import loguru
 import pydantic
 from rich.progress import track
+from vod_datasets.rosetta import models
+from vod_datasets.utlis import _fetch_queries_split, init_gcloud_filesystem
 
 from src import vod_configs
-
-from .models import (
-    DATASETS_CACHE_PATH,
-    QueryModel,
-    SectionModel,
-)
 
 FrankDsetNamePattern = re.compile(r"^(?P<name>[frank]+)(_(?P<frank_split>[A-Za-z_]))$")
 
 
-class FrankSectionModel(SectionModel):
+class FrankSectionModel(models.SectionModel):
     """A Frank section."""
 
     section: str = pydantic.Field(..., alias="content")
@@ -36,7 +32,7 @@ class FrankSectionModel(SectionModel):
     answer_id: int
 
 
-class FrankQueryModel(QueryModel):
+class FrankQueryModel(models.QueryModel):
     """A Frank query."""
 
     query: str = pydantic.Field(..., alias="question")
@@ -205,7 +201,7 @@ def load_frank(
     version: int = 0,
 ) -> datasets.Dataset | datasets.DatasetDict:
     """Load the Frank dataset."""
-    cache_dir = pathlib.Path(config.options.cache_dir or DATASETS_CACHE_PATH)
+    cache_dir = pathlib.Path(config.options.cache_dir or models.DATASETS_CACHE_PATH)
 
     # Parse the frank split
     parsed_named = FrankDsetNamePattern.match(config.name)

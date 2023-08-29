@@ -28,6 +28,12 @@ DATASET_CONFIGS = {
         "identifier": "quality",
         "name_or_path": "emozilla/quality",
     },
+    "race": {
+        "identifier": "race",
+        "name_or_path": "race",
+        "subset": "high",
+        "split": "test",
+    },
     "nqopen": {
         "identifier": "nqopen",
         "name_or_path": "nq_open",
@@ -40,9 +46,15 @@ DATASET_CONFIGS = {
         "split": "test",
     },
     "wiki": {
-        "name": "wikipedia",
+        "identifier": "wiki",
+        "name_or_path": "wikipedia",
         "subsets": ["20220301.simple"],
-        "splits": "train",
+        "split": "train",
+    },
+    "flan": {
+        "identifier": "flan",
+        "name_or_path": "Muennighoff/flan",
+        "split": "test",
     },
 }
 
@@ -62,9 +74,11 @@ def run(args: Args) -> None:
 
     dset = vod_datasets.load_queries(vod_configs.BaseDatasetConfig(**config))
     rich.print(dset)
+    rich.print(dset[0])
 
     dset = vod_datasets.load_sections(vod_configs.BaseDatasetConfig(**config))
     rich.print(dset)
+    rich.print(dset[0])
 
 
 if __name__ == "__main__":

@@ -25,7 +25,7 @@ class TensorStoreKvStoreConfig(BaseModel):
     driver: Literal["file"]
     path: str
 
-    @pydantic.validator("path", pre=True)
+    @pydantic.field_validator("path", mode="before")
     def _validate_path(cls, value: str | Path) -> str:
         return str(Path(value).expanduser().absolute())
 
@@ -45,7 +45,7 @@ class TensorStoreFactory(BaseModel):
 
     def open(self, create: int = False, delete_existing: int = False, **kwargs: Any) -> ts.TensorStore:
         """Open and return a TensorStore."""
-        cfg = self.dict()
+        cfg = self.model_dump()
         future = ts.open(cfg, create=create, delete_existing=delete_existing, **kwargs)
         return future.result()
 

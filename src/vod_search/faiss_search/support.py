@@ -49,13 +49,13 @@ class IVFPQFactory(pydantic.BaseModel):
     nbits: Optional[int] = None
     encoding: Literal["flat", "", "fs", "fs"] = "flat"
 
-    @pydantic.validator("encoding", pre=True)
+    @pydantic.field_validator("encoding", mode="before")
     def _validate_encoding(cls, v):  # noqa: ANN
         if v is None:
             return "flat"
         return v
 
-    @pydantic.validator("preproc", pre=True)
+    @pydantic.field_validator("preproc", mode="before")
     def _validate_preproc(cls, v):  # noqa: ANN
         if v is None:
             return None

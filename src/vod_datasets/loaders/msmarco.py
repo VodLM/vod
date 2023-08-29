@@ -16,7 +16,7 @@ import loguru
 import pydantic
 from rich.progress import track
 
-from .models import (
+from .rosetta.models import (
     DATASETS_CACHE_PATH,
     QueryModel,
     SectionModel,

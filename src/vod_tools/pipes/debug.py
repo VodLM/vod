@@ -46,7 +46,7 @@ class Properties(pydantic.BaseModel):
     max: Optional[str] = None
     n_nans: Optional[int] = None
 
-    @pydantic.validator("py_type", pre=True)
+    @pydantic.field_validator("py_type", mode="before")
     def _cast_py_type(cls, value: Any) -> str:  # noqa: ANN401
         if value is None:
             return "None"
