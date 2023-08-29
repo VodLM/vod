@@ -33,7 +33,7 @@ class TransformerEncoderConfig(pydantic.BaseModel):
     activation: Optional[str] = None
     cls_name: str = "AutoModel"
     agg: AggMethod = "mean"
-    model_config: Optional[dict] = None
+    encoder_config: Optional[dict] = None
 
 
 class Aggregator(nn.Module):
@@ -216,7 +216,7 @@ class TransformerEncoder(nn.Module, interfaces.ProtocolEncoder):
         super().__init__()
         self.config = TransformerEncoderConfig(
             model_name=model_name,
-            model_config=model_config,
+            encoder_config=model_config,
             vector_size=vector_size,
             vector_norm=vector_norm,
             activation=activation,

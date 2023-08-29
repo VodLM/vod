@@ -1,19 +1,21 @@
 from __future__ import annotations
 
-import collections
 import re
 from typing import Any, Iterable, Literal, Optional, Protocol, TypeVar, Union, runtime_checkable
 
 import datasets
 import omegaconf
 import pydantic
+from hydra.utils import instantiate
 from typing_extensions import Self, Type
 from vod_tools.misc.config import as_pyobj_validator
 
 from .search import MutliSearchFactoryConfig, MutliSearchFactoryDiff, SearchFactoryDefaults
 from .utils import AllowMutations, StrictModel
 
-DsetDescriptorRegex = re.compile(r"^(?P<name>[A-Za-z_]+)(|.(?P<subset>[A-Za-z_]+))(|:(?P<split>[A-Za-z_]+))$")
+DsetDescriptorRegex = re.compile(
+    r"^(?P<identifier>[A-Za-z0-9_]+)\((?P<name_or_path>[A-Za-z0-9_/]+)(|.(?P<subset>[A-Za-z0-9_\+]+))(|:(?P<split>[A-Za-z_\+]+))\)(|\s*->\s*(?P<link>[A-Za-z0-9_]+))\s*$"  # noqa: E501
+)
 
 
 @runtime_checkable
@@ -55,14 +57,11 @@ class DatasetOptionsDiff(StrictModel):
     """Preprocessing options diff."""
 
     templates: Optional[Templates] = None
-    cache_dir: Optional[str] = None
-    invalidate_cache: Optional[bool] = None
     prep_map_kwargs: Optional[dict[str, Any]] = None
     subset_size: Optional[int] = None
-    filter_unused_sections: Optional[bool] = None
-    min_section_tokens: Optional[int] = None
-    group_hash_key: Optional[str] = None
     group_keys: Optional[list[str]] = None
+    convert_subset_ids_to_targets: Optional[bool] = None
+    set_language: Optional[str] = None
 
     # validators
     _validate_prep_map_kwargs = pydantic.field_validator("prep_map_kwargs", mode="before")(as_pyobj_validator)
@@ -88,6 +87,10 @@ class DatasetOptions(StrictModel):
         default=False,
         description="Convert the subset ids to targets.",
     )
+    set_language: Optional[str] = pydantic.Field(
+        None,
+        description="Set the language of the dataset.",
+    )
 
     # validators
     _validate_prep_map_kwargs = pydantic.field_validator("prep_map_kwargs", mode="before")(as_pyobj_validator)
@@ -106,6 +109,8 @@ class DatasetOptions(StrictModel):
 
 class BaseDatasetConfig(StrictModel):
     """Defines a dataset."""
+
+    _dynamic_dataset_validation = pydantic.PrivateAttr(False)
 
     class Config:
         """Pydantic config."""
@@ -139,17 +144,25 @@ class BaseDatasetConfig(StrictModel):
     @property
     def descriptor(self) -> str:
         """Return the dataset descriptor `name.subset:split`."""
-        desc = self.identifier
+        desc = self.name_or_path if isinstance(self.name_or_path, str) else type(self.name_or_path).__name__
         if self.subsets is not None:
             desc += f".{'_'.join(self.subsets)}"
 
-        return f"{desc}:{self.split}"
+        return f"{self.identifier}({desc}:{self.split})"
 
     def __hash__(self) -> int:
         """Hash the object based on its name and split."""
         return hash(self.descriptor)
 
     _validate_options = pydantic.field_validator("options", mode="before")(as_pyobj_validator)
+
+    @pydantic.field_validator("subsets", mode="before")
+    def _validate_subsets(cls, value: None | str | list[str]) -> list[str]:
+        if value is None:
+            return []
+        if isinstance(value, str):
+            return [value]
+        return value
 
     @pydantic.field_validator("name_or_path", mode="before")
     def validate_name_or_path(cls, value: str) -> str:
@@ -166,6 +179,9 @@ class BaseDatasetConfig(StrictModel):
     @pydantic.model_validator(mode="after")
     def validate_subsets_and_splits(self) -> Self:
         """Validate the dataset subsets."""
+        if not self._dynamic_dataset_validation:
+            # disable the validation of datasets (`subset` & `split`) using the huggingface Hub.
+            return self
         if not isinstance(self.name_or_path, str):
             return self
         with AllowMutations(self):
@@ -204,14 +220,6 @@ class BaseDatasetConfig(StrictModel):
     ) -> Self:
         """Parse a config dictionary or dataset name into a structured config."""
         parsed = _parse_dataset_descriptor(config_or_descriptor)
-        parts = parsed.pop("parts", None)
-        if parts:
-            if not isinstance(parts, (list, omegaconf.ListConfig)):
-                raise TypeError(f"Expected `list`, found `{type(parts)}`")
-            parsed["parts"] = [cls.parse(part, base_options=base_options) for part in parts]
-            counts = collections.Counter(parsed["parts"])
-            if max(counts.values()) > 1:
-                raise ValueError(f"Found duplicated parts: {counts}")
 
         # parse `options` if provided
         base_options = base_options or DatasetOptions()
@@ -223,7 +231,6 @@ class BaseDatasetConfig(StrictModel):
             if "search" in parsed:
                 base_search = base_search + MutliSearchFactoryDiff.parse(parsed["search"])
             parsed["search"] = base_search
-
         return cls(**parsed)
 
 
@@ -258,38 +265,46 @@ DatasetConfig = Union[QueriesDatasetConfig, SectionsDatasetConfig]
 
 
 def _parse_dataset_descriptor(
-    config_or_name: str | dict | omegaconf.DictConfig,  # type: ignore
+    config_or_descriptor: str | dict | omegaconf.DictConfig,  # type: ignore
 ) -> dict:
-    if isinstance(config_or_name, (omegaconf.DictConfig)):
-        config_or_name: dict = omegaconf.OmegaConf.to_container(config_or_name, resolve=True)  # type: ignore
+    if isinstance(config_or_descriptor, omegaconf.DictConfig):
+        config_or_descriptor = omegaconf.OmegaConf.to_container(config_or_descriptor, resolve=True)  # type: ignore
+    if isinstance(config_or_descriptor, dict) and "name_or_path" in config_or_descriptor:
+        name_or_path = config_or_descriptor["name_or_path"]
+        if isinstance(name_or_path, dict):
+            name_or_path = instantiate(name_or_path)
+        return {
+            **config_or_descriptor,
+            "name_or_path": name_or_path,
+        }
 
-    if isinstance(config_or_name, str):
-        config_or_name = {"name": config_or_name}
-    if not isinstance(config_or_name, dict):
-        raise TypeError(f"config_or_name should be a dict. Found `{type(config_or_name)}`")
+    if isinstance(config_or_descriptor, str):
+        config_or_descriptor = {"descriptor": config_or_descriptor}
+    if not isinstance(config_or_descriptor, dict):
+        raise TypeError(f"`config_or_descriptor` should be a dict. Found `{type(config_or_descriptor)}`")
 
-    try:
-        name = config_or_name["name"]
-    except KeyError as exc:
-        raise KeyError(
-            f"Key `name` should be provided when parsing `DatasetConfig`. Found keys={list(config_or_name.keys())}"
-        ) from exc
+    if descriptor := config_or_descriptor.get("descriptor", None):
+        parsed = DsetDescriptorRegex.match(descriptor)
+        if parsed is None:
+            raise ValueError(f"Couldn't parse descriptor `{descriptor}` with pattern {DsetDescriptorRegex.pattern}")
+        parsed_dict = parsed.groupdict()
+    else:
+        parsed_dict = {}
 
-    parsed = DsetDescriptorRegex.match(name)
-    if parsed is None:
-        raise ValueError(f"Couldn't parse name `{name}` with pattern {DsetDescriptorRegex.pattern}")
-
-    # Filter None
-    parsed_ = {k: v for k, v in parsed.groupdict().items() if v is not None}
-    config_ = {k: v for k, v in config_or_name.items() if v is not None}
+    # Filter `None` values
+    parsed_ = {k: v for k, v in parsed_dict.items() if v is not None}
+    config_ = {k: v for k, v in config_or_descriptor.items() if v is not None}
 
     # Create the final config
     final_config = {}
     for key in parsed_.keys() | config_.keys():
         parsed_value = parsed_.get(key, None)
+        if parsed_value is not None and "+" in parsed_value:
+            parsed_value = parsed_value.split("+")
         config_value = config_.get(key, None)
         final_config[key] = parsed_value or config_value
 
+    final_config.pop("descriptor", None)
     return final_config
 
 
@@ -396,7 +411,7 @@ class TrainDatasetsConfig(StrictModel):
         if len(sections.sections) == 1:
             for query in queries.train + queries.val:
                 with AllowMutations(query):
-                    query.link = sections.sections[0].descriptor
+                    query.link = sections.sections[0].identifier
 
         return cls(
             queries=queries,

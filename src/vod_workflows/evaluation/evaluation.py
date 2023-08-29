@@ -48,7 +48,7 @@ def benchmark(
 ) -> dict[str, float]:
     """Run benchmarks on a retrieval task."""
     with vod_search.build_hybrid_search_engine(
-        shard_names=[cfg.descriptor for cfg in task.sections],
+        shard_names=[cfg.identifier for cfg in task.sections],
         sections=[vod_datasets.load_sections(cfg) for cfg in task.sections],  # type: ignore
         vectors=[dstruct.as_lazy_array(task.vectors[d]) for d in task.sections]
         if task.vectors
@@ -83,7 +83,7 @@ def benchmark(
         cfg = {"compute_on_cpu": True, "dist_sync_on_step": True, "sync_on_compute": False}
         monitors = {key: RetrievalMetricCollection(metrics=metrics, **cfg) for key in output_keys}
         diagnostics = collections.defaultdict(list)
-        queries_descriptior = "+".join(cfg.descriptor for cfg in task.queries)
+        queries_descriptior = "+".join(cfg.identifier for cfg in task.queries)
 
         try:
             with IterProgressBar() as pbar:

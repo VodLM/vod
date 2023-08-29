@@ -112,7 +112,7 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                         collate_config=config.collates.predict,
                         dataloader_config=config.dataloaders.predict,
                         field=cfg.field,
-                        locator=cfg.descriptor,
+                        locator=cfg.identifier,
                     )
                     for cfg in all_dset_configs
                 }
@@ -218,8 +218,8 @@ def _run_benchmarks(
     if fabric.is_global_zero:
         logger.info(f"Running benchmarks ... (period={1+state.pidx})")
         for j, task in enumerate(tasks):
-            queries_loc = "+".join([q.descriptor for q in task.queries])
-            sections_loc = "+".join([s.descriptor for s in task.sections])
+            queries_loc = "+".join([q.identifier for q in task.queries])
+            sections_loc = "+".join([s.identifier for s in task.sections])
             bench_loc = f"{queries_loc} <- {sections_loc}"
             logger.info(f"{1+j}/{len(config.dataset.benchmark)} - Benchmarking `{bench_loc}` ...")
             logdir = pathlib.Path("benchmarks", f"{bench_loc}-{state.pidx}-{state.step}")

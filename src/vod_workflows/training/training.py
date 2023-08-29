@@ -99,7 +99,7 @@ def index_and_train(
 
     barrier_fn("Init search engines..")
     with vod_search.build_hybrid_search_engine(
-        shard_names=[cfg.descriptor for cfg in sections],
+        shard_names=[cfg.identifier for cfg in sections],
         sections=[vod_datasets.load_sections(cfg) for cfg in sections],  # type: ignore
         vectors=[dstruct.as_lazy_array(vectors[d]) for d in sections] if vectors else None,  # type: ignore
         configs=[cfg.search for cfg in sections],  # type: ignore

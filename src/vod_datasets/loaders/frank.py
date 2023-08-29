@@ -5,7 +5,6 @@ import dataclasses
 import functools
 import json
 import pathlib
-import re
 import shutil
 from os import PathLike
 from pathlib import Path
@@ -16,19 +15,15 @@ import fsspec
 import loguru
 import pydantic
 from rich.progress import track
+from vod_configs import DatasetLoader
 from vod_datasets.rosetta import models
 from vod_datasets.utils import _fetch_queries_split, init_gcloud_filesystem
-
-from src import vod_configs
-
-FrankDsetNamePattern = re.compile(r"^(?P<name>[frank]+)(_(?P<frank_split>[A-Za-z_]))$")
 
 
 class FrankSectionModel(models.SectionModel):
     """A Frank section."""
 
-    section: str = pydantic.Field(..., alias="content")
-    kb_id: int = pydantic.Field(..., alias="knowledge_base_id")
+    subset_id: str = pydantic.Field(..., alias="knowledge_base_id")
     answer_id: int
 
 
@@ -39,7 +34,13 @@ class FrankQueryModel(models.QueryModel):
     category: Optional[str] = None
     label_method_type: Optional[str] = None
     answer_id: int
-    kb_id: int = pydantic.Field(..., alias="knowledge_base_id")
+    subset_ids: list[str] = pydantic.Field(..., alias="knowledge_base_id")
+
+    @pydantic.field_validator("subset_ids", mode="before")
+    def _validate_subset_ids(cls, value: str | list) -> list[str]:
+        if isinstance(value, str):
+            return [value]
+        return value
 
 
 @dataclasses.dataclass
@@ -194,54 +195,64 @@ def _make_local_sync_path(
     )
 
 
-def load_frank(
-    config: vod_configs.BaseDatasetConfig,
-    *,
-    only_positive_sections: bool = False,
-    version: int = 0,
-) -> datasets.Dataset | datasets.DatasetDict:
-    """Load the Frank dataset."""
-    cache_dir = pathlib.Path(config.options.cache_dir or models.DATASETS_CACHE_PATH)
+class FrankDatasetLoader(DatasetLoader):
+    """Load the Frank Dataset."""
 
-    # Parse the frank split
-    parsed_named = FrankDsetNamePattern.match(config.name)
-    if parsed_named is None or "frank_split" not in parsed_named.groupdict():
-        raise ValueError(f"Failed to parse Frank name `{config.name}` using pattern `{FrankDsetNamePattern.pattern}`")
-    frank_split = parsed_named.groupdict()["frank_split"].upper()
+    def __init__(
+        self,
+        frank_split: str = "A",
+        cache_dir: None | str = None,
+        only_positive_sections: bool = False,
+        version: int = 0,
+        invalidate_cache: bool = False,
+        what: models.DatasetType = "queries",
+    ) -> None:
+        self.frank_split = frank_split
+        self.cache_dir = pathlib.Path(cache_dir or models.DATASETS_CACHE_PATH)
+        self.only_positive_sections = only_positive_sections
+        self.version = version
+        self.invalidate_cache = invalidate_cache
+        if what not in {"queries", "sections"}:
+            raise ValueError(f"Unexpected dataset type: what=`{what}`")
+        self.dataset_type = what
 
-    # Check the language (split)
-    if config.subset is None:
-        raise ValueError(f"Split must be configured. Config={config}")
+    def __call__(
+        self,
+        subset: str | None = None,
+        split: str | None = None,
+        **kws: Any,
+    ) -> datasets.Dataset | datasets.DatasetDict:
+        """Load the Frank dataset."""
+        if subset is None:
+            raise ValueError("Expected a subset, got `None`")
+        qa_splits_path, sections_paths = _make_local_sync_path(
+            self.cache_dir,
+            language=subset,
+            split=self.frank_split,
+            version=self.version,
+            only_positive_sections=self.only_positive_sections,
+        )
+        if self.invalidate_cache:
+            loguru.logger.debug(f"Invalidating cache `{qa_splits_path}` and `{sections_paths}`")
+            if qa_splits_path.exists():
+                shutil.rmtree(qa_splits_path)
+            if sections_paths.exists():
+                shutil.rmtree(sections_paths)
 
-    # Define the local paths
-    qa_splits_path, sections_paths = _make_local_sync_path(
-        cache_dir,
-        language=config.subset,
-        split=frank_split,
-        version=version,
-        only_positive_sections=only_positive_sections,
-    )
-    if config.options.invalidate_cache:
-        loguru.logger.debug(f"Invalidating cache `{qa_splits_path}` and `{sections_paths}`")
-        if qa_splits_path.exists():
-            shutil.rmtree(qa_splits_path)
-        if sections_paths.exists():
-            shutil.rmtree(sections_paths)
+        # If not downloaded, download, process and save to disk
+        if not qa_splits_path.exists() or not sections_paths.exists():
+            frank_dset = _download_and_parse_frank(subset, self.frank_split, self.version, self.only_positive_sections)
+            frank_dset.qa_splits.save_to_disk(str(qa_splits_path))
+            frank_dset.sections.save_to_disk(str(sections_paths))
 
-    # If not downloaded, download, process and save to disk
-    if not qa_splits_path.exists() or not sections_paths.exists():
-        frank_dset = _download_and_parse_frank(config.subset, frank_split, version, only_positive_sections)
-        frank_dset.qa_splits.save_to_disk(str(qa_splits_path))
-        frank_dset.sections.save_to_disk(str(sections_paths))
+        if self.dataset_type == "sections":
+            return datasets.Dataset.load_from_disk(str(sections_paths))
 
-    if isinstance(config, vod_configs.SectionsDatasetConfig):
-        return datasets.Dataset.load_from_disk(str(sections_paths))
+        if self.dataset_type == "queries":
+            queries = datasets.DatasetDict.load_from_disk(str(qa_splits_path))
+            return _fetch_queries_split(queries, split=split)
 
-    if isinstance(config, vod_configs.QueriesDatasetConfig):
-        queries = datasets.DatasetDict.load_from_disk(str(qa_splits_path))
-        return _fetch_queries_split(queries, split=config.split)
-
-    raise TypeError(f"Unexpected config type {type(config)}")
+        raise TypeError(f"Unexpected dataset type: `{self.dataset_type}`")
 
 
 def _filter_by_kbid(row: dict, idx: Optional[int] = None, *, kb_id: int) -> bool:  # noqa: ARG001

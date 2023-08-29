@@ -39,7 +39,7 @@ def _load_one_dataset(
 
 def _load_dataset_from_config(config: vod_configs.BaseDatasetConfig, **kws: typing.Any) -> datasets.Dataset:
     """Load the dataset, process it according to the prompt template and return a HF dataset."""
-    loguru.logger.info("Loading dataset `{descriptor}`", descriptor=config.descriptor)
+    loguru.logger.info("Loading dataset `{descriptor}`", descriptor=config.identifier)
     subsets = config.subsets or [None]
     loaded_subsets = [_load_one_dataset(config.name_or_path, subset, split=config.split) for subset in subsets]
     return combine_datasets(loaded_subsets)

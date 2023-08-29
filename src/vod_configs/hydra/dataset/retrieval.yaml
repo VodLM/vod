@@ -15,28 +15,43 @@ search:
 training:
   queries:
     train:
-      - name: frank_a.en:train
-        link: frank_a.en
-      - name: squad.en:train
-        link: squad.en
+      - identifier: squad_en_train
+        name_or_path: squad_v2
+        split: train
+        link: squad_en_sections
+        options:
+          # Required to use the SQuAD contexts as targets
+          convert_subset_ids_to_targets: true
     val:
-      - name: frank_a.en:train
-        link: frank_a.en
+      - identifier: squad_en_val
+        name_or_path: squad_v2
+        split: validation
+        link: squad_en_sections
+        options:
+          # Required to use the SQuAD contexts as targets
+          convert_subset_ids_to_targets: true
 
   sections:
     sections:
-      - name: frank_a.en
-        search:
-          dense:
-            backend: qdrant
-      - name: squad.en
+      - identifier: squad_en_sections
+        name_or_path: squad_v2
         search:
           dense:
             backend: qdrant
 
 # Benchmarks
 benchmark:
-  - queries: frank_a.en:val
-    sections: frank_a.en
-  - queries: frank_b.en:val
-    sections: frank_b.en
+  - queries:
+      identifier: squad_en_val
+      name_or_path: squad_v2
+      split: validation
+      link: squad_en_sections
+      options:
+        # Required to use the SQuAD contexts as targets
+        convert_subset_ids_to_targets: true
+    sections:
+      identifier: squad_en_sections
+      name_or_path: squad_v2
+      search:
+        dense:
+          backend: faiss

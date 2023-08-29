@@ -9,6 +9,7 @@ from src.vod_tools import pipes
 
 DSET_DESCRIPTOR_KEY = "_DSET_ID_"
 DSET_LINK_KEY = "_LINK_"
+_LANGUAGE_KEY = "language"
 _UNDEFINED_LINK = object()
 
 
@@ -53,7 +54,7 @@ def postprocess_queries(
             _convert_subset_ids_to_targets,
             **_prep_map_kwargs(
                 config.prep_map_kwargs,
-                desc=f"{identifier}: Converting subset_ids to targets",
+                desc=f"{identifier}: Converting `subset_ids` to `section_ids` (targets)",
                 batched=False,
                 with_indices=False,
             ),
@@ -87,7 +88,12 @@ def _postprocessing(
     link: None | str | object = _UNDEFINED_LINK,
 ) -> datasets.Dataset:
     dset = _take_subset(dset, config.subset_size)
-    dset = _add_extras_attributes(dset, identifier=identifier, link=link)
+    dset = _add_extras_attributes(
+        dset,
+        identifier=identifier,
+        link=link,
+        set_language=config.set_language,
+    )
     return dset
 
 
@@ -103,6 +109,7 @@ def _add_extras(
 def _add_extras_attributes(
     dataset: datasets.Dataset,
     identifier: str,
+    set_language: None | str = None,
     link: None | str | object = _UNDEFINED_LINK,
 ) -> datasets.Dataset:
     """Add a descriptor to the dataset."""
@@ -111,6 +118,8 @@ def _add_extras_attributes(
         if link is not None and not isinstance(link, str):
             raise TypeError(f"Expected `link` to be a string or None, but got `{type(link)}`")
         xtras[DSET_LINK_KEY] = link  # type: ignore
+    if set_language is not None:
+        xtras[_LANGUAGE_KEY] = set_language
 
     return dataset.map(
         functools.partial(_add_extras, extras=xtras),

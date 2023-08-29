@@ -1,9 +1,5 @@
 # @package _global_
 
-defaults:
-  - override /dataset/templates: encode_lang
-  - _self_
-
 dataset:
   # Base search
   search:
@@ -17,63 +13,307 @@ dataset:
   training:
     queries:
       train:
-        - name: frank_a.en:train
-          link: frank_a.en
-        - name: squad.en:train
-          link: squad.en
-        - name: frank_a.da:train
-          link: frank_a.da
-        - name: squad.da:train
-          link: squad.da
-        - name: frank_a.de:train
-          link: frank_a.de
-        - name: squad.de:train
-          link: squad.de
-        - name: frank_a.fr:train
-          link: frank_a.fr
-        - name: squad.fr:train
-          link: squad.fr
-        - name: frank_a.is:train
-          link: frank_a.is
+        # Franks
+        - identifier: frank_a_en_train
+          name_or_path:
+            _target_: vod_datasets.FrankDatasetLoader
+            frank_split: A
+            what: queries
+          subsets: en
+          split: train
+          link: frank_a_en_sections
+        - identifier: frank_a_da_train
+          name_or_path:
+            _target_: vod_datasets.FrankDatasetLoader
+            frank_split: A
+            what: queries
+          subsets: da
+          split: train
+          link: frank_a_da_sections
+        - identifier: frank_a_de_train
+          name_or_path:
+            _target_: vod_datasets.FrankDatasetLoader
+            frank_split: A
+            what: queries
+          subsets: de
+          split: train
+          link: frank_a_de_sections
+        - identifier: frank_a_nl_train
+          name_or_path:
+            _target_: vod_datasets.FrankDatasetLoader
+            frank_split: A
+            what: queries
+          subsets: nl
+          split: train
+          link: frank_a_nl_sections
+        - identifier: frank_a_fr_train
+          name_or_path:
+            _target_: vod_datasets.FrankDatasetLoader
+            frank_split: A
+            what: queries
+          subsets: fr
+          split: train
+          link: frank_a_fr_sections
+        - identifier: frank_a_is_train
+          name_or_path:
+            _target_: vod_datasets.FrankDatasetLoader
+            frank_split: A
+            what: queries
+          subsets: is
+          split: train
+          link: frank_a_is_sections
+        # SQuADs
+        - identifier: squad_en_train
+          name_or_path: squad_v2
+          split: train
+          options:
+            set_language: en
+            convert_subset_ids_to_targets: True
+        - identifier: squad_fr_train
+          name_or_path: qwant/squad_fr
+          split: train
+          options:
+            set_language: fr
+            convert_subset_ids_to_targets: True
+        - identifier: squad_de_train
+          name_or_path: deepset/germanquad
+          split: train
+          options:
+            set_language: de
+            convert_subset_ids_to_targets: True
+        - identifier: squad_nl_train
+          name_or_path: yhavinga/squad_v2_dutch
+          split: train
+          options:
+            set_language: nl
+            convert_subset_ids_to_targets: True
+
       val:
-        - name: frank_a.en:train
-          link: frank_a.en
-        - name: frank_a.da:train
-          link: frank_a.da
-        - name: frank_a.de:train
-          link: frank_a.de
-        - name: frank_a.fr:train
-          link: frank_a.fr
-        - name: frank_a.is:train
-          link: frank_a.is
+        # Franks
+        - identifier: frank_a_en_train
+          name_or_path:
+            _target_: vod_datasets.FrankDatasetLoader
+            frank_split: A
+            what: queries
+          subsets: en
+          split: validation
+          link: frank_a_sections
+        - identifier: frank_a_da_train
+          name_or_path:
+            _target_: vod_datasets.FrankDatasetLoader
+            frank_split: A
+            what: queries
+          subsets: da
+          split: validation
+          link: frank_a_sections
+        - identifier: frank_a_de_train
+          name_or_path:
+            _target_: vod_datasets.FrankDatasetLoader
+            frank_split: A
+            what: queries
+          subsets: de
+          split: validation
+          link: frank_a_sections
+        - identifier: frank_a_nl_train
+          name_or_path:
+            _target_: vod_datasets.FrankDatasetLoader
+            frank_split: A
+            what: queries
+          subsets: nl
+          split: validation
+          link: frank_a_sections
+        - identifier: frank_a_fr_train
+          name_or_path:
+            _target_: vod_datasets.FrankDatasetLoader
+            frank_split: A
+            what: queries
+          subsets: fr
+          split: validation
+          link: frank_a_sections
+        - identifier: frank_a_is_train
+          name_or_path:
+            _target_: vod_datasets.FrankDatasetLoader
+            frank_split: A
+            what: queries
+          subsets: is
+          split: validation
+          link: frank_a_sections
 
     sections:
       sections:
-        - frank_a.en
-        - squad.en
-        - frank_a.da
-        - squad.da
-        - frank_a.de
-        - squad.de
-        - frank_a.fr
-        - squad.fr
-        - frank_a.is
-        - squad.is
-
+        # Franks
+        - identifier: frank_a_en_sections
+          name_or_path:
+            _target_: vod_datasets.FrankDatasetLoader
+            frank_split: A
+            what: sections
+          subsets: en
+        - identifier: frank_a_da_sections
+          name_or_path:
+            _target_: vod_datasets.FrankDatasetLoader
+            frank_split: A
+            what: sections
+          subsets: da
+        - identifier: frank_a_de_sections
+          name_or_path:
+            _target_: vod_datasets.FrankDatasetLoader
+            frank_split: A
+            what: sections
+          subsets: de
+        - identifier: frank_a_nl_sections
+          name_or_path:
+            _target_: vod_datasets.FrankDatasetLoader
+            frank_split: A
+            what: sections
+          subsets: nl
+        - identifier: frank_a_fr_sections
+          name_or_path:
+            _target_: vod_datasets.FrankDatasetLoader
+            frank_split: A
+            what: sections
+          subsets: fr
+        - identifier: frank_a_is_sections
+          name_or_path:
+            _target_: vod_datasets.FrankDatasetLoader
+            frank_split: A
+            what: sections
+          subsets: is
+        # SQuADs
+        - identifier: squad_en_sections
+          name_or_path: squad_v2
+          options:
+            set_language: en
+        - identifier: squad_fr_sections
+          name_or_path: qwant/squad_fr
+          options:
+            set_language: fr
+        - identifier: squad_de_sections
+          name_or_path: deepset/germanquad
+          options:
+            set_language: de
+        - identifier: squad_nl_sections
+          name_or_path: yhavinga/squad_v2_dutch
+          options:
+            set_language: nl
 
   # Benchmarks
   benchmark:
-    - queries: frank_a.en:val
-      sections: frank_a.en
-    - queries: frank_a.da:val
-      sections: frank_a.da
-    - queries: frank_b.en:val
-      sections: frank_b.en
-    - queries: frank_b.da:val
-      sections: frank_b.da
-    - queries: frank_b.de:val
-      sections: frank_b.de
-    - queries: frank_b.fr:val
-      sections: frank_b.fr
-    - queries: frank_b.is:val
-      sections: frank_b.is
+    # Frank A en
+    - queries:
+        identifier: frank_a_en_train
+        name_or_path:
+          _target_: vod_datasets.FrankDatasetLoader
+          frank_split: A
+          what: queries
+        subsets: en
+        split: validation
+        link: frank_a_en_sections
+      sections:
+        identifier: frank_a_en_sections
+        name_or_path:
+          _target_: vod_datasets.FrankDatasetLoader
+          frank_split: A
+          what: sections
+        subsets: en
+    # Frank B en
+    - queries:
+        identifier: frank_b_en_train
+        name_or_path:
+          _target_: vod_datasets.FrankDatasetLoader
+          frank_split: B
+          what: queries
+        subsets: en
+        split: train
+        link: frank_b_en_sections
+      sections:
+        identifier: frank_b_en_sections
+        name_or_path:
+          _target_: vod_datasets.FrankDatasetLoader
+          frank_split: B
+          what: sections
+        subsets: en
+    # Frank B fr
+    - queries:
+        identifier: frank_b_fr_train
+        name_or_path:
+          _target_: vod_datasets.FrankDatasetLoader
+          frank_split: B
+          what: queries
+        subsets: fr
+        split: train
+        link: frank_b_fr_sections
+      sections:
+        identifier: frank_b_fr_sections
+        name_or_path:
+          _target_: vod_datasets.FrankDatasetLoader
+          frank_split: B
+          what: sections
+        subsets: fr
+    # Frank B de
+    - queries:
+        identifier: frank_b_de_train
+        name_or_path:
+          _target_: vod_datasets.FrankDatasetLoader
+          frank_split: B
+          what: queries
+        subsets: de
+        split: train
+        link: frank_b_de_sections
+      sections:
+        identifier: frank_b_de_sections
+        name_or_path:
+          _target_: vod_datasets.FrankDatasetLoader
+          frank_split: B
+          what: sections
+        subsets: de
+    # Frank B nl
+    - queries:
+        identifier: frank_b_nl_train
+        name_or_path:
+          _target_: vod_datasets.FrankDatasetLoader
+          frank_split: B
+          what: queries
+        subsets: nl
+        split: train
+        link: frank_b_nl_sections
+      sections:
+        identifier: frank_b_nl_sections
+        name_or_path:
+          _target_: vod_datasets.FrankDatasetLoader
+          frank_split: B
+          what: sections
+        subsets: nl
+    # Frank B da
+    - queries:
+        identifier: frank_b_da_train
+        name_or_path:
+          _target_: vod_datasets.FrankDatasetLoader
+          frank_split: B
+          what: queries
+        subsets: da
+        split: train
+        link: frank_b_da_sections
+      sections:
+        identifier: frank_b_da_sections
+        name_or_path:
+          _target_: vod_datasets.FrankDatasetLoader
+          frank_split: B
+          what: sections
+        subsets: da
+    # Frank B is
+    - queries:
+        identifier: frank_b_is_train
+        name_or_path:
+          _target_: vod_datasets.FrankDatasetLoader
+          frank_split: B
+          what: queries
+        subsets: is
+        split: train
+        link: frank_b_is_sections
+      sections:
+        identifier: frank_b_is_sections
+        name_or_path:
+          _target_: vod_datasets.FrankDatasetLoader
+          frank_split: B
+          what: sections
+        subsets: is

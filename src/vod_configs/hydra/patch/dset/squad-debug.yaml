@@ -1,0 +1,59 @@
+# @package _global_
+
+dataset:
+  # Base search
+  search:
+    engines:
+      dense:
+        backend: qdrant
+      sparse:
+        backend: elasticsearch
+
+  # Train/val splits
+  training:
+    queries:
+      train:
+        - identifier: squad_en_train
+          name_or_path: squad_v2
+          split: train
+          link: squad_en_sections
+          options:
+            subset_size: 100
+            convert_subset_ids_to_targets: true
+      val:
+        - identifier: squad_en_val
+          name_or_path: squad_v2
+          split: validation
+          link: squad_en_sections
+          options:
+            subset_size: 100
+            convert_subset_ids_to_targets: true
+
+    sections:
+      sections:
+        - identifier: squad_en_sections
+          name_or_path: squad_v2
+          options:
+            subset_size: 1_000
+          search:
+            dense:
+              backend: qdrant
+
+  # Benchmarks
+  benchmark:
+    - queries:
+        identifier: squad_en_val
+        name_or_path: squad_v2
+        split: validation
+        link: squad_en_sections
+        options:
+          subset_size: 100
+          convert_subset_ids_to_targets: true
+      sections:
+        identifier: squad_en_sections
+        name_or_path: squad_v2
+        options:
+          subset_size: 1_000
+        search:
+          dense:
+            backend: faiss

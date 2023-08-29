@@ -50,7 +50,7 @@ class Adapter(typing.Generic[Im, Om], abc.ABC):
         if isinstance(x, dict):
             return cls.translate_row(x).model_dump()  # type: ignore
 
-        raise TypeError(f"Cannot translate input of type `{type(x)}`")
+        raise TypeError(f"Cannot adapt input of type `{type(x)}`")
 
     @classmethod
     def translate_row(cls: typing.Type[Self], row: dict[str, typing.Any]) -> Om:
@@ -63,6 +63,6 @@ class Adapter(typing.Generic[Im, Om], abc.ABC):
         return dset.map(
             AsDict(cls.translate_row),
             remove_columns=dset.column_names,
-            desc=f"Translating dataset using {cls.__name__}",
+            desc=f"Adapting dataset using {cls.__name__}",
             **kwargs,
         )
