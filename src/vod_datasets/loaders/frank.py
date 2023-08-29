@@ -17,7 +17,7 @@ import loguru
 import pydantic
 from rich.progress import track
 from vod_datasets.rosetta import models
-from vod_datasets.utlis import _fetch_queries_split, init_gcloud_filesystem
+from vod_datasets.utils import _fetch_queries_split, init_gcloud_filesystem
 
 from src import vod_configs
 

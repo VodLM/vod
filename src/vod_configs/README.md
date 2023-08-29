@@ -1,3 +1,3 @@
 # VOD - Configs
 
-`hydra` and `pydantic` configurations the VOD project
+`hydra` and `pydantic` configurations the VOD project.

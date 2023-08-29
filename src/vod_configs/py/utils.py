@@ -4,13 +4,13 @@ import pydantic
 
 
 class StrictModel(pydantic.BaseModel):
-    """A pydantic model with strict configuration."""
+    """A pydantic model with strict configuration (immutable, doesn't accept extra args)."""
 
     class Config:
         """Pydantic configuration."""
 
-        extra = "ignore"
-        frozen = False  # before named "frozen=True"
+        extra = "forbid"
+        frozen = True
         from_attributes = True
 
 

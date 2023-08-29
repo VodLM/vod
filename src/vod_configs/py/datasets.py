@@ -84,6 +84,10 @@ class DatasetOptions(StrictModel):
         Templates(),
         description="A set of templates used at preprocessing time.",
     )
+    convert_subset_ids_to_targets: bool = pydantic.Field(
+        default=False,
+        description="Convert the subset ids to targets.",
+    )
 
     # validators
     _validate_prep_map_kwargs = pydantic.field_validator("prep_map_kwargs", mode="before")(as_pyobj_validator)
@@ -103,10 +107,13 @@ class DatasetOptions(StrictModel):
 class BaseDatasetConfig(StrictModel):
     """Defines a dataset."""
 
-    class Config(StrictModel.Config):
+    class Config:
         """Pydantic config."""
 
-        arbitrary_types_allowed = True
+        arbitrary_types_allowed = True  # <- new attribute
+        extra = "forbid"
+        frozen = True
+        from_attributes = True
 
     identifier: str = pydantic.Field(
         ...,
@@ -144,7 +151,7 @@ class BaseDatasetConfig(StrictModel):
 
     _validate_options = pydantic.field_validator("options", mode="before")(as_pyobj_validator)
 
-    @pydantic.field_validator("name_or_path")
+    @pydantic.field_validator("name_or_path", mode="before")
     def validate_name_or_path(cls, value: str) -> str:
         """Validate the dataset name or path."""
         # Assuming datasets.get_dataset_config_names are accessible
@@ -161,27 +168,29 @@ class BaseDatasetConfig(StrictModel):
         """Validate the dataset subsets."""
         if not isinstance(self.name_or_path, str):
             return self
-        available_subsets = datasets.get_dataset_config_names(self.name_or_path)
+        with AllowMutations(self):
+            available_subsets = datasets.get_dataset_config_names(self.name_or_path)
 
-        if not self.subsets:
-            self.subsets = available_subsets
+            if not self.subsets:
+                self.subsets = available_subsets
 
-        invalid_subsets = set(self.subsets) - set(available_subsets)
-        if invalid_subsets:
-            raise ValueError(
-                f"Subsets {list(invalid_subsets)} not available for dataset. Available subsets: `{available_subsets}`"
-            )
-
-        # Check the splits & return
-        if self.split is None:
-            return self
-        for subset_name in self.subsets:
-            available_splits = datasets.get_dataset_split_names(self.name_or_path, subset_name)
-            if self.split not in available_splits:
+            invalid_subsets = set(self.subsets) - set(available_subsets)
+            if invalid_subsets:
                 raise ValueError(
-                    f"Split `{self.split}` not available for dataset `{self.name_or_path}`. "
-                    f"Available splits: {available_splits}"
+                    f"Subsets {list(invalid_subsets)} not available for dataset. "
+                    f"Available subsets: `{available_subsets}`"
                 )
+
+            # Check the splits & return
+            if self.split is None:
+                return self
+            for subset_name in self.subsets:
+                available_splits = datasets.get_dataset_split_names(self.name_or_path, subset_name)
+                if self.split not in available_splits:
+                    raise ValueError(
+                        f"Split `{self.split}` not available for dataset `{self.name_or_path}`. "
+                        f"Available splits: {available_splits}"
+                    )
 
         return self
 

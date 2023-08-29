@@ -15,7 +15,7 @@ import fsspec
 import loguru
 import pydantic
 from rich.progress import track
-from vod_datasets.utlis import init_gcloud_filesystem
+from vod_datasets.utils import init_gcloud_filesystem
 
 from .rosetta.models import (
     DATASETS_CACHE_PATH,

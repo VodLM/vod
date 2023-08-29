@@ -12,6 +12,17 @@ DSET_LINK_KEY = "_LINK_"
 _UNDEFINED_LINK = object()
 
 
+def _convert_subset_ids_to_targets(
+    row: dict[str, Any],
+    **kws: dict[str, Any],
+) -> dict[str, Any]:
+    """Convert the `subset_ids` to `section_ids` (targets)."""
+    return {
+        "section_ids": row["subset_ids"],
+        "subset_ids": [],
+    }
+
+
 def postprocess_queries(
     dset: datasets.Dataset,
     identifier: str,
@@ -27,10 +38,28 @@ def postprocess_queries(
             output_key="text",
             allow_missing=True,
         ),
-        **_prep_map_kwargs(config.prep_map_kwargs, desc=f"{identifier}: Post-processing questions"),
+        **_prep_map_kwargs(
+            config.prep_map_kwargs,
+            desc=f"{identifier}: Post-processing questions",
+        ),
     )
 
-    return _postprocessing(dset, identifier=identifier, config=config, link=link)
+    # Common post-processing (add extra attributes, etc.)
+    output = _postprocessing(dset, identifier=identifier, config=config, link=link)
+
+    # Convert `subset_ids` to `section_ids` (targets)
+    if config.convert_subset_ids_to_targets:
+        output = output.map(
+            _convert_subset_ids_to_targets,
+            **_prep_map_kwargs(
+                config.prep_map_kwargs,
+                desc=f"{identifier}: Converting subset_ids to targets",
+                batched=False,
+                with_indices=False,
+            ),
+        )
+
+    return output
 
 
 def postprocess_sections(
