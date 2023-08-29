@@ -4,6 +4,22 @@ from vod_datasets.rosetta import models, testing
 from .adapter import RenameQueryAdapter, RenameSectionAdapter
 
 
+def test_rename_dummy_queries() -> None:
+    """Test parsing dummy queries."""
+    dummy_queries = [
+        {
+            "question": "What is the meaning of life?",
+            "answer": ["42"],
+        },
+    ]
+    data = datasets.Dataset.from_list(dummy_queries)
+    return testing.test_parse_dataset(
+        data=data,
+        adapter_cls=RenameQueryAdapter,
+        output_model=models.QueryModel,
+    )
+
+
 def test_medwiki_as_sections() -> None:
     """Test parsing the MedWiki dataset."""
     return testing.test_parse_dataset(

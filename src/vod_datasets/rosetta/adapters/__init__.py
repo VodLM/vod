@@ -1,10 +1,7 @@
 from typing_extensions import Type
-from vod_datasets.rosetta.models import ModelType
+from vod_datasets.rosetta.models import DatasetType
 
 from .adapter import Adapter
-from .flan.adapter import (
-    FlanQueryAdapter,
-)
 from .identity.adapter import (
     IdentityQueryAdapter,
     IdentityQueryWithContextAdapter,
@@ -21,6 +18,9 @@ from .rename.adapter import (
 from .squad.adapter import (
     SquadQueryAdapter,
     SquadQueryWithContextsAdapter,
+)
+from .text_to_text.adapter import (
+    TextToTextQueryAdapter,
 )
 from .trivia_qa.adapter import (
     TriviaQaQueryAdapter,
@@ -40,7 +40,7 @@ KNOWN_QUERY_ADAPTERS: list[Type[Adapter]] = [
     MultipleChoiceQueryAdapter,
     TriviaQaQueryAdapter,
     SquadQueryAdapter,
-    FlanQueryAdapter,
+    TextToTextQueryAdapter,
 ]
 
 KNOWN_SECTION_ADAPTERS: list[Type[Adapter]] = [
@@ -48,7 +48,7 @@ KNOWN_SECTION_ADAPTERS: list[Type[Adapter]] = [
     RenameSectionAdapter,
 ]
 
-ROSETTA_ADAPTERS: dict[ModelType, list[Type[Adapter]]] = {
+ROSETTA_ADAPTERS: dict[DatasetType, list[Type[Adapter]]] = {
     "queries_with_context": KNOWN_QUERY_WITH_CONTEXT_ADAPTERS,
     "queries": KNOWN_QUERY_ADAPTERS,
     "sections": KNOWN_SECTION_ADAPTERS,

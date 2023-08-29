@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import collections
 import re
-from typing import Any, Iterable, Literal, Optional, TypeVar
+from typing import Any, Iterable, Literal, Optional, Protocol, TypeVar, Union, runtime_checkable
 
 import datasets
 import omegaconf
 import pydantic
-import vod_datasets
 from typing_extensions import Self, Type
 from vod_tools.misc.config import as_pyobj_validator
 
@@ -15,6 +14,15 @@ from .search import MutliSearchFactoryConfig, MutliSearchFactoryDiff, SearchFact
 from .utils import AllowMutations, StrictModel
 
 DsetDescriptorRegex = re.compile(r"^(?P<name>[A-Za-z_]+)(|.(?P<subset>[A-Za-z_]+))(|:(?P<split>[A-Za-z_]+))$")
+
+
+@runtime_checkable
+class DatasetLoader(Protocol):
+    """A dataset loader."""
+
+    def __call__(self, subset: None | str = None, split: None | str = None, **kwargs: Any) -> datasets.Dataset:
+        """Load a dataset."""
+        ...
 
 
 class Templates(StrictModel):
@@ -72,12 +80,6 @@ class DatasetOptions(StrictModel):
         default=None,
         description="Take a subset of the dataset.",
     )
-    filter_unused_sections: bool = pydantic.Field(
-        default=False, description="Filter out sections that are not used in the QA split."
-    )
-    min_section_tokens: Optional[int] = pydantic.Field(
-        default=None, description="Filter out sections with less than `min_section_tokens` tokens."
-    )
     templates: Templates = pydantic.Field(
         Templates(),
         description="A set of templates used at preprocessing time.",
@@ -101,11 +103,16 @@ class DatasetOptions(StrictModel):
 class BaseDatasetConfig(StrictModel):
     """Defines a dataset."""
 
+    class Config(StrictModel.Config):
+        """Pydantic config."""
+
+        arbitrary_types_allowed = True
+
     identifier: str = pydantic.Field(
         ...,
         description="Name of the dataset, or descriptor with pattern `name.subset:split`.",
     )
-    name_or_path: str = pydantic.Field(
+    name_or_path: Union[str, DatasetLoader] = pydantic.Field(
         ...,
         description="Path to the dataset loader (overrides `name`)",
     )
@@ -141,6 +148,8 @@ class BaseDatasetConfig(StrictModel):
     def validate_name_or_path(cls, value: str) -> str:
         """Validate the dataset name or path."""
         # Assuming datasets.get_dataset_config_names are accessible
+        if not isinstance(value, str):
+            return value
         try:
             datasets.get_dataset_config_names(value)
             return value
@@ -150,6 +159,8 @@ class BaseDatasetConfig(StrictModel):
     @pydantic.model_validator(mode="after")
     def validate_subsets_and_splits(self) -> Self:
         """Validate the dataset subsets."""
+        if not isinstance(self.name_or_path, str):
+            return self
         available_subsets = datasets.get_dataset_config_names(self.name_or_path)
 
         if not self.subsets:
@@ -211,7 +222,10 @@ class QueriesDatasetConfig(BaseDatasetConfig):
     """Defines a query dataset."""
 
     field: Literal["query"] = "query"
-    link: Optional[str] = pydantic.Field(None, description="Dataset to search into (identifier)")
+    link: Optional[str] = pydantic.Field(
+        None,
+        description="Identifier of the `Sections` dataset to search into.",
+    )
 
     @pydantic.field_validator("link", mode="before")
     def _validate_link(cls, value: Optional[str]) -> Optional[str]:
@@ -229,6 +243,9 @@ class SectionsDatasetConfig(BaseDatasetConfig):
         None,
         description="Search config diffs for this dataset",
     )
+
+
+DatasetConfig = Union[QueriesDatasetConfig, SectionsDatasetConfig]
 
 
 def _parse_dataset_descriptor(
@@ -460,7 +477,7 @@ class DatasetsConfig(StrictModel):
         self,
         what: None | Literal["all", "queries", "sections"] = None,
         split: None | Literal["all", "train", "val", "train+val", "benchmark"] = None,
-    ) -> Iterable[BaseDatasetConfig]:
+    ) -> Iterable[DatasetConfig]:
         """Iterate over the dataset configs."""
         what = what or "all"
         split = split or "all"
@@ -482,12 +499,3 @@ class DatasetsConfig(StrictModel):
                     yield benchmark.queries
                 if what in ["all", "sections"]:
                     yield benchmark.sections
-
-    def load_datasets(
-        self,
-        what: None | Literal["all", "queries", "sections"] = None,
-        split: None | Literal["all", "train", "val", "train+val", "benchmark"] = None,
-    ) -> Iterable[datasets.Dataset]:
-        """Load the datasets."""
-        for config in self.get_dataset_configs(what=what, split=split):
-            yield vod_datasets.load_dataset(config)

@@ -7,6 +7,8 @@ from .py.dataloaders import (
 )
 from .py.datasets import (
     BaseDatasetConfig,
+    DatasetConfig,
+    DatasetLoader,
     DatasetOptions,
     DatasetsConfig,
     DsetDescriptorRegex,

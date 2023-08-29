@@ -1,10 +1,32 @@
 from __future__ import annotations
 
+import typing
+
+import datasets
 import rich
-import vod_configs
 from vod_tools import arguantic
 
-from src import vod_datasets
+from src import (
+    vod_configs,
+    vod_datasets,
+)
+
+
+def my_loader(
+    subset: str | None = None,  # noqa: ARG001
+    split: str | None = None,  # noqa: ARG001
+    **kws: dict[str, typing.Any],
+) -> datasets.Dataset:
+    """Define a custom data loader."""
+    return datasets.Dataset.from_list(
+        [
+            {
+                "question": "What is the meaning of life?",
+                "answer": "42",
+            },
+        ]
+    )
+
 
 DATASET_CONFIGS = {
     "msmarco": {
@@ -56,6 +78,10 @@ DATASET_CONFIGS = {
         "name_or_path": "Muennighoff/flan",
         "split": "test",
     },
+    "my_data": {
+        "identifier": "my_data",
+        "name_or_path": my_loader,
+    },
 }
 
 
@@ -72,11 +98,13 @@ def run(args: Args) -> None:
     except KeyError as exc:
         raise KeyError(f"Configuration for `{args.name}` not found!") from exc
 
-    dset = vod_datasets.load_queries(vod_configs.BaseDatasetConfig(**config))
+    dset = vod_datasets.load_dataset(
+        vod_configs.QueriesDatasetConfig(**config),
+    )
     rich.print(dset)
     rich.print(dset[0])
 
-    dset = vod_datasets.load_sections(vod_configs.BaseDatasetConfig(**config))
+    dset = vod_datasets.load_dataset(vod_configs.SectionsDatasetConfig(**config))
     rich.print(dset)
     rich.print(dset[0])
 

@@ -14,6 +14,7 @@ import datasets
 import fsspec
 import loguru
 import pydantic
+from vod_datasets.utils import _fetch_queries_split, init_gcloud_filesystem
 
 from src import vod_configs
 

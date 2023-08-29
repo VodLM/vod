@@ -3,7 +3,6 @@ import functools
 import typing
 
 import datasets
-import rich
 import xxhash
 from vod_datasets.rosetta import models
 
@@ -123,7 +122,6 @@ def isolate_qa_and_sections(
         desc="Assigning subset IDs",
         remove_columns=[k for k in ["contexts", "titles"] if k in data.column_names],
     )
-    rich.print({"queries": queries})
 
     # Clean up the queries and return
     return QueriesWithSections(

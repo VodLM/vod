@@ -10,7 +10,7 @@ import pydantic
 VOD_CACHE_DIR = str(pathlib.Path(os.environ.get("VOD_CACHE_DIR", "~/.cache/vod")).expanduser())
 DATASETS_CACHE_PATH = str(pathlib.Path(VOD_CACHE_DIR, "datasets"))
 
-ModelType = typing.Literal["queries_with_context", "queries", "sections"]
+DatasetType = typing.Literal["queries_with_context", "queries", "sections"]
 
 
 class QueryModel(pydantic.BaseModel):

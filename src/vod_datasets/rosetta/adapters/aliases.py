@@ -62,3 +62,16 @@ CHOICES_ALIASES = pydantic.AliasChoices(
     "options",
     "candidates",
 )
+
+INPUT_TEXTS = pydantic.AliasChoices(
+    "inputs",
+    "prompt",
+    "question",
+    "query",
+)
+TARGET_TEXTS = pydantic.AliasChoices(
+    "targets",
+    "answer",
+    "response",
+    "completion",
+)
