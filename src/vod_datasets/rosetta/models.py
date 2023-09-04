@@ -3,8 +3,8 @@ from __future__ import annotations  # noqa: I001
 import os
 import pathlib
 import typing
-import uuid
 
+import uuid
 import pydantic
 
 VOD_CACHE_DIR = str(pathlib.Path(os.environ.get("VOD_CACHE_DIR", "~/.cache/vod")).expanduser())
@@ -17,46 +17,49 @@ class QueryModel(pydantic.BaseModel):
     """A base query data model."""
 
     id: str = pydantic.Field(
-        default=uuid.uuid4().hex,
+        default_factory=lambda: uuid.uuid4().hex,
         description="The unique identifier for the query.",
     )
     query: str = pydantic.Field(
         ...,
-        description="The text of the question or query. This input text is used for a Language Model to process.",
+        description="The text of the question or query or instructions.",
     )
-    answer: list[str] = pydantic.Field(
+    answers: list[str] = pydantic.Field(
         default=[],
         description=(
-            "The generated response or answer text that a Language Model should associate to a given query. "
-            "Required for generative tasks, optional for retrieval and ranking tasks."
+            "A list of possible answers or completions for the query. "
+            "This can be used to encoded aliases for generative tasks or answer choices for multiple choice tasks."
         ),
     )
-    choices: list[str] = pydantic.Field(
+    answer_scores: list[float] = pydantic.Field(
         default=[],
         description=(
-            "A list of strings representing the possible answers to the query. "
-            "Required for retrieval and ranking tasks, optional for generative tasks."
+            "Unnormalized scores for each answer. "
+            "This can encode a multiple-choice problem or a ranking of preferences."
         ),
     )
-    section_ids: list[str] = pydantic.Field(
+    retrieval_ids: list[str] = pydantic.Field(
         default=[],
-        description="A list of labels `section.uid`.",
+        description="A list of target section IDs `section.id` for the given query.",
     )
     subset_ids: list[str] = pydantic.Field(
         default=[],
-        description="An optional ID representing a subset of data",
+        description="An optional ID representing a subset of data to search over.",
     )
-    language: str = pydantic.Field(
-        default="en",
-        description="The written language of the query, specified as a string.",
-    )
+
+    @pydantic.model_validator(mode="after")
+    def _validate_answers_and_scores(self) -> "QueryModel":
+        """Validate the answers and scores."""
+        if len(self.answers) != len(self.answer_scores):
+            raise ValueError("The number of answers must match the number of answer scores.")
+        return self
 
 
 class SectionModel(pydantic.BaseModel):
     """A base section data model."""
 
     id: str = pydantic.Field(
-        default=uuid.uuid4().hex,
+        ...,
         description="The unique identifier for the section.",
     )
     content: str = pydantic.Field(
@@ -69,11 +72,7 @@ class SectionModel(pydantic.BaseModel):
     )
     subset_id: typing.Optional[str] = pydantic.Field(
         default=None,
-        description="An optional ID representing a target subset of sections.",
-    )
-    language: str = pydantic.Field(
-        default="en",
-        description="The written language of the section's content, specified as a string.",
+        description="An optional ID representing a subset of knowledge.",
     )
 
 

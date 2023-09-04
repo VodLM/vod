@@ -122,7 +122,7 @@ class QdrantSearchClient(base.SearchClient):
         if vector is None:
             raise ValueError("vector cannot be None")
         if self.supports_groups and group is None:
-            warnings.warn(f"This `{type(self).__name__}` supports group, but no label is provided.", stacklevel=2)
+            warnings.warn(f"This `{type(self).__name__}` supports subsets, but no label is provided.", stacklevel=2)
 
         def _get_filter(group: None | str | int) -> None | qdrm.Filter:
             if group is None:
@@ -191,7 +191,7 @@ class QdrantSearchMaster(base.SearchMaster[QdrantSearchClient], abc.ABC):
         self,
         vectors: dstruct.SizedDataset[np.ndarray],
         *,
-        groups: Optional[Iterable[str | int]] = None,
+        subset_ids: Optional[Iterable[str | int]] = None,
         host: str = "http://localhost",
         port: int = 6333,
         grpc_port: None | int = 6334,
@@ -209,7 +209,7 @@ class QdrantSearchMaster(base.SearchMaster[QdrantSearchClient], abc.ABC):
         self._port = port
         self._grpc_port = grpc_port
         self._vectors = vectors
-        self._input_groups = groups
+        self._input_groups = subset_ids
         if index_name is None:
             index_name = f"auto-{uuid.uuid4().hex}"
         self._index_name = index_name

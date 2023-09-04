@@ -40,8 +40,8 @@ class SearchClient(abc.ABC):
         *,
         text: list[str],
         vector: Optional[rdtypes.Ts] = None,
-        group: Optional[list[str | int]] = None,
-        section_ids: Optional[list[list[str | int]]] = None,
+        subset_ids: Optional[list[list[str]]] = None,
+        section_ids: Optional[list[list[str]]] = None,
         shard: Optional[list[str]] = None,
         top_k: int = 3,
     ) -> rdtypes.RetrievalBatch[rdtypes.Ts]:
@@ -53,8 +53,8 @@ class SearchClient(abc.ABC):
         *,
         text: list[str],
         vector: Optional[rdtypes.Ts] = None,
-        group: Optional[list[str | int]] = None,
-        section_ids: Optional[list[list[str | int]]] = None,
+        subset_ids: Optional[list[list[str]]] = None,
+        section_ids: Optional[list[list[str]]] = None,
         shard: Optional[list[str]] = None,
         top_k: int = 3,
     ) -> rdtypes.RetrievalBatch[rdtypes.Ts]:
@@ -62,7 +62,7 @@ class SearchClient(abc.ABC):
         return self.search(
             text=text,
             vector=vector,
-            group=group,
+            subset_ids=subset_ids,
             section_ids=section_ids,
             shard=shard,
             top_k=top_k,

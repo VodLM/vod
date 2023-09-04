@@ -98,8 +98,7 @@ class BaseSearchFactoryConfig(StrictModel):
     """Base config for all search engines."""
 
     backend: SearchBackends = pydantic.Field(..., description="Search backend to use.")
-    text_key: str = pydantic.Field("text", description="Text field to be indexed.")
-    group_key: Optional[str] = pydantic.Field("group", description="Group field to be indexed.")
+    subset_id_key: Optional[str] = pydantic.Field("subset_id", description="Subset ID field to be indexed.")
     section_id_key: Optional[str] = pydantic.Field("id", description="Section ID field to be indexed.")
 
 
@@ -107,7 +106,6 @@ class BaseSearchFactoryDiff(StrictModel):
     """Relative search configs."""
 
     backend: SearchBackends
-    text_key: Optional[str] = None
     group_key: Optional[str] = None
     section_id_key: Optional[str] = None
 
@@ -175,13 +173,14 @@ class ElasticsearchFactoryConfig(BaseSearchFactoryConfig):
     host: str = "http://localhost"
     port: int = 9200
     persistent: bool = True
+    section_template: str = r"{{ title }} {{ content }}"
     es_body: Optional[dict] = None
 
     def __add__(self, diff: None | ElasticsearchFactoryDiff) -> Self:
         if diff is None:
             return self
         diffs = {k: v for k, v in diff if v is not None}
-        return self.copy(update=diffs)
+        return self.model_copy(update=diffs)
 
     @pydantic.field_validator("es_body", mode="before")
     def _validate_es_body(cls, v: dict | None) -> dict | None:
@@ -192,7 +191,7 @@ class ElasticsearchFactoryConfig(BaseSearchFactoryConfig):
     def fingerprint(self) -> str:
         """Return a fingerprint for this config."""
         excludes = {"host", "port", "persistent"}
-        return pipes.fingerprint(self.dict(exclude=excludes))
+        return pipes.fingerprint(self.model_dump(exclude=excludes))
 
 
 class QdrantFactoryDiff(BaseSearchFactoryDiff):

@@ -42,7 +42,7 @@ class HybridSearchClient(base.SearchClient):
             name: client.search(
                 vector=vector,
                 text=text,
-                group=group,
+                subset_ids=group,
                 section_ids=section_ids,
                 shard=shard,
                 top_k=top_k,

@@ -1,14 +1,18 @@
 import datasets
 from vod_datasets.rosetta import models, testing
 
-from .adapter import IdentityQueryAdapter, IdentityQueryWithContextAdapter, IdentitySectionAdapter
+from src.vod_datasets.rosetta.adapters.identity import (
+    IdentityQueryAdapter,
+    IdentityQueryWithContextAdapter,
+    IdentitySectionAdapter,
+)
 
 
 def test_identity_dummy_queries() -> None:
     """Test parsing dummy queries."""
     dummy_queries = [
         {
-            "uid": "1",
+            "id": "1",
             "query": "What is the meaning of life?",
             "answer": ["42"],
         },
@@ -25,7 +29,7 @@ def test_identity_dummy_sections() -> None:
     """Test parsing dummy sections."""
     dummy_sections = [
         {
-            "uid": "1",
+            "id": "1",
             "title": "title1",
             "content": "text1",
         },
@@ -42,7 +46,7 @@ def test_identity_dummy_query_with_contexts() -> None:
     """Test parsing dummy query with contexts."""
     dummy_data = [
         {
-            "uid": "1",
+            "id": "1",
             "query": "What is the meaning of life?",
             "answer": ["42"],
             "contexts": [

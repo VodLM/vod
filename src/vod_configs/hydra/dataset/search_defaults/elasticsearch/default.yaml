@@ -1,16 +1,19 @@
 text_key: text
-group_key: group_hash
+subset_id_key: subset_id
 persistent: true
 es_body:
   # defining a mapping will help: (1) optimize the performance, (2) save disk space
   mappings:
     properties:
-      body: # section content
+      __body__: # section content
         type: text
-      group: # group hash
-        type: long
-      section_id: # local section id
-        type: long
+        analyzer: custom
+      __subset_id__: # susbet ID
+        type: keyword
+        ignore_above: 1024
+      __section_id__: # section/document ID
+        type: keyword
+        ignore_above: 1024
       __row_idx__: # index of the section in the dataset
         type: unsigned_long
         # Prevents the inverted index and doc values from being created

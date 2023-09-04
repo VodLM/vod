@@ -33,7 +33,7 @@ def run(args: Args) -> None:
     # Spin up a server
     with qdrant_search.QdrantSearchMaster(
         vectors=vectors,  # type: ignore
-        groups=groups,
+        subset_ids=groups,
         index_name=index_name,
         qdrant_body={
             "shard_number": 1,

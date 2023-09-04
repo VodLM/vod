@@ -35,6 +35,9 @@ training:
     sections:
       - identifier: squad_en_sections
         name_or_path: squad_v2
+        options:
+          # Required to use the SQuAD contexts as targets
+          convert_subset_ids_to_targets: true
         search:
           dense:
             backend: qdrant
@@ -49,9 +52,13 @@ benchmark:
       options:
         # Required to use the SQuAD contexts as targets
         convert_subset_ids_to_targets: true
+
     sections:
       identifier: squad_en_sections
       name_or_path: squad_v2
+      options:
+        # Required to use the SQuAD contexts as targets
+        convert_subset_ids_to_targets: true
       search:
         dense:
           backend: faiss

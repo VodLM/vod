@@ -3,7 +3,7 @@ import typing
 import pydantic
 from typing_extensions import Self, Type
 from vod_datasets.rosetta import models
-from vod_datasets.rosetta.adapters import adapter
+from vod_datasets.rosetta.adapters import base
 
 
 class AnswerDict(pydantic.BaseModel):
@@ -33,7 +33,7 @@ class TriviaQaQueryWithContextsModel(TriviaQaQueryModel):
     entity_pages: EntityPages
 
 
-class TriviaQaQueryAdapter(adapter.Adapter[TriviaQaQueryModel, models.QueryModel]):
+class TriviaQaQueryAdapter(base.Adapter[TriviaQaQueryModel, models.QueryModel]):
     """Handle Squad-like answer dicts with context dicts (e.g., TriviaQA)."""
 
     input_model = TriviaQaQueryModel
@@ -46,11 +46,12 @@ class TriviaQaQueryAdapter(adapter.Adapter[TriviaQaQueryModel, models.QueryModel
         return cls.output_model(
             id=m.question_id,
             query=m.question,
-            answer=m.answer.aliases,
+            answers=m.answer.aliases,
+            answer_scores=[1.0] * len(m.answer.aliases),
         )
 
 
-class TriviaQaQueryWithContextsAdapter(adapter.Adapter[TriviaQaQueryWithContextsModel, models.QueryWithContextsModel]):
+class TriviaQaQueryWithContextsAdapter(base.Adapter[TriviaQaQueryWithContextsModel, models.QueryWithContextsModel]):
     """Handle Squad-like answer dicts with context dicts (e.g., TriviaQA)."""
 
     input_model = TriviaQaQueryWithContextsModel
@@ -63,7 +64,8 @@ class TriviaQaQueryWithContextsAdapter(adapter.Adapter[TriviaQaQueryWithContexts
         return cls.output_model(
             id=m.question_id,
             query=m.question,
-            answer=m.answer.aliases,
+            answers=m.answer.aliases,
+            answer_scores=[1.0] * len(m.answer.aliases),
             contexts=m.entity_pages.wiki_context,
             titles=m.entity_pages.title,
         )

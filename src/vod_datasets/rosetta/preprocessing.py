@@ -1,21 +1,23 @@
 import dataclasses
-import functools
+import re
 import typing
 
 import datasets
 import xxhash
+from datasets import fingerprint
 from vod_datasets.rosetta import models
 
 T = typing.TypeVar("T")
+ALPHANUM_PATTERN = re.compile(r"[^\w]|[\s]")
 
 
-def _compute_section_hash(section: models.SectionModel) -> str:
+def _compute_section_hash(content: str, title: None | str) -> str:
     """Get the hash of the section."""
     hasher = xxhash.xxh128()
-    hasher.update(section.content)
-    if section.title is not None:
-        hasher.update(section.title)
-    return hasher.hexdigest()
+    hasher.update(content)
+    if title is not None:
+        hasher.update(title)
+    return f"{hasher.hexdigest()}-{len(content)}"  # add the length to be extra careful with collisions
 
 
 @dataclasses.dataclass
@@ -33,34 +35,58 @@ class QueriesWithSections(typing.Generic[T]):
             raise KeyError(f"Invalid key `{idx}`. Valid keys are `{list(self.__dict__.keys())}`") from exc
 
 
-def _is_idx_in(row: dict, idx: int, *, allowed_ids: list[int]) -> bool:  # noqa: ARG001
-    """Check if an index is in a row."""
-    return idx in allowed_ids
+class _ExtractSections:
+    query_with_context_model: typing.Type[models.QueryWithContextsModel]
+    section_model: typing.Type[models.SectionModel]
 
+    def __init__(
+        self,
+        query_with_context_model: typing.Type[models.QueryWithContextsModel],
+        section_model: typing.Type[models.SectionModel],
+    ) -> None:
+        """Initialize the class."""
+        self.query_with_context_model = query_with_context_model
+        self.section_model = section_model
 
-def _extract_sections(batch: dict[str, list[typing.Any]], idx: list[int]) -> dict[str, list[typing.Any]]:
-    """Extract sections from a batch."""
-    keys = list(batch.keys())
-    flattened_sections = []
-    for t, _ in enumerate(idx):
-        row = {k: batch[k][t] for k in keys}
-        row_ = models.QueryWithContextsModel(**row)
-        for j, content in enumerate(row_.contexts):
-            title = row_.titles[j] if row_.titles is not None else None
-            flattened_sections.append(
-                models.SectionModel(
-                    content=content,
-                    title=title,
-                    language=row_.language,
+    """A utility function to extract sections."""
+
+    def __call__(self, batch: dict[str, list[typing.Any]], idx: list[int]) -> dict[str, list[typing.Any]]:
+        """Extract sections from a batch."""
+        keys = list(batch.keys())
+        flattened_sections = []
+        for t, _ in enumerate(idx):
+            row = {k: batch[k][t] for k in keys}
+            row_ = self.query_with_context_model(**row)
+            for j, content in enumerate(row_.contexts):
+                title = row_.titles[j] if row_.titles is not None else None
+                section_hash = _compute_section_hash(content, title)
+                flattened_sections.append(
+                    self.section_model(
+                        content=content,
+                        title=title,
+                        id=section_hash,
+                        subset_id=section_hash,
+                    )
                 )
-            )
 
-    return {
-        "content": [s.content for s in flattened_sections],
-        "title": [s.title for s in flattened_sections],
-        "language": [s.language for s in flattened_sections],
-        "subset_id": [_compute_section_hash(s) for s in flattened_sections],
-    }
+        return {
+            "content": [s.content for s in flattened_sections],
+            "title": [s.title for s in flattened_sections],
+            "id": [s.id for s in flattened_sections],
+            "subset_id": [s.subset_id for s in flattened_sections],
+        }
+
+
+@fingerprint.hashregister(_ExtractSections)
+def _hash_extract_sections(hasher: datasets.fingerprint.Hasher, obj: _ExtractSections) -> str:
+    """Register the `_IsIdxIn` class to work with `datasets.map()`."""
+    return hasher.hash(
+        {
+            "cls": obj.__class__,
+            "query_with_context_model": obj.query_with_context_model,
+            "section_model": obj.section_model,
+        }
+    )
 
 
 def _extract_queries_and_assign_subset_ids(row: dict[str, typing.Any]) -> dict[str, typing.Any]:
@@ -69,44 +95,85 @@ def _extract_queries_and_assign_subset_ids(row: dict[str, typing.Any]) -> dict[s
     sections = []
     for i, section in enumerate(row_.contexts):
         title = row_.titles[i] if row_.titles is not None else None
+        section_hash = _compute_section_hash(section, title)
         sections.append(
             models.SectionModel(
                 content=section,
                 title=title,
-                language=row_.language,
+                id=section_hash,
+                subset_id=section_hash,
             )
         )
-    return {"subset_ids": [_compute_section_hash(s) for s in sections]}
+    return {"subset_ids": [s.subset_id for s in sections]}
+
+
+class _IsIdxIn:
+    """A utility function to filer unique sections.
+
+    The `_allowed_ids` is built lazily so the whole operation can be hashed and cached by `datasets.map()`.
+    """
+
+    _allowed_ids: None | list[int]
+    sections: datasets.Dataset
+
+    def __init__(self, sections: datasets.Dataset) -> None:
+        self.sections = sections
+        self._allowed_ids = None
+
+    @staticmethod
+    def _build_allowed_ids(sections: datasets.Dataset) -> list[int]:
+        """Build the allowed IDs."""
+        subset_ids: dict[str, int] = {}
+        for idx, row in enumerate(sections):
+            row_ = models.SectionModel(**row)  # type: ignore
+            if row_.subset_id is None:
+                raise ValueError(f"Row `{row}` does not have a subset ID.")
+            if row_.subset_id not in subset_ids:
+                subset_ids[row_.subset_id] = idx
+        return list(subset_ids.values())
+
+    def __call__(self, row: dict, idx: int) -> bool:  # noqa: ARG
+        """Check if an index is in a row."""
+        if self._allowed_ids is None:
+            self._allowed_ids = self._build_allowed_ids(self.sections)
+        return idx in self._allowed_ids
+
+
+@fingerprint.hashregister(_IsIdxIn)
+def _hash_is_idx_in(hasher: datasets.fingerprint.Hasher, obj: _IsIdxIn) -> str:
+    """Register the `_IsIdxIn` class to work with `datasets.map()`."""
+    return hasher.hash(
+        {
+            "cls": obj.__class__,
+            "sections": obj.sections._fingerprint,
+        }
+    )
 
 
 def isolate_qa_and_sections(
-    data: datasets.Dataset | datasets.DatasetDict,
+    data: datasets.Dataset,
     num_proc: int = 4,
 ) -> QueriesWithSections[datasets.Dataset]:
     """Preprocess the data into a retrieval dataset.
 
-    Each unique `context` will be converted into a section. The `subset_id` will be used to link queries to sections.
+    Each unique `context` will be converted into a section.
+    The `subset_id` will be used to link queries to sections.
+    NB: make sure to sort the `remove_columns` to ensure the fingerprint is consistent.
     """
     sections = data.map(
-        _extract_sections,
+        _ExtractSections(
+            query_with_context_model=models.QueryWithContextsModel,
+            section_model=models.SectionModel,
+        ),
         batched=True,
         with_indices=True,
         num_proc=num_proc,
         desc="Extracting sections",
-        remove_columns=list(data.column_names),
+        remove_columns=sorted(set(data.column_names) - {"id"}),
     )
 
-    # Filter out duplicate sections
-    section_unique_ids: dict[str, int] = {}
-    for idx, row in enumerate(sections):
-        row_ = models.SectionModel(**row)  # type: ignore
-        if row_.subset_id is None:
-            raise ValueError(f"Row `{row}` does not have a subset ID.")
-        if row_.subset_id not in section_unique_ids:
-            section_unique_ids[row_.subset_id] = idx
-
     sections = sections.filter(
-        functools.partial(_is_idx_in, allowed_ids=list(section_unique_ids.values())),
+        _IsIdxIn(sections),
         num_proc=num_proc,
         with_indices=True,
         batched=False,
@@ -120,7 +187,7 @@ def isolate_qa_and_sections(
         with_indices=False,
         num_proc=num_proc,
         desc="Assigning subset IDs",
-        remove_columns=[k for k in ["contexts", "titles"] if k in data.column_names],
+        remove_columns=sorted([k for k in ["contexts", "titles"] if k in data.column_names]),
     )
 
     # Clean up the queries and return

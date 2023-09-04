@@ -4,7 +4,7 @@ import uuid
 import pydantic
 from typing_extensions import Self, Type
 from vod_datasets.rosetta import models
-from vod_datasets.rosetta.adapters import adapter, aliases, contextual
+from vod_datasets.rosetta.adapters import aliases, base, contextual
 
 ANSWER_CHOICES_LETTERS = typing.Literal["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]
 
@@ -23,7 +23,7 @@ class MultipleChoiceQueryModel(pydantic.BaseModel):
     """A multiple-choice query."""
 
     id: str = pydantic.Field(
-        default=uuid.uuid4().hex,
+        default_factory=lambda: uuid.uuid4().hex,
         description="The unique identifier for the query.",
         validation_alias=aliases.QUERY_ID_ALIASES,
     )
@@ -41,7 +41,7 @@ class MultipleChoiceQueryModel(pydantic.BaseModel):
     )
 
 
-class MultipleChoiceQueryAdapter(adapter.Adapter[MultipleChoiceQueryModel, models.QueryModel]):
+class MultipleChoiceQueryAdapter(base.Adapter[MultipleChoiceQueryModel, models.QueryModel]):
     """An adapter for multiple-choice datasets."""
 
     input_model = MultipleChoiceQueryModel
@@ -52,11 +52,13 @@ class MultipleChoiceQueryAdapter(adapter.Adapter[MultipleChoiceQueryModel, model
         """Translate a row."""
         m = cls.input_model(**row)
         a_idx = _answer_to_int(m.answer)
+        scores = [0.0] * len(m.choices)
+        scores[a_idx] = 1.0
         return cls.output_model(
             id=m.id,
             query=m.query,
-            choices=m.choices,
-            answer=[m.choices[a_idx]],
+            answers=m.choices,
+            answer_scores=scores,
         )
 
 
@@ -65,7 +67,7 @@ class MultipleChoiceQueryWithContextsModel(MultipleChoiceQueryModel, contextual.
 
 
 class MultipleChoiceQueryWithContextAdapter(
-    adapter.Adapter[MultipleChoiceQueryWithContextsModel, models.QueryWithContextsModel]
+    base.Adapter[MultipleChoiceQueryWithContextsModel, models.QueryWithContextsModel]
 ):
     """An adapter for contextual multiple-choice queries."""
 
@@ -77,11 +79,13 @@ class MultipleChoiceQueryWithContextAdapter(
         """Translate a row."""
         m = cls.input_model(**row)
         a_idx = _answer_to_int(m.answer)
+        scores = [0.0] * len(m.choices)
+        scores[a_idx] = 1.0
         return cls.output_model(
             id=m.id,
             query=m.query,
-            choices=m.choices,
-            answer=[m.choices[a_idx]],
+            answers=m.choices,
+            answer_scores=scores,
             contexts=m.contexts,
             titles=m.titles,
         )

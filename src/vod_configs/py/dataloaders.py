@@ -51,7 +51,7 @@ class RetrievalCollateConfig(BaseCollateConfig):
     text_keys: KeyMap = KeyMap(query="text", section="text")  #  text field
     vector_keys: KeyMap = KeyMap(query="vector", section="vector")  #  vector field
     section_id_keys: KeyMap = KeyMap(query="section_ids", section="id")  #  label field (section ids)
-    group_id_keys: KeyMap = KeyMap(query="group_hash", section="group_hash")  #  group hash (kb_id, lang, etc.)
+    subset_id_keys: KeyMap = KeyMap(query="subset_ids", section="subset_id")  #  group hash (kb_id, lang, etc.)
 
 
 class SamplerFactoryConfig(StrictModel):

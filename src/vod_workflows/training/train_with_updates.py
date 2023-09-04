@@ -38,7 +38,7 @@ def train_with_index_updates(  # noqa: C901, PLR0915
     optimizer = ranker.get_optimizer()
     scheduler = ranker.get_scheduler(helpers.unwrap_optimizer(optimizer))
 
-    # Define the trainer State
+    # Define the trainer state
     state = helpers.TrainerState(
         step=0,
         pidx=0,
@@ -98,8 +98,8 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                 barrier("Pre-processing done.")
 
             # pre-compute the vectors for each dataset, this is deactivated when faiss is not in use
-            if helpers.is_engine_enabled(train_parameters, "faiss") or (
-                run_benchmarks and helpers.is_engine_enabled(bench_parameters, "faiss")
+            if helpers.is_engine_enabled(train_parameters, "dense") or (
+                run_benchmarks and helpers.is_engine_enabled(bench_parameters, "dense")
             ):
                 # Compute the vectors
                 vectors = {
@@ -117,7 +117,7 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                     for cfg in all_dset_configs
                 }
             else:
-                logger.info("Faiss engine is disabled. Skipping vector pre-computation.")
+                logger.info("Dense search engine is disabled. Skipping vector pre-computation.")
                 vectors = None
 
             # Tune the parameters and benchmark the ranker on each dataset separately

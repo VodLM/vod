@@ -1,7 +1,7 @@
 import datasets
 from vod_datasets.rosetta import models, testing
 
-from .adapter import TextToTextQueryAdapter
+from src.vod_datasets.rosetta.adapters.text_to_text import TextToTextQueryAdapter
 
 
 def test_flan_as_queries() -> None:

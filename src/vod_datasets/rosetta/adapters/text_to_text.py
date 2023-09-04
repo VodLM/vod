@@ -3,7 +3,7 @@ import typing
 import pydantic
 from typing_extensions import Self
 from vod_datasets.rosetta import models
-from vod_datasets.rosetta.adapters import adapter, aliases
+from vod_datasets.rosetta.adapters import aliases, base
 
 
 class TextToTextQueryModel(pydantic.BaseModel):
@@ -19,7 +19,7 @@ class TextToTextQueryModel(pydantic.BaseModel):
     )
 
 
-class TextToTextQueryAdapter(adapter.Adapter[TextToTextQueryModel, models.QueryModel]):
+class TextToTextQueryAdapter(base.Adapter[TextToTextQueryModel, models.QueryModel]):
     """An adapter for the text-to-text datasets like FLAN."""
 
     input_model = TextToTextQueryModel
@@ -31,5 +31,6 @@ class TextToTextQueryAdapter(adapter.Adapter[TextToTextQueryModel, models.QueryM
         m = cls.input_model(**row)
         return cls.output_model(
             query=m.inputs,
-            answer=[m.targets],
+            answers=[m.targets],
+            answer_scores=[1.0],
         )

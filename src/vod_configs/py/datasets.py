@@ -18,15 +18,6 @@ DsetDescriptorRegex = re.compile(
 )
 
 
-@runtime_checkable
-class DatasetLoader(Protocol):
-    """A dataset loader."""
-
-    def __call__(self, subset: None | str = None, split: None | str = None, **kwargs: Any) -> datasets.Dataset:
-        """Load a dataset."""
-        ...
-
-
 class Templates(StrictModel):
     """Prompt templates."""
 
@@ -53,56 +44,44 @@ class Templates(StrictModel):
         return variables
 
 
+@runtime_checkable
+class DatasetLoader(Protocol):
+    """A dataset loader."""
+
+    def __call__(self, subset: None | str = None, split: None | str = None, **kwargs: Any) -> datasets.Dataset:
+        """Load a dataset."""
+        ...
+
+
 class DatasetOptionsDiff(StrictModel):
     """Preprocessing options diff."""
 
-    templates: Optional[Templates] = None
     prep_map_kwargs: Optional[dict[str, Any]] = None
     subset_size: Optional[int] = None
-    group_keys: Optional[list[str]] = None
-    convert_subset_ids_to_targets: Optional[bool] = None
-    set_language: Optional[str] = None
 
     # validators
     _validate_prep_map_kwargs = pydantic.field_validator("prep_map_kwargs", mode="before")(as_pyobj_validator)
-    _validate_templates = pydantic.field_validator("templates", mode="before")(as_pyobj_validator)
 
 
 class DatasetOptions(StrictModel):
     """Preprocessing options."""
 
     prep_map_kwargs: dict[str, Any] = pydantic.Field(
-        default={},
+        default_factory=dict,
         description="Kwargs for `datasets.map(...)`.",
     )
     subset_size: Optional[int] = pydantic.Field(
         default=None,
         description="Take a subset of the dataset.",
     )
-    templates: Templates = pydantic.Field(
-        Templates(),
-        description="A set of templates used at preprocessing time.",
-    )
-    convert_subset_ids_to_targets: bool = pydantic.Field(
-        default=False,
-        description="Convert the subset ids to targets.",
-    )
-    set_language: Optional[str] = pydantic.Field(
-        None,
-        description="Set the language of the dataset.",
-    )
-
     # validators
     _validate_prep_map_kwargs = pydantic.field_validator("prep_map_kwargs", mode="before")(as_pyobj_validator)
-    _validate_templates = pydantic.field_validator("templates", mode="before")(as_pyobj_validator)
 
     def __add__(self, other: None | DatasetOptionsDiff) -> DatasetOptions:
         """Add two options."""
         if other is None:
             return self
         attrs = other.model_dump(exclude_none=True)
-        if "templates" in attrs and "templates" in self.__dict__:
-            attrs["templates"] = Templates(**{**self.templates.__dict__, **attrs["templates"]})
         new_self = self.model_copy(update=attrs)
         return new_self
 
@@ -129,7 +108,7 @@ class BaseDatasetConfig(StrictModel):
         description="Path to the dataset loader (overrides `name`)",
     )
     subsets: list[str] = pydantic.Field(
-        default=[],
+        default_factory=list,
         description="A list of subset names to load.",
     )
     split: str | None = pydantic.Field(
@@ -137,7 +116,7 @@ class BaseDatasetConfig(StrictModel):
         description="Dataset split (train, etc.)",
     )
     options: DatasetOptions = pydantic.Field(
-        DatasetOptions(),  # type: ignore
+        default_factory=DatasetOptions,  # type: ignore
         description="Loading/preprocessing options.",
     )
 

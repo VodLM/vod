@@ -45,9 +45,6 @@ DATASET_CONFIGS = {
         "identifier": "squad",
         "name_or_path": "squad_v2",
         "split": "validation",
-        "options": {
-            "convert_subset_ids_to_targets": True,
-        },
     },
     "quality": {
         "identifier": "quality",

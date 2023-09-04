@@ -1,7 +1,7 @@
 import datasets
 from vod_datasets.rosetta import models, testing
 
-from .adapter import TriviaQaQueryAdapter, TriviaQaQueryWithContextsAdapter
+from src.vod_datasets.rosetta.adapters.trivia_qa import TriviaQaQueryAdapter, TriviaQaQueryWithContextsAdapter
 
 
 def test_trivia_qa_as_queries() -> None:

@@ -1,7 +1,7 @@
 import datasets
 from vod_datasets.rosetta import models, testing
 
-from .adapter import MultipleChoiceQueryAdapter, MultipleChoiceQueryWithContextAdapter
+from src.vod_datasets.rosetta.adapters.mcqa import MultipleChoiceQueryAdapter, MultipleChoiceQueryWithContextAdapter
 
 
 def test_mmu_as_queries() -> None:

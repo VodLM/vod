@@ -1,7 +1,7 @@
 import datasets
 from vod_datasets.rosetta import models, testing
 
-from .adapter import SquadQueryAdapter, SquadQueryWithContextsAdapter
+from src.vod_datasets.rosetta.adapters.squad import SquadQueryAdapter, SquadQueryWithContextsAdapter
 
 
 def test_squad_as_queries() -> None:

@@ -27,6 +27,7 @@ SECTION_ALIASES = pydantic.AliasChoices(
     "content",
     "article",
     "document.text",
+    "body",
 )
 CONTEXTS_ALIASES = pydantic.AliasChoices(
     "contexts",
@@ -51,6 +52,9 @@ ANSWER_ALIASES = pydantic.AliasChoices(
     "answer",
     "answers",
     "response",
+)
+ANSWER_SCORES_ALIASES = pydantic.AliasChoices(
+    "answer_scores",
 )
 ANSWER_CHOICE_IDX_ALIASES = pydantic.AliasChoices(
     "answer",

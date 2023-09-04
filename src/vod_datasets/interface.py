@@ -33,7 +33,7 @@ def _load_one_dataset(
         return name_or_path(subset=subset, split=split, **kws)
     except Exception as e:
         raise RuntimeError(
-            f"Attempted to use `{name_or_path}` as a callable following the `{vod_configs.DatasetLoader}` protocol."
+            f"Failed to use `{name_or_path}` as a callable following the `{vod_configs.DatasetLoader}` protocol."
         ) from e
 
 
@@ -49,7 +49,7 @@ def load_queries(config: vod_configs.QueriesDatasetConfig) -> datasets.Dataset:
     """Load a queries dataset."""
     dset = _load_dataset_from_config(config)
     dset = rosetta.transform(dset, output="queries")
-    dset = postprocess_queries(dset, config.identifier, config=config.options, link=config.link)
+    dset = postprocess_queries(dset, config.identifier, config=config.options)
     return dset
 
 

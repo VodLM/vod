@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import collections
 import contextlib
+import copy
 import itertools
 import logging
 import time
@@ -22,11 +24,51 @@ es_logger = logging.getLogger("elastic_transport")
 es_logger.setLevel(logging.WARNING)
 
 ROW_IDX_KEY = "__row_idx__"
-BODY_KEY: str = "body"
-GROUP_KEY: str = "group"
-SECTION_ID_KEY: str = "section_id"
-TERMS_BOOST = 10_000  # Set this value high enough to make sure we can identify the terms that have been boosted.
-EPS = 1e-5
+BODY_KEY: str = "__body__"
+SUBSET_ID_KEY: str = "__subset_id__"
+SECTION_ID_KEY: str = "__section_id__"
+
+ES_DEFAULT_BODY = {
+    "mappings": {
+        "properties": {
+            BODY_KEY: {
+                "type": "text",
+            },
+            SUBSET_ID_KEY: {
+                "type": "keyword",
+                "ignore_above": 1_024,
+            },
+            SECTION_ID_KEY: {
+                "type": "keyword",
+                "ignore_above": 1_024,
+            },
+            ROW_IDX_KEY: {
+                "type": "unsigned_long",
+            },
+        },
+    },
+}
+
+
+def _validate_es_body(body: dict) -> dict:
+    """Validate the elasticsearch body using the default values."""
+    if "mappings" not in body:
+        body["mappings"] = ES_DEFAULT_BODY["mappings"]
+        return body
+
+    # Check the mappings
+    mappings = body["mappings"]
+    if "properties" not in mappings:
+        mappings["properties"] = ES_DEFAULT_BODY["mappings"]["properties"]
+        return body
+
+    # Check the properties
+    properties = mappings["properties"]
+    for key in [BODY_KEY, SUBSET_ID_KEY, SECTION_ID_KEY, ROW_IDX_KEY]:
+        if key not in properties:
+            properties[key] = ES_DEFAULT_BODY["mappings"]["properties"][key]
+
+    return body
 
 
 class ElasticsearchClient(base.SearchClient):
@@ -40,12 +82,12 @@ class ElasticsearchClient(base.SearchClient):
         self,
         url: str,
         index_name: str,
-        supports_groups: bool = False,
+        supports_subsets: bool = False,
     ):
         self.url = url
         self._client = es.Elasticsearch(url)
         self._index_name = index_name
-        self.supports_groups = supports_groups
+        self.support_subsets = supports_subsets
 
     def __repr__(self) -> str:
         return (
@@ -83,29 +125,27 @@ class ElasticsearchClient(base.SearchClient):
         *,
         text: list[str],
         vector: Optional[rdtypes.Ts] = None,  # noqa: ARG
-        group: Optional[list[str | int]] = None,
-        section_ids: Optional[list[list[str | int]]] = None,
+        subset_ids: Optional[list[list[str]]] = None,
+        section_ids: Optional[list[list[str]]] = None,
         shard: Optional[list[str]] = None,  # noqa: ARG002
         top_k: int = 3,
     ) -> rdtypes.RetrievalBatch[np.ndarray]:
         """Search elasticsearch for the batch of text queries using `msearch`. NB: `vector` is not used here."""
         start_time = time.time()
-        if self.supports_groups and group is None:
-            warnings.warn(f"This `{type(self).__name__}` supports group, but no label is provided.", stacklevel=2)
-
-        if section_ids is not None and group is None:
-            raise ValueError("`section_ids` is only supported when group is provided.")
+        if self.support_subsets and subset_ids is None:
+            warnings.warn(f"This `{type(self).__name__}` supports subset ids, but no label is provided.", stacklevel=2)
 
         queries = self._make_queries(
             text,
             top_k=top_k,
-            groups=group,
+            subset_ids=subset_ids,
             section_ids=section_ids,
-            terms_boost_value=TERMS_BOOST,
         )
 
         # Search with retries
+        rich.print(queries)
         responses = self._client.msearch(searches=queries)
+        rich.print(responses)
         while "error" in responses:
             logger.warning("Error in response: {}", responses["error"])
             time.sleep(0.2)
@@ -146,14 +186,7 @@ class ElasticsearchClient(base.SearchClient):
         # Stack the results
         indices = np.stack(indices)
         scores = np.stack(scores)
-        if section_ids is not None:
-            # process the labels (super hacky)
-            labels = (scores >= TERMS_BOOST).astype(np.int64)
-            labels[indices < 0] = -1  # Pad with -1
-            scores[labels > 0] -= TERMS_BOOST  # Re-adjust the scores
-            scores = np.where(scores < EPS, np.nan, scores)  # set the scores to NaN for documents with score zero
-        else:
-            labels = None
+        labels = (scores > -np.inf).astype(np.int64) if section_ids is not None else None
 
         return rdtypes.RetrievalBatch(
             indices=indices,
@@ -167,48 +200,51 @@ class ElasticsearchClient(base.SearchClient):
         texts: list[str],
         *,
         top_k: int,
-        groups: Optional[list[str | int]] = None,
-        section_ids: Optional[list[list[str | int]]] = None,
-        terms_boost_value: float = 1.0,
+        subset_ids: Optional[list[str] | list[list[str]]] = None,
+        section_ids: Optional[list[str] | list[list[str]]] = None,
     ) -> list:
-        if groups is None:
-            groups = []
+        if subset_ids is None:
+            subset_ids = []
         if section_ids is None:
             section_ids = []
 
         def _make_search_body(
             text: str,
-            group: Optional[str | int] = None,
-            section_ids: Optional[list[str | int]] = None,
-            terms_boost_value: float = 1.0,
+            subset_ids: Optional[str | list[str]] = None,
+            section_ids: Optional[str | list[str]] = None,
         ) -> dict[str, Any]:
-            body = {"should": []}
+            body = collections.defaultdict(list)
             if len(text):
                 body["should"].append(
                     {"match": {BODY_KEY: text}},
                 )
-            if section_ids is not None:
-                body["should"].append(
-                    {"terms": {SECTION_ID_KEY: section_ids, "boost": terms_boost_value}},  # type: ignore
-                )
-            if group is not None:
-                body["filter"] = {"term": {GROUP_KEY: group}}  # type: ignore
-            return {"query": {"bool": body}}
+            if section_ids:
+                if isinstance(section_ids, str):
+                    section_ids = [section_ids]
+                body["filter"].append({"terms": {SECTION_ID_KEY: section_ids}})
+
+            if subset_ids:
+                if isinstance(subset_ids, str):
+                    subset_ids = [subset_ids]
+                body["filter"].append({"terms": {SUBSET_ID_KEY: subset_ids}})
+
+            return {"query": {"bool": dict(body)}}
 
         return [
             part
-            for text, group, ids in itertools.zip_longest(texts, groups, section_ids)
+            for text, sub_ids, sec_ids in itertools.zip_longest(texts, subset_ids, section_ids)
             for part in [
                 {"index": self._index_name},
                 {
                     "from": 0,
                     "size": top_k,
-                    "_source": [ROW_IDX_KEY],
+                    "_source": [
+                        ROW_IDX_KEY,
+                    ],
                     **_make_search_body(
                         text,
-                        group=group,
-                        section_ids=ids,
-                        terms_boost_value=terms_boost_value,
+                        subset_ids=sub_ids,
+                        section_ids=sec_ids,
                     ),
                 },
             ]
@@ -217,21 +253,21 @@ class ElasticsearchClient(base.SearchClient):
 
 def _yield_input_data(
     texts: Iterable[str],
-    groups: Optional[Iterable[str | int]] = None,
-    section_ids: Optional[Iterable[str | int]] = None,
+    subset_ids: Optional[Iterable[str]] = None,
+    section_ids: Optional[Iterable[str]] = None,
 ) -> Iterable[dict[str, Any]]:
     """Yield the input data for indexing."""
-    for row_idx, (text, group, section_id) in enumerate(
+    for row_idx, (text, subset_id, section_id) in enumerate(
         itertools.zip_longest(
             texts,
-            groups or [],
+            subset_ids or [],
             section_ids or [],
         ),
     ):
         yield {
             ROW_IDX_KEY: row_idx,
             BODY_KEY: text,
-            GROUP_KEY: group,
+            SUBSET_ID_KEY: subset_id,
             SECTION_ID_KEY: section_id,
         }
 
@@ -245,8 +281,8 @@ class ElasticSearchMaster(base.SearchMaster[ElasticsearchClient]):
         self,
         texts: Iterable[str],
         *,
-        groups: Optional[Iterable[str | int]] = None,
-        section_ids: Optional[Iterable[str | int]] = None,
+        subset_ids: Optional[Iterable[str]] = None,
+        section_ids: Optional[Iterable[str]] = None,
         host: str = "http://localhost",
         port: int = 9200,  # hardcoded for now
         index_name: Optional[str] = None,
@@ -263,9 +299,10 @@ class ElasticSearchMaster(base.SearchMaster[ElasticsearchClient]):
         self._port = port
         self._proc_kwargs = proc_kwargs
         self._input_texts = texts
-        self._input_groups = groups
+        self._input_subset_ids = subset_ids
         self._input_section_ids = section_ids
-        self._es_body = es_body
+        self._es_body = es_body or copy.deepcopy(ES_DEFAULT_BODY)
+        self._es_body = _validate_es_body(self._es_body)
         if index_name is None:
             index_name = f"auto-{uuid.uuid4().hex}"
         self._index_name = index_name
@@ -277,15 +314,15 @@ class ElasticSearchMaster(base.SearchMaster[ElasticsearchClient]):
         self._input_data_size = input_size
 
     @property
-    def supports_groups(self) -> bool:
+    def support_subset_ids(self) -> bool:
         """Whether the index supports labels."""
-        return self._input_groups is not None
+        return self._input_subset_ids is not None
 
     def _on_init(self) -> None:
         stream = rich.progress.track(
             _yield_input_data(
                 texts=self._input_texts,
-                groups=self._input_groups,
+                subset_ids=self._input_subset_ids,
                 section_ids=self._input_section_ids,
             ),
             description=f"Building ES index {self._index_name}",
@@ -321,7 +358,7 @@ class ElasticSearchMaster(base.SearchMaster[ElasticsearchClient]):
 
     def get_client(self) -> ElasticsearchClient:
         """Get a client to the search server."""
-        return ElasticsearchClient(self.url, index_name=self._index_name, supports_groups=self.supports_groups)
+        return ElasticsearchClient(self.url, index_name=self._index_name, supports_subsets=self.support_subset_ids)
 
     def _free_resources(self) -> None:
         _close_all_es_indices(self.url)

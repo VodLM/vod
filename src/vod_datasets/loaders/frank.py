@@ -26,6 +26,14 @@ class FrankSectionModel(models.SectionModel):
     subset_id: str = pydantic.Field(..., alias="knowledge_base_id")
     answer_id: int
 
+    @pydantic.field_validator("id", mode="before")
+    def _validate_id(cls, value: str) -> str:
+        return str(value)
+
+    @pydantic.field_validator("subset_id", mode="before")
+    def _validate_subset_id(cls, value: str) -> str:
+        return str(value)
+
 
 class FrankQueryModel(models.QueryModel):
     """A Frank query."""
@@ -36,11 +44,21 @@ class FrankQueryModel(models.QueryModel):
     answer_id: int
     subset_ids: list[str] = pydantic.Field(..., alias="knowledge_base_id")
 
+    @pydantic.field_validator("id", mode="before")
+    def _validate_id(cls, value: str) -> str:
+        return str(value)
+
     @pydantic.field_validator("subset_ids", mode="before")
     def _validate_subset_ids(cls, value: str | list) -> list[str]:
-        if isinstance(value, str):
-            return [value]
-        return value
+        if not isinstance(value, list):
+            return [str(value)]
+        return [str(x) for x in value]
+
+    @pydantic.field_validator("retrieval_ids", mode="before")
+    def _validate_section_ids(cls, value: str | list) -> list[str]:
+        if not isinstance(value, list):
+            return [str(value)]
+        return [str(x) for x in value]
 
 
 @dataclasses.dataclass

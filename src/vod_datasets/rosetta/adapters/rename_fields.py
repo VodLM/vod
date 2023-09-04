@@ -4,10 +4,10 @@ import datasets
 import pydantic
 from typing_extensions import Self
 from vod_datasets.rosetta import models
-from vod_datasets.rosetta.adapters import adapter, aliases
+from vod_datasets.rosetta.adapters import aliases, base
 
 
-class AliasAdapter(adapter.Adapter[adapter.Im, adapter.Om]):
+class AliasAdapter(base.Adapter[base.Im, base.Om]):
     """An adatper to rename input columns."""
 
     @classmethod
@@ -21,7 +21,7 @@ class AliasAdapter(adapter.Adapter[adapter.Im, adapter.Om]):
         return super().can_handle(row)
 
     @classmethod
-    def translate_row(cls: typing.Type[Self], row: dict[str, typing.Any]) -> adapter.Om:
+    def translate_row(cls: typing.Type[Self], row: dict[str, typing.Any]) -> base.Om:
         """Translate a row."""
         cls._validate_models()
         m = cls.input_model(**row)
@@ -58,18 +58,22 @@ class AliasAdapter(adapter.Adapter[adapter.Im, adapter.Om]):
                         alias_mapping[alias] = key  # type: ignore
         if not alias_mapping:
             raise ValueError(f"Could not find any aliases for {cls.input_model.__name__}")
-
         return alias_mapping
 
 
 class AliasQueryModel(models.QueryModel):
     """A query with an alias."""
 
+    id: str = pydantic.Field(
+        ...,
+        validation_alias=aliases.QUERY_ID_ALIASES,
+    )
+
     query: str = pydantic.Field(
         ...,
         validation_alias=aliases.QUERY_ALIASES,
     )
-    answer: list[str] = pydantic.Field(
+    answers: list[str] = pydantic.Field(
         [],
         validation_alias=aliases.ANSWER_ALIASES,
     )
@@ -78,6 +82,10 @@ class AliasQueryModel(models.QueryModel):
 class AliasSectionModel(models.SectionModel):
     """A query with an alias."""
 
+    id: str = pydantic.Field(
+        ...,
+        validation_alias=aliases.SECTION_ID_ALIASES,
+    )
     content: str = pydantic.Field(
         ...,
         validation_alias=aliases.SECTION_ALIASES,

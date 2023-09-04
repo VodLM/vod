@@ -61,8 +61,8 @@ class ShardedSearchClient(Generic[K, Sc], base.SearchClient):
         *,
         text: list[str],
         vector: Optional[np.ndarray] = None,
-        group: Optional[list[str | int]] = None,
-        section_ids: Optional[list[list[str | int]]] = None,
+        subset_ids: Optional[list[list[str]]] = None,
+        section_ids: Optional[list[list[str]]] = None,
         shard: Optional[list[K]] = None,
         top_k: int = 3,
     ) -> rdtypes.RetrievalBatch[np.ndarray]:
@@ -77,7 +77,7 @@ class ShardedSearchClient(Generic[K, Sc], base.SearchClient):
             text=text,
             shard=shard,
             vector=vector,
-            group=group,
+            subset_ids=subset_ids,
             section_ids=section_ids,
         )
 
@@ -88,7 +88,7 @@ class ShardedSearchClient(Generic[K, Sc], base.SearchClient):
             search_shard = self.shards[shard_name]
             results_by_shard[shard_name] = search_shard.search(
                 text=query["text"],
-                group=query["group"],
+                subset_ids=query["subset_ids"],
                 section_ids=query["section_ids"],
                 vector=np.stack(query["vector"]) if vector is not None else None,
                 top_k=top_k,
@@ -105,8 +105,8 @@ class ShardedSearchClient(Generic[K, Sc], base.SearchClient):
         text: list[str],
         shard: Optional[list[K]],
         vector: Optional[np.ndarray] = None,
-        group: Optional[list[str | int]] = None,
-        section_ids: Optional[list[list[str | int]]] = None,
+        subset_ids: Optional[list[list[str]]] = None,
+        section_ids: Optional[list[list[str]]] = None,
         top_k: int = 3,
     ) -> rdtypes.RetrievalBatch[np.ndarray]:
         """Search the server given a batch of text and/or vectors."""
@@ -120,7 +120,7 @@ class ShardedSearchClient(Generic[K, Sc], base.SearchClient):
             text=text,
             shard=shard,
             vector=vector,
-            group=group,
+            subset_ids=subset_ids,
             section_ids=section_ids,
         )
 
@@ -140,7 +140,7 @@ class ShardedSearchClient(Generic[K, Sc], base.SearchClient):
             """Search a single shard."""
             result = payload["search_shard"].search(
                 text=payload["query"]["text"],
-                group=payload["query"]["group"],
+                subset_ids=payload["query"]["subset_ids"],
                 section_ids=payload["query"]["section_ids"],
                 vector=np.stack(payload["query"]["vector"]) if vector is not None else None,
                 top_k=top_k,
@@ -173,8 +173,8 @@ def _scatter_queries(
     text: list[str],
     shard: list[K],
     vector: Optional[np.ndarray] = None,
-    group: Optional[list[str | int]] = None,
-    section_ids: Optional[list[list[str | int]]] = None,
+    subset_ids: Optional[list[list[str]]] = None,
+    section_ids: Optional[list[list[str]]] = None,
 ) -> _ShardedQueries[K]:
     shards = collections.defaultdict(lambda: collections.defaultdict(list))
     lookup = []
@@ -182,8 +182,8 @@ def _scatter_queries(
         shards[shard_name]["text"].append(text[i])
         shards[shard_name]["local_rank"].append(i)
         lookup.append((shard_name, len(shards[shard_name]["text"]) - 1))
-        if group is not None:
-            shards[shard_name]["group"].append(group[i])
+        if subset_ids is not None:
+            shards[shard_name]["subset_ids"].append(subset_ids[i])
         if section_ids is not None:
             shards[shard_name]["section_ids"].append(section_ids[i])
         if vector is not None:

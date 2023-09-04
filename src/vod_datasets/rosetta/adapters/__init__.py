@@ -1,28 +1,32 @@
 from typing_extensions import Type
 from vod_datasets.rosetta.models import DatasetType
 
-from .adapter import Adapter
-from .identity.adapter import (
+from .base import Adapter
+from .identity import (
     IdentityQueryAdapter,
     IdentityQueryWithContextAdapter,
     IdentitySectionAdapter,
 )
-from .mcqa.adapter import (
+from .mcqa import (
     MultipleChoiceQueryAdapter,
     MultipleChoiceQueryWithContextAdapter,
 )
-from .rename.adapter import (
+from .missing_fields import (
+    MissingFieldQueryAdapter,
+    MissingFieldSectionAdapter,
+)
+from .rename_fields import (
     RenameQueryAdapter,
     RenameSectionAdapter,
 )
-from .squad.adapter import (
+from .squad import (
     SquadQueryAdapter,
     SquadQueryWithContextsAdapter,
 )
-from .text_to_text.adapter import (
+from .text_to_text import (
     TextToTextQueryAdapter,
 )
-from .trivia_qa.adapter import (
+from .trivia_qa import (
     TriviaQaQueryAdapter,
     TriviaQaQueryWithContextsAdapter,
 )
@@ -37,6 +41,7 @@ KNOWN_QUERY_WITH_CONTEXT_ADAPTERS: list[Type[Adapter]] = [
 KNOWN_QUERY_ADAPTERS: list[Type[Adapter]] = [
     IdentityQueryAdapter,
     RenameQueryAdapter,
+    MissingFieldQueryAdapter,
     MultipleChoiceQueryAdapter,
     TriviaQaQueryAdapter,
     SquadQueryAdapter,
@@ -46,6 +51,7 @@ KNOWN_QUERY_ADAPTERS: list[Type[Adapter]] = [
 KNOWN_SECTION_ADAPTERS: list[Type[Adapter]] = [
     IdentitySectionAdapter,
     RenameSectionAdapter,
+    MissingFieldSectionAdapter,
 ]
 
 ROSETTA_ADAPTERS: dict[DatasetType, list[Type[Adapter]]] = {

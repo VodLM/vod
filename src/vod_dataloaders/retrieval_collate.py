@@ -14,12 +14,12 @@ import torch
 import transformers
 from loguru import logger
 from vod_dataloaders import fast
+from vod_datasets.postprocessing import DSET_LINK_KEY
 from vod_tools import dstruct, pipes
 from vod_tools.pipes.utils.misc import pack_examples
 
 from src import vod_configs, vod_search
 
-from .post_filtering import PostFilter, post_filter_factory
 from .utils import BlockTimer, cast_as_tensor
 
 T = TypeVar("T")
@@ -33,16 +33,14 @@ class RetrievalCollate(pipes.Collate):
 
     Steps:
         1. search & merge
-        2. post-filter
-        3. sample the sections
-        4. fetch the content of each section from the huggingface `datasets.Dataset`
-        5. tokenize the sections & querys
-        6. cast & return the batch (`torch.Tensor`)
+        2. sample the sections
+        3. fetch the content of each section from the huggingface `datasets.Dataset`
+        4. tokenize the sections & querys
+        5. cast & return the batch (`torch.Tensor`)
     """
 
     tokenizer: transformers.PreTrainedTokenizerBase
     search_client: vod_search.HybridSearchClient
-    post_filter: Optional[PostFilter]
     sections: dstruct.SizedDataset[dict[str, Any]]
     config: vod_configs.RetrievalCollateConfig
 
@@ -66,18 +64,6 @@ class RetrievalCollate(pipes.Collate):
         self.config = config
         self.parameters = parameters or {}
 
-        # Build the post-filter
-        if config.post_filter is not None:
-            post_filter = post_filter_factory(
-                config.post_filter,
-                sections=sections,
-                query_key=config.group_id_keys.query,
-                section_key=config.group_id_keys.section,
-            )
-        else:
-            post_filter = None
-        self.post_filter = post_filter
-
         # Validate the parameters
         client_names = set(search_client.clients.keys())
         missing_clients = client_names - set(self.parameters.keys())
@@ -98,16 +84,6 @@ class RetrievalCollate(pipes.Collate):
         # Search within each client
         search_results, raw_scores = self.search(batch, top_k=self.config.prefetch_n_sections)
         diagnostics = {f"diagnostics.{key}": s for key, s in search_results.meta.items()}
-
-        # Post-filtering sections based on the group hash
-        if self.post_filter is not None:
-            search_results, raw_scores = _post_filter(
-                search_results,
-                raw_scores,
-                batch=batch,
-                diagnostics=diagnostics,
-                post_filter=self.post_filter,
-            )
 
         # Sample the sections given the positive ones and the pool of candidates
         with BlockTimer(name="diagnostics.sample_sections_time", output=diagnostics):
@@ -155,14 +131,6 @@ class RetrievalCollate(pipes.Collate):
             config=self.config,
         )
 
-        # Debugging: proportion of in-domain sections (same group hash)
-        q_group_hash = attributes["query.group_hash"][:, None]
-        s_group_hash = attributes["section.group_hash"]
-        if s_group_hash.ndim == 1:
-            s_group_hash = s_group_hash[None, :]
-        in_domain_prop = (q_group_hash == s_group_hash).float().mean(dim=-1).mean().item()
-        diagnostics["diagnostics.in_domain_prop"] = in_domain_prop
-
         # Build the batch
         diagnostics["diagnostics.collate_time"] = time.perf_counter() - start_time
         batch = {
@@ -183,7 +151,7 @@ class RetrievalCollate(pipes.Collate):
     ) -> tuple[vod_search.RetrievalBatch, dict[str, np.ndarray]]:
         """Search the batch of queries and return the top `top_k` results."""
         # Get the query ids
-        query_group_ids = batch[self.config.group_id_keys.query]
+        query_subset_ids = batch[self.config.subset_id_keys.query]
 
         # Get the query text
         query_text = batch[self.config.text_keys.query]
@@ -199,10 +167,10 @@ class RetrievalCollate(pipes.Collate):
         # Async search the query text using `search_client.async_search`
         return _multi_search(
             text=query_text,
-            shards=batch["link"],
+            shards=batch[DSET_LINK_KEY],
             vector=query_vectors,
-            group=query_group_ids,
-            query_section_ids=batch[self.config.section_id_keys.query],
+            subset_ids=query_subset_ids,
+            section_ids=batch[self.config.section_id_keys.query],
             top_k=top_k,
             clients=self.search_client.clients,
             weights=dict(self.parameters),
@@ -214,8 +182,8 @@ def _multi_search(
     text: list[str],
     shards: list[str],
     vector: Optional[np.ndarray] = None,
-    group: Optional[list[str]] = None,
-    query_section_ids: list[list[str | int]],
+    subset_ids: Optional[list[list[str]]] = None,
+    section_ids: list[list[str]],
     top_k: int,
     clients: dict[str, vod_search.SearchClient],
     weights: dict[str, float],
@@ -229,8 +197,8 @@ def _multi_search(
         "client": clients["sparse"],
         "vector": vector,
         "text": [""] * len(text),
-        "group": group,
-        "section_ids": query_section_ids,
+        "subset_ids": subset_ids,
+        "section_ids": section_ids,
         "shard": shards,
         "top_k": top_k,
     }
@@ -240,7 +208,7 @@ def _multi_search(
             "client": clients[name],
             "vector": vector,
             "text": text,
-            "group": group,
+            "subset_ids": subset_ids,
             "shard": shards,
             "top_k": top_k,
         }
@@ -279,6 +247,8 @@ def _multi_search(
         for key, value in result.meta.items():
             meta[f"{name}_{key}"] = value
 
+    rich.print(search_results)
+
     # normalize the scores
     fast.normalize_scores_(search_results, offset=1.0)
 
@@ -308,24 +278,6 @@ async def _execute_search(payloads: list[dict[str, Any]]) -> list[vod_search.Ret
 
     futures = [_async_search_one(payload) for payload in payloads]
     return await asyncio.gather(*futures)
-
-
-def _post_filter(
-    search_results: vod_search.RetrievalBatch,
-    raw_scores: dict[str, np.ndarray],
-    *,
-    post_filter: PostFilter,
-    batch: dict[str, Any],
-    diagnostics: dict[str, Any],
-) -> tuple[vod_search.RetrievalBatch, dict[str, np.ndarray]]:
-    n_not_inf = (~np.isinf(search_results.scores)).sum()
-    all_scores = {"main": search_results.scores, **raw_scores}
-    all_scores = post_filter(search_results.indices, all_scores, query=batch)
-    search_results.scores = all_scores.pop("main")
-    n_not_inf_after = (~np.isinf(search_results.scores)).sum()
-    prop_filtered = (n_not_inf - n_not_inf_after) / search_results.scores.size
-    diagnostics["diagnostics.post_filtered"] = prop_filtered
-    return search_results, all_scores
 
 
 def _sampled_sections_to_dict(

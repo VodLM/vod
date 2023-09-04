@@ -104,7 +104,7 @@ def index_and_train(
         vectors=[dstruct.as_lazy_array(vectors[d]) for d in sections] if vectors else None,  # type: ignore
         configs=[cfg.search for cfg in sections],  # type: ignore
         cache_dir=cache_dir,
-        dense_enabled=helpers.is_engine_enabled(parameters, "faiss"),
+        dense_enabled=helpers.is_engine_enabled(parameters, "dense"),
         sparse_enabled=True,
         skip_setup=not fabric.is_global_zero,
         barrier_fn=barrier_fn,

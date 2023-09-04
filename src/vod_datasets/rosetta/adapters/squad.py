@@ -4,7 +4,7 @@ import uuid
 import pydantic
 from typing_extensions import Self, Type
 from vod_datasets.rosetta import models
-from vod_datasets.rosetta.adapters import adapter, aliases, contextual
+from vod_datasets.rosetta.adapters import aliases, base, contextual
 
 
 class AnswerDict(pydantic.BaseModel):
@@ -17,7 +17,7 @@ class SquadQueryModel(pydantic.BaseModel):
     """A query with an answer dictionary."""
 
     id: str = pydantic.Field(
-        default=uuid.uuid4().hex,
+        default_factory=lambda: uuid.uuid4().hex,
         validation_alias=aliases.QUERY_ID_ALIASES,
     )
     query: str = pydantic.Field(
@@ -34,7 +34,7 @@ class SquadQueryWithContextsModel(SquadQueryModel, contextual.WithContexstMixin)
     """A query with context and an answer dictionary."""
 
 
-class SquadQueryAdapter(adapter.Adapter[SquadQueryModel, models.QueryModel]):
+class SquadQueryAdapter(base.Adapter[SquadQueryModel, models.QueryModel]):
     """Handle Squad-like answer dicts."""
 
     input_model = SquadQueryModel
@@ -47,11 +47,12 @@ class SquadQueryAdapter(adapter.Adapter[SquadQueryModel, models.QueryModel]):
         return cls.output_model(
             id=m.id,
             query=m.query,
-            answer=m.answer.text,
+            answers=m.answer.text,
+            answer_scores=[1.0] * len(m.answer.text),
         )
 
 
-class SquadQueryWithContextsAdapter(adapter.Adapter[SquadQueryWithContextsModel, models.QueryWithContextsModel]):
+class SquadQueryWithContextsAdapter(base.Adapter[SquadQueryWithContextsModel, models.QueryWithContextsModel]):
     """Handle Squad-like answer dicts with context dicts (e.g., TriviaQA)."""
 
     input_model = SquadQueryWithContextsModel
@@ -64,7 +65,8 @@ class SquadQueryWithContextsAdapter(adapter.Adapter[SquadQueryWithContextsModel,
         return cls.output_model(
             id=m.id,
             query=m.query,
-            answer=m.answer.text,
+            answers=m.answer.text,
+            answer_scores=[1.0] * len(m.answer.text),
             contexts=m.contexts,
             titles=m.titles,
         )
