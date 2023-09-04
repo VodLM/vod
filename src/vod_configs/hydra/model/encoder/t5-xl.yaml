@@ -1,4 +1,4 @@
 defaults:
   - t5-base
   - _self_
-model_name: t5-3b
+pretrained_model_name_or_path: t5-3b

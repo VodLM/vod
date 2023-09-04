@@ -1,4 +1,4 @@
 defaults:
   - t5-base
   - _self_
-model_name: google/mt5-base
+pretrained_model_name_or_path: google/mt5-base

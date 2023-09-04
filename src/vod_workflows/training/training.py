@@ -268,6 +268,7 @@ def _training_loop(  # noqa: C901, PLR0915
                                 pbar=pbar,
                             )
                             if checkpoint_path is not None:
+                                logger.debug("Saving checkpoint to `{}`", checkpoint_path)
                                 io.save_training_state(
                                     checkpoint_path=checkpoint_path,
                                     fabric=fabric,

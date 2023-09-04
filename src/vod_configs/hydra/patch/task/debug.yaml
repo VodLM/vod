@@ -25,8 +25,8 @@ benchmark:
     dense: 1.0
 
 trainer:
-  max_steps: 1000
-  period: 300
+  max_steps: 30
+  period: 10
   val_check_interval: 5
   n_max_eval: 100
   parameters:
@@ -43,8 +43,12 @@ dataset:
       train:
         - name: squad.en:train
           link: squad.en
-      val:
         - name: squad.fr:train
+          link: squad.fr
+      val:
+        - name: squad.en:val
+          link: squad.en
+        - name: squad.fr:val
           link: squad.fr
 
     sections:

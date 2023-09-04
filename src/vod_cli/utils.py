@@ -16,7 +16,6 @@ import transformers
 import yaml
 from lightning.fabric.loggers.logger import Logger as FabricLogger
 from lightning.pytorch.loggers import WandbLogger
-from vod_tools import interfaces
 from vod_tools.misc.config import config_to_flat_dict
 
 from src import vod_models
@@ -67,8 +66,7 @@ def _get_ranker_meta_data(ranker: vod_models.Ranker) -> dict[str, Any]:
     return {
         "n_trainable_params": sum(p.numel() for p in ranker.parameters() if p.requires_grad),
         "n_total_params": sum(p.numel() for p in ranker.parameters()),
-        "output_shape_question": list(ranker.encoder.get_output_shape(interfaces.FieldType.QUERY)),
-        "output_shape_section": list(ranker.encoder.get_output_shape(interfaces.FieldType.SECTION)),
+        "output_shape": list(ranker.encoder.get_output_shape()),
         "flash_sdp_enabled": torch.backends.cuda.flash_sdp_enabled(),  # type: ignore
         "mem_efficient_sdp_enabled": torch.backends.cuda.mem_efficient_sdp_enabled(),  # type: ignore
         "math_sdp_enabled": torch.backends.cuda.math_sdp_enabled(),  # type: ignore

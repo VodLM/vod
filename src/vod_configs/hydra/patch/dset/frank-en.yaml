@@ -5,8 +5,7 @@ dataset:
   search:
     engines:
       dense:
-        backend: faiss
-        factory: IVFauto,Flat
+        backend: qdrant
       sparse:
         backend: elasticsearch
 

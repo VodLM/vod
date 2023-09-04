@@ -1,4 +1,4 @@
 defaults:
   - mini-lm
   - _self_
-model_name: sentence-transformers/paraphrase-MiniLM-L3-v2
+pretrained_model_name_or_path: sentence-transformers/paraphrase-MiniLM-L3-v2
