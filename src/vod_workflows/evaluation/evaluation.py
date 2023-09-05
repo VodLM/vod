@@ -63,12 +63,12 @@ def benchmark(
 
         # Instantiate the dataloader
         dataloader = helpers.instantiate_retrieval_dataloader(
-            queries=helpers.DsetWithVectors.cast(
-                data=[vod_datasets.load_queries(cfg) for cfg in task.queries],
+            queries=helpers.ShardedDsetWithVectors.from_configs(
+                data=task.queries,
                 vectors=[task.vectors[d] for d in task.queries] if task.vectors else None,
             ),
-            sections=helpers.DsetWithVectors.cast(
-                data=[vod_datasets.load_sections(cfg) for cfg in task.sections],
+            sections=helpers.ShardedDsetWithVectors.from_configs(
+                data=task.sections,
                 vectors=[task.vectors[d] for d in task.sections] if task.vectors else None,
             ),
             tokenizer=tokenizer,

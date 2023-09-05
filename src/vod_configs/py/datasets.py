@@ -18,32 +18,6 @@ DsetDescriptorRegex = re.compile(
 )
 
 
-class Templates(StrictModel):
-    """Prompt templates."""
-
-    queries: str = pydantic.Field(
-        default=r"Q: {{ query }}",
-        description="Template formatting queries before encoding for retrieval.",
-    )
-    answers: str = pydantic.Field(
-        default=r"A: {{ answer }}",
-        description="Template formatting answers before encoding for retrieval.",
-    )
-    sections: str = pydantic.Field(
-        default=r"D: {{ content }}",
-        description="Template formatting documents before encoding for retrieval.",
-    )
-
-    @property
-    def input_variables(cls) -> set[str]:
-        """Return the input variables."""
-        variables = set()
-        for attribute_value in cls.__dict__.values():
-            matches = re.findall(r"{{\s*(.*?)\s*}}", attribute_value)
-            variables.update(matches)
-        return variables
-
-
 @runtime_checkable
 class DatasetLoader(Protocol):
     """A dataset loader."""

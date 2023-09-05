@@ -26,7 +26,7 @@ from vod_search import base, rdtypes
 from vod_tools import dstruct
 from vod_tools.misc.pretty import human_format_nb
 
-QDRANT_GROUP_KEY: str = "_group_"
+QDRANT_SUBSET_ID_KEY: str = "_SUBSET_ID_"
 
 
 def _init_client(host: str, port: int, grpc_port: None | int, **kwargs: Any) -> qdrant_client.QdrantClient:
@@ -111,31 +111,30 @@ class QdrantSearchClient(base.SearchClient):
     def search(
         self,
         *,
-        text: Optional[list[str]] = None,  # noqa: ARG002
-        vector: Optional[rdtypes.Ts],
-        group: Optional[list[str | int]] = None,
-        section_ids: Optional[list[list[str | int]]] = None,  # noqa: ARG002
-        shard: Optional[list[str]] = None,  # noqa: ARG002
+        text: None | list[str] = None,  # noqa: ARG002
+        vector: None | rdtypes.Ts,
+        subset_ids: None | list[list[str]] = None,
+        ids: None | list[list[str]] = None,  # noqa: ARG002
+        shard: None | list[str] = None,  # noqa: ARG002
         top_k: int = 3,
     ) -> rdtypes.RetrievalBatch[rdtypes.Ts]:
         """Search the server given a batch of text and/or vectors."""
         if vector is None:
             raise ValueError("vector cannot be None")
-        if self.supports_groups and group is None:
+        if self.supports_groups and subset_ids is None:
             warnings.warn(f"This `{type(self).__name__}` supports subsets, but no label is provided.", stacklevel=2)
 
-        def _get_filter(group: None | str | int) -> None | qdrm.Filter:
-            if group is None:
+        def _get_filter(subset_ids: None | list[str]) -> None | qdrm.Filter:
+            if subset_ids is None:
                 return None
-            if not isinstance(group, str):
-                group = int(group)
 
             return qdrm.Filter(
                 must=[
                     qdrm.FieldCondition(
-                        key=QDRANT_GROUP_KEY,
-                        match=qdrm.MatchValue(value=group),
-                    ),
+                        key=QDRANT_SUBSET_ID_KEY,
+                        match=qdrm.MatchValue(value=sid),
+                    )
+                    for sid in subset_ids
                 ],
             )
 
@@ -145,7 +144,7 @@ class QdrantSearchClient(base.SearchClient):
                 qdrm.SearchRequest(
                     limit=top_k,
                     vector=vector[i].tolist(),
-                    filter=_get_filter(group[i]) if group is not None else None,
+                    filter=_get_filter(subset_ids[i]) if subset_ids is not None else None,
                     with_payload=False,
                     params=self.search_params,
                 )
@@ -444,7 +443,9 @@ def _ingest_data(
             payloads = None
         else:
             group_chunk = [next(groups_iter) for _ in range(len(vec_chunk))]
-            payloads = [{QDRANT_GROUP_KEY: g if isinstance(g, str) else int(g)} for g in group_chunk]  # type: ignore
+            payloads = [
+                {QDRANT_SUBSET_ID_KEY: g if isinstance(g, str) else int(g)} for g in group_chunk  # type: ignore
+            ]
         ids = np.arange(j, j + len(vec_chunk))
         batch = qdrm.Batch(
             ids=ids.tolist(),

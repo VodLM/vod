@@ -66,27 +66,15 @@ dataset:
         - identifier: squad_en_train
           name_or_path: squad_v2
           split: train
-          options:
-            set_language: en
-            convert_subset_ids_to_targets: True
         - identifier: squad_fr_train
           name_or_path: qwant/squad_fr
           split: train
-          options:
-            set_language: fr
-            convert_subset_ids_to_targets: True
         - identifier: squad_de_train
           name_or_path: deepset/germanquad
           split: train
-          options:
-            set_language: de
-            convert_subset_ids_to_targets: True
         - identifier: squad_nl_train
           name_or_path: yhavinga/squad_v2_dutch
           split: train
-          options:
-            set_language: nl
-            convert_subset_ids_to_targets: True
 
       val:
         # Franks
@@ -181,20 +169,12 @@ dataset:
         # SQuADs
         - identifier: squad_en_sections
           name_or_path: squad_v2
-          options:
-            set_language: en
         - identifier: squad_fr_sections
           name_or_path: qwant/squad_fr
-          options:
-            set_language: fr
         - identifier: squad_de_sections
           name_or_path: deepset/germanquad
-          options:
-            set_language: de
         - identifier: squad_nl_sections
           name_or_path: yhavinga/squad_v2_dutch
-          options:
-            set_language: nl
 
   # Benchmarks
   benchmark:

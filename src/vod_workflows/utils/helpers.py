@@ -12,6 +12,7 @@ import lightning as L
 import numpy as np
 import torch
 import transformers
+import vod_datasets
 from lightning.fabric import wrappers as fabric_wrappers
 from loguru import logger
 from torch.utils import data as torch_data
@@ -23,6 +24,19 @@ from src import vod_configs, vod_dataloaders, vod_search
 
 T = TypeVar("T")
 K = TypeVar("K")
+D = TypeVar("D", bound=typing.Union[dstruct.SizedDataset, datasets.Dataset])
+
+
+def _maybe_concatenate_parts(parts: list[D]) -> D:
+    if len(parts) > 1:
+        if all(isinstance(p, datasets.Dataset) for p in parts):
+            data_ = datasets.concatenate_datasets(parts)  # type: ignore
+        else:
+            data_ = dstruct.ConcatenatedSizedDataset(parts)  # type: ignore
+    else:
+        data_ = parts[0]
+
+    return data_  # type: ignore
 
 
 @dataclasses.dataclass
@@ -56,6 +70,34 @@ def is_engine_enabled(parameters: Optional[dict | DictProxy], engine: str) -> bo
     return parameters.get(engine, 1.0) >= 0
 
 
+class _WithExtrasAttributes(dstruct.SizedDataset[dict[str, Any]]):
+    """A class that adds extra attributes to the accessed items."""
+
+    __slots__ = ("data", "extras")
+
+    def __init__(
+        self,
+        *,
+        data: dstruct.SizedDataset[dict[str, Any]] | datasets.Dataset,
+        extras: dict[str, Any],
+    ) -> None:
+        self.data = data
+        self.extras = extras
+
+    def __len__(self) -> int:
+        """Get the length data the dataset."""
+        return len(self.data)
+
+    def __getitem__(self, index: int | list[int] | slice) -> dict[str, Any]:
+        """Get an item from the dataset and add the extras."""
+        item = self.data[index]
+        item.update(self.extras)
+        return item
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}(extras={self.extras}, data={self.data})"
+
+
 @dataclasses.dataclass(frozen=True)
 class PrecomputedDsetVectors:
     """Holds the vectors for a given dataset and field."""
@@ -64,8 +106,19 @@ class PrecomputedDsetVectors:
     sections: dstruct.TensorStoreFactory
 
 
+def _load_dataset_with_target_shard(config: vod_configs.BaseDatasetConfig) -> dstruct.SizedDataset[dict[str, Any]]:
+    """Load the dataset and potentially wrap it to include the target shard name."""
+    if isinstance(config, vod_configs.SectionsDatasetConfig):
+        return vod_datasets.load_sections(config)  # type: ignore
+    if isinstance(config, vod_configs.QueriesDatasetConfig):
+        data = vod_datasets.load_queries(config)  # type: ignore
+        return _WithExtrasAttributes(data=data, extras={vod_configs.TARGET_SHARD_KEY: config.link})
+
+    raise TypeError(f"Unsupported dataset config: `{config}`")
+
+
 @dataclasses.dataclass(frozen=True)
-class DsetWithVectors:
+class ShardedDsetWithVectors:
     """Holds a dataset and its vectors."""
 
     data: dstruct.SizedDataset[dict[str, Any]]
@@ -80,38 +133,41 @@ class DsetWithVectors:
             )
 
     @classmethod
-    def cast(
+    def from_configs(
         cls: Type[Self],
         *,
-        data: dstruct.SizedDataset[dict[str, Any]]
-        | datasets.Dataset
-        | list[datasets.Dataset]
-        | list[dstruct.SizedDataset[dict[str, Any]]],
+        data: list[vod_configs.QueriesDatasetConfig | vod_configs.SectionsDatasetConfig],
         vectors: None
         | np.ndarray
-        | dstruct.TensorStoreFactory
-        | dstruct.SizedDataset[np.ndarray]
         | list[dstruct.TensorStoreFactory]
         | list[dstruct.SizedDataset[np.ndarray]]
         | list[np.ndarray] = None,
     ) -> Self:
-        """Cast a dataset and vectors to the correct type."""
-        if isinstance(data, datasets.Dataset):
-            pass
-        elif isinstance(data, list) and all(isinstance(d, datasets.Dataset) for d in data):
-            data = datasets.concatenate_datasets(data)  # type: ignore
-        else:
-            dstruct.ConcatenatedSizedDataset(data)  # type: ignore
+        """Load multiple dataset shards from their respective configs.
 
+        NB: query dataset are augmented such that each item has a `__LINKED_SHARD__` key.
+        This key is necessary for the sharded search engine to function. It would be great
+        to find a better way to do this. For instance, implementing a custom `torch.utils.data.DataLoader`,
+        which would automatically concatenate datasets, could do the trick.
+        """
+        if vectors is not None and len(data) != len(vectors):
+            raise ValueError(
+                f"Dataset and vectors must have the same length, "
+                f"but got {len(data)} and {len(vectors)}, respectively."
+            )
+
+        # Load the datasets and concatenate them
+        data_ = _maybe_concatenate_parts([_load_dataset_with_target_shard(cfg) for cfg in data])
+
+        # Concatenate the vectors
         if vectors is not None:
-            if isinstance(vectors, list):
-                vectors = dstruct.ConcatenatedSizedDataset([dstruct.as_lazy_array(v) for v in vectors])
-            else:
-                vectors = dstruct.as_lazy_array(vectors)
+            vectors_ = _maybe_concatenate_parts([dstruct.as_lazy_array(v) for v in vectors])
+        else:
+            vectors_ = None
 
         return cls(
-            data=data,  # type: ignore
-            vectors=vectors,
+            data=data_,  # type: ignore
+            vectors=vectors_,
         )
 
     def __str__(self) -> str:
@@ -124,10 +180,10 @@ class DsetWithVectors:
 
 def instantiate_retrieval_dataloader(
     *,
-    queries: DsetWithVectors,
-    sections: DsetWithVectors,
+    queries: ShardedDsetWithVectors,
+    sections: ShardedDsetWithVectors,
     tokenizer: transformers.PreTrainedTokenizer | transformers.PreTrainedTokenizerFast,
-    search_client: vod_search.ShardedMultiSearchClient,
+    search_client: vod_search.HybridSearchClient,
     collate_config: vod_configs.RetrievalCollateConfig,
     dataloader_config: vod_configs.DataLoaderConfig,
     parameters: Optional[dict | DictProxy],
@@ -179,9 +235,6 @@ class IndexWithVectors(dstruct.SizedDataset[dict[str, Any]]):
         if self.vectors is not None:
             item[self.vector_key] = self.vectors[index]
         return item
-
-
-D = TypeVar("D", bound=typing.Union[dstruct.SizedDataset, datasets.Dataset])
 
 
 def _concat_data(data: list[D]) -> D:

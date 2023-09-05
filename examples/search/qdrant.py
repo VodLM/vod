@@ -62,7 +62,7 @@ def run(args: Args) -> None:
 
         results = client.search(
             vector=query_vecs,
-            group=query_groups,  # type: ignore
+            subset_ids=query_groups,  # type: ignore
             top_k=3,
         )
         rich.print(
@@ -81,7 +81,7 @@ def run(args: Args) -> None:
             query_groups = np.random.randint(0, args.n_categories, size=args.bs).astype("int64")
             results = client.search(
                 vector=query_vecs,
-                group=query_groups,  # type: ignore
+                subset_ids=query_groups,  # type: ignore
                 top_k=args.top_k,
             )
         end = time.perf_counter()

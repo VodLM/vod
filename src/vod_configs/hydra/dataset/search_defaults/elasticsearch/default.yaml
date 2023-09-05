@@ -1,5 +1,4 @@
-text_key: text
-subset_id_key: subset_id
+section_template: "{% if title %}{{ title }}{% endif %} {{ content }}"
 persistent: true
 es_body:
   # defining a mapping will help: (1) optimize the performance, (2) save disk space
@@ -22,11 +21,10 @@ es_body:
     # Defines changes to the text before tokenization and indexing
     analysis:
       analyzer:
-        custom_analyzer:
+        custom:
           # token filters
           filter:
             - lowercase # Converts tokens to lowercase
-            - stop # Removes tokens equivalent to english stopwords
             - asciifolding # Converts a-z, 1-9, and symbolic characters to their ASCII equivalent
           tokenizer: standard
           type: custom

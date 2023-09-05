@@ -126,7 +126,7 @@ class ElasticsearchClient(base.SearchClient):
         text: list[str],
         vector: Optional[rdtypes.Ts] = None,  # noqa: ARG
         subset_ids: Optional[list[list[str]]] = None,
-        section_ids: Optional[list[list[str]]] = None,
+        ids: Optional[list[list[str]]] = None,
         shard: Optional[list[str]] = None,  # noqa: ARG002
         top_k: int = 3,
     ) -> rdtypes.RetrievalBatch[np.ndarray]:
@@ -139,13 +139,11 @@ class ElasticsearchClient(base.SearchClient):
             text,
             top_k=top_k,
             subset_ids=subset_ids,
-            section_ids=section_ids,
+            ids=ids,
         )
 
         # Search with retries
-        rich.print(queries)
         responses = self._client.msearch(searches=queries)
-        rich.print(responses)
         while "error" in responses:
             logger.warning("Error in response: {}", responses["error"])
             time.sleep(0.2)
@@ -186,7 +184,7 @@ class ElasticsearchClient(base.SearchClient):
         # Stack the results
         indices = np.stack(indices)
         scores = np.stack(scores)
-        labels = (scores > -np.inf).astype(np.int64) if section_ids is not None else None
+        labels = (scores > -np.inf).astype(np.int64) if ids is not None else None
 
         return rdtypes.RetrievalBatch(
             indices=indices,
@@ -201,12 +199,12 @@ class ElasticsearchClient(base.SearchClient):
         *,
         top_k: int,
         subset_ids: Optional[list[str] | list[list[str]]] = None,
-        section_ids: Optional[list[str] | list[list[str]]] = None,
+        ids: Optional[list[str] | list[list[str]]] = None,
     ) -> list:
         if subset_ids is None:
             subset_ids = []
-        if section_ids is None:
-            section_ids = []
+        if ids is None:
+            ids = []
 
         def _make_search_body(
             text: str,
@@ -218,12 +216,12 @@ class ElasticsearchClient(base.SearchClient):
                 body["should"].append(
                     {"match": {BODY_KEY: text}},
                 )
-            if section_ids:
+            if section_ids is not None:
                 if isinstance(section_ids, str):
                     section_ids = [section_ids]
                 body["filter"].append({"terms": {SECTION_ID_KEY: section_ids}})
 
-            if subset_ids:
+            if subset_ids is not None:
                 if isinstance(subset_ids, str):
                     subset_ids = [subset_ids]
                 body["filter"].append({"terms": {SUBSET_ID_KEY: subset_ids}})
@@ -232,7 +230,7 @@ class ElasticsearchClient(base.SearchClient):
 
         return [
             part
-            for text, sub_ids, sec_ids in itertools.zip_longest(texts, subset_ids, section_ids)
+            for text, sub_ids, sec_ids in itertools.zip_longest(texts, subset_ids, ids)
             for part in [
                 {"index": self._index_name},
                 {

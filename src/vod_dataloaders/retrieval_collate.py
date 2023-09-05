@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import functools
 import math
 import time
 import warnings
@@ -14,13 +13,13 @@ import torch
 import transformers
 from loguru import logger
 from vod_dataloaders import fast
-from vod_datasets.postprocessing import DSET_LINK_KEY
 from vod_tools import dstruct, pipes
 from vod_tools.pipes.utils.misc import pack_examples
 
 from src import vod_configs, vod_search
 
-from .utils import BlockTimer, cast_as_tensor
+from .predict_collate import PredictCollate
+from .utils import BlockTimer
 
 T = TypeVar("T")
 
@@ -43,6 +42,8 @@ class RetrievalCollate(pipes.Collate):
     search_client: vod_search.HybridSearchClient
     sections: dstruct.SizedDataset[dict[str, Any]]
     config: vod_configs.RetrievalCollateConfig
+    query_collate_fn: PredictCollate
+    section_collate_fn: PredictCollate
 
     def __init__(
         self,
@@ -63,6 +64,8 @@ class RetrievalCollate(pipes.Collate):
         self.sections = sections
         self.config = config
         self.parameters = parameters or {}
+        self.query_collate_fn = PredictCollate.from_config(self.config, tokenizer=self.tokenizer, field="query")
+        self.section_collate_fn = PredictCollate.from_config(self.config, tokenizer=self.tokenizer, field="section")
 
         # Validate the parameters
         client_names = set(search_client.clients.keys())
@@ -79,7 +82,7 @@ class RetrievalCollate(pipes.Collate):
     def __call__(self, examples: list[dict[str, Any]], **kwargs: Any) -> dict[str, Any]:
         """Collate function for retrieval tasks. This function is used to convert a list of examples into a batch."""
         start_time = time.perf_counter()
-        batch = pack_examples(examples)
+        batch = pack_examples(examples)  # list[dict] -> dict[list]
 
         # Search within each client
         search_results, raw_scores = self.search(batch, top_k=self.config.prefetch_n_sections)
@@ -109,6 +112,10 @@ class RetrievalCollate(pipes.Collate):
                 padding=True,  # <-- padding is required for `torch.compile()` to compile a single graph.
             )
 
+        # Replace negative indices with random ones
+        #    this is requiered because `datasets.Dataset` doesn't support negative indices
+        sections = _replace_negative_indices(sections, world_size=len(self.sections))
+
         # Fetch the content of each section from the huggingface `datasets.Dataset`
         flat_ids = sections.indices.flatten().tolist()
         flat_sections_content: dict[str, Any] = self.sections[flat_ids]
@@ -119,12 +126,12 @@ class RetrievalCollate(pipes.Collate):
                 batch,
                 flat_sections_content,
                 sections=sections,
-                tokenizer=self.tokenizer,
-                config=self.config,
+                query_collate_fn=self.query_collate_fn,
+                section_collate_fn=self.section_collate_fn,
             )
 
         # Get query/section attributes (e.g., group_hash, kb_id, etc.)
-        attributes = _get_attributes_as_torch(
+        attributes = _get_extra_attributes(
             batch,
             flat_sections_content,
             sections_shape=sections.indices.shape,
@@ -136,11 +143,12 @@ class RetrievalCollate(pipes.Collate):
         batch = {
             **tokenized_querys,
             **tokenized_sections,
-            **_sampled_sections_to_dict(sections, sampled_raw, prefix="section.", as_torch=True),
+            **_sections_to_dict(sections, sampled_raw, prefix="section.", as_torch=True),
             **attributes,
             **diagnostics,
             **{f"diagnostics.parameters.{k}": v for k, v in self.parameters.items()},
         }
+        rich.print(batch)
 
         return batch
 
@@ -154,8 +162,7 @@ class RetrievalCollate(pipes.Collate):
         query_subset_ids = batch[self.config.subset_id_keys.query]
 
         # Get the query text
-        query_text = batch[self.config.text_keys.query]
-
+        query_text: list[str] = self.query_collate_fn.template.render_batch(batch)
         # Get the query vectors
         if self.search_client.requires_vectors:
             query_vectors = batch[self.config.vector_keys.query]
@@ -167,7 +174,7 @@ class RetrievalCollate(pipes.Collate):
         # Async search the query text using `search_client.async_search`
         return _multi_search(
             text=query_text,
-            shards=batch[DSET_LINK_KEY],
+            shards=batch[vod_configs.TARGET_SHARD_KEY],
             vector=query_vectors,
             subset_ids=query_subset_ids,
             section_ids=batch[self.config.section_id_keys.query],
@@ -196,9 +203,9 @@ def _multi_search(
     lookup_payload = {
         "client": clients["sparse"],
         "vector": vector,
-        "text": [""] * len(text),
+        "text": [""] * len(text),  # No search query is provided here. We are only looking for the `positive` sections
         "subset_ids": subset_ids,
-        "section_ids": section_ids,
+        "ids": section_ids,
         "shard": shards,
         "top_k": top_k,
     }
@@ -223,6 +230,8 @@ def _multi_search(
     # Unpack the results
     search_results = dict(zip(["lookup"] + client_names, search_results))
 
+    rich.print(search_results)
+
     # Discard the scores for the lookup client, discard the labels for all other clients
     search_results["lookup"].scores.fill(0.0)
     for name, result in search_results.items():
@@ -230,24 +239,14 @@ def _multi_search(
             continue
         result.labels = None
 
-    # DEBUGGING - check for inf scores in the faiss results
+    # DEBUGGING - check for `-inf` scores in the `dense` results (hunting down problems with `faiss`)
     if "dense" in search_results:
-        r = search_results["dense"]
-        is_inf = r.scores >= FLOAT_INF_THRES
-        if is_inf.any():
-            rich.print(r)
-            warnings.warn(
-                f"Found {is_inf.sum()} ({is_inf.sum() / is_inf.size:.2%}) inf scores in the faiss results.",
-                stacklevel=2,
-            )
-            r.scores[is_inf] = np.nan
+        _check_inf_scores(search_results["dense"])
 
     # Retrieve the meta data
     for name, result in search_results.items():
         for key, value in result.meta.items():
             meta[f"{name}_{key}"] = value
-
-    rich.print(search_results)
 
     # normalize the scores
     fast.normalize_scores_(search_results, offset=1.0)
@@ -260,13 +259,38 @@ def _multi_search(
     combined_results.meta = meta
     raw_scores.pop("lookup")
 
-    # Set -inf to the mask section (index -1)
+    # Set -inf to the mask section (index -1) and replace the neg. indices with random indices
     is_masked = combined_results.indices < 0
     combined_results.scores[is_masked] = -np.inf
     for scores in raw_scores.values():
         scores[is_masked] = -np.inf
 
     return combined_results, raw_scores
+
+
+def _replace_negative_indices(sections: vod_search.RetrievalBatch, world_size: int) -> vod_search.RetrievalBatch:
+    """Replace negative indices with random ones."""
+    is_negative = sections.indices < 0
+    n_negative = is_negative.sum()
+    if n_negative:
+        sections.indices.setflags(write=True)
+        sections.indices[is_negative] = np.random.randint(0, world_size, size=n_negative)
+    return sections
+
+
+def _check_inf_scores(r: vod_search.RetrievalBatch[np.ndarray]) -> None:
+    """Check whether there is any `+inf` scores in the results.
+
+    This sometimes happens with `faiss`. I still don't understand why.
+    """
+    is_inf = r.scores >= FLOAT_INF_THRES
+    if is_inf.any():
+        rich.print(r)
+        warnings.warn(
+            f"Found {is_inf.sum()} ({is_inf.sum() / is_inf.size:.2%}) inf scores in the search results.",
+            stacklevel=2,
+        )
+        r.scores[is_inf] = np.nan
 
 
 async def _execute_search(payloads: list[dict[str, Any]]) -> list[vod_search.RetrievalBatch]:
@@ -280,7 +304,7 @@ async def _execute_search(payloads: list[dict[str, Any]]) -> list[vod_search.Ret
     return await asyncio.gather(*futures)
 
 
-def _sampled_sections_to_dict(
+def _sections_to_dict(
     sections: vod_search.RetrievalBatch,
     raw_scores: Optional[dict[str, np.ndarray]] = None,
     prefix: str = "",
@@ -315,47 +339,30 @@ def _tokenize_fields(
     flat_sections_content: dict[str, Any],
     *,
     sections: vod_search.RetrievalBatch,
-    config: vod_configs.RetrievalCollateConfig,
-    tokenizer: transformers.PreTrainedTokenizerBase,
+    query_collate_fn: PredictCollate,
+    section_collate_fn: PredictCollate,
 ) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
-    tokenized_sections = pipes.torch_tokenize_pipe(
-        flat_sections_content,
-        tokenizer=tokenizer,
-        text_key="text",
-        prefix_key="section.",
-        max_length=config.section_max_length,
-        truncation=True,
-        padding="max_length",
-    )
+    # Tokenize the sections
+    tokenized_sections = section_collate_fn(flat_sections_content)
     tokenized_sections = {k: v.view(*sections.indices.shape, -1) for k, v in tokenized_sections.items()}
-
-    # Tokenize the querys
-    tokenized_query = pipes.torch_tokenize_pipe(
-        batch,
-        tokenizer=tokenizer,
-        text_key="text",
-        prefix_key="query.",
-        max_length=config.query_max_length,
-        truncation=True,
-        padding="max_length",
-    )
-
+    # Tokenize the queries
+    tokenized_query = query_collate_fn(batch)
     return tokenized_query, tokenized_sections
 
 
-def _get_attributes_as_torch(
+def _get_extra_attributes(
     batch: dict[str, Any],
     flat_sections_content: dict[str, Any],
     *,
     sections_shape: tuple[int, ...],
     config: vod_configs.RetrievalCollateConfig,
 ) -> dict[str, Any]:
-    as_tensor = functools.partial(cast_as_tensor, dtype=torch.long, replace={None: -1})
+    # as_tensor = functools.partial(cast_as_tensor, dtype=torch.long, replace={None: -1})
     extras_keys_ops = {
-        "id": as_tensor,
-        "answer_id": as_tensor,
-        "kb_id": as_tensor,
-        "group_hash": as_tensor,
+        "id": lambda x: x,
+        "language": lambda x: x,
+        "subset_id": lambda x: x,
+        "subset_ids": lambda x: x,
         "link": lambda x: x,
         "dset_uid": lambda x: x,
     }
@@ -369,8 +376,7 @@ def _get_attributes_as_torch(
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        query_section_ids = torch.nested.nested_tensor(batch[config.section_id_keys.query])
-        query_extras["query.section_ids"] = torch.nested.to_padded_tensor(query_section_ids, padding=-1)
+        query_extras["query.section_ids"] = batch[config.section_id_keys.query]
 
     # Handle section attributes
     sections_extras = {}
@@ -411,13 +417,14 @@ def _gather_in_batch_negatives(
         # pad the unique indices with random indices to a fixed size
         n_full = math.prod(samples.indices.shape)
         n_pad = n_full - unique_indices.shape[0]
-        # We sample iid so there might be some collisions
-        # but this is ok unlikely, so not worth the extra computation to check.
+        # We sample sections iid so there might be some collisions
+        #   but in practice this is sufficiently unlikely,
+        #   so it's not worth the extra computation to check.
         random_indices = np.random.randint(0, world_size, size=n_pad)
         unique_indices = np.concatenate([unique_indices, random_indices])
 
     # Repeat the unique indices for each section
-    unique_indices_ = unique_indices[None, :].repeat(samples.indices.shape[0], axis=0)
+    unique_indices_: np.ndarray = unique_indices[None, :].repeat(samples.indices.shape[0], axis=0)
 
     # Gather the scores from the `candidates` batch, set the NaNs to the minimum score
     scores = fast.gather_values_by_indices(unique_indices_, search_results.indices, search_results.scores)

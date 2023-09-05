@@ -67,7 +67,7 @@ def run(args: _Args) -> None:
         sr = client.search(
             text=batch["query"],
             subset_ids=batch.get("subset_ids", None),
-            section_ids=batch.get("retrieval_ids", None),
+            ids=batch.get("retrieval_ids", None),
             top_k=10,
         )
         rich.print(sr)

@@ -204,8 +204,8 @@ def _info_bar(output: dict[str, Any], model: HybridRanker, step: int, total_step
 class TuningTask:
     """Holds the train and validation datasets."""
 
-    questions: helpers.DsetWithVectors
-    sections: helpers.DsetWithVectors
+    questions: helpers.ShardedDsetWithVectors
+    sections: helpers.ShardedDsetWithVectors
 
 
 def _make_tuning_task(
@@ -226,13 +226,13 @@ def _make_tuning_task(
     return TuningTask(
         questions=helpers.concatenate_datasets(
             [
-                helpers.DsetWithVectors.cast(data=factory.get_queries(), vectors=_vec(key, "question"))
+                helpers.ShardedDsetWithVectors.from_configs(data=factory.get_queries(), vectors=_vec(key, "question"))
                 for key, factory in factories.items()
             ]
         ),
         sections=helpers.concatenate_datasets(
             [
-                helpers.DsetWithVectors.cast(data=factory.get_sections(), vectors=_vec(key, "section"))
+                helpers.ShardedDsetWithVectors.from_configs(data=factory.get_sections(), vectors=_vec(key, "section"))
                 for key, factory in factories.items()
             ]
         ),

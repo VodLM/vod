@@ -60,9 +60,9 @@ class ShardedSearchClient(Generic[K, Sc], base.SearchClient):
         self,
         *,
         text: list[str],
-        vector: Optional[np.ndarray] = None,
-        subset_ids: Optional[list[list[str]]] = None,
-        section_ids: Optional[list[list[str]]] = None,
+        vector: None | rdtypes.Ts = None,
+        subset_ids: None | list[list[str]] = None,
+        ids: None | list[list[str]] = None,
         shard: Optional[list[K]] = None,
         top_k: int = 3,
     ) -> rdtypes.RetrievalBatch[np.ndarray]:
@@ -78,7 +78,7 @@ class ShardedSearchClient(Generic[K, Sc], base.SearchClient):
             shard=shard,
             vector=vector,
             subset_ids=subset_ids,
-            section_ids=section_ids,
+            ids=ids,
         )
 
         # Search the shards
@@ -88,8 +88,8 @@ class ShardedSearchClient(Generic[K, Sc], base.SearchClient):
             search_shard = self.shards[shard_name]
             results_by_shard[shard_name] = search_shard.search(
                 text=query["text"],
+                ids=query["ids"],
                 subset_ids=query["subset_ids"],
-                section_ids=query["section_ids"],
                 vector=np.stack(query["vector"]) if vector is not None else None,
                 top_k=top_k,
             )
@@ -103,10 +103,10 @@ class ShardedSearchClient(Generic[K, Sc], base.SearchClient):
         self,
         *,
         text: list[str],
-        shard: Optional[list[K]],
-        vector: Optional[np.ndarray] = None,
-        subset_ids: Optional[list[list[str]]] = None,
-        section_ids: Optional[list[list[str]]] = None,
+        shard: None | list[K] = None,
+        vector: None | np.ndarray = None,
+        subset_ids: None | list[list[str]] = None,
+        ids: None | list[list[str]] = None,
         top_k: int = 3,
     ) -> rdtypes.RetrievalBatch[np.ndarray]:
         """Search the server given a batch of text and/or vectors."""
@@ -121,7 +121,7 @@ class ShardedSearchClient(Generic[K, Sc], base.SearchClient):
             shard=shard,
             vector=vector,
             subset_ids=subset_ids,
-            section_ids=section_ids,
+            ids=ids,
         )
 
         # Make the queries
@@ -141,7 +141,7 @@ class ShardedSearchClient(Generic[K, Sc], base.SearchClient):
             result = payload["search_shard"].search(
                 text=payload["query"]["text"],
                 subset_ids=payload["query"]["subset_ids"],
-                section_ids=payload["query"]["section_ids"],
+                ids=payload["query"]["ids"],
                 vector=np.stack(payload["query"]["vector"]) if vector is not None else None,
                 top_k=top_k,
             )
@@ -172,9 +172,9 @@ class ShardedSearchClient(Generic[K, Sc], base.SearchClient):
 def _scatter_queries(
     text: list[str],
     shard: list[K],
-    vector: Optional[np.ndarray] = None,
+    vector: Optional[rdtypes.Ts] = None,
     subset_ids: Optional[list[list[str]]] = None,
-    section_ids: Optional[list[list[str]]] = None,
+    ids: Optional[list[list[str]]] = None,
 ) -> _ShardedQueries[K]:
     shards = collections.defaultdict(lambda: collections.defaultdict(list))
     lookup = []
@@ -184,8 +184,8 @@ def _scatter_queries(
         lookup.append((shard_name, len(shards[shard_name]["text"]) - 1))
         if subset_ids is not None:
             shards[shard_name]["subset_ids"].append(subset_ids[i])
-        if section_ids is not None:
-            shards[shard_name]["section_ids"].append(section_ids[i])
+        if ids is not None:
+            shards[shard_name]["ids"].append(ids[i])
         if vector is not None:
             shards[shard_name]["vector"].append(vector[i])
     return _ShardedQueries(shards=dict(shards), lookup=lookup)
@@ -193,7 +193,7 @@ def _scatter_queries(
 
 def _gather_results(
     lookup: list[tuple[K, int]],
-    results: dict[K, rdtypes.RetrievalBatch[np.ndarray]],
+    results: dict[K, rdtypes.RetrievalBatch[rdtypes.Ts]],
 ) -> rdtypes.RetrievalBatch[np.ndarray]:
     gathered_results = [results[name][j] for name, j in lookup]
     return rdtypes.stack_samples(gathered_results)

@@ -146,7 +146,7 @@ def _hash_unique_values_map(hasher: datasets.fingerprint.Hasher, obj: _UniqueVal
     return hasher.hash(
         {
             "cls": obj.__class__,
-            "key": self.key,
+            "key": obj.key,
             "sections": obj.sections._fingerprint,
         }
     )

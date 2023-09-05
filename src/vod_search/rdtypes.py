@@ -347,15 +347,17 @@ def _stack_np_1darrays(arrays: list[np.ndarray], fill_values: Any) -> np.ndarray
     return output
 
 
-def stack_samples(samples: Iterable[RetrievalSample[np.ndarray]]) -> RetrievalBatch[np.ndarray]:
+def stack_samples(samples: Iterable[RetrievalSample[Ts]]) -> RetrievalBatch[np.ndarray]:
     """Stack a list of samples into a batch."""
     scores = [sample.scores for sample in samples]
     indices = [sample.indices for sample in samples]
     labels = [sample.labels for sample in samples]
     if any(lbl is None for lbl in labels):
         labels = None
+    if not isinstance(scores[0], np.ndarray):
+        raise TypeError(f"Expected a list of numpy arrays, but got {type(scores[0])}")
     return RetrievalBatch(
-        scores=_stack_np_1darrays(scores, fill_values=-math.inf),
-        indices=_stack_np_1darrays(indices, fill_values=-1),
-        labels=_stack_np_1darrays(labels, -1) if labels is not None else None,
+        scores=_stack_np_1darrays(scores, fill_values=-math.inf),  # type: ignore
+        indices=_stack_np_1darrays(indices, fill_values=-1),  # type: ignore
+        labels=_stack_np_1darrays(labels, -1) if labels is not None else None,  # type: ignore
     )

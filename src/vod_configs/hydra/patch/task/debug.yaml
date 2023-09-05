@@ -1,7 +1,7 @@
 # @package _global_
 
 defaults:
-  - override /model/encoder: mini-lm-debug
+  - override /model/encoder: mini-lm
   - _self_
 
 seed: 1
@@ -22,7 +22,7 @@ benchmark:
   tuning: null
   parameters:
     sparse: 1.0
-    dense: -1.0 # deactivate `dense` search
+    dense: 1.0 # deactivate `dense` search
 
 trainer:
   max_steps: 1000
@@ -31,13 +31,13 @@ trainer:
   n_max_eval: 100
   parameters:
     sparse: 1.0
-    dense: -1.0 # deactivate `dense` search
+    dense: 1.0 # deactivate `dense` search
 
 batch_size:
   effective: 16
   per_device: 2
   per_device_eval: 2
-  per_device_predict: 512
+  per_device_predict: 32
 
 resources:
   num_workers: 1

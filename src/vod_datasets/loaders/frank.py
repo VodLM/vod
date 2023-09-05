@@ -241,7 +241,7 @@ class FrankDatasetLoader(DatasetLoader):
             raise ValueError(f"Unexpected dataset type: what=`{what}`")
         self.dataset_type = what
 
-    def __call__(
+    def __call__(  # noqa: C901
         self,
         subset: str | None = None,
         split: str | None = None,

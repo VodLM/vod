@@ -1,0 +1,3 @@
+query: "Q: {{ query }}"
+answer: "A: {{ answer }}"
+section: "{% if title %}Title: {{ title }}. {% endif %}D: {{ content }}"

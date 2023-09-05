@@ -30,6 +30,9 @@ from .py.search import (
     SearchFactoryDefaults,
     SingleSearchFactoryConfig,
 )
+from .py.templates import (
+    TemplatesConfig,
+)
 from .py.workflows import (
     BatchSizeConfig,
     BenchmarkConfig,
@@ -39,6 +42,8 @@ from .py.workflows import (
     TrainerConfig,
     TrainWithIndexUpdatesConfigs,
 )
+
+TARGET_SHARD_KEY = "__LINKED_SHARD__"
 
 
 def hyra_conf_path() -> str:

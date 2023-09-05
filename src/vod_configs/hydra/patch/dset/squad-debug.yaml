@@ -1,11 +1,6 @@
 # @package _global_
 
-
-
 dataset:
-  options:
-    # Necessary ot use context as targets for retrieval
-    convert_subset_ids_to_targets: true
   # Base search
   search:
     engines:
@@ -20,24 +15,19 @@ dataset:
       train:
         - identifier: squad_en_train
           name_or_path: squad_v2
-          split: train
+          split: validation[:100]
           link: squad_en_sections
-          options:
-            subset_size: 10
       val:
-        - identifier: squad_en_val
+        - identifier: squad_en_train
           name_or_path: squad_v2
-          split: validation
+          split: validation[:100]
           link: squad_en_sections
-          options:
-            subset_size: 10
 
     sections:
       sections:
         - identifier: squad_en_sections
           name_or_path: squad_v2
-          options:
-            subset_size: 100
+          split: validation[:100]
           search:
             dense:
               backend: qdrant
@@ -47,13 +37,14 @@ dataset:
     - queries:
         identifier: squad_en_val
         name_or_path: squad_v2
-        split: validation
+        split: validation[:100]
         link: squad_en_sections
         options:
           subset_size: 10
       sections:
         identifier: squad_en_sections
         name_or_path: squad_v2
+        split: validation[:100]
         options:
           subset_size: 100
         search:
