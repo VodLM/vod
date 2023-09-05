@@ -5,7 +5,7 @@ import math
 import time
 import warnings
 from multiprocessing.managers import DictProxy
-from typing import Any, Optional, TypeVar
+from typing import Any, Callable, Optional, TypeVar
 
 import numpy as np
 import rich
@@ -130,7 +130,7 @@ class RetrievalCollate(pipes.Collate):
                 section_collate_fn=self.section_collate_fn,
             )
 
-        # Get query/section attributes (e.g., group_hash, kb_id, etc.)
+        # Get query/section attributes (e.g., subset_id, retrieval_ids, etc.)
         attributes = _get_extra_attributes(
             batch,
             flat_sections_content,
@@ -139,7 +139,6 @@ class RetrievalCollate(pipes.Collate):
         )
 
         # Build the batch
-        diagnostics["diagnostics.collate_time"] = time.perf_counter() - start_time
         batch = {
             **tokenized_querys,
             **tokenized_sections,
@@ -148,8 +147,7 @@ class RetrievalCollate(pipes.Collate):
             **diagnostics,
             **{f"diagnostics.parameters.{k}": v for k, v in self.parameters.items()},
         }
-        rich.print(batch)
-
+        batch["diagnostics.collate_time"] = time.perf_counter() - start_time
         return batch
 
     def search(
@@ -224,6 +222,8 @@ def _multi_search(
 
     # Run the searches asynchronously
     meta = {}
+    # Note - VL: I am not 100% sure this leverages asynchroneous execution effectively.
+    #            This might something to look into for `asyncio` experts.
     with BlockTimer(name="search_time", output=meta):
         search_results = asyncio.run(_execute_search([lookup_payload] + payloads))
 
@@ -298,7 +298,10 @@ async def _execute_search(payloads: list[dict[str, Any]]) -> list[vod_search.Ret
 
     async def _async_search_one(args: dict[str, Any]) -> vod_search.RetrievalBatch[np.ndarray]:
         client = args.pop("client")
-        return await client.async_search(**args)
+        start_time = time.perf_counter()
+        result = await client.async_search(**args)
+        result.meta["search_time"] = time.perf_counter() - start_time
+        return result
 
     futures = [_async_search_one(payload) for payload in payloads]
     return await asyncio.gather(*futures)
@@ -356,15 +359,14 @@ def _get_extra_attributes(
     *,
     sections_shape: tuple[int, ...],
     config: vod_configs.RetrievalCollateConfig,
-) -> dict[str, Any]:
-    # as_tensor = functools.partial(cast_as_tensor, dtype=torch.long, replace={None: -1})
+) -> dict[str, None | Callable[[Any], Any]]:
     extras_keys_ops = {
-        "id": lambda x: x,
-        "language": lambda x: x,
-        "subset_id": lambda x: x,
-        "subset_ids": lambda x: x,
-        "link": lambda x: x,
-        "dset_uid": lambda x: x,
+        "id": None,
+        "language": None,
+        "subset_id": None,
+        "subset_ids": None,
+        "link": None,
+        "dset_uid": None,
     }
 
     # Handle query attributes
@@ -372,7 +374,7 @@ def _get_extra_attributes(
     for k, fn in extras_keys_ops.items():
         if k not in batch:
             continue
-        query_extras[f"query.{k}"] = fn(batch[k])
+        query_extras[f"query.{k}"] = fn(batch[k]) if fn is not None else batch[k]
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -430,6 +432,8 @@ def _gather_in_batch_negatives(
     scores = fast.gather_values_by_indices(unique_indices_, search_results.indices, search_results.scores)
 
     # Gather the labels from the `positives` batch, set NaNs to negatives
+    if search_results.labels is None:
+        raise ValueError("The `search_results` must have labels.")
     labels = fast.gather_values_by_indices(unique_indices_, search_results.indices, search_results.labels)
     labels[np.isnan(labels)] = -1
 
