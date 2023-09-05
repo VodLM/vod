@@ -5,7 +5,8 @@ dataset:
   search:
     engines:
       dense:
-        backend: qdrant
+        backend: faiss
+        factory: Flat
       sparse:
         backend: elasticsearch
 

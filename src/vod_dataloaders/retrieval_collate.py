@@ -230,8 +230,6 @@ def _multi_search(
     # Unpack the results
     search_results = dict(zip(["lookup"] + client_names, search_results))
 
-    rich.print(search_results)
-
     # Discard the scores for the lookup client, discard the labels for all other clients
     search_results["lookup"].scores.fill(0.0)
     for name, result in search_results.items():
@@ -374,7 +372,8 @@ def _get_extra_attributes(
     for k, fn in extras_keys_ops.items():
         if k not in batch:
             continue
-        query_extras[f"query.{k}"] = fn(batch[k]) if fn is not None else batch[k]
+        v = batch[k]
+        query_extras[f"query.{k}"] = fn(v) if fn is not None else v
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -385,7 +384,8 @@ def _get_extra_attributes(
     for k, fn in extras_keys_ops.items():
         if k not in flat_sections_content:
             continue
-        v = fn(flat_sections_content[k])
+        v = flat_sections_content[k]
+        v = fn(v) if fn is not None else v
         if isinstance(v, torch.Tensor):
             v = v.view(sections_shape)
         elif isinstance(v, np.ndarray):
