@@ -10,7 +10,7 @@ from .utils import StrictModel
 class TokenizerConfig(StrictModel):
     """Configuration for a tokenizer."""
 
-    model_name: str
+    name_or_path: str
     use_fast: Optional[bool] = True
 
     def instantiate(
@@ -21,4 +21,4 @@ class TokenizerConfig(StrictModel):
         if self.use_fast is not None:
             kwargs["use_fast"] = self.use_fast  # type: ignore
 
-        return transformers.AutoTokenizer.from_pretrained(self.model_name, **kwargs)
+        return transformers.AutoTokenizer.from_pretrained(self.name_or_path, **kwargs)

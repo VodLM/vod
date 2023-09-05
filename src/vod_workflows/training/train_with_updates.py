@@ -27,7 +27,7 @@ def train_with_index_updates(  # noqa: C901, PLR0915
     fabric: L.Fabric,
     ranker: vod_models.Ranker,
     config: vod_configs.TrainWithIndexUpdatesConfigs | omegaconf.DictConfig,
-    load_from: Optional[str] = None,  # todo
+    resume_from_checkpoint: Optional[str] = None,
 ) -> vod_models.Ranker:
     """Train a ranking model while periodically updating the index."""
     barrier = functools.partial(helpers.barrier_fn, fabric=fabric)
@@ -54,14 +54,15 @@ def train_with_index_updates(  # noqa: C901, PLR0915
         parameters=config.trainer.parameters,
     )
 
-    if load_from is not None:
-        logger.info(f"Loading training state from `{load_from}`")
+    # Load an existing checkpoint
+    if resume_from_checkpoint is not None:
+        logger.info(f"Loading training state from `{config.trainer.checkpoint_path}`")
         io.load_training_state(
-            checkpoint_path=load_from,
+            checkpoint_path=resume_from_checkpoint,
             fabric=fabric,
             model=ranker,
             optimizer=optimizer,
-            scheduler=None,
+            scheduler=scheduler,
             trainer_state=state,
         )
         rich.print(state)

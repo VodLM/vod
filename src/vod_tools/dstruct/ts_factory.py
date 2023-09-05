@@ -105,4 +105,4 @@ def _factory_cfg_path(path: pathlib.Path | str) -> pathlib.Path:
 
 @datasets.fingerprint.hashregister(TensorStoreFactory)
 def _hash_store_factory_lazy_array(hasher: datasets.fingerprint.Hasher, obj: TensorStoreFactory) -> str:
-    return hasher.hash(obj.json())
+    return hasher.hash(obj.model_dump_json())
