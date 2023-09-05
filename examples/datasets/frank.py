@@ -23,8 +23,8 @@ def run(args: Args) -> None:
             name_or_path=vod_datasets.FrankDatasetLoader(
                 frank_split=args.frank_split,
                 what="queries",
+                language=args.language,
             ),
-            subsets=[args.language],
             split=args.split,
             link=None,
             options=vod_configs.DatasetOptions(),

@@ -82,6 +82,20 @@ DATASET_CONFIGS = {
         "identifier": "my_data",
         "name_or_path": my_loader,
     },
+    "frank": {
+        "identifier": "frank",
+        "name_or_path": [
+            vod_datasets.FrankDatasetLoader(frank_split="A", language="en", what="queries"),
+            vod_datasets.FrankDatasetLoader(frank_split="A", language="en", what="sections"),
+        ],
+    },
+    "raffle_squad": {
+        "identifier": "raffle_squad",
+        "name_or_path": [
+            vod_datasets.RaffleSquadDatasetLoader(language="da", what="queries"),
+            vod_datasets.RaffleSquadDatasetLoader(language="da", what="sections"),
+        ],
+    },
 }
 
 
@@ -99,12 +113,28 @@ def run(args: Args) -> None:
         raise KeyError(f"Configuration for `{args.name}` not found!") from exc
 
     dset = vod_datasets.load_dataset(
-        vod_configs.QueriesDatasetConfig(**config),
+        vod_configs.QueriesDatasetConfig(
+            **{
+                **config,
+                "name_or_path": config["name_or_path"][0]
+                if isinstance(config["name_or_path"], list)
+                else config["name_or_path"],
+            }
+        ),
     )
     rich.print(dset)
     rich.print(dset[0])
 
-    dset = vod_datasets.load_dataset(vod_configs.SectionsDatasetConfig(**config))
+    dset = vod_datasets.load_dataset(
+        vod_configs.SectionsDatasetConfig(
+            **{
+                **config,
+                "name_or_path": config["name_or_path"][1]
+                if isinstance(config["name_or_path"], list)
+                else config["name_or_path"],
+            }
+        )
+    )
     rich.print(dset)
     rich.print(dset[0])
 

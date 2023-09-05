@@ -19,7 +19,7 @@ dataset:
             _target_: vod_datasets.FrankDatasetLoader
             frank_split: A
             what: queries
-          subsets: en
+            language: en
           split: train
           link: frank_a_en_sections
         - identifier: frank_a_da_train
@@ -27,7 +27,7 @@ dataset:
             _target_: vod_datasets.FrankDatasetLoader
             frank_split: A
             what: queries
-          subsets: da
+            language: da
           split: train
           link: frank_a_da_sections
         - identifier: frank_a_de_train
@@ -35,7 +35,7 @@ dataset:
             _target_: vod_datasets.FrankDatasetLoader
             frank_split: A
             what: queries
-          subsets: de
+            language: de
           split: train
           link: frank_a_de_sections
         - identifier: frank_a_nl_train
@@ -43,7 +43,7 @@ dataset:
             _target_: vod_datasets.FrankDatasetLoader
             frank_split: A
             what: queries
-          subsets: nl
+            language: nl
           split: train
           link: frank_a_nl_sections
         - identifier: frank_a_fr_train
@@ -51,7 +51,7 @@ dataset:
             _target_: vod_datasets.FrankDatasetLoader
             frank_split: A
             what: queries
-          subsets: fr
+            language: fr
           split: train
           link: frank_a_fr_sections
         - identifier: frank_a_is_train
@@ -59,7 +59,7 @@ dataset:
             _target_: vod_datasets.FrankDatasetLoader
             frank_split: A
             what: queries
-          subsets: is
+            language: is
           split: train
           link: frank_a_is_sections
         # SQuADs
@@ -83,7 +83,7 @@ dataset:
             _target_: vod_datasets.FrankDatasetLoader
             frank_split: A
             what: queries
-          subsets: en
+            language: en
           split: validation
           link: frank_a_sections
         - identifier: frank_a_da_train
@@ -91,7 +91,7 @@ dataset:
             _target_: vod_datasets.FrankDatasetLoader
             frank_split: A
             what: queries
-          subsets: da
+            language: da
           split: validation
           link: frank_a_sections
         - identifier: frank_a_de_train
@@ -99,7 +99,7 @@ dataset:
             _target_: vod_datasets.FrankDatasetLoader
             frank_split: A
             what: queries
-          subsets: de
+            language: de
           split: validation
           link: frank_a_sections
         - identifier: frank_a_nl_train
@@ -107,7 +107,7 @@ dataset:
             _target_: vod_datasets.FrankDatasetLoader
             frank_split: A
             what: queries
-          subsets: nl
+            language: nl
           split: validation
           link: frank_a_sections
         - identifier: frank_a_fr_train
@@ -115,7 +115,7 @@ dataset:
             _target_: vod_datasets.FrankDatasetLoader
             frank_split: A
             what: queries
-          subsets: fr
+            language: fr
           split: validation
           link: frank_a_sections
         - identifier: frank_a_is_train
@@ -123,7 +123,7 @@ dataset:
             _target_: vod_datasets.FrankDatasetLoader
             frank_split: A
             what: queries
-          subsets: is
+            language: is
           split: validation
           link: frank_a_sections
 
@@ -135,37 +135,37 @@ dataset:
             _target_: vod_datasets.FrankDatasetLoader
             frank_split: A
             what: sections
-          subsets: en
+            language: en
         - identifier: frank_a_da_sections
           name_or_path:
             _target_: vod_datasets.FrankDatasetLoader
             frank_split: A
             what: sections
-          subsets: da
+            language: da
         - identifier: frank_a_de_sections
           name_or_path:
             _target_: vod_datasets.FrankDatasetLoader
             frank_split: A
             what: sections
-          subsets: de
+            language: de
         - identifier: frank_a_nl_sections
           name_or_path:
             _target_: vod_datasets.FrankDatasetLoader
             frank_split: A
             what: sections
-          subsets: nl
+            language: nl
         - identifier: frank_a_fr_sections
           name_or_path:
             _target_: vod_datasets.FrankDatasetLoader
             frank_split: A
             what: sections
-          subsets: fr
+            language: fr
         - identifier: frank_a_is_sections
           name_or_path:
             _target_: vod_datasets.FrankDatasetLoader
             frank_split: A
             what: sections
-          subsets: is
+            language: is
         # SQuADs
         - identifier: squad_en_sections
           name_or_path: squad_v2
@@ -185,7 +185,7 @@ dataset:
           _target_: vod_datasets.FrankDatasetLoader
           frank_split: A
           what: queries
-        subsets: en
+          language: en
         split: validation
         link: frank_a_en_sections
       sections:
@@ -194,7 +194,7 @@ dataset:
           _target_: vod_datasets.FrankDatasetLoader
           frank_split: A
           what: sections
-        subsets: en
+          language: en
     # Frank B en
     - queries:
         identifier: frank_b_en_train
@@ -202,7 +202,7 @@ dataset:
           _target_: vod_datasets.FrankDatasetLoader
           frank_split: B
           what: queries
-        subsets: en
+          language: en
         split: train
         link: frank_b_en_sections
       sections:
@@ -211,7 +211,7 @@ dataset:
           _target_: vod_datasets.FrankDatasetLoader
           frank_split: B
           what: sections
-        subsets: en
+          language: en
     # Frank B fr
     - queries:
         identifier: frank_b_fr_train
@@ -219,7 +219,7 @@ dataset:
           _target_: vod_datasets.FrankDatasetLoader
           frank_split: B
           what: queries
-        subsets: fr
+          language: fr
         split: train
         link: frank_b_fr_sections
       sections:
@@ -228,7 +228,7 @@ dataset:
           _target_: vod_datasets.FrankDatasetLoader
           frank_split: B
           what: sections
-        subsets: fr
+          language: fr
     # Frank B de
     - queries:
         identifier: frank_b_de_train
@@ -236,7 +236,7 @@ dataset:
           _target_: vod_datasets.FrankDatasetLoader
           frank_split: B
           what: queries
-        subsets: de
+          language: de
         split: train
         link: frank_b_de_sections
       sections:
@@ -245,7 +245,7 @@ dataset:
           _target_: vod_datasets.FrankDatasetLoader
           frank_split: B
           what: sections
-        subsets: de
+          language: de
     # Frank B nl
     - queries:
         identifier: frank_b_nl_train
@@ -253,7 +253,7 @@ dataset:
           _target_: vod_datasets.FrankDatasetLoader
           frank_split: B
           what: queries
-        subsets: nl
+          language: nl
         split: train
         link: frank_b_nl_sections
       sections:
@@ -262,7 +262,7 @@ dataset:
           _target_: vod_datasets.FrankDatasetLoader
           frank_split: B
           what: sections
-        subsets: nl
+          language: nl
     # Frank B da
     - queries:
         identifier: frank_b_da_train
@@ -270,7 +270,7 @@ dataset:
           _target_: vod_datasets.FrankDatasetLoader
           frank_split: B
           what: queries
-        subsets: da
+          language: da
         split: train
         link: frank_b_da_sections
       sections:
@@ -279,7 +279,7 @@ dataset:
           _target_: vod_datasets.FrankDatasetLoader
           frank_split: B
           what: sections
-        subsets: da
+          language: da
     # Frank B is
     - queries:
         identifier: frank_b_is_train
@@ -287,7 +287,7 @@ dataset:
           _target_: vod_datasets.FrankDatasetLoader
           frank_split: B
           what: queries
-        subsets: is
+          language: is
         split: train
         link: frank_b_is_sections
       sections:
@@ -296,4 +296,4 @@ dataset:
           _target_: vod_datasets.FrankDatasetLoader
           frank_split: B
           what: sections
-        subsets: is
+          language: is

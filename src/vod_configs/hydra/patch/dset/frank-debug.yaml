@@ -18,9 +18,9 @@ dataset:
           name_or_path:
             _target_: vod_datasets.FrankDatasetLoader
             frank_split: A
+            language: en
             what: queries
             kb_ids: [14, 156]
-          subsets: en
           split: train
           link: frank_a_sections
       val:
@@ -28,9 +28,9 @@ dataset:
           name_or_path:
             _target_: vod_datasets.FrankDatasetLoader
             frank_split: A
+            language: en
             what: queries
             kb_ids: [14, 156]
-          subsets: en
           split: validation
           link: frank_a_sections
 
@@ -40,9 +40,9 @@ dataset:
           name_or_path:
             _target_: vod_datasets.FrankDatasetLoader
             frank_split: A
+            language: en
             what: sections
             kb_ids: [14, 156]
-          subsets: en
 
   # Benchmarks
   benchmark:
@@ -51,9 +51,9 @@ dataset:
         name_or_path:
           _target_: vod_datasets.FrankDatasetLoader
           frank_split: A
+          language: en
           what: queries
           kb_ids: [14, 156]
-        subsets: en
         split: train
         link: frank_a_sections
       sections:
@@ -61,6 +61,6 @@ dataset:
         name_or_path:
           _target_: vod_datasets.FrankDatasetLoader
           frank_split: A
+          language: en
           what: sections
           kb_ids: [14, 156]
-        subsets: en

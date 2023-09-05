@@ -58,7 +58,7 @@ class FrankQueryModel(models.QueryModel):
         return [str(x) for x in value]
 
     @pydantic.field_validator("retrieval_ids", mode="before")
-    def _validate_section_ids(cls, value: str | list) -> list[str]:
+    def _validate_retrieval_ids(cls, value: str | list) -> list[str]:
         if not isinstance(value, list):
             return [str(value)]
         return [str(x) for x in value]
@@ -221,9 +221,10 @@ def _make_local_sync_path(
 class FrankDatasetLoader(DatasetLoader):
     """Load the Frank Dataset."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         frank_split: str = "A",
+        language: str = "en",
         cache_dir: None | str = None,
         only_positive_sections: bool = False,
         version: int = 0,
@@ -232,6 +233,7 @@ class FrankDatasetLoader(DatasetLoader):
         what: models.DatasetType = "queries",
     ) -> None:
         self.frank_split = frank_split
+        self.language = language
         self.cache_dir = pathlib.Path(cache_dir or models.DATASETS_CACHE_PATH)
         self.only_positive_sections = only_positive_sections
         self.version = version
@@ -244,15 +246,15 @@ class FrankDatasetLoader(DatasetLoader):
     def __call__(  # noqa: C901
         self,
         subset: str | None = None,
-        split: str | None = None,
+        split: None = None,
         **kws: Any,
     ) -> datasets.Dataset | datasets.DatasetDict:
         """Load the Frank dataset."""
-        if subset is None:
-            raise ValueError("Expected a subset, got `None`")
+        if subset is not None:
+            raise ValueError(f"Loader `{self.__class__.__name__}` does not support `subset` argument.")
         qa_splits_path, sections_paths = _make_local_sync_path(
             self.cache_dir,
-            language=subset,
+            language=self.language,
             split=self.frank_split,
             version=self.version,
             only_positive_sections=self.only_positive_sections,
@@ -266,7 +268,12 @@ class FrankDatasetLoader(DatasetLoader):
 
         # If not downloaded, download, process and save to disk
         if not qa_splits_path.exists() or not sections_paths.exists():
-            frank_dset = _download_and_parse_frank(subset, self.frank_split, self.version, self.only_positive_sections)
+            frank_dset = _download_and_parse_frank(
+                self.language,
+                self.frank_split,
+                self.version,
+                self.only_positive_sections,
+            )
             frank_dset.qa_splits.save_to_disk(str(qa_splits_path))
             frank_dset.sections.save_to_disk(str(sections_paths))
 
