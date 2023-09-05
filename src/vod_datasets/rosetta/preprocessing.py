@@ -107,44 +107,46 @@ def _extract_queries_and_assign_subset_ids(row: dict[str, typing.Any]) -> dict[s
     return {"subset_ids": [s.subset_id for s in sections]}
 
 
-class _IsIdxIn:
-    """A utility function to filer unique sections.
+class _UniqueValuesMap:
+    """A utility function to keep one row per unique value.
 
-    The `_allowed_ids` is built lazily so the whole operation can be hashed and cached by `datasets.map()`.
+    The `_unique_ids_map` is built lazily so the whole operation can be hashed and cached by `datasets.map()`.
     """
 
-    _allowed_ids: None | list[int]
+    _unique_ids_map: None | list[int]
     sections: datasets.Dataset
 
-    def __init__(self, sections: datasets.Dataset) -> None:
+    def __init__(self, sections: datasets.Dataset, *, key: str) -> None:
+        self.key = key
         self.sections = sections
-        self._allowed_ids = None
+        self._unique_ids_map = None
 
     @staticmethod
-    def _build_allowed_ids(sections: datasets.Dataset) -> list[int]:
+    def _build_allowed_ids(sections: datasets.Dataset, key: str) -> list[int]:
         """Build the allowed IDs."""
-        subset_ids: dict[str, int] = {}
+        unique_values_ids: dict[str, int] = {}
         for idx, row in enumerate(sections):
-            row_ = models.SectionModel(**row)  # type: ignore
-            if row_.subset_id is None:
+            value = row.get(key, None)
+            if value is None:
                 raise ValueError(f"Row `{row}` does not have a subset ID.")
-            if row_.subset_id not in subset_ids:
-                subset_ids[row_.subset_id] = idx
-        return list(subset_ids.values())
+            if value not in unique_values_ids:
+                unique_values_ids[value] = idx
+        return list(unique_values_ids.values())
 
     def __call__(self, row: dict, idx: int) -> bool:  # noqa: ARG
         """Check if an index is in a row."""
-        if self._allowed_ids is None:
-            self._allowed_ids = self._build_allowed_ids(self.sections)
-        return idx in self._allowed_ids
+        if self._unique_ids_map is None:
+            self._unique_ids_map = self._build_allowed_ids(self.sections, self.key)
+        return idx in self._unique_ids_map
 
 
-@fingerprint.hashregister(_IsIdxIn)
-def _hash_is_idx_in(hasher: datasets.fingerprint.Hasher, obj: _IsIdxIn) -> str:
-    """Register the `_IsIdxIn` class to work with `datasets.map()`."""
+@fingerprint.hashregister(_UniqueValuesMap)
+def _hash_unique_values_map(hasher: datasets.fingerprint.Hasher, obj: _UniqueValuesMap) -> str:
+    """Register the `_UniqueValuesMap` class to work with `datasets.map()`."""
     return hasher.hash(
         {
             "cls": obj.__class__,
+            "key": self.key,
             "sections": obj.sections._fingerprint,
         }
     )
@@ -173,7 +175,7 @@ def isolate_qa_and_sections(
     )
 
     sections = sections.filter(
-        _IsIdxIn(sections),
+        _UniqueValuesMap(sections, key="subset_id"),
         num_proc=num_proc,
         with_indices=True,
         batched=False,
