@@ -1,12 +1,13 @@
 import datasets
-from vod_datasets.rosetta import models, testing
+from vod_datasets.rosetta import models
+from vod_datasets.tests import utils
 
 from src.vod_datasets.rosetta.adapters.text_to_text import TextToTextQueryAdapter
 
 
 def test_flan_as_queries() -> None:
     """Test parsing the FLAN dataset."""
-    return testing.test_parse_dataset(
+    return utils.test_parse_dataset(
         datasets.load_dataset("Muennighoff/flan", split="test[:10]"),  # type: ignore
         adapter_cls=TextToTextQueryAdapter,
         output_model=models.QueryModel,
@@ -23,7 +24,7 @@ def test_dummy_as_queries() -> None:
             },
         ]
     )
-    return testing.test_parse_dataset(
+    return utils.test_parse_dataset(
         data,  # type: ignore
         adapter_cls=TextToTextQueryAdapter,
         output_model=models.QueryModel,

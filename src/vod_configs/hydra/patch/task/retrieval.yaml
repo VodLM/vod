@@ -17,9 +17,6 @@ defaults:
 seed: 1
 
 model:
-  encoder:
-    model_config:
-      dropout: 0.1
   optimizer:
     lr: 3e-5
     weight_decay: 1e-3

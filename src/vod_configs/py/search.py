@@ -173,7 +173,7 @@ class ElasticsearchFactoryConfig(BaseSearchFactoryConfig):
     host: str = "http://localhost"
     port: int = 9200
     persistent: bool = True
-    section_template: str = r"{{ title }} {{ content }}"
+    section_template: str = r"{% if title %}{{ title }}{% endif %} {{ content }}"
     es_body: Optional[dict] = None
 
     def __add__(self, diff: None | ElasticsearchFactoryDiff) -> Self:

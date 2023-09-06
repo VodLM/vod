@@ -11,6 +11,7 @@ from typing_extensions import Self, Type
 from vod_tools.misc.config import as_pyobj_validator
 
 from .search import MutliSearchFactoryConfig, MutliSearchFactoryDiff, SearchFactoryDefaults
+from .sectioning import SectioningConfig
 from .utils import AllowMutations, StrictModel
 
 DsetDescriptorRegex = re.compile(
@@ -32,6 +33,7 @@ class DatasetOptionsDiff(StrictModel):
 
     prep_map_kwargs: Optional[dict[str, Any]] = None
     subset_size: Optional[int] = None
+    sectioning: Optional[SectioningConfig] = None
 
     # validators
     _validate_prep_map_kwargs = pydantic.field_validator("prep_map_kwargs", mode="before")(as_pyobj_validator)
@@ -48,6 +50,11 @@ class DatasetOptions(StrictModel):
         default=None,
         description="Take a subset of the dataset.",
     )
+    sectioning: Optional[SectioningConfig] = pydantic.Field(
+        default=None,
+        description="Configures a sectioning algorithm to split input documents/sections into smaller chunks.",
+    )
+
     # validators
     _validate_prep_map_kwargs = pydantic.field_validator("prep_map_kwargs", mode="before")(as_pyobj_validator)
 
@@ -403,7 +410,7 @@ class BenchmarkDatasetConfig(StrictModel):
 
         # Implicitely link the queries to the sections when there is only one section dataset
         with AllowMutations(queries):
-            queries.link = sections.descriptor
+            queries.link = sections.identifier
 
         return cls(
             queries=queries,

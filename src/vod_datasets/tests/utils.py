@@ -2,8 +2,8 @@ import datasets
 import pydantic
 from typing_extensions import Type
 
-from .adapters import Adapter
-from .utils import get_first_row
+from src.vod_datasets.rosetta.adapters import Adapter
+from src.vod_datasets.rosetta.utils import get_first_row
 
 
 def test_parse_dataset(

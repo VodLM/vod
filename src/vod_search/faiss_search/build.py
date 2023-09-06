@@ -30,14 +30,18 @@ def build_faiss_index(
     factory_string = support.infer_factory_centroids(factory_string, nvecs)
     logger.info(f"Building index with factory string `{factory_string}`")
 
+    # Attempt building the index on GPU
     if gpu_config is not None and torch.cuda.is_available():
-        return build_gpu.build_faiss_index_multigpu(
-            vectors,
-            factory_string=factory_string,
-            train_size=train_size,
-            faiss_metric=faiss_metric,
-            gpu_config=gpu_config,
-        )
+        try:
+            return build_gpu.build_faiss_index_multigpu(
+                vectors,
+                factory_string=factory_string,
+                train_size=train_size,
+                faiss_metric=faiss_metric,
+                gpu_config=gpu_config,
+            )
+        except ValueError as exc:
+            logger.warning(f"{exc}. Using CPU instead.")
 
     return _build_faiss_index_on_cpu(
         vectors,

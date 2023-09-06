@@ -7,6 +7,7 @@ import pathlib
 from typing import Any, Iterable, Optional
 
 import numpy as np
+import rich
 import torch
 import transformers
 from lightning.pytorch import utilities as pl_utils
@@ -60,6 +61,12 @@ def benchmark(
         serve_on_gpu=serve_on_gpu,
     ) as master:
         search_client = master.get_client()
+
+        rich.print(
+            {
+                "shard_names": [cfg.identifier for cfg in task.sections],
+            }
+        )
 
         # Instantiate the dataloader
         dataloader = helpers.instantiate_retrieval_dataloader(

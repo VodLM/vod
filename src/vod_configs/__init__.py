@@ -30,6 +30,11 @@ from .py.search import (
     SearchFactoryDefaults,
     SingleSearchFactoryConfig,
 )
+from .py.sectioning import (
+    FixedLengthSectioningConfig,
+    SectioningConfig,
+    SentenceSectioningConfig,
+)
 from .py.templates import (
     TemplatesConfig,
 )

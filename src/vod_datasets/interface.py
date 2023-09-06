@@ -4,9 +4,8 @@ import typing
 
 import datasets
 import loguru
+import vod_configs
 from vod_datasets import rosetta
-
-from src import vod_configs
 
 from .postprocessing import (
     combine_datasets,
