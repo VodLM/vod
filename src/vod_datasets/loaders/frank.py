@@ -130,7 +130,7 @@ def _download_and_parse_frank(
         raise FileNotFoundError(f"Path {path} does not exist on storage {fs}.")
 
     full_frank_split = None
-    for part_path in track(fs.ls(path), description=f"Processing Frank {split}"):
+    for part_path in track(fs.ls(path), description=f"Parsing Frank {split} ({language})"):
         if not fs.exists(Path(part_path, "sections.json")):
             loguru.logger.debug(f"Skipping {part_path} (no sections.json)")
             continue

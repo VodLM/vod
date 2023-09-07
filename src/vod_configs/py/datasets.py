@@ -1,22 +1,23 @@
 from __future__ import annotations
 
+import copy
 import re
 from typing import Any, Iterable, Literal, Optional, Protocol, TypeVar, Union, runtime_checkable
 
 import datasets
 import omegaconf
 import pydantic
+from datasets import fingerprint
 from hydra.utils import instantiate
+from loguru import logger
 from typing_extensions import Self, Type
 from vod_tools.misc.config import as_pyobj_validator
 
-from .search import MutliSearchFactoryConfig, MutliSearchFactoryDiff, SearchFactoryDefaults
+from .search import HybridSearchFactoryConfig, MutliSearchFactoryDiff, SearchFactoryDefaults
 from .sectioning import SectioningConfig
 from .utils import AllowMutations, StrictModel
 
-DsetDescriptorRegex = re.compile(
-    r"^(?P<identifier>[A-Za-z0-9_]+)\((?P<name_or_path>[A-Za-z0-9_/]+)(|.(?P<subset>[A-Za-z0-9_\+]+))(|:(?P<split>[A-Za-z_\+]+))\)(|\s*->\s*(?P<link>[A-Za-z0-9_]+))\s*$"  # noqa: E501
-)
+_CONFIG_EXPAND_KEY = "__vars__"
 
 
 @runtime_checkable
@@ -104,7 +105,12 @@ class BaseDatasetConfig(StrictModel):
     @property
     def descriptor(self) -> str:
         """Return the dataset descriptor `name.subset:split`."""
-        desc = self.name_or_path if isinstance(self.name_or_path, str) else type(self.name_or_path).__name__
+        if isinstance(self.name_or_path, str):
+            desc = self.name_or_path
+        else:
+            clsn_ame = type(self.name_or_path).__name__
+            cls_hash = fingerprint.Hasher.hash(self.name_or_path)
+            desc = f"{clsn_ame}({cls_hash})"
         if self.subsets is not None:
             desc += f".{'_'.join(self.subsets)}"
 
@@ -173,25 +179,29 @@ class BaseDatasetConfig(StrictModel):
     @classmethod
     def parse(
         cls: Type[Self],
-        config_or_descriptor: str | dict,
+        config: dict | omegaconf.DictConfig,
         *,
         base_options: Optional[DatasetOptions] = None,
-        base_search: Optional[MutliSearchFactoryConfig] = None,
+        base_search: Optional[HybridSearchFactoryConfig] = None,
     ) -> Self:
         """Parse a config dictionary or dataset name into a structured config."""
-        parsed = _parse_dataset_descriptor(config_or_descriptor)
-
         # parse `options` if provided
+        if isinstance(config, omegaconf.DictConfig):
+            config: dict[str, Any] = omegaconf.OmegaConf.to_container(config, resolve=True)  # type: ignore
+
+        if isinstance(config["name_or_path"], dict):
+            config["name_or_path"] = instantiate(config["name_or_path"])
+
         base_options = base_options or DatasetOptions()
-        options = DatasetOptionsDiff(**(parsed["options"] if "options" in parsed else {}))
-        parsed["options"] = base_options + options
+        options = DatasetOptionsDiff(**(config["options"] if "options" in config else {}))
+        config["options"] = base_options + options
 
         # parse `search` if provided, and combine with the base search config
         if base_search is not None:
-            if "search" in parsed:
-                base_search = base_search + MutliSearchFactoryDiff.parse(parsed["search"])
-            parsed["search"] = base_search
-        return cls(**parsed)
+            if "search" in config:
+                base_search = base_search + MutliSearchFactoryDiff.parse(config["search"])
+            config["search"] = base_search
+        return cls(**config)  # type: ignore
 
 
 class QueriesDatasetConfig(BaseDatasetConfig):
@@ -203,19 +213,12 @@ class QueriesDatasetConfig(BaseDatasetConfig):
         description="Identifier of the `Sections` dataset to search into.",
     )
 
-    @pydantic.field_validator("link", mode="before")
-    def _validate_link(cls, value: Optional[str]) -> Optional[str]:
-        if isinstance(value, str) and ":" not in value:
-            return f"{value}:all"
-
-        return None
-
 
 class SectionsDatasetConfig(BaseDatasetConfig):
     """Defines a section dataset."""
 
     field: Literal["section"] = "section"
-    search: Optional[MutliSearchFactoryConfig] = pydantic.Field(
+    search: Optional[HybridSearchFactoryConfig] = pydantic.Field(
         None,
         description="Search config diffs for this dataset",
     )
@@ -224,51 +227,42 @@ class SectionsDatasetConfig(BaseDatasetConfig):
 DatasetConfig = Union[QueriesDatasetConfig, SectionsDatasetConfig]
 
 
-def _parse_dataset_descriptor(
-    config_or_descriptor: str | dict | omegaconf.DictConfig,  # type: ignore
-) -> dict:
-    if isinstance(config_or_descriptor, omegaconf.DictConfig):
-        config_or_descriptor = omegaconf.OmegaConf.to_container(config_or_descriptor, resolve=True)  # type: ignore
-    if isinstance(config_or_descriptor, dict) and "name_or_path" in config_or_descriptor:
-        name_or_path = config_or_descriptor["name_or_path"]
-        if isinstance(name_or_path, dict):
-            name_or_path = instantiate(name_or_path)
-        return {
-            **config_or_descriptor,
-            "name_or_path": name_or_path,
-        }
-
-    if isinstance(config_or_descriptor, str):
-        config_or_descriptor = {"descriptor": config_or_descriptor}
-    if not isinstance(config_or_descriptor, dict):
-        raise TypeError(f"`config_or_descriptor` should be a dict. Found `{type(config_or_descriptor)}`")
-
-    if descriptor := config_or_descriptor.get("descriptor", None):
-        parsed = DsetDescriptorRegex.match(descriptor)
-        if parsed is None:
-            raise ValueError(f"Couldn't parse descriptor `{descriptor}` with pattern {DsetDescriptorRegex.pattern}")
-        parsed_dict = parsed.groupdict()
-    else:
-        parsed_dict = {}
-
-    # Filter `None` values
-    parsed_ = {k: v for k, v in parsed_dict.items() if v is not None}
-    config_ = {k: v for k, v in config_or_descriptor.items() if v is not None}
-
-    # Create the final config
-    final_config = {}
-    for key in parsed_.keys() | config_.keys():
-        parsed_value = parsed_.get(key, None)
-        if parsed_value is not None and "+" in parsed_value:
-            parsed_value = parsed_value.split("+")
-        config_value = config_.get(key, None)
-        final_config[key] = parsed_value or config_value
-
-    final_config.pop("descriptor", None)
-    return final_config
-
-
 BDC = TypeVar("BDC", bound=BaseDatasetConfig)
+Cv = TypeVar("Cv", bound=Union[str, dict, list])
+
+
+def _expand_dynamic_configs(x: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Expand dynamic configurations (e.g. `__vars__`)."""
+    expanded_x = []
+    for y in x:
+        if not isinstance(y, dict):
+            expanded_x.append(y)
+            continue
+        variables = y.pop(_CONFIG_EXPAND_KEY, None)  # type: ignore
+        if variables is None:
+            expanded_x.append(y)
+            continue
+
+        # Take the combinations of the variables
+        def _sub(v: Cv, target: str, value: Any) -> Cv:  # noqa: ANN401
+            if isinstance(v, str):
+                # replace `{target}` with `value`
+                return re.sub(rf"\{{\s*{target}\s*\}}", str(value), v)
+            if isinstance(v, dict):
+                return {k: _sub(v, target, value) for k, v in v.items()}  # type: ignore
+            if isinstance(v, list):
+                return [_sub(v, target, value) for v in v]  # type: ignore
+            return v
+
+        keys = list(variables.keys())
+        values = [variables[k] for k in keys]
+        for vals in zip(*values):
+            new_y = copy.deepcopy(y)
+            for pat, val in zip(keys, vals):
+                new_y = {k: _sub(v, pat, val) for k, v in new_y.items()}
+            expanded_x.append(new_y)
+
+    return expanded_x
 
 
 def _parse_list_dset_configs(
@@ -280,7 +274,10 @@ def _parse_list_dset_configs(
         x = omegaconf.OmegaConf.to_container(x, resolve=True)  # type: ignore
 
     if isinstance(x, dict):
-        return [cls.parse(x, **kwargs)]
+        x = [x]
+
+    # Resolve dynamic configurations (e.g. `__vars__`)
+    x = _expand_dynamic_configs(x)  # type: ignore
 
     if isinstance(x, list):
         return [cls.parse(y, **kwargs) for y in x]
@@ -321,7 +318,7 @@ class SectionsConfig(StrictModel):
         cls: Type[Self],
         config: dict | omegaconf.DictConfig,
         base_options: Optional[DatasetOptions] = None,
-        base_search: Optional[MutliSearchFactoryConfig] = None,
+        base_search: Optional[HybridSearchFactoryConfig] = None,
     ) -> Self:
         """Parse dict or omegaconf.DictConfig into a structured config."""
         base_options = base_options or DatasetOptions()
@@ -349,7 +346,7 @@ class TrainDatasetsConfig(StrictModel):
         cls: Type[Self],
         config: dict | omegaconf.DictConfig,
         base_options: Optional[DatasetOptions] = None,
-        base_search: Optional[MutliSearchFactoryConfig] = None,
+        base_search: Optional[HybridSearchFactoryConfig] = None,
     ) -> Self:
         """Parse dict or omegaconf.DictConfig into a structured config."""
         base_options = base_options or DatasetOptions()
@@ -378,6 +375,35 @@ class TrainDatasetsConfig(StrictModel):
             sections=sections,
         )
 
+    @pydantic.model_validator(mode="after")
+    def _validate_links(self: Self) -> Self:
+        """Check that the queries are pointing to valid sections."""
+        section_ids = [s.identifier for s in self.sections.sections]
+        linked_queries = {sid: [] for sid in section_ids}
+        if len(linked_queries) != len(section_ids):
+            raise ValueError(
+                f"Duplicate section identifiers found: `{section_ids}`. "
+                f"Make sure to assign each section dataset with a uniquer identifier."
+            )
+
+        # Assign queries to sections
+        for query in self.queries.train + self.queries.val:
+            if query.link not in section_ids:
+                raise ValueError(
+                    f"Query `{query.identifier}` points to invalid section ID `{query.link}`. "
+                    f"Available section IDs: `{section_ids}`"
+                )
+            linked_queries[query.link].append(query.identifier)
+
+        # Check that all sections have at least one query
+        # Drop the sections that have no queries
+        for sid in list(linked_queries.keys()):
+            if not linked_queries[sid]:
+                logger.warning(f"Section `{sid}` has no queries; dropping it.")
+                self.sections.sections = [s for s in self.sections.sections if s.identifier != sid]
+
+        return self
+
 
 class BenchmarkDatasetConfig(StrictModel):
     """Defines a benchmark."""
@@ -390,7 +416,7 @@ class BenchmarkDatasetConfig(StrictModel):
         cls: Type[Self],
         config: dict | omegaconf.DictConfig,
         base_options: Optional[DatasetOptions] = None,
-        base_search: Optional[MutliSearchFactoryConfig] = None,
+        base_search: Optional[HybridSearchFactoryConfig] = None,
     ) -> Self:
         """Parse dict or omegaconf.DictConfig into a structured config."""
         base_options = base_options or DatasetOptions()

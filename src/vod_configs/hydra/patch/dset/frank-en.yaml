@@ -43,13 +43,13 @@ dataset:
   # Benchmarks
   benchmark:
     - queries:
-        identifier: frank_a_en_train
+        identifier: frank_a_en_val
         name_or_path:
           _target_: vod_datasets.FrankDatasetLoader
           frank_split: A
           language: en
           what: queries
-        split: train
+        split: validation
       sections:
         identifier: frank_a_sections
         name_or_path:
@@ -57,13 +57,13 @@ dataset:
           frank_split: A
           what: sections
     - queries:
-        identifier: frank_b_en_train
+        identifier: frank_b_en_val
         name_or_path:
           _target_: vod_datasets.FrankDatasetLoader
           frank_split: B
           language: en
           what: queries
-        split: train
+        split: validation
       sections:
         identifier: frank_b_sections
         name_or_path:

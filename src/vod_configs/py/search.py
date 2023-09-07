@@ -91,13 +91,13 @@ class FaissGpuConfig(StrictModel):
         return _get_gpu_resources(self.devices, self.tempmem or -1)
 
 
-SearchBackends = Literal["elasticsearch", "faiss", "qdrant"]
+SearchBackend = Literal["elasticsearch", "faiss", "qdrant"]
 
 
 class BaseSearchFactoryConfig(StrictModel):
     """Base config for all search engines."""
 
-    backend: SearchBackends = pydantic.Field(..., description="Search backend to use.")
+    backend: SearchBackend = pydantic.Field(..., description="Search backend to use.")
     subset_id_key: Optional[str] = pydantic.Field("subset_id", description="Subset ID field to be indexed.")
     section_id_key: Optional[str] = pydantic.Field("id", description="Section ID field to be indexed.")
 
@@ -105,7 +105,7 @@ class BaseSearchFactoryConfig(StrictModel):
 class BaseSearchFactoryDiff(StrictModel):
     """Relative search configs."""
 
-    backend: SearchBackends
+    backend: SearchBackend
     group_key: Optional[str] = None
     section_id_key: Optional[str] = None
 
@@ -255,13 +255,13 @@ class QdrantFactoryConfig(BaseSearchFactoryConfig):
 SingleSearchFactoryConfig = Union[ElasticsearchFactoryConfig, FaissFactoryConfig, QdrantFactoryConfig]
 SingleSearchFactoryDiff = Union[ElasticsearchFactoryDiff, FaissFactoryDiff, QdrantFactoryDiff]
 
-FactoryConfigsByBackend: dict[SearchBackends, Type[BaseSearchFactoryConfig]] = {
+FactoryConfigsByBackend: dict[SearchBackend, Type[BaseSearchFactoryConfig]] = {
     "elasticsearch": ElasticsearchFactoryConfig,
     "faiss": FaissFactoryConfig,
     "qdrant": QdrantFactoryConfig,
 }
 
-FactoryDiffByBackend: dict[SearchBackends, Type[BaseSearchFactoryDiff]] = {
+FactoryDiffByBackend: dict[SearchBackend, Type[BaseSearchFactoryDiff]] = {
     "elasticsearch": ElasticsearchFactoryDiff,
     "faiss": FaissFactoryDiff,
     "qdrant": QdrantFactoryDiff,
@@ -287,7 +287,7 @@ class MutliSearchFactoryDiff(BaseSearchFactoryDiff):
         return cls(engines=config)  # type: ignore
 
 
-class MutliSearchFactoryConfig(BaseSearchFactoryConfig):
+class HybridSearchFactoryConfig(BaseSearchFactoryConfig):
     """Configures a hybrid search engine."""
 
     _defaults = pydantic.PrivateAttr(None)
@@ -341,13 +341,13 @@ class SearchFactoryDefaults(StrictModel):
         return cls(**config)
 
     # methods
-    def __add__(self, diff: MutliSearchFactoryDiff) -> MutliSearchFactoryConfig:
+    def __add__(self, diff: MutliSearchFactoryDiff) -> HybridSearchFactoryConfig:
         engine_factories = {}
         for key, cfg_diff in diff.engines.items():
             default_config = getattr(self, cfg_diff.backend)
             engine_factories[key] = default_config + cfg_diff
 
-        cfg = MutliSearchFactoryConfig(engines=engine_factories)
+        cfg = HybridSearchFactoryConfig(engines=engine_factories)
         cfg._defaults = self  # <- save the defaults for better resolution of diffs
         return cfg
 

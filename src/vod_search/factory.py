@@ -229,9 +229,9 @@ def _infer_offsets(x: list[dstruct.SizedDataset[Any]]) -> list[int]:
 
 
 def _resolve_ports(
-    config: vod_configs.MutliSearchFactoryConfig,
+    config: vod_configs.HybridSearchFactoryConfig,
     fabric: Optional[L.Fabric],
-) -> vod_configs.MutliSearchFactoryConfig:
+) -> vod_configs.HybridSearchFactoryConfig:
     """Resolve missing ports."""
     engines: dict[str, vod_configs.SingleSearchFactoryConfig] = copy.copy(config.engines)
     for key, engine in engines.items():
@@ -250,7 +250,7 @@ def build_hybrid_search_engine(  # noqa: C901, PLR0912
     shard_names: list[str],
     sections: None | list[dstruct.SizedDataset[dict[str, Any]]],
     vectors: None | list[dstruct.SizedDataset[np.ndarray]],
-    configs: list[vod_configs.MutliSearchFactoryConfig],
+    configs: list[vod_configs.HybridSearchFactoryConfig],
     cache_dir: str | pathlib.Path,
     dense_enabled: bool = True,
     sparse_enabled: bool = True,
