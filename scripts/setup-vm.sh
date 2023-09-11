@@ -58,6 +58,9 @@ else
     sudo apt-get update
     sudo apt-get install elasticsearch
 
+# Instlall ICU plugins
+sudo bin/elasticsearch-plugin install analysis-icu
+
 # (Optional) Setup elasticsearch config: open file and comment out the security stuff
 sudo nano /etc/elasticsearch/elasticsearch.yml
 # Setup elasticsearch jvm: limit the virtual memory to 320GB

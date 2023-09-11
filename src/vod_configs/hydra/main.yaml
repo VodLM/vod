@@ -60,7 +60,6 @@ collates:
     max_pos_sections: 4
     support_size: 100
     prefetch_n_sections: 300
-    post_filter: null
     do_sample: false
     in_batch_negatives: false
     prep_num_proc: ${resources.num_proc}
@@ -73,7 +72,6 @@ collates:
     max_pos_sections: null
     support_size: null
     prefetch_n_sections: 1000
-    post_filter: null
     do_sample: false
     in_batch_negatives: false
     prep_num_proc: ${resources.num_proc}

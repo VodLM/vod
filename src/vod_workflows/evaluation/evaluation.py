@@ -7,7 +7,6 @@ import pathlib
 from typing import Any, Iterable, Optional
 
 import numpy as np
-import rich
 import torch
 import transformers
 from lightning.pytorch import utilities as pl_utils
@@ -62,20 +61,14 @@ def benchmark(
     ) as master:
         search_client = master.get_client()
 
-        rich.print(
-            {
-                "shard_names": [cfg.identifier for cfg in task.sections],
-            }
-        )
-
         # Instantiate the dataloader
         dataloader = helpers.instantiate_retrieval_dataloader(
             queries=helpers.ShardedDsetWithVectors.from_configs(
-                data=task.queries,
+                data=task.queries,  # type: ignore
                 vectors=[task.vectors[d] for d in task.queries] if task.vectors else None,
             ),
             sections=helpers.ShardedDsetWithVectors.from_configs(
-                data=task.sections,
+                data=task.sections,  # type: ignore
                 vectors=[task.vectors[d] for d in task.sections] if task.vectors else None,
             ),
             tokenizer=tokenizer,

@@ -74,9 +74,7 @@ collates:
     prefetch_n_sections: 128 # retrieve `z` candidate sections
     do_sample: true # sample the sections from the candidate sections (randomly)
     in_batch_negatives: false # TODO
-    post_filter: null
   benchmark:
     n_sections: null
     prefetch_n_sections: 512
     do_sample: false
-    post_filter: null

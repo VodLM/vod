@@ -24,10 +24,11 @@ es_body:
       analyzer:
         custom_analyzer:
           filter:
-            - __auto_stopwords__ #  Automatically picks up a stopword list based on `language`
             - lowercase # Converts tokens to lowercase
-            - asciifolding # Converts a-z, 1-9, and symbolic characters to their ASCII equivalent
-          tokenizer: standard
+            - icu_folding # This is similar to asciifolding, but it's better at handling a wide variety of characters that appear in different languages.
+            - icu_normalizer # Normalizes unicode text to a canonical form
+            - __auto_stopwords__ #  Automatically picks up a stopword list based on `language`
+          tokenizer: icu_tokenizer # Tokenizes the text using ICU tokenizer
           type: custom
     # Replicas are copies of the shards and provide reliability if a node is lost
     number_of_replicas: 0

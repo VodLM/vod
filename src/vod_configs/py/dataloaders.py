@@ -45,7 +45,6 @@ class RetrievalCollateConfig(BaseCollateConfig):
     n_sections: Optional[int] = 10
     max_pos_sections: Optional[int] = 3
     support_size: Optional[int] = None
-    post_filter: Optional[str] = None
     do_sample: bool = False
     in_batch_negatives: bool = False
     in_batch_neg_offset: int = 0
