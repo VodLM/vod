@@ -108,7 +108,7 @@ DATASET_CONFIGS = {
             vod_datasets.BeirDatasetLoader(what="queries"),
             vod_datasets.BeirDatasetLoader(what="sections"),
         ],
-        "subsets": "mmarco",
+        "subsets": "mmarco/french",
         "split": "train",
     },
 }

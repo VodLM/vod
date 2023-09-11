@@ -1,5 +1,6 @@
 section_template: "{% if title %}{{ title }}{% endif %} {{ content }}"
 persistent: true
+language: en
 es_body:
   # defining a mapping will help: (1) optimize the performance, (2) save disk space
   mappings:
@@ -23,6 +24,7 @@ es_body:
       analyzer:
         custom_analyzer:
           filter:
+            - __auto_stopwords__ #  Automatically picks up a stopword list based on `language`
             - lowercase # Converts tokens to lowercase
             - asciifolding # Converts a-z, 1-9, and symbolic characters to their ASCII equivalent
           tokenizer: standard

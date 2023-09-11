@@ -15,14 +15,14 @@ class BaseSectioningConfig(StrictModel):
 class SentenceSectioningConfig(BaseSectioningConfig):
     """Sentence sectioning configuration."""
 
-    mode: Literal["sentence"]
+    mode: Literal["sentence"] = "sentence"
     delimiter: str = ". "
 
 
 class FixedLengthSectioningConfig(BaseSectioningConfig):
     """Fixed-length sectioning configuration."""
 
-    mode: Literal["fixed_length"]
+    mode: Literal["fixed_length"] = "fixed_length"
     tokenizer_name_or_path: str
     max_length: int
     stride: int

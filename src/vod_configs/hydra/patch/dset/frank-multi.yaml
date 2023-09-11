@@ -44,23 +44,36 @@ dataset:
             frank_split: A
             language: "{lang}"
             what: sections
+          search:
+            engines:
+              sparse:
+                # Make sure to set the current language to load `stopwords` accordingly.
+                backend: elasticsearch
+                language: "{lang}"
 
   # Benchmarks
   benchmark:
     - __vars__:
         lang: ${languages}
+        frank_split: [A, B]
       queries:
-        identifier: frank_b_{lang}_val
+        identifier: "frank_{frank_split}_{lang}_val"
         name_or_path:
           _target_: vod_datasets.FrankDatasetLoader
-          frank_split: B
+          frank_split: "{frank_split}"
           language: "{lang}"
           what: queries
         split: validation
       sections:
-        identifier: frank_b_{lang}_sections
+        identifier: "frank_{frank_split}_{lang}_val"
         name_or_path:
           _target_: vod_datasets.FrankDatasetLoader
-          frank_split: B
+          frank_split: "{frank_split}"
           language: "{lang}"
           what: sections
+        search:
+          engines:
+            sparse:
+              # Make sure to set the current language to load `stopwords` accordingly.
+              backend: elasticsearch
+              language: "{lang}"

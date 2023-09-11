@@ -153,7 +153,7 @@ class FaissFactoryConfig(BaseSearchFactoryConfig):
     def fingerprint(self) -> str:
         """Return a fingerprint for this config."""
         excludes = {"host", "port", "logging_level"}
-        return pipes.fingerprint(self.dict(exclude=excludes))
+        return pipes.fingerprint(self.model_dump(exclude=excludes))
 
 
 class ElasticsearchFactoryDiff(BaseSearchFactoryDiff):
@@ -164,6 +164,7 @@ class ElasticsearchFactoryDiff(BaseSearchFactoryDiff):
     port: Optional[int] = None
     persistent: Optional[bool] = None
     es_body: Optional[dict] = None
+    language: Optional[str] = None
 
 
 class ElasticsearchFactoryConfig(BaseSearchFactoryConfig):
@@ -175,6 +176,7 @@ class ElasticsearchFactoryConfig(BaseSearchFactoryConfig):
     persistent: bool = True
     section_template: str = r"{% if title %}{{ title }}{% endif %} {{ content }}"
     es_body: Optional[dict] = None
+    language: Optional[str] = None
 
     def __add__(self, diff: None | ElasticsearchFactoryDiff) -> Self:
         if diff is None:
@@ -183,15 +185,19 @@ class ElasticsearchFactoryConfig(BaseSearchFactoryConfig):
         return self.model_copy(update=diffs)
 
     @pydantic.field_validator("es_body", mode="before")
-    def _validate_es_body(cls, v: dict | None) -> dict | None:
+    @classmethod
+    def _validate_es_body(cls: Type[Self], v: dict | None) -> dict | None:
         if isinstance(v, omegaconf.DictConfig):
             v = omegaconf.OmegaConf.to_container(v, resolve=True)  # type: ignore
+
         return v
 
-    def fingerprint(self) -> str:
+    def fingerprint(self, exclude: None | list[str] = None) -> str:  # noqa: ARG002
         """Return a fingerprint for this config."""
-        excludes = {"host", "port", "persistent"}
-        return pipes.fingerprint(self.model_dump(exclude=excludes))
+        base_exclude = {"host", "port", "persistent"}
+        if exclude:
+            base_exclude.update(exclude)
+        return pipes.fingerprint(self.model_dump(exclude=base_exclude))
 
 
 class QdrantFactoryDiff(BaseSearchFactoryDiff):

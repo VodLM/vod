@@ -7,12 +7,13 @@ from typing import Any
 
 import datasets
 import requests
-import rich
+from datasets import fingerprint
 from loguru import logger
 from tqdm import tqdm
 from typing_extensions import Self, Type
 from vod_configs.py.datasets import DatasetLoader
 from vod_datasets.rosetta import models
+from vod_datasets.rosetta.adapters.rename_fields import RenameSectionAdapter
 
 
 def _download_url(
@@ -63,7 +64,8 @@ def _validate_file(path: str | pathlib.Path, ext: str) -> None:
     """Validate if the file is present and has the correct extension."""
     path = pathlib.Path(path)
     if not path.exists():
-        raise ValueError("File `{}` not present!".format(path))
+        avail_files = [f.name for f in path.parent.iterdir()]
+        raise ValueError(f"File `{path}` doesn't exist. Available files in `{path.parent}`: `{avail_files}`")
 
     if not path.name.endswith(ext):
         raise ValueError("File `{}` must be present with extension `{}`".format(path, ext))
@@ -152,40 +154,123 @@ class BeirDatasetLoader(DatasetLoader):
         "germanquad",
     ]
 
-    def __init__(  # noqa: PLR0913
+    def __init__(
         self,
         cache_dir: None | str = None,
+        num_proc: int = 4,
         what: models.DatasetType = "queries",
     ):
+        self.num_proc = num_proc
         self.what = what
         self.cache_dir = pathlib.Path(cache_dir or models.DATASETS_CACHE_PATH) / "beir_datasets"
 
     def __call__(self, subset: str | None = None, split: str | None = None, **kwargs: Any) -> datasets.Dataset:
         """Load the dataset."""
-        if subset not in self.DATASETS:
-            raise ValueError(f"susbet `{subset}` not available. Please choose from `{self.DATASETS}`.")
+        if subset is None:
+            raise ValueError("Please specify a subset.")
+        name, *subpath = subset.split("/")
+        if name not in self.DATASETS:
+            raise ValueError(f"susbet `{name}` not available. Please choose from `{self.DATASETS}`.")
 
+        # Download the dataset
         dataset_dir = _download_and_unzip(
-            self.BASE_URL.format(subset),
+            self.BASE_URL.format(name),
             self.cache_dir,
         )
 
         # Load the data
         data = QrelsDataset.from_files(
-            queries=dataset_dir / "queries.jsonl",
-            qrels=dataset_dir / "qrels" / f"{split or '*'}.tsv",
-            corpus=dataset_dir / "corpus.jsonl",
+            queries=pathlib.Path(dataset_dir, *subpath, "queries.jsonl"),
+            qrels=pathlib.Path(dataset_dir, *subpath, "qrels", f"{split or '*'}.tsv"),
+            corpus=pathlib.Path(dataset_dir, *subpath, "corpus.jsonl"),
         )
 
-        rich.print(data)
-        rich.print(
-            {
-                "queries": data.queries[0],
-                "qrels": data.qrels[0],
-                "corpus": data.corpus[0],
-            }
-        )
+        if self.what == "sections":
+            return RenameSectionAdapter.translate_dset(data.corpus)
+        if self.what == "queries":
+            output = data.queries.map(
+                _FormatAndFilterQueries(data.qrels),
+                num_proc=self.num_proc,
+                remove_columns=data.queries.column_names,
+                batched=True,
+                desc=f"{subset}:{split or 'all'} - Formatting and filtering queries",
+            )
+            if len(output) == 0:
+                raise ValueError(f"Dataset `{subset}` is empty.")
+            return output
 
-        rich.print(collections.Counter(data.qrels["score"]))
+        raise ValueError(f"Unknown dataset type `{self.what}`.")
 
-        raise NotImplementedError
+
+class _FormatAndFilterQueries:
+    output_model = models.QueryModel
+    _lookup: dict[int, list[int]]
+
+    def __init__(self, qrels: datasets.Dataset) -> None:
+        self.qrels = qrels
+        self._lookup: dict[int, list[int]] = {}
+
+    @property
+    def lookup(self) -> dict[int, list[int]]:
+        """Build the lookup table lazily in each worker.
+
+        This allows `datasets.map()` to cache this operation without building the lookup table.
+        """
+        if len(self._lookup) == 0:
+            for row in self.qrels:
+                qid = int(row["query-id"])  # type: ignore
+                cid = int(row["corpus-id"])  # type: ignore
+                score = float(row["score"])  # type: ignore
+                if score <= 0:
+                    continue
+                if qid not in self._lookup:
+                    self._lookup[qid] = [cid]
+                else:
+                    self._lookup[qid].append(cid)
+
+        return self._lookup
+
+    def __call__(self, batch: dict[str, list[Any]]) -> dict[str, list[Any]]:
+        output = collections.defaultdict(list)
+        for qid, txt in zip(batch["_id"], batch["text"]):
+            qid_int = int(qid)
+            retrieval_ids = self.lookup.get(qid_int, None)
+            if retrieval_ids is None:
+                continue
+            model = self.output_model(
+                id=str(qid_int),
+                query=txt,
+                answers=[],
+                answer_scores=[],
+                retrieval_ids=[str(i) for i in retrieval_ids],
+                subset_ids=[],
+            )
+            for k, v in model.model_dump().items():
+                output[k].append(v)
+
+        # Create and empty output if there are no values
+        # This happends if all queries are filtered out
+        # For this batch. This is necessary for the `map()` function
+        # to concatenate the chunks correctly.
+        if len(output) == 0:
+            for k in self.output_model.model_fields:
+                output[k] = []
+            return output
+
+        # check that all values are of the same length
+        n_values_per_key = {k: len(v) for k, v in output.items()}
+        if len(set(n_values_per_key.values())) != 1:
+            raise ValueError(f"Values are not of the same length: `{n_values_per_key}`")
+        return output
+
+
+@fingerprint.hashregister(_FormatAndFilterQueries)
+def _hash_format_queries(hasher: datasets.fingerprint.Hasher, obj: _FormatAndFilterQueries) -> str:
+    """Register the `_FormatQueries` class to work with `datasets.map()`."""
+    return hasher.hash(
+        {
+            "cls": obj.__class__,
+            "qrels": obj.qrels._fingerprint,
+            "output_model": obj.output_model,
+        }
+    )

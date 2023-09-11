@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import itertools
 import re
 from typing import Any, Iterable, Literal, Optional, Protocol, TypeVar, Union, runtime_checkable
 
@@ -81,7 +82,7 @@ class BaseDatasetConfig(StrictModel):
         frozen = True
         from_attributes = True
 
-    identifier: str = pydantic.Field(
+    identifier: pydantic.constr(to_lower=True) = pydantic.Field(  # type: ignore | auto-lowercase
         ...,
         description="Name of the dataset, or descriptor with pattern `name.subset:split`.",
     )
@@ -255,14 +256,26 @@ def _expand_dynamic_configs(x: list[dict[str, Any]]) -> list[dict[str, Any]]:
             return v
 
         keys = list(variables.keys())
-        values = [variables[k] for k in keys]
-        for vals in zip(*values):
+        values = list(variables.values())
+        for comb in itertools.product(*values):
             new_y = copy.deepcopy(y)
-            for pat, val in zip(keys, vals):
+            for pat, val in zip(keys, comb):
                 new_y = {k: _sub(v, pat, val) for k, v in new_y.items()}
             expanded_x.append(new_y)
 
     return expanded_x
+
+
+def _omegaconf_to_dict_list(
+    x: dict | omegaconf.DictConfig | list[dict] | omegaconf.ListConfig,
+) -> list[dict]:
+    if isinstance(x, (omegaconf.DictConfig, omegaconf.ListConfig)):
+        x = omegaconf.OmegaConf.to_container(x, resolve=True)  # type: ignore
+
+    if isinstance(x, dict):
+        x = [x]
+
+    return x  # type: ignore
 
 
 def _parse_list_dset_configs(
@@ -270,12 +283,7 @@ def _parse_list_dset_configs(
     cls: Type[BDC],
     **kwargs: Any,
 ) -> list[BDC]:
-    if isinstance(x, (omegaconf.DictConfig, omegaconf.ListConfig)):
-        x = omegaconf.OmegaConf.to_container(x, resolve=True)  # type: ignore
-
-    if isinstance(x, dict):
-        x = [x]
-
+    x = _omegaconf_to_dict_list(x)
     # Resolve dynamic configurations (e.g. `__vars__`)
     x = _expand_dynamic_configs(x)  # type: ignore
 
@@ -467,6 +475,10 @@ class DatasetsConfig(StrictModel):
         # parse the base search config
         base_search = search_defaults + MutliSearchFactoryDiff.parse(config["search"])
 
+        # Resolve dynamic configurations (e.g. `__vars__`)
+        benchmark_configs = _omegaconf_to_dict_list(config["benchmark"])
+        benchmark_configs = _expand_dynamic_configs(benchmark_configs)  # type: ignore
+
         return cls(
             training=TrainDatasetsConfig.parse(
                 config["training"],
@@ -479,7 +491,7 @@ class DatasetsConfig(StrictModel):
                     base_options=base_options,
                     base_search=base_search,
                 )
-                for cfg in config["benchmark"]
+                for cfg in benchmark_configs
             ],
         )
 

@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import collections
 import contextlib
-import copy
 import itertools
 import logging
 import time
@@ -18,57 +17,17 @@ import rich
 import rich.progress
 from elasticsearch import helpers as es_helpers
 from loguru import logger
+from vod_configs.py.es_body import (
+    BODY_KEY,
+    ROW_IDX_KEY,
+    SECTION_ID_KEY,
+    SUBSET_ID_KEY,
+    validate_es_body,
+)
 from vod_search import base, rdtypes
 
 es_logger = logging.getLogger("elastic_transport")
 es_logger.setLevel(logging.WARNING)
-
-ROW_IDX_KEY = "__row_idx__"
-BODY_KEY: str = "__body__"
-SUBSET_ID_KEY: str = "__subset_id__"
-SECTION_ID_KEY: str = "__section_id__"
-
-ES_DEFAULT_BODY = {
-    "mappings": {
-        "properties": {
-            BODY_KEY: {
-                "type": "text",
-            },
-            SUBSET_ID_KEY: {
-                "type": "keyword",
-                "ignore_above": 1_024,
-            },
-            SECTION_ID_KEY: {
-                "type": "keyword",
-                "ignore_above": 1_024,
-            },
-            ROW_IDX_KEY: {
-                "type": "unsigned_long",
-            },
-        },
-    },
-}
-
-
-def _validate_es_body(body: dict) -> dict:
-    """Validate the elasticsearch body using the default values."""
-    if "mappings" not in body:
-        body["mappings"] = ES_DEFAULT_BODY["mappings"]
-        return body
-
-    # Check the mappings
-    mappings = body["mappings"]
-    if "properties" not in mappings:
-        mappings["properties"] = ES_DEFAULT_BODY["mappings"]["properties"]
-        return body
-
-    # Check the properties
-    properties = mappings["properties"]
-    for key in [BODY_KEY, SUBSET_ID_KEY, SECTION_ID_KEY, ROW_IDX_KEY]:
-        if key not in properties:
-            properties[key] = ES_DEFAULT_BODY["mappings"]["properties"][key]
-
-    return body
 
 
 class ElasticsearchClient(base.SearchClient):
@@ -217,11 +176,17 @@ class ElasticsearchClient(base.SearchClient):
                     {"match": {BODY_KEY: text}},
                 )
             if section_ids is not None:
+                # Still search the index for `[]`, this will return zero results
+                # This is necessary to implement the correct behaviour when
+                # looking up positive sections with no label.
                 if isinstance(section_ids, str):
                     section_ids = [section_ids]
                 body["filter"].append({"terms": {SECTION_ID_KEY: section_ids}})
 
-            if subset_ids is not None:
+            if subset_ids is not None and subset_ids != []:
+                # We don't include `subset_ids` in the query
+                # when it's an empty list. This means when no `subset_ids` are provided
+                # we don't filter by `subset_ids`.
                 if isinstance(subset_ids, str):
                     subset_ids = [subset_ids]
                 body["filter"].append({"terms": {SUBSET_ID_KEY: subset_ids}})
@@ -290,6 +255,7 @@ class ElasticSearchMaster(base.SearchMaster[ElasticsearchClient]):
         skip_setup: bool = False,
         free_resources: bool = False,
         es_body: Optional[dict] = None,
+        language: Optional[str] = None,
         **proc_kwargs: Any,
     ):
         super().__init__(skip_setup=skip_setup, free_resources=free_resources)
@@ -299,8 +265,7 @@ class ElasticSearchMaster(base.SearchMaster[ElasticsearchClient]):
         self._input_texts = texts
         self._input_subset_ids = subset_ids
         self._input_section_ids = section_ids
-        self._es_body = es_body or copy.deepcopy(ES_DEFAULT_BODY)
-        self._es_body = _validate_es_body(self._es_body)
+        self._es_body = validate_es_body(es_body, language=language)
         if index_name is None:
             index_name = f"auto-{uuid.uuid4().hex}"
         self._index_name = index_name
