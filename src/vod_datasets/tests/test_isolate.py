@@ -13,8 +13,7 @@ def _re_inject_content(
     sections_lookup: dict[str, dict[str, typing.Any]],
 ) -> dict[str, typing.Any]:
     subset_ids = row["subset_ids"]
-    if len(subset_ids) != 1:
-        raise ValueError(f"Expected 1 section, got {len(subset_ids)}")
+    assert len(subset_ids) == 1, f"Expected 1 section, got {len(subset_ids)}"  # noqa: S101
     section = sections_lookup[subset_ids[0]]
     return {
         "contexts": [section["content"]],
@@ -45,8 +44,9 @@ def test_isolate_qa_and_sections(num_proc: int = 1) -> None:
     )
 
     # Check the two datasets are the same
-    if len(squad_subset) != len(squad_rejoined):
-        raise ValueError(f"Lengths do not match: {len(squad_subset)} != {len(squad_rejoined)}")
+    assert (
+        len(squad_subset) == len(squad_rejoined)
+        ), f"Lengths do not match: {len(squad_subset)} != {len(squad_rejoined)}"
     for i in range(len(squad_subset)):
         row_ori = squad_subset[i]
         row_new = squad_rejoined[i]
@@ -55,5 +55,6 @@ def test_isolate_qa_and_sections(num_proc: int = 1) -> None:
         for key in set(row_ori.keys()) - {"subset_ids"}:
             v_or = Hasher.hash(row_ori[key])
             v_new = Hasher.hash(row_new[key])
-            if v_or != v_new:
-                raise ValueError(f"Key=`{key}`. Row values do not match: {row_ori[key]} != {row_new[key]}")
+            assert (
+                v_or == v_new
+            ), f"Key=`{key}`. Row values do not match: {row_ori[key]} != {row_new[key]}"  x

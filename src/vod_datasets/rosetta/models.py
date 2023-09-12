@@ -31,26 +31,26 @@ class QueryModel(pydantic.BaseModel):
             "This can be used to encoded aliases for generative tasks or answer choices for multiple choice tasks."
         ),
     )
-    answer_scores: list[float] = pydantic.Field(
-        default=[],
+    answer_scores: None | list[float] = pydantic.Field(
+        default=None,
         description=(
             "Unnormalized scores for each answer. "
             "This can encode a multiple-choice problem or a ranking of preferences."
         ),
     )
-    retrieval_ids: list[str] = pydantic.Field(
-        default=[],
+    retrieval_ids: None | list[str] = pydantic.Field(
+        default=None,
         description="A list of target section IDs `section.id` for the given query.",
     )
-    subset_ids: list[str] = pydantic.Field(
-        default=[],
+    subset_ids: None | list[str] = pydantic.Field(
+        default=None,
         description="An optional ID representing a subset of data to search over.",
     )
 
     @pydantic.model_validator(mode="after")
     def _validate_answers_and_scores(self) -> "QueryModel":
         """Validate the answers and scores."""
-        if len(self.answers) != len(self.answer_scores):
+        if self.answer_scores is not None and len(self.answers) != len(self.answer_scores):
             raise ValueError("The number of answers must match the number of answer scores.")
         return self
 
