@@ -171,6 +171,8 @@ def normalize_scores_(
 ) -> None:
     """Subtract the minimum score from all score to allow consistent aggregation."""
     for key, result in search_results.items():
+        if result.scores.size == 0:
+            continue
         search_results[key].scores = _subtract_min_score(result.scores, offset=offset)
 
 

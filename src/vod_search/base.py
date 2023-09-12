@@ -39,10 +39,10 @@ class SearchClient(abc.ABC):
         self,
         *,
         text: list[str],
-        vector: Optional[rdtypes.Ts] = None,
-        group: Optional[list[str | int]] = None,
-        section_ids: Optional[list[list[str | int]]] = None,
-        shard: Optional[list[str]] = None,
+        vector: None | rdtypes.Ts = None,
+        subset_ids: None | list[list[str]] = None,
+        ids: None | list[list[str]] = None,
+        shard: None | list[str] = None,
         top_k: int = 3,
     ) -> rdtypes.RetrievalBatch[rdtypes.Ts]:
         """Search the server given a batch of text and/or vectors."""
@@ -52,18 +52,18 @@ class SearchClient(abc.ABC):
         self,
         *,
         text: list[str],
-        vector: Optional[rdtypes.Ts] = None,
-        group: Optional[list[str | int]] = None,
-        section_ids: Optional[list[list[str | int]]] = None,
-        shard: Optional[list[str]] = None,
+        vector: None | rdtypes.Ts = None,
+        subset_ids: None | list[list[str]] = None,
+        ids: None | list[list[str]] = None,
+        shard: None | list[str] = None,
         top_k: int = 3,
     ) -> rdtypes.RetrievalBatch[rdtypes.Ts]:
         """Search the server given a batch of text and/or vectors."""
         return self.search(
             text=text,
             vector=vector,
-            group=group,
-            section_ids=section_ids,
+            subset_ids=subset_ids,
+            ids=ids,
             shard=shard,
             top_k=top_k,
         )

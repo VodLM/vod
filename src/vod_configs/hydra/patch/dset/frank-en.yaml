@@ -13,22 +13,71 @@ dataset:
   training:
     queries:
       train:
-        - name: frank_a.en:train
-          link: frank_a.en
-        - name: squad.en:train
-          link: squad.en
+        - identifier: frank_a_en_train
+          name_or_path:
+            _target_: vod_datasets.FrankDatasetLoader
+            frank_split: A
+            language: en
+            what: queries
+          split: train
+          link: frank_a_sections
+        - identifier: squad_en_train
+          name_or_path: squad_v2
+          split: train
       val:
-        - name: frank_a.en:train
-          link: frank_a.en
+        - identifier: frank_a_en_val
+          name_or_path:
+            _target_: vod_datasets.FrankDatasetLoader
+            frank_split: A
+            language: en
+            what: queries
+          split: validation
+          link: frank_a_sections
 
     sections:
       sections:
-        - frank_a.en
-        - squad.en
+        - identifier: frank_a_sections
+          name_or_path:
+            _target_: vod_datasets.FrankDatasetLoader
+            frank_split: A
+            language: en
+            what: sections
+          split: validation
+        - identifier: squad_en_sections
+          name_or_path: squad_v2
 
   # Benchmarks
   benchmark:
-    - queries: frank_a.en:val
-      sections: frank_a.en
-    - queries: frank_b.en:val
-      sections: frank_b.en
+    - queries:
+        identifier: frank_a_en_train
+        name_or_path:
+          _target_: vod_datasets.FrankDatasetLoader
+          frank_split: A
+          language: en
+          what: queries
+        split: train
+        link: frank_a_sections
+      sections:
+        identifier: frank_a_sections
+        name_or_path:
+          _target_: vod_datasets.FrankDatasetLoader
+          frank_split: A
+          what: sections
+        split: validation
+    - queries:
+        identifier: frank_b_en_train
+        name_or_path:
+          _target_: vod_datasets.FrankDatasetLoader
+          frank_split: B
+          language: en
+          what: queries
+        split: train
+        link: frank_b_sections
+      sections:
+        identifier: frank_b_sections
+        name_or_path:
+          _target_: vod_datasets.FrankDatasetLoader
+          frank_split: B
+          language: en
+          what: sections
+        split: validation

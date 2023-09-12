@@ -10,7 +10,7 @@ from src import vod_datasets
 class Args(arguantic.Arguantic):
     """Arguments for the script."""
 
-    name: str = "frank_a"
+    frank_split: str = "A"
     language: str = "en"
     split: str = "all"
 
@@ -19,9 +19,15 @@ def run(args: Args) -> None:
     """Showcase the `load_frank` function."""
     dset = vod_datasets.load_queries(
         vod_configs.QueriesDatasetConfig(
-            name=args.name,
-            subset=args.language,
+            identifier=f"frank-{args.frank_split}-queries-{args.language}",
+            name_or_path=vod_datasets.FrankDatasetLoader(
+                frank_split=args.frank_split,
+                what="queries",
+                language=args.language,
+            ),
             split=args.split,
+            link=None,
+            options=vod_configs.DatasetOptions(),
         )
     )
     rich.print(dset)

@@ -19,7 +19,7 @@ class TensorStoreKvStoreConfig(BaseModel):
     class Config:
         """pydantic config for TensorStoreKvStoreConfig."""
 
-        allow_mutation = False
+        frozen = False
         extra = pydantic.Extra.forbid
 
     driver: Literal["file"]
@@ -36,7 +36,7 @@ class TensorStoreFactory(BaseModel):
     class Config:
         """pydantic config for TensorStoreFactory."""
 
-        allow_mutation = False
+        frozen = False
         extra = pydantic.Extra.forbid
 
     driver: Literal["n5", "zarr"]
@@ -45,7 +45,7 @@ class TensorStoreFactory(BaseModel):
 
     def open(self, create: int = False, delete_existing: int = False, **kwargs: Any) -> ts.TensorStore:
         """Open and return a TensorStore."""
-        cfg = self.dict()
+        cfg = self.model_dump()
         future = ts.open(cfg, create=create, delete_existing=delete_existing, **kwargs)
         return future.result()
 

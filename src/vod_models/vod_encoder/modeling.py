@@ -159,7 +159,7 @@ class VodPooler(torch.nn.Module):
                 "l1": functools.partial(torch.nn.functional.normalize, p=1),
             }[config.output_norm]
 
-    def forward(self, hidden_states: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
+    def forward(self, hidden_states: torch.Tensor, *, attention_mask: torch.Tensor) -> torch.Tensor:
         """Pools the model output and project. Note that the activation is applied last."""
         pooled_output = self.aggregator(hidden_states, attention_mask)
         if self.projection:
@@ -185,11 +185,11 @@ class VodEncoderBase(Generic[Cfg], transformers.PreTrainedModel, abc.ABC):
     """A VOD transformer encoder."""
 
     config_class: Type[Cfg]
-    pooler: VodPooler
+    vod_pooler: VodPooler
 
     def __init__(self, config: Cfg, **kwargs: Any) -> None:
         super().__init__(config, **kwargs)
-        self.pooler = VodPooler(config.pooler, self.config.hidden_size)
+        self.vod_pooler = VodPooler(config.pooler, self.config.hidden_size)
 
     def _backbone_forward(
         self,
@@ -220,9 +220,9 @@ class VodEncoderBase(Generic[Cfg], transformers.PreTrainedModel, abc.ABC):
             input_type=input_type,
             **kwargs,
         )
-        pooled_output = self.pooler(
+        pooled_output = self.vod_pooler(
             output.last_hidden_state,
-            attention_mask,
+            attention_mask=attention_mask,
         )
         if return_dict:
             return {
@@ -245,7 +245,7 @@ class VodEncoderBase(Generic[Cfg], transformers.PreTrainedModel, abc.ABC):
 
     def get_output_shape(self) -> tuple[int, ...]:
         """Get the output shape of the encoder. Set `-1` for unknown dimensions."""
-        return self.pooler.get_output_shape()
+        return self.vod_pooler.get_output_shape()
 
     @property
     def base_name_or_path(self) -> str:

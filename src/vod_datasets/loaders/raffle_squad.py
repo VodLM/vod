@@ -14,19 +14,9 @@ import datasets
 import fsspec
 import loguru
 import pydantic
-
-from src import vod_configs
-
-from .base import (
-    DATASETS_CACHE_PATH,
-    QueryModel,
-    SectionModel,
-    SilentHuggingfaceDecorator,
-    _fetch_queries_split,
-    init_gcloud_filesystem,
-)
-
-RAFFLE_SQUAD_KB_ID = 200_001
+from vod_configs import DatasetLoader
+from vod_datasets.rosetta import models
+from vod_datasets.utils import _fetch_queries_split, init_gcloud_filesystem
 
 
 @dataclasses.dataclass
@@ -37,22 +27,33 @@ class RaffleSquad:
     sections: datasets.Dataset
 
 
-class SquadSectionModel(SectionModel):
+class SquadSectionModel(models.SectionModel):
     """A Frank section."""
 
-    section: str = pydantic.Field(..., alias="content")
-    kb_id: int = RAFFLE_SQUAD_KB_ID
-    answer_id: int
+    language: str
+
+    @pydantic.field_validator("id", mode="before")
+    def _validate_id(cls, value: str) -> str:
+        return str(value)
 
 
-class SquadQueryModel(QueryModel):
+class SquadQueryModel(models.QueryModel):
     """A Frank query."""
 
     query: str = pydantic.Field(..., alias="question")
+    retrieval_ids: list[str] = pydantic.Field(..., alias="section_ids")
     category: Optional[str] = None
     label_method_type: Optional[str] = None
     answer_id: int
-    kb_id: int = RAFFLE_SQUAD_KB_ID
+    language: str
+
+    @pydantic.field_validator("id", mode="before")
+    def _validate_id(cls, value: str) -> str:
+        return str(value)
+
+    @pydantic.field_validator("retrieval_ids", mode="before")
+    def _validate_retrieval_ids(cls, value: list[str]) -> list[str]:
+        return [str(v) for v in value]
 
 
 def _iter_examples_from_json(
@@ -67,7 +68,6 @@ def _iter_examples_from_json(
         yield example
 
 
-@SilentHuggingfaceDecorator()
 def _download_and_parse_squad(language: str) -> RaffleSquad:
     fs = init_gcloud_filesystem()
 
@@ -96,7 +96,7 @@ def _gen_qa_split(
             section_id = int(section_id)
             row["section_ids"] = [section_id]
         struct_row = SquadQueryModel(language=language, **row)
-        yield struct_row.dict()
+        yield struct_row.model_dump()
 
 
 def _pase_squad_dir(local_frank_path: str, language: str, *, fs: fsspec.AbstractFileSystem) -> RaffleSquad:
@@ -109,10 +109,10 @@ def _pase_squad_dir(local_frank_path: str, language: str, *, fs: fsspec.Abstract
     def gen_sections() -> Iterable[dict[str, Any]]:
         for section in _iter_examples_from_json(_parse_squad_dir, fs=fs):
             row = SquadSectionModel(language=language, **section)
-            yield row.dict()
+            yield row.model_dump()
 
     # generate sections
-    sections = datasets.Dataset.from_generator(gen_sections)
+    sections: datasets.Dataset = datasets.Dataset.from_generator(gen_sections)  # type: ignore
 
     # build `answer2section`
     answer2section: dict[int, set[int]] = collections.defaultdict(set)
@@ -145,33 +145,53 @@ def _make_local_sync_path(cache_dir: str | pathlib.Path, language: str) -> tuple
     )
 
 
-def load_raffle_squad(
-    config: vod_configs.BaseDatasetConfig,
-) -> datasets.Dataset | datasets.DatasetDict:
-    """Load the Frank dataset."""
-    cache_dir = pathlib.Path(config.options.cache_dir or DATASETS_CACHE_PATH)
-    if config.subset is None:
-        raise ValueError(f"Subset must be configured. Config={config}")
+class RaffleSquadDatasetLoader(DatasetLoader):
+    """Load the Raffle-Squad Dataset."""
 
-    # define the local paths
-    qa_splits_path, sections_paths = _make_local_sync_path(cache_dir, language=config.subset)
-    if config.options.invalidate_cache:
-        loguru.logger.debug(f"Invalidating cache `{qa_splits_path}` and `{sections_paths}`")
-        if qa_splits_path.exists():
-            shutil.rmtree(qa_splits_path)
-        if sections_paths.exists():
-            shutil.rmtree(sections_paths)
+    def __init__(  # noqa: PLR0913
+        self,
+        language: str = "en",
+        cache_dir: None | str = None,
+        invalidate_cache: bool = False,
+        what: models.DatasetType = "queries",
+    ) -> None:
+        """Initialize the dataset loader."""
+        self.language = language
+        self.cache_dir = pathlib.Path(cache_dir or models.DATASETS_CACHE_PATH)
+        self.invalidate_cache = invalidate_cache
+        if what not in {"queries", "sections"}:
+            raise ValueError(f"Unexpected dataset type: what=`{what}`")
+        self.dataset_type = what
 
-    # if not downloaded, download, process and save to disk
-    if not qa_splits_path.exists() or not sections_paths.exists():
-        frank_split = _download_and_parse_squad(config.subset)
-        frank_split.qa_splits.save_to_disk(str(qa_splits_path))
-        frank_split.sections.save_to_disk(str(sections_paths))
+    def __call__(  # noqa: C901
+        self,
+        subset: str | None = None,
+        split: None = None,
+        **kws: Any,
+    ) -> datasets.Dataset | datasets.DatasetDict:
+        """Load the Frank dataset."""
+        if subset is not None:
+            raise ValueError(f"Loader `{self.__class__.__name__}` does not support `subset` argument.")
 
-    if isinstance(config, vod_configs.SectionsDatasetConfig):
-        return datasets.Dataset.load_from_disk(str(sections_paths))
-    if isinstance(config, vod_configs.QueriesDatasetConfig):
-        queries = datasets.DatasetDict.load_from_disk(str(qa_splits_path))
-        return _fetch_queries_split(queries, split=config.split)
+        # define the local paths
+        qa_splits_path, sections_paths = _make_local_sync_path(self.cache_dir, language=self.language)
+        if self.invalidate_cache:
+            loguru.logger.debug(f"Invalidating cache `{qa_splits_path}` and `{sections_paths}`")
+            if qa_splits_path.exists():
+                shutil.rmtree(qa_splits_path)
+            if sections_paths.exists():
+                shutil.rmtree(sections_paths)
 
-    raise TypeError(f"Unexpected config type {type(config)}")
+        # if not downloaded, download, process and save to disk
+        if not qa_splits_path.exists() or not sections_paths.exists():
+            frank_split = _download_and_parse_squad(self.language)
+            frank_split.qa_splits.save_to_disk(str(qa_splits_path))
+            frank_split.sections.save_to_disk(str(sections_paths))
+
+        if self.dataset_type == "sections":
+            return datasets.Dataset.load_from_disk(str(sections_paths))
+        if self.dataset_type == "queries":
+            queries = datasets.DatasetDict.load_from_disk(str(qa_splits_path))
+            return _fetch_queries_split(queries, split=split)
+
+        raise TypeError(f"Unexpected dataset type `{self.dataset_type}`")

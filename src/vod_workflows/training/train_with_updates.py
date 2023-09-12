@@ -38,7 +38,7 @@ def train_with_index_updates(  # noqa: C901, PLR0915
     optimizer = ranker.get_optimizer()
     scheduler = ranker.get_scheduler(helpers.unwrap_optimizer(optimizer))
 
-    # Define the trainer State
+    # Define the trainer state
     state = helpers.TrainerState(
         step=0,
         pidx=0,
@@ -99,8 +99,8 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                 barrier("Pre-processing done.")
 
             # pre-compute the vectors for each dataset, this is deactivated when faiss is not in use
-            if helpers.is_engine_enabled(train_parameters, "faiss") or (
-                run_benchmarks and helpers.is_engine_enabled(bench_parameters, "faiss")
+            if helpers.is_engine_enabled(train_parameters, "dense") or (
+                run_benchmarks and helpers.is_engine_enabled(bench_parameters, "dense")
             ):
                 # Compute the vectors
                 vectors = {
@@ -113,12 +113,12 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                         collate_config=config.collates.predict,
                         dataloader_config=config.dataloaders.predict,
                         field=cfg.field,
-                        locator=cfg.descriptor,
+                        locator=cfg.identifier,
                     )
                     for cfg in all_dset_configs
                 }
             else:
-                logger.info("Faiss engine is disabled. Skipping vector pre-computation.")
+                logger.info("Dense search engine is disabled. Skipping vector pre-computation.")
                 vectors = None
 
             # Tune the parameters and benchmark the ranker on each dataset separately
@@ -219,8 +219,8 @@ def _run_benchmarks(
     if fabric.is_global_zero:
         logger.info(f"Running benchmarks ... (period={1+state.pidx})")
         for j, task in enumerate(tasks):
-            queries_loc = "+".join([q.descriptor for q in task.queries])
-            sections_loc = "+".join([s.descriptor for s in task.sections])
+            queries_loc = "+".join([q.identifier for q in task.queries])
+            sections_loc = "+".join([s.identifier for s in task.sections])
             bench_loc = f"{queries_loc} <- {sections_loc}"
             logger.info(f"{1+j}/{len(config.dataset.benchmark)} - Benchmarking `{bench_loc}` ...")
             logdir = pathlib.Path("benchmarks", f"{bench_loc}-{state.pidx}-{state.step}")

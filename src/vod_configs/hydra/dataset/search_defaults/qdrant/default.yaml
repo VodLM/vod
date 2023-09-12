@@ -1,5 +1,5 @@
 backend: qdrant
-group_key: group_hash
+subset_id_key: subset_id
 host: http://localhost
 port: 6333
 grpc_port: 6334

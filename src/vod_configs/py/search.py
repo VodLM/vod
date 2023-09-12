@@ -62,7 +62,7 @@ class FaissGpuConfig(StrictModel):
     shard: bool = True
     add_batch_size: int = 2**18
 
-    @pydantic.validator("devices", pre=True, always=True)
+    @pydantic.field_validator("devices", mode="before")
     def _validate_devices(cls, v):  # noqa: ANN
         if v is None or v == [-1]:
             return list(range(torch.cuda.device_count()))
@@ -98,8 +98,7 @@ class BaseSearchFactoryConfig(StrictModel):
     """Base config for all search engines."""
 
     backend: SearchBackends = pydantic.Field(..., description="Search backend to use.")
-    text_key: str = pydantic.Field("text", description="Text field to be indexed.")
-    group_key: Optional[str] = pydantic.Field("group", description="Group field to be indexed.")
+    subset_id_key: Optional[str] = pydantic.Field("subset_id", description="Subset ID field to be indexed.")
     section_id_key: Optional[str] = pydantic.Field("id", description="Section ID field to be indexed.")
 
 
@@ -107,7 +106,6 @@ class BaseSearchFactoryDiff(StrictModel):
     """Relative search configs."""
 
     backend: SearchBackends
-    text_key: Optional[str] = None
     group_key: Optional[str] = None
     section_id_key: Optional[str] = None
 
@@ -143,9 +141,9 @@ class FaissFactoryConfig(BaseSearchFactoryConfig):
         if diff is None:
             return self
         diffs = {k: v for k, v in diff if v is not None}
-        return self.copy(update=diffs)
+        return self.model_copy(update=diffs)
 
-    @pydantic.validator("metric", pre=True)
+    @pydantic.field_validator("metric", mode="before")
     def _validate_metric(cls, v: str | int) -> int:
         if isinstance(v, int):
             return v
@@ -175,15 +173,16 @@ class ElasticsearchFactoryConfig(BaseSearchFactoryConfig):
     host: str = "http://localhost"
     port: int = 9200
     persistent: bool = True
+    section_template: str = r"{{ title }} {{ content }}"
     es_body: Optional[dict] = None
 
     def __add__(self, diff: None | ElasticsearchFactoryDiff) -> Self:
         if diff is None:
             return self
         diffs = {k: v for k, v in diff if v is not None}
-        return self.copy(update=diffs)
+        return self.model_copy(update=diffs)
 
-    @pydantic.validator("es_body", pre=True)
+    @pydantic.field_validator("es_body", mode="before")
     def _validate_es_body(cls, v: dict | None) -> dict | None:
         if isinstance(v, omegaconf.DictConfig):
             v = omegaconf.OmegaConf.to_container(v, resolve=True)  # type: ignore
@@ -192,7 +191,7 @@ class ElasticsearchFactoryConfig(BaseSearchFactoryConfig):
     def fingerprint(self) -> str:
         """Return a fingerprint for this config."""
         excludes = {"host", "port", "persistent"}
-        return pipes.fingerprint(self.dict(exclude=excludes))
+        return pipes.fingerprint(self.model_dump(exclude=excludes))
 
 
 class QdrantFactoryDiff(BaseSearchFactoryDiff):
@@ -228,13 +227,13 @@ class QdrantFactoryConfig(BaseSearchFactoryConfig):
         diffs = {k: v for k, v in diff if v is not None}
         return self.copy(update=diffs)
 
-    @pydantic.validator("qdrant_body", pre=True)
+    @pydantic.field_validator("qdrant_body", mode="before")
     def _validate_qdrant_body(cls, v: dict | None) -> dict | None:
         if isinstance(v, omegaconf.DictConfig):
             v = omegaconf.OmegaConf.to_container(v, resolve=True)  # type: ignore
         return v
 
-    @pydantic.validator("search_params", pre=True)
+    @pydantic.field_validator("search_params", mode="before")
     def _validate_search_params(cls, v: dict | None) -> dict | None:
         if isinstance(v, omegaconf.DictConfig):
             v = omegaconf.OmegaConf.to_container(v, resolve=True)  # type: ignore
@@ -332,9 +331,9 @@ class SearchFactoryDefaults(StrictModel):
     qdrant: QdrantFactoryConfig = QdrantFactoryConfig()
 
     # validators
-    _validate_elasticsearch = pydantic.validator("elasticsearch", allow_reuse=True, pre=True)(as_pyobj_validator)
-    _validate_faiss = pydantic.validator("faiss", allow_reuse=True, pre=True)(as_pyobj_validator)
-    _validate_qdrant = pydantic.validator("qdrant", allow_reuse=True, pre=True)(as_pyobj_validator)
+    _validate_elasticsearch = pydantic.field_validator("elasticsearch", mode="before")(as_pyobj_validator)
+    _validate_faiss = pydantic.field_validator("faiss", mode="before")(as_pyobj_validator)
+    _validate_qdrant = pydantic.field_validator("qdrant", mode="before")(as_pyobj_validator)
 
     @classmethod
     def parse(cls: Type[Self], config: dict | omegaconf.DictConfig) -> Self:  # type: ignore

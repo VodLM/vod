@@ -13,6 +13,7 @@ from loguru import logger
 from vod_search import base, es_search, faiss_search, qdrant_search
 from vod_search.socket import find_available_port
 from vod_tools import dstruct, pipes
+from vod_tools.misc.template import Template
 
 from src import vod_configs
 
@@ -83,17 +84,28 @@ def build_elasticsearch_index(
     if isinstance(config, dict):
         config = vod_configs.ElasticsearchFactoryConfig(**config)
     index_fingerprint = f"{pipes.fingerprint(sections)}-{config.fingerprint()}"
+    template = Template(config.section_template)
     logger.info(
         f"Init. elasticsearch index `{index_fingerprint}`, "
-        f"text_key: `{config.text_key}`, "
-        f"group_key: `{config.group_key}`"
+        f"template: `{template.template}`, "
+        f"section_id_key: `{config.section_id_key}`,"
+        f"subset_id: `{config.subset_id_key}`"
     )
-    texts = (row[config.text_key] for row in iter(sections))
-    groups = (row[config.group_key] for row in iter(sections)) if config.group_key else None
+    for row in iter(sections):
+        if not template.is_valide(row):
+            raise ValueError(f"Invalid template `{template.template}` for row with keys `{list(row.keys())}`")
+        if config.section_id_key is not None and config.section_id_key not in row:
+            raise ValueError(f"Could not find `{config.section_id_key}` in `{row.keys()}`")
+        if config.subset_id_key is not None and config.subset_id_key not in row:
+            raise ValueError(f"Could not find `{config.subset_id_key}` in `{row.keys()}`")
+        break  # test only the first one
+
+    texts = (template.render(row) for row in iter(sections))
+    subset_ids = (row[config.subset_id_key] for row in iter(sections)) if config.subset_id_key else None
     sections_ids = (row[config.section_id_key] for row in iter(sections)) if config.section_id_key else None
     return es_search.ElasticSearchMaster(
         texts=texts,
-        groups=groups,
+        subset_ids=subset_ids,
         section_ids=sections_ids,
         host=config.host,
         port=config.port,
@@ -183,12 +195,12 @@ def build_qdrant_index(
     logger.info(
         f"Init. Qdrant index `{index_fingerprint}`, "
         f"vector: `{[len(vectors), *vectors[0].shape]}`, "
-        f"group_key: `{config.group_key}`"
+        f"subset_id_key: `{config.subset_id_key}`"
     )
-    groups = (row[config.group_key] for row in iter(sections)) if config.group_key else None
+    subset_ids = (row[config.subset_id_key] for row in iter(sections)) if config.subset_id_key else None
     return qdrant_search.QdrantSearchMaster(
         vectors=vectors,
-        groups=groups,
+        subset_ids=subset_ids,
         host=config.host,
         port=config.port,
         grpc_port=config.grpc_port,
@@ -228,9 +240,9 @@ def _resolve_ports(
             if fabric is not None:
                 # Sync the port across all ranks
                 new_port = fabric.broadcast(new_port, 0)
-            engines[key] = engine.copy(update={"port": new_port})
+            engines[key] = engine.model_copy(update={"port": new_port})
 
-    return config.copy(update={"engines": engines})
+    return config.model_copy(update={"engines": engines})
 
 
 def build_hybrid_search_engine(  # noqa: C901, PLR0912
@@ -259,7 +271,7 @@ def build_hybrid_search_engine(  # noqa: C901, PLR0912
     # Resolve missing ports
     if resolve_ports:
         if fabric is None:
-            logger.debug("No fabric provided. Ports will not be synced across ranks.")
+            logger.debug("No fabric provided. Ports may not be synced across ranks.")
         configs = [_resolve_ports(config, fabric=fabric) for config in configs]
 
     if sections is not None:

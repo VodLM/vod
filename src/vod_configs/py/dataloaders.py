@@ -3,7 +3,10 @@ from __future__ import annotations
 import typing
 from typing import Optional
 
-from vod_configs.py.utils import StrictModel
+import pydantic
+
+from .templates import TemplatesConfig
+from .utils import StrictModel
 
 
 class KeyMap(StrictModel):
@@ -31,6 +34,7 @@ class BaseCollateConfig(StrictModel):
 
     query_max_length: int = 512
     section_max_length: int = 512
+    templates: TemplatesConfig = pydantic.Field(default_factory=TemplatesConfig)
 
 
 class RetrievalCollateConfig(BaseCollateConfig):
@@ -48,10 +52,9 @@ class RetrievalCollateConfig(BaseCollateConfig):
     prep_num_proc: int = 4
 
     # name of the keys to use on the query side and on the section side
-    text_keys: KeyMap = KeyMap(query="text", section="text")  #  text field
     vector_keys: KeyMap = KeyMap(query="vector", section="vector")  #  vector field
-    section_id_keys: KeyMap = KeyMap(query="section_ids", section="id")  #  label field (section ids)
-    group_id_keys: KeyMap = KeyMap(query="group_hash", section="group_hash")  #  group hash (kb_id, lang, etc.)
+    section_id_keys: KeyMap = KeyMap(query="retrieval_ids", section="id")  #  label field (section ids)
+    subset_id_keys: KeyMap = KeyMap(query="subset_ids", section="subset_id")  #  group hash (kb_id, lang, etc.)
 
 
 class SamplerFactoryConfig(StrictModel):

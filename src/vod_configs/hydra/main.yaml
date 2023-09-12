@@ -1,5 +1,6 @@
 defaults:
   - dataset: retrieval
+  - templates: default
   - dl_sampler: none
   - model: default
   - tokenizer: default
@@ -51,6 +52,7 @@ collates:
   predict:
     query_max_length: 128
     section_max_length: 200
+    templates: ${templates}
   train:
     # Configuration for the training/evaluation `Collate`
     n_sections: 16
@@ -63,6 +65,7 @@ collates:
     prep_num_proc: ${resources.num_proc}
     query_max_length: ${collates.predict.query_max_length}
     section_max_length:  ${collates.predict.section_max_length}
+    templates: ${templates}
   benchmark:
     # Configuration for the benchmark eval. `Collate`
     n_sections: null
@@ -75,3 +78,4 @@ collates:
     prep_num_proc: ${resources.num_proc}
     query_max_length: ${collates.predict.query_max_length}
     section_max_length:  ${collates.predict.section_max_length}
+    templates: ${templates}

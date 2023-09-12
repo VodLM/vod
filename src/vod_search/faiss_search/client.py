@@ -5,7 +5,6 @@ import sys
 import time
 from copy import copy
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 import requests
@@ -76,10 +75,10 @@ class FaissClient(base.SearchClient):
         self,
         *,
         vector: rdtypes.Ts,
-        text: Optional[list[str]] = None,  # noqa: ARG
-        group: Optional[list[str | int]] = None,  # noqa: ARG
-        section_ids: Optional[list[list[str | int]]] = None,  # noqa: ARG
-        shard: Optional[list[str]] = None,  # noqa: ARG
+        text: None | list[str] = None,  # noqa: ARG
+        ids: None | list[list[str]] = None,  # noqa: ARG
+        subset_ids: None | list[list[str]] = None,  # noqa: ARG
+        shard: None | list[str] = None,  # noqa: ARG
         top_k: int = 3,
         timeout: float = 120,
     ) -> rdtypes.RetrievalBatch[rdtypes.Ts]:

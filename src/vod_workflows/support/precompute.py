@@ -8,7 +8,8 @@ import datasets
 import lightning as L
 import loguru
 import transformers
-from vod_tools import dstruct, pipes, predict
+from vod_dataloaders.predict_collate import PredictCollate
+from vod_tools import dstruct, predict
 from vod_workflows.utils import helpers
 
 from src import vod_configs, vod_models
@@ -28,7 +29,7 @@ def compute_vectors(
     locator: None | str = None,
 ) -> dstruct.TensorStoreFactory:
     """Compute the vectors for a given dataset and field. Hanldes distributed execution on a single node."""
-    collate_fn = init_predict_collate_fn(collate_config, field=field, tokenizer=tokenizer)
+    collate_fn = PredictCollate.from_config(collate_config, field=field, tokenizer=tokenizer)
     barrier_fn = functools.partial(helpers.barrier_fn, fabric=fabric)
 
     # construct the `predict` function
@@ -67,26 +68,3 @@ def compute_vectors(
         validate_store=validate_store,
         open_mode="a",
     )  # type: ignore
-
-
-def init_predict_collate_fn(
-    config: vod_configs.BaseCollateConfig,
-    *,
-    field: str,
-    tokenizer: transformers.PreTrainedTokenizerBase,
-) -> pipes.Collate:
-    """Initialize the collate function for the `predict` function."""
-    max_length = {
-        "query": config.query_max_length,
-        "section": config.section_max_length,
-    }[field]
-
-    # init the collate_fn
-    return functools.partial(
-        pipes.torch_tokenize_collate,
-        tokenizer=tokenizer,
-        max_length=max_length,
-        truncation=True,
-        padding="max_length",
-        prefix_key=f"{field}.",
-    )

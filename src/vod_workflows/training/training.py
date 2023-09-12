@@ -39,9 +39,9 @@ class OnFirstBatchCallback(typing.Protocol):
 class RetrievalTask:
     """Holds the train and validation datasets."""
 
-    train_questions: helpers.DsetWithVectors
-    val_questions: helpers.DsetWithVectors
-    sections: helpers.DsetWithVectors
+    train_questions: helpers.ShardedDsetWithVectors
+    val_questions: helpers.ShardedDsetWithVectors
+    sections: helpers.ShardedDsetWithVectors
 
 
 def index_and_train(
@@ -74,16 +74,16 @@ def index_and_train(
     parameters.update(trainer_state.get_parameters())
 
     # Wrap queries with vectorss
-    train_queries_ = helpers.DsetWithVectors.cast(
-        data=[vod_datasets.load_queries(cfg) for cfg in train_queries],
+    train_queries_ = helpers.ShardedDsetWithVectors.from_configs(
+        data=train_queries,
         vectors=[vectors[d] for d in train_queries] if vectors else None,
     )
-    val_queries_ = helpers.DsetWithVectors.cast(
-        data=[vod_datasets.load_queries(cfg) for cfg in val_queries],
+    val_queries_ = helpers.ShardedDsetWithVectors.from_configs(
+        data=val_queries,
         vectors=[vectors[d] for d in val_queries] if vectors else None,
     )
-    sections_ = helpers.DsetWithVectors.cast(
-        data=[vod_datasets.load_sections(cfg) for cfg in sections],
+    sections_ = helpers.ShardedDsetWithVectors.from_configs(
+        data=sections,
         vectors=[vectors[d] for d in sections] if vectors else None,
     )
 
@@ -99,12 +99,12 @@ def index_and_train(
 
     barrier_fn("Init search engines..")
     with vod_search.build_hybrid_search_engine(
-        shard_names=[cfg.descriptor for cfg in sections],
+        shard_names=[cfg.identifier for cfg in sections],
         sections=[vod_datasets.load_sections(cfg) for cfg in sections],  # type: ignore
         vectors=[dstruct.as_lazy_array(vectors[d]) for d in sections] if vectors else None,  # type: ignore
         configs=[cfg.search for cfg in sections],  # type: ignore
         cache_dir=cache_dir,
-        dense_enabled=helpers.is_engine_enabled(parameters, "faiss"),
+        dense_enabled=helpers.is_engine_enabled(parameters, "dense"),
         sparse_enabled=True,
         skip_setup=not fabric.is_global_zero,
         barrier_fn=barrier_fn,

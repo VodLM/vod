@@ -26,7 +26,7 @@ class TuningConfig(StrictModel):
     learning_rate: float = 1e-3
     collate_overrides: dict[str, Any] = {}
 
-    @pydantic.validator("collate_overrides", pre=True)
+    @pydantic.field_validator("collate_overrides", mode="before")
     def _validate_collate_overrides(cls, v: None | dict[str, Any]) -> dict[str, Any]:
         if v is None:
             return {}
@@ -44,7 +44,7 @@ class BenchmarkConfig(StrictModel):
         """Pydantic configuration."""
 
         extra = "forbid"
-        allow_mutation = False
+        frozen = False
 
     on_init: bool = False
     n_max_eval: Optional[int] = None
@@ -54,9 +54,9 @@ class BenchmarkConfig(StrictModel):
     search: dict[str, Any] = {}
 
     # Validators
-    _validate_metrics = pydantic.validator("metrics", allow_reuse=True, pre=True)(as_pyobj_validator)
+    _validate_metrics = pydantic.field_validator("metrics", mode="before")(as_pyobj_validator)
 
-    @pydantic.validator("search", pre=True)
+    @pydantic.field_validator("search", mode="before")
     def _validate_searchs(cls, v: None | dict[str, Any]) -> dict[str, Any]:
         if v is None:
             return {}
@@ -88,10 +88,10 @@ class TrainerConfig(StrictModel):
     pbar_keys: list[str] = ["loss", "hitrate_3"]
 
     # validators
-    _validate_update_freq = pydantic.validator("period", allow_reuse=True, pre=True)(as_pyobj_validator)
-    _validate_pbark_keys = pydantic.validator("pbar_keys", allow_reuse=True, pre=True)(as_pyobj_validator)
+    _validate_update_freq = pydantic.field_validator("period", mode="before")(as_pyobj_validator)
+    _validate_pbark_keys = pydantic.field_validator("pbar_keys", mode="before")(as_pyobj_validator)
 
-    @pydantic.validator("parameters", pre=True)
+    @pydantic.field_validator("parameters", mode="before")
     def _validate_parameters(cls, x: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
         if x is None:
             return {}

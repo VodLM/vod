@@ -5,7 +5,6 @@ import dataclasses
 import functools
 import json
 import pathlib
-import re
 import shutil
 from os import PathLike
 from pathlib import Path
@@ -16,37 +15,53 @@ import fsspec
 import loguru
 import pydantic
 from rich.progress import track
-
-from src import vod_configs
-
-from .base import (
-    DATASETS_CACHE_PATH,
-    QueryModel,
-    SectionModel,
-    SilentHuggingfaceDecorator,
-    _fetch_queries_split,
-    init_gcloud_filesystem,
-)
-
-FrankDsetNamePattern = re.compile(r"^(?P<name>[frank]+)(_(?P<frank_split>[A-Za-z_]))$")
+from vod_configs import DatasetLoader
+from vod_datasets.rosetta import models
+from vod_datasets.utils import _fetch_queries_split, init_gcloud_filesystem
 
 
-class FrankSectionModel(SectionModel):
+class FrankSectionModel(models.SectionModel):
     """A Frank section."""
 
-    section: str = pydantic.Field(..., alias="content")
-    kb_id: int = pydantic.Field(..., alias="knowledge_base_id")
+    subset_id: str = pydantic.Field(..., alias="knowledge_base_id")
     answer_id: int
+    language: str
+
+    @pydantic.field_validator("id", mode="before")
+    def _validate_id(cls, value: str) -> str:
+        return str(value)
+
+    @pydantic.field_validator("subset_id", mode="before")
+    def _validate_subset_id(cls, value: str) -> str:
+        return str(value)
 
 
-class FrankQueryModel(QueryModel):
+class FrankQueryModel(models.QueryModel):
     """A Frank query."""
 
     query: str = pydantic.Field(..., alias="question")
     category: Optional[str] = None
     label_method_type: Optional[str] = None
     answer_id: int
-    kb_id: int = pydantic.Field(..., alias="knowledge_base_id")
+    subset_ids: list[str] = pydantic.Field(..., alias="knowledge_base_id")
+    retrieval_ids: list[str] = pydantic.Field(...)
+    language: str
+
+    @pydantic.field_validator("id", mode="before")
+    def _validate_id(cls, value: str) -> str:
+        return str(value)
+
+    @pydantic.field_validator("subset_ids", mode="before")
+    def _validate_subset_ids(cls, value: str | list) -> list[str]:
+        if not isinstance(value, list):
+            return [str(value)]
+        return [str(x) for x in value]
+
+    @pydantic.field_validator("retrieval_ids", mode="before")
+    def _validate_retrieval_ids(cls, value: str | list) -> list[str]:
+        if not isinstance(value, list):
+            return [str(value)]
+        return [str(x) for x in value]
 
 
 @dataclasses.dataclass
@@ -88,7 +103,6 @@ def _iter_examples_from_json(
         yield example
 
 
-@SilentHuggingfaceDecorator()
 def _download_and_parse_frank(
     language: str,
     split: str,
@@ -110,9 +124,11 @@ def _download_and_parse_frank(
         path = f"raffle-datasets-1/datasets/frank/{language}/da_frank_V{version}{split}/kb_indexes/"
     else:
         path = f"raffle-datasets-1/datasets/frank/{language}/translated_da_frank_V{version}{split}/kb_indexes/"
+
     loguru.logger.debug(f"Reading Frank from {path} using {fs}")
     if not fs.exists(path):
         raise FileNotFoundError(f"Path {path} does not exist on storage {fs}.")
+
     full_frank_split = None
     for part_path in track(fs.ls(path), description=f"Processing Frank {split}"):
         if not fs.exists(Path(part_path, "sections.json")):
@@ -140,12 +156,12 @@ def _gen_qa_split(
         if section_id is None:
             section_ids = answer2section[answer_id]
             section_ids = sorted(section_ids)
-            row["section_ids"] = section_ids
+            row["retrieval_ids"] = section_ids
         else:
             section_id = int(section_id)
-            row["section_ids"] = [section_id]
+            row["retrieval_ids"] = [section_id]
         struct_row = FrankQueryModel(language=language, **row)
-        yield struct_row.dict()
+        yield struct_row.model_dump()
 
 
 def _pase_frank_dir(local_frank_path: str, split: str, language: str, *, fs: fsspec.AbstractFileSystem) -> HfFrankPart:
@@ -158,7 +174,7 @@ def _pase_frank_dir(local_frank_path: str, split: str, language: str, *, fs: fss
     def gen_sections() -> Iterable[dict[str, Any]]:
         for section in _iter_examples_from_json(sections_path, fs=fs):
             struct_row = FrankSectionModel(language=language, **section)
-            yield struct_row.dict()
+            yield struct_row.model_dump()
 
     # generate sections
     sections: datasets.Dataset = datasets.Dataset.from_generator(gen_sections)  # type: ignore
@@ -202,55 +218,101 @@ def _make_local_sync_path(
     )
 
 
-def load_frank(
-    config: vod_configs.BaseDatasetConfig,
-    *,
-    only_positive_sections: bool = False,
-    version: int = 0,
-) -> datasets.Dataset | datasets.DatasetDict:
-    """Load the Frank dataset."""
-    cache_dir = pathlib.Path(config.options.cache_dir or DATASETS_CACHE_PATH)
+class FrankDatasetLoader(DatasetLoader):
+    """Load the Frank Dataset."""
 
-    # Parse the frank split
-    parsed_named = FrankDsetNamePattern.match(config.name)
-    if parsed_named is None or "frank_split" not in parsed_named.groupdict():
-        raise ValueError(f"Failed to parse Frank name `{config.name}` using pattern `{FrankDsetNamePattern.pattern}`")
-    frank_split = parsed_named.groupdict()["frank_split"].upper()
+    def __init__(  # noqa: PLR0913
+        self,
+        frank_split: str = "A",
+        language: str = "en",
+        cache_dir: None | str = None,
+        only_positive_sections: bool = False,
+        version: int = 0,
+        invalidate_cache: bool = False,
+        kb_ids: None | list[str] = None,
+        what: models.DatasetType = "queries",
+    ) -> None:
+        self.frank_split = frank_split
+        self.language = language
+        self.cache_dir = pathlib.Path(cache_dir or models.DATASETS_CACHE_PATH)
+        self.only_positive_sections = only_positive_sections
+        self.version = version
+        self.invalidate_cache = invalidate_cache
+        self.kb_ids = [str(x) for x in (kb_ids or [])]
+        if what not in {"queries", "sections"}:
+            raise ValueError(f"Unexpected dataset type: what=`{what}`")
+        self.dataset_type = what
 
-    # Check the language (split)
-    if config.subset is None:
-        raise ValueError(f"Split must be configured. Config={config}")
+    def __call__(  # noqa: C901
+        self,
+        subset: str | None = None,
+        split: None = None,
+        **kws: Any,
+    ) -> datasets.Dataset | datasets.DatasetDict:
+        """Load the Frank dataset."""
+        if subset is not None:
+            raise ValueError(f"Loader `{self.__class__.__name__}` does not support `subset` argument.")
+        qa_splits_path, sections_paths = _make_local_sync_path(
+            self.cache_dir,
+            language=self.language,
+            split=self.frank_split,
+            version=self.version,
+            only_positive_sections=self.only_positive_sections,
+        )
+        if self.invalidate_cache:
+            loguru.logger.debug(f"Invalidating cache `{qa_splits_path}` and `{sections_paths}`")
+            if qa_splits_path.exists():
+                shutil.rmtree(qa_splits_path)
+            if sections_paths.exists():
+                shutil.rmtree(sections_paths)
 
-    # Define the local paths
-    qa_splits_path, sections_paths = _make_local_sync_path(
-        cache_dir,
-        language=config.subset,
-        split=frank_split,
-        version=version,
-        only_positive_sections=only_positive_sections,
-    )
-    if config.options.invalidate_cache:
-        loguru.logger.debug(f"Invalidating cache `{qa_splits_path}` and `{sections_paths}`")
-        if qa_splits_path.exists():
-            shutil.rmtree(qa_splits_path)
-        if sections_paths.exists():
-            shutil.rmtree(sections_paths)
+        # If not downloaded, download, process and save to disk
+        if not qa_splits_path.exists() or not sections_paths.exists():
+            frank_dset = _download_and_parse_frank(
+                self.language,
+                self.frank_split,
+                self.version,
+                self.only_positive_sections,
+            )
+            frank_dset.qa_splits.save_to_disk(str(qa_splits_path))
+            frank_dset.sections.save_to_disk(str(sections_paths))
 
-    # If not downloaded, download, process and save to disk
-    if not qa_splits_path.exists() or not sections_paths.exists():
-        frank_dset = _download_and_parse_frank(config.subset, frank_split, version, only_positive_sections)
-        frank_dset.qa_splits.save_to_disk(str(qa_splits_path))
-        frank_dset.sections.save_to_disk(str(sections_paths))
+        if self.dataset_type == "sections":
+            output = datasets.Dataset.load_from_disk(str(sections_paths))
 
-    if isinstance(config, vod_configs.SectionsDatasetConfig):
-        return datasets.Dataset.load_from_disk(str(sections_paths))
+            if self.kb_ids:
+                output = output.filter(
+                    functools.partial(_filter_by_kbid, kb_ids=self.kb_ids),
+                    with_indices=True,
+                    desc="Filtering sections by kb_ids",
+                )
+                if len(output) == 0:
+                    raise ValueError(f"Sections dataset is empty after filtering by kb_ids={self.kb_ids}")
 
-    if isinstance(config, vod_configs.QueriesDatasetConfig):
-        queries = datasets.DatasetDict.load_from_disk(str(qa_splits_path))
-        return _fetch_queries_split(queries, split=config.split)
+            return output
 
-    raise TypeError(f"Unexpected config type {type(config)}")
+        if self.dataset_type == "queries":
+            output = datasets.DatasetDict.load_from_disk(str(qa_splits_path))
+            output = _fetch_queries_split(output, split=split)
+            if self.kb_ids:
+                output = output.filter(
+                    functools.partial(_filter_by_kbid, kb_ids=self.kb_ids),
+                    with_indices=True,
+                    desc="Filtering queries by kb_ids",
+                )
+                if len(output) == 0:
+                    raise ValueError(f"Queries dataset is empty after filtering by kb_ids={self.kb_ids}")
+
+            return output
+
+        raise TypeError(f"Unexpected dataset type: `{self.dataset_type}`")
 
 
-def _filter_by_kbid(row: dict, idx: Optional[int] = None, *, kb_id: int) -> bool:  # noqa: ARG001
-    return int(kb_id) == int(row["kb_id"])
+def _filter_by_kbid(row: dict, idx: Optional[int] = None, *, kb_ids: list[str]) -> bool:  # noqa: ARG001
+    """Filter a row by its `subset_id` or `subset_ids` field."""
+    if "subset_id" in row:
+        return str(row["subset_id"]) in kb_ids
+    if "subset_ids" in row:
+        return any(str(x) in kb_ids for x in row["subset_ids"])
+
+    raise ValueError(f"Unexpected row with keys: `{row.keys()}`")

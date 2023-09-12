@@ -7,32 +7,35 @@ import datasets
 import numpy as np
 
 T = TypeVar("T")
+_FILL_VALUE_UNSET = object()
 
 
-def iter_examples(batch: dict[str, list], keys: Iterable[str] = None) -> Iterable[dict]:
+def iter_examples(
+    batch: dict[str, list],
+    keys: None | Iterable[str] = None,
+    allow_missing: bool = False,
+) -> Iterable[dict]:
     """Iterate over the examples contained in a batch."""
-    keys = list(batch.keys()) if keys is None else list(keys)
-    subset = {key: batch[key] for key in keys}
-    master_key, *other_keys = subset
-    for i in range(len(batch[master_key])):
-        example = {key: batch[key][i] for key in keys}
+    input_keys = set(batch.keys())
+    requested_keys = set(keys or input_keys)
+    if not allow_missing and requested_keys > input_keys:
+        raise ValueError(f"Expected keys {set(requested_keys)}, got {set(batch.keys())}")
+    handled_keys = list(requested_keys.intersection(input_keys))
+    for i in range(len(batch[handled_keys[0]])):
+        example = {key: batch[key][i] for key in handled_keys}
         yield example
 
 
-def pack_examples(examples: Iterable[dict[T, Any]], keys: Optional[list[T]] = None) -> dict[T, list[Any]]:
+def pack_examples(examples: Iterable[dict[T, Any]], keys: None | list[T] = None) -> dict[T, list[Any]]:
     """Pack a list of examples into a batch."""
     output = defaultdict(list)
     for example in examples:
-        if keys is None:
-            keys = set(example.keys())
-        elif not set(keys).issubset(example.keys()):
-            raise ValueError(f"Expected keys {set(keys)}, got {set(example.keys())}")
-        for key in keys:
+        keys_ = keys or set(example.keys())
+        if not set(keys_).issubset(example.keys()):
+            raise ValueError(f"Expected keys {set(keys_)}, got {set(example.keys())}")
+        for key in keys_:
             output[key].append(example[key])
     return dict(output)
-
-
-_FILL_VALUE_UNSET = object()
 
 
 def pad_list(

@@ -46,7 +46,7 @@ class Properties(pydantic.BaseModel):
     max: Optional[str] = None
     n_nans: Optional[int] = None
 
-    @pydantic.validator("py_type", pre=True)
+    @pydantic.field_validator("py_type", mode="before")
     def _cast_py_type(cls, value: Any) -> str:  # noqa: ANN401
         if value is None:
             return "None"
@@ -121,11 +121,11 @@ def _(x: list | set | tuple) -> Properties:
 
     n_nans = sum(1 for y in _iter_leaves(x) if y is None)
     leaves_types = list({type(y) for y in _iter_leaves(x)})
-    if all(issubclass(t, Number) for t in leaves_types):
+    try:
         leaves_mean = np.mean(list(_iter_leaves(x)))
         leaves_min = min(_iter_leaves(x))
         leaves_max = max(_iter_leaves(x))
-    else:
+    except Exception:
         leaves_mean = "-"
         leaves_min = "-"
         leaves_max = "-"
