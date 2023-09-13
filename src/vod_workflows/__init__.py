@@ -1,5 +1,5 @@
 """Collection of workflows such as training, evaluation, etc."""
-from __future__ import annotations
+
 
 from .evaluation.evaluation import benchmark
 from .support.precompute import compute_vectors

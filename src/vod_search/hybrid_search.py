@@ -1,10 +1,10 @@
-from __future__ import annotations
-
 import asyncio
-from typing import Any, Optional
+import typing as typ
 
 import numpy as np
-from vod_search import base, rdtypes
+import vod_types as vt
+from typing_extensions import Self
+from vod_search import base
 
 
 class HybridSearchClient(base.SearchClient):
@@ -31,12 +31,12 @@ class HybridSearchClient(base.SearchClient):
         self,
         *,
         text: list[str],
-        vector: None | rdtypes.Ts = None,
+        vector: None | np.ndarray = None,
         subset_ids: None | list[list[str]] = None,
         ids: None | list[list[str]] = None,
         shard: None | list[str] = None,
         top_k: int = 3,
-    ) -> dict[str, rdtypes.RetrievalBatch[rdtypes.Ts]]:
+    ) -> dict[str, vt.RetrievalBatch]:
         """Search the server given a batch of text and/or vectors."""
         return {
             name: client.search(
@@ -54,15 +54,15 @@ class HybridSearchClient(base.SearchClient):
         self,
         *,
         text: list[str],
-        vector: Optional[rdtypes.Ts] = None,
+        vector: None | np.ndarray = None,
         subset_ids: None | list[list[str]] = None,
         ids: None | list[list[str]] = None,
         shard: None | list[str] = None,
         top_k: int = 3,
-    ) -> dict[str, rdtypes.RetrievalBatch[np.ndarray]]:
+    ) -> dict[str, vt.RetrievalBatch]:
         """Search the server given a batch of text and/or vectors."""
 
-        def search_fn(args: dict[str, Any]) -> rdtypes.RetrievalBatch[np.ndarray]:
+        def search_fn(args: dict[str, typ.Any]) -> vt.RetrievalBatch:
             client = args.pop("client")
             return client.search(**args)
 
@@ -105,7 +105,7 @@ class HyrbidSearchMaster(base.SearchMaster):
         self.servers = servers
         self.free_resources = free_resources
 
-    def __enter__(self) -> HyrbidSearchMaster:
+    def __enter__(self) -> Self:
         """Start the servers."""
         if self.free_resources:
             self._free_resources()

@@ -1,9 +1,7 @@
-from __future__ import annotations
-
 import copy
 import itertools
 import re
-from typing import Any, Iterable, Literal, Optional, Protocol, TypeVar, Union, runtime_checkable
+import typing as typ
 
 import datasets
 import omegaconf
@@ -21,11 +19,11 @@ from .utils import AllowMutations, StrictModel
 _CONFIG_EXPAND_KEY = "__vars__"
 
 
-@runtime_checkable
-class DatasetLoader(Protocol):
+@typ.runtime_checkable
+class DatasetLoader(typ.Protocol):
     """A dataset loader."""
 
-    def __call__(self, subset: None | str = None, split: None | str = None, **kwargs: Any) -> datasets.Dataset:
+    def __call__(self, subset: None | str = None, split: None | str = None, **kws: typ.Any) -> datasets.Dataset:
         """Load a dataset."""
         ...
 
@@ -33,34 +31,34 @@ class DatasetLoader(Protocol):
 class DatasetOptionsDiff(StrictModel):
     """Preprocessing options diff."""
 
-    prep_map_kwargs: Optional[dict[str, Any]] = None
-    subset_size: Optional[int] = None
-    sectioning: Optional[SectioningConfig] = None
+    prep_map_kws: None | dict[str, typ.Any] = None
+    subset_size: None | int = None
+    sectioning: None | SectioningConfig = None
 
     # validators
-    _validate_prep_map_kwargs = pydantic.field_validator("prep_map_kwargs", mode="before")(as_pyobj_validator)
+    _validate_prep_map_kws = pydantic.field_validator("prep_map_kws", mode="before")(as_pyobj_validator)
 
 
 class DatasetOptions(StrictModel):
     """Preprocessing options."""
 
-    prep_map_kwargs: dict[str, Any] = pydantic.Field(
+    prep_map_kws: dict[str, typ.Any] = pydantic.Field(
         default_factory=dict,
         description="Kwargs for `datasets.map(...)`.",
     )
-    subset_size: Optional[int] = pydantic.Field(
+    subset_size: None | int = pydantic.Field(
         default=None,
         description="Take a subset of the dataset.",
     )
-    sectioning: Optional[SectioningConfig] = pydantic.Field(
+    sectioning: None | SectioningConfig = pydantic.Field(
         default=None,
         description="Configures a sectioning algorithm to split input documents/sections into smaller chunks.",
     )
 
     # validators
-    _validate_prep_map_kwargs = pydantic.field_validator("prep_map_kwargs", mode="before")(as_pyobj_validator)
+    _validate_prep_map_kws = pydantic.field_validator("prep_map_kws", mode="before")(as_pyobj_validator)
 
-    def __add__(self, other: None | DatasetOptionsDiff) -> DatasetOptions:
+    def __add__(self: Self, other: None | DatasetOptionsDiff) -> Self:
         """Add two options."""
         if other is None:
             return self
@@ -86,7 +84,7 @@ class BaseDatasetConfig(StrictModel):
         ...,
         description="Name of the dataset, or descriptor with pattern `name.subset:split`.",
     )
-    name_or_path: Union[str, DatasetLoader] = pydantic.Field(
+    name_or_path: str | DatasetLoader = pydantic.Field(
         ...,
         description="Path to the dataset loader (overrides `name`)",
     )
@@ -182,13 +180,13 @@ class BaseDatasetConfig(StrictModel):
         cls: Type[Self],
         config: dict | omegaconf.DictConfig,
         *,
-        base_options: Optional[DatasetOptions] = None,
-        base_search: Optional[HybridSearchFactoryConfig] = None,
+        base_options: None | DatasetOptions = None,
+        base_search: None | HybridSearchFactoryConfig = None,
     ) -> Self:
         """Parse a config dictionary or dataset name into a structured config."""
         # parse `options` if provided
         if isinstance(config, omegaconf.DictConfig):
-            config: dict[str, Any] = omegaconf.OmegaConf.to_container(config, resolve=True)  # type: ignore
+            config: dict[str, typ.Any] = omegaconf.OmegaConf.to_container(config, resolve=True)  # type: ignore
 
         if isinstance(config["name_or_path"], dict):
             config["name_or_path"] = instantiate(config["name_or_path"])
@@ -208,8 +206,8 @@ class BaseDatasetConfig(StrictModel):
 class QueriesDatasetConfig(BaseDatasetConfig):
     """Defines a query dataset."""
 
-    field: Literal["query"] = "query"
-    link: Optional[str] = pydantic.Field(
+    field: typ.Literal["query"] = "query"
+    link: None | str = pydantic.Field(
         None,
         description="Identifier of the `Sections` dataset to search into.",
     )
@@ -218,21 +216,21 @@ class QueriesDatasetConfig(BaseDatasetConfig):
 class SectionsDatasetConfig(BaseDatasetConfig):
     """Defines a section dataset."""
 
-    field: Literal["section"] = "section"
-    search: Optional[HybridSearchFactoryConfig] = pydantic.Field(
+    field: typ.Literal["section"] = "section"
+    search: None | HybridSearchFactoryConfig = pydantic.Field(
         None,
         description="Search config diffs for this dataset",
     )
 
 
-DatasetConfig = Union[QueriesDatasetConfig, SectionsDatasetConfig]
+DatasetConfig = QueriesDatasetConfig | SectionsDatasetConfig
 
 
-BDC = TypeVar("BDC", bound=BaseDatasetConfig)
-Cv = TypeVar("Cv", bound=Union[str, dict, list])
+BDC = typ.TypeVar("BDC", bound=BaseDatasetConfig)
+Cv = typ.TypeVar("Cv", bound=str | dict | list)
 
 
-def _expand_dynamic_configs(x: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _expand_dynamic_configs(x: list[dict[str, typ.Any]]) -> list[dict[str, typ.Any]]:
     """Expand dynamic configurations (e.g. `__vars__`)."""
     expanded_x = []
     for y in x:
@@ -245,7 +243,7 @@ def _expand_dynamic_configs(x: list[dict[str, Any]]) -> list[dict[str, Any]]:
             continue
 
         # Take the combinations of the variables
-        def _sub(v: Cv, target: str, value: Any) -> Cv:  # noqa: ANN401
+        def _sub(v: Cv, target: str, value: typ.Any) -> Cv:  # noqa: ANN401
             if isinstance(v, str):
                 # replace `{target}` with `value`
                 return re.sub(rf"\{{\s*{target}\s*\}}", str(value), v)
@@ -281,14 +279,14 @@ def _omegaconf_to_dict_list(
 def _parse_list_dset_configs(
     x: dict | omegaconf.DictConfig | list[dict] | omegaconf.ListConfig,
     cls: Type[BDC],
-    **kwargs: Any,
+    **kws: typ.Any,
 ) -> list[BDC]:
     x = _omegaconf_to_dict_list(x)
     # Resolve dynamic configurations (e.g. `__vars__`)
     x = _expand_dynamic_configs(x)  # type: ignore
 
     if isinstance(x, list):
-        return [cls.parse(y, **kwargs) for y in x]
+        return [cls.parse(y, **kws) for y in x]
 
     raise ValueError(f"Unknown type `{type(x)}`")
 
@@ -303,7 +301,7 @@ class TrainValQueriesConfig(StrictModel):
     def parse(
         cls: Type[Self],
         config: dict | omegaconf.DictConfig,
-        base_options: Optional[DatasetOptions] = None,
+        base_options: None | DatasetOptions = None,
     ) -> Self:
         """Parse dict or omegaconf.DictConfig into a structured config."""
         base_options = base_options or DatasetOptions()
@@ -325,8 +323,8 @@ class SectionsConfig(StrictModel):
     def parse(
         cls: Type[Self],
         config: dict | omegaconf.DictConfig,
-        base_options: Optional[DatasetOptions] = None,
-        base_search: Optional[HybridSearchFactoryConfig] = None,
+        base_options: None | DatasetOptions = None,
+        base_search: None | HybridSearchFactoryConfig = None,
     ) -> Self:
         """Parse dict or omegaconf.DictConfig into a structured config."""
         base_options = base_options or DatasetOptions()
@@ -353,8 +351,8 @@ class TrainDatasetsConfig(StrictModel):
     def parse(
         cls: Type[Self],
         config: dict | omegaconf.DictConfig,
-        base_options: Optional[DatasetOptions] = None,
-        base_search: Optional[HybridSearchFactoryConfig] = None,
+        base_options: None | DatasetOptions = None,
+        base_search: None | HybridSearchFactoryConfig = None,
     ) -> Self:
         """Parse dict or omegaconf.DictConfig into a structured config."""
         base_options = base_options or DatasetOptions()
@@ -423,8 +421,8 @@ class BenchmarkDatasetConfig(StrictModel):
     def parse(
         cls: Type[Self],
         config: dict | omegaconf.DictConfig,
-        base_options: Optional[DatasetOptions] = None,
-        base_search: Optional[HybridSearchFactoryConfig] = None,
+        base_options: None | DatasetOptions = None,
+        base_search: None | HybridSearchFactoryConfig = None,
     ) -> Self:
         """Parse dict or omegaconf.DictConfig into a structured config."""
         base_options = base_options or DatasetOptions()
@@ -462,7 +460,7 @@ class DatasetsConfig(StrictModel):
     def parse(
         cls: Type[Self],
         config: dict | omegaconf.DictConfig,
-        base_options: Optional[DatasetOptions] = None,
+        base_options: None | DatasetOptions = None,
     ) -> Self:
         """Parse dict or omegaconf.DictConfig into a structured config."""
         base_options = base_options or DatasetOptions()
@@ -497,9 +495,9 @@ class DatasetsConfig(StrictModel):
 
     def get_dataset_configs(  # noqa: C901
         self,
-        what: None | Literal["all", "queries", "sections"] = None,
-        split: None | Literal["all", "train", "val", "train+val", "benchmark"] = None,
-    ) -> Iterable[DatasetConfig]:
+        what: None | typ.Literal["all", "queries", "sections"] = None,
+        split: None | typ.Literal["all", "train", "val", "train+val", "benchmark"] = None,
+    ) -> typ.Iterable[DatasetConfig]:
         """Iterate over the dataset configs."""
         what = what or "all"
         split = split or "all"

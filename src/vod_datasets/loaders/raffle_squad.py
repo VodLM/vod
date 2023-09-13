@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import collections
 import dataclasses
 import functools
@@ -8,7 +6,7 @@ import pathlib
 import shutil
 from os import PathLike
 from pathlib import Path
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable
 
 import datasets
 import fsspec
@@ -42,8 +40,8 @@ class SquadQueryModel(models.QueryModel):
 
     query: str = pydantic.Field(..., alias="question")
     retrieval_ids: list[str] = pydantic.Field(..., alias="section_ids")
-    category: Optional[str] = None
-    label_method_type: Optional[str] = None
+    category: None | str = None
+    label_method_type: None | str = None
     answer_id: int
     language: str
 

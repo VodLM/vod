@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import copy
 import functools
 import math
@@ -38,12 +36,12 @@ class Properties(pydantic.BaseModel):
     """Defines a set of displayable properties for a given object."""
 
     py_type: str
-    dtype: Optional[str] = None
-    shape: Optional[str] = None
-    device: Optional[str] = None
-    mean: Optional[str] = None
-    min: Optional[str] = None
-    max: Optional[str] = None
+    dtype: None | str = None
+    shape: None | str = None
+    device: None | str = None
+    mean: None | str = None
+    min: None | str = None
+    max: None | str = None
     n_nans: Optional[int] = None
 
     @pydantic.field_validator("py_type", mode="before")
@@ -229,10 +227,10 @@ def _format_field(field_name: str, field_value: Any) -> str:  # noqa: ANN401
 
 def pprint_batch(
     batch: dict[str, Any],
-    idx: Optional[list[int]] = None,  # noqa: ARG
+    idx: None | list[int] = None,  # noqa: ARG
     console: Optional[rich.console.Console] = None,
-    header: Optional[str] = None,
-    footer: Optional[str] = None,
+    header: None | str = None,
+    footer: None | str = None,
     **kwargs: Any,
 ) -> dict:
     """Pretty print a batch of data."""
@@ -278,7 +276,7 @@ def _safe_yaml(section: str) -> str:
 
 def pprint_retrieval_batch(  # noqa: C901, PLR0915
     batch: dict[str, Any],
-    idx: Optional[list[int]] = None,  # noqa: ARG
+    idx: None | list[int] = None,  # noqa: ARG
     *,
     tokenizer: transformers.PreTrainedTokenizerBase,
     header: str = "Supervised retrieval batch",

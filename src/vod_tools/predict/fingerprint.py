@@ -1,22 +1,20 @@
-from __future__ import annotations
-
 import math
-from typing import Optional
+import typing as typ
 
 import datasets
 import numpy as np
 import torch
+import vod_types as vt
 from datasets import fingerprint
-from vod_tools import dstruct, interfaces, pipes
 from vod_tools.misc.tensor_tools import serialize_tensor
 
 
 def make_predict_fingerprint(
     *,
-    dataset: dstruct.SizedDataset | datasets.Dataset,
-    collate_fn: pipes.Collate,
-    model: torch.nn.Module | interfaces.ProtocolEncoder,
-    model_output_key: Optional[str] = None,
+    dataset: typ.Any | vt.Sequence | vt.SupportsGetFingerprint,
+    collate_fn: typ.Any | vt.Collate | vt.SupportsGetFingerprint,
+    model: typ.Any | torch.nn.Module | vt.SupportsGetFingerprint,
+    model_output_key: None | str = None,
 ) -> str:
     """Make a fingerprint for the `predict` operation."""
     dset_fingerprint = _get_dset_fingerprint(dataset)
@@ -28,29 +26,46 @@ def make_predict_fingerprint(
     return op_fingerprint
 
 
-def _get_model_fingerprint(model: torch.nn.Module | interfaces.ProtocolEncoder) -> str:
-    try:
-        return model.get_fingerprint()  # type: ignore
-    except AttributeError:
-        if isinstance(model, torch.nn.Module):
-            state = model.state_dict()
-            hasher = fingerprint.Hasher()
-            hasher.update(type(model).__name__)
-            for k, v in sorted(state.items(), key=lambda x: x[0]):
-                hasher.update(k)
-                u = serialize_tensor(v)
-                hasher.update(u)
+def use_get_fingerprint_if_available(
+    fun: typ.Callable[[typ.Any], str]
+) -> typ.Callable[[typ.Any | vt.SupportsGetFingerprint], str]:
+    """Decorate a `get_fingerprint` function to first try call `x.get_fingerprint()`."""
 
-            return hasher.hexdigest()
+    def wrapper(x: typ.Any) -> str:  # noqa: ANN401
+        try:
+            return x.get_fingerprint()
+        except AttributeError:
+            return fun(x)
 
-        return fingerprint.Hasher.hash(model)
+    return wrapper
 
 
-def _get_collate_fn_fingerprint(collate_fn: pipes.Collate) -> str:
+@use_get_fingerprint_if_available
+def _get_model_fingerprint(model: torch.nn.Module) -> str:
+    if isinstance(model, torch.nn.Module):
+        state = model.state_dict()
+        hasher = fingerprint.Hasher()
+        hasher.update(type(model).__name__)
+        for k, v in sorted(state.items(), key=lambda x: x[0]):
+            hasher.update(k)
+            u = serialize_tensor(v)
+            hasher.update(u)
+
+        return hasher.hexdigest()
+
+    return fingerprint.Hasher.hash(model)
+
+
+@use_get_fingerprint_if_available
+def _get_collate_fn_fingerprint(collate_fn: typ.Any) -> str:  # noqa: ANN401
     return fingerprint.Hasher.hash(collate_fn)
 
 
-def _get_dset_fingerprint(dataset: dstruct.SizedDataset | datasets.Dataset, max_samples: float = math.inf) -> str:
+@use_get_fingerprint_if_available
+def _get_dset_fingerprint(
+    dataset: vt.Sequence | datasets.Dataset,
+    max_samples: float = math.inf,
+) -> str:
     if isinstance(dataset, datasets.Dataset):
         return dataset._fingerprint
 

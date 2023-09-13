@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import pathlib
 from typing import Any, Iterable, Optional
 
@@ -17,7 +15,7 @@ def log(
     loggers: Iterable[FabricLogger],
     step: Optional[int] = None,
     console: bool = False,
-    header: Optional[str] = None,
+    header: None | str = None,
 ) -> None:
     """Log metrics to the trainer loggers and optionally to the console."""
     for logger in loggers:

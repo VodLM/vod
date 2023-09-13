@@ -1,6 +1,5 @@
 # pylint: disable=no-member
 
-from __future__ import annotations
 
 import pathlib
 from pathlib import Path
@@ -8,8 +7,8 @@ from typing import Any, Iterable, Literal, Union
 
 import datasets
 import pydantic
-import tensorstore as ts
 from pydantic import BaseModel
+from tensorstore import _tensorstore as ts
 from typing_extensions import Self, Type
 
 

@@ -1,6 +1,3 @@
-from __future__ import annotations
-
-
 def int_div(a: int, *b: int) -> int:
     """Divide a by b. Return an integer."""
     try:

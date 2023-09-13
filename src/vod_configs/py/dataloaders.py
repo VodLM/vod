@@ -1,7 +1,4 @@
-from __future__ import annotations
-
-import typing
-from typing import Optional
+import typing as typ
 
 import pydantic
 
@@ -25,7 +22,7 @@ class DataLoaderConfig(StrictModel):
     pin_memory: bool = False
     drop_last: bool = False
     timeout: float = 0
-    prefetch_factor: Optional[int] = None
+    prefetch_factor: None | int = None
     persistent_workers: bool = False
 
 
@@ -42,9 +39,9 @@ class RetrievalCollateConfig(BaseCollateConfig):
 
     # base config
     prefetch_n_sections: int = 100
-    n_sections: Optional[int] = 10
-    max_pos_sections: Optional[int] = 3
-    support_size: Optional[int] = None
+    n_sections: None | int = 10
+    max_pos_sections: None | int = 3
+    support_size: None | int = None
     do_sample: bool = False
     in_batch_negatives: bool = False
     in_batch_neg_offset: int = 0
@@ -59,7 +56,7 @@ class RetrievalCollateConfig(BaseCollateConfig):
 class SamplerFactoryConfig(StrictModel):
     """Configuration for a dataloader sampler."""
 
-    mode: typing.Literal["lookup", "inverse_frequency"]
+    mode: typ.Literal["lookup", "inverse_frequency"]
     key: str
-    lookup: Optional[dict[str, float]] = None
+    lookup: None | dict[str, float] = None
     default_weight: float = 1.0

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import abc
 import copy
 import os
@@ -9,14 +7,15 @@ import time
 from typing import Any, Generic, Optional, TypeVar
 
 import loguru
+import numpy as np
 from typing_extensions import Self
-from vod_search import rdtypes
+from vod_types import retrieval
 
 
 class DoNotPickleError(Exception):
     """An exception to raise when an object cannot be pickled."""
 
-    def __init__(self, msg: Optional[str] = None):
+    def __init__(self, msg: None | str = None):
         msg = msg or "This object cannot be pickled."
         super().__init__(msg)
 
@@ -39,12 +38,12 @@ class SearchClient(abc.ABC):
         self,
         *,
         text: list[str],
-        vector: None | rdtypes.Ts = None,
+        vector: None | np.ndarray = None,
         subset_ids: None | list[list[str]] = None,
         ids: None | list[list[str]] = None,
         shard: None | list[str] = None,
         top_k: int = 3,
-    ) -> rdtypes.RetrievalBatch[rdtypes.Ts]:
+    ) -> retrieval.RetrievalBatch:
         """Search the server given a batch of text and/or vectors."""
         raise NotImplementedError()
 
@@ -52,12 +51,12 @@ class SearchClient(abc.ABC):
         self,
         *,
         text: list[str],
-        vector: None | rdtypes.Ts = None,
+        vector: None | np.ndarray = None,
         subset_ids: None | list[list[str]] = None,
         ids: None | list[list[str]] = None,
         shard: None | list[str] = None,
         top_k: int = 3,
-    ) -> rdtypes.RetrievalBatch[rdtypes.Ts]:
+    ) -> retrieval.RetrievalBatch:
         """Search the server given a batch of text and/or vectors."""
         return self.search(
             text=text,

@@ -1,5 +1,5 @@
 import copy
-from typing import Literal, Optional, TypeVar, Union
+import typing as typ
 
 import faiss
 import omegaconf
@@ -55,8 +55,8 @@ class FaissGpuConfig(StrictModel):
     devices: list[int] = [-1]
     use_float16: bool = True
     use_precomputed_tables: bool = True
-    max_add: Optional[int] = 2**18
-    tempmem: Optional[int] = -1
+    max_add: None | int = 2**18
+    tempmem: None | int = -1
     keep_indices_on_cpu: bool = False
     verbose: bool = True
     shard: bool = True
@@ -91,51 +91,51 @@ class FaissGpuConfig(StrictModel):
         return _get_gpu_resources(self.devices, self.tempmem or -1)
 
 
-SearchBackend = Literal["elasticsearch", "faiss", "qdrant"]
+SearchBackend = typ.Literal["elasticsearch", "faiss", "qdrant"]
 
 
 class BaseSearchFactoryConfig(StrictModel):
     """Base config for all search engines."""
 
     backend: SearchBackend = pydantic.Field(..., description="Search backend to use.")
-    subset_id_key: Optional[str] = pydantic.Field("subset_id", description="Subset ID field to be indexed.")
-    section_id_key: Optional[str] = pydantic.Field("id", description="Section ID field to be indexed.")
+    subset_id_key: None | str = pydantic.Field("subset_id", description="Subset ID field to be indexed.")
+    section_id_key: None | str = pydantic.Field("id", description="Section ID field to be indexed.")
 
 
 class BaseSearchFactoryDiff(StrictModel):
     """Relative search configs."""
 
     backend: SearchBackend
-    group_key: Optional[str] = None
-    section_id_key: Optional[str] = None
+    group_key: None | str = None
+    section_id_key: None | str = None
 
 
 class FaissFactoryDiff(BaseSearchFactoryDiff):
     """Configures a relative faiss configuration."""
 
-    backend: Literal["faiss"] = "faiss"
-    factory: Optional[str] = None
-    nprobe: Optional[int] = None
-    metric: Optional[int] = None
-    train_size: Optional[int] = None
-    logging_level: Optional[str] = None
-    host: Optional[str] = None
-    port: Optional[int] = None
-    gpu: Optional[FaissGpuConfig] = None
+    backend: typ.Literal["faiss"] = "faiss"
+    factory: None | str = None
+    nprobe: None | int = None
+    metric: None | int = None
+    train_size: None | int = None
+    logging_level: None | str = None
+    host: None | str = None
+    port: None | int = None
+    gpu: None | FaissGpuConfig = None
 
 
 class FaissFactoryConfig(BaseSearchFactoryConfig):
     """Configures the building of a faiss server."""
 
-    backend: Literal["faiss"] = "faiss"
+    backend: typ.Literal["faiss"] = "faiss"
     factory: str = "Flat"
     nprobe: int = 16
     metric: int = faiss.METRIC_INNER_PRODUCT
-    train_size: Optional[int] = None
+    train_size: None | int = None
     logging_level: str = "DEBUG"
     host: str = "http://localhost"
     port: int = -1
-    gpu: Optional[FaissGpuConfig] = None
+    gpu: None | FaissGpuConfig = None
 
     def __add__(self, diff: None | FaissFactoryDiff) -> Self:
         if diff is None:
@@ -159,24 +159,24 @@ class FaissFactoryConfig(BaseSearchFactoryConfig):
 class ElasticsearchFactoryDiff(BaseSearchFactoryDiff):
     """Configures a relative elasticsearch configuration."""
 
-    backend: Literal["elasticsearch"] = "elasticsearch"
-    host: Optional[str] = None
-    port: Optional[int] = None
-    persistent: Optional[bool] = None
-    es_body: Optional[dict] = None
-    language: Optional[str] = None
+    backend: typ.Literal["elasticsearch"] = "elasticsearch"
+    host: None | str = None
+    port: None | int = None
+    persistent: None | bool = None
+    es_body: None | dict = None
+    language: None | str = None
 
 
 class ElasticsearchFactoryConfig(BaseSearchFactoryConfig):
     """Configures the building of an Elasticsearch server."""
 
-    backend: Literal["elasticsearch"] = "elasticsearch"
+    backend: typ.Literal["elasticsearch"] = "elasticsearch"
     host: str = "http://localhost"
     port: int = 9200
     persistent: bool = True
     section_template: str = r"{% if title %}{{ title }}{% endif %} {{ content }}"
-    es_body: Optional[dict] = None
-    language: Optional[str] = None
+    es_body: None | dict = None
+    language: None | str = None
 
     def __add__(self, diff: None | ElasticsearchFactoryDiff) -> Self:
         if diff is None:
@@ -203,28 +203,28 @@ class ElasticsearchFactoryConfig(BaseSearchFactoryConfig):
 class QdrantFactoryDiff(BaseSearchFactoryDiff):
     """Configures a relative qdrant configuration."""
 
-    backend: Literal["qdrant"] = "qdrant"
-    host: Optional[str] = None
-    port: Optional[int] = None
-    grpc_port: Optional[int] = None
-    persistent: Optional[bool] = None
-    exist_ok: Optional[bool] = None
-    qdrant_body: Optional[dict] = None
-    search_params: Optional[dict] = None
-    force_single_collection: Optional[bool] = None
+    backend: typ.Literal["qdrant"] = "qdrant"
+    host: None | str = None
+    port: None | int = None
+    grpc_port: None | int = None
+    persistent: None | bool = None
+    exist_ok: None | bool = None
+    qdrant_body: None | dict = None
+    search_params: None | dict = None
+    force_single_collection: None | bool = None
 
 
 class QdrantFactoryConfig(BaseSearchFactoryConfig):
     """Configures the building of a Qdrant server."""
 
-    backend: Literal["qdrant"] = "qdrant"
+    backend: typ.Literal["qdrant"] = "qdrant"
     host: str = "http://localhost"
     port: int = 6333
-    grpc_port: Optional[int] = 6334
+    grpc_port: None | int = 6334
     persistent: bool = False
     exist_ok: bool = True
-    qdrant_body: Optional[dict] = None
-    search_params: Optional[dict] = None
+    qdrant_body: None | dict = None
+    search_params: None | dict = None
     force_single_collection: bool = False
 
     def __add__(self, diff: None | QdrantFactoryDiff) -> Self:
@@ -258,8 +258,8 @@ class QdrantFactoryConfig(BaseSearchFactoryConfig):
         return pipes.fingerprint(self.dict(exclude=excludes))
 
 
-SingleSearchFactoryConfig = Union[ElasticsearchFactoryConfig, FaissFactoryConfig, QdrantFactoryConfig]
-SingleSearchFactoryDiff = Union[ElasticsearchFactoryDiff, FaissFactoryDiff, QdrantFactoryDiff]
+SingleSearchFactoryConfig = ElasticsearchFactoryConfig | FaissFactoryConfig | QdrantFactoryConfig
+SingleSearchFactoryDiff = ElasticsearchFactoryDiff | FaissFactoryDiff | QdrantFactoryDiff
 
 FactoryConfigsByBackend: dict[SearchBackend, Type[BaseSearchFactoryConfig]] = {
     "elasticsearch": ElasticsearchFactoryConfig,
@@ -277,7 +277,7 @@ FactoryDiffByBackend: dict[SearchBackend, Type[BaseSearchFactoryDiff]] = {
 class MutliSearchFactoryDiff(BaseSearchFactoryDiff):
     """Configures a hybrid search engine."""
 
-    backend: Literal["multi"] = "multi"
+    backend: typ.Literal["multi"] = "multi"
     engines: dict[str, SingleSearchFactoryDiff]
 
     @classmethod
@@ -298,7 +298,7 @@ class HybridSearchFactoryConfig(BaseSearchFactoryConfig):
 
     _defaults = pydantic.PrivateAttr(None)
 
-    backend: Literal["multi"] = "multi"
+    backend: typ.Literal["multi"] = "multi"
     engines: dict[str, SingleSearchFactoryConfig]
 
     @classmethod
@@ -358,8 +358,8 @@ class SearchFactoryDefaults(StrictModel):
         return cfg
 
 
-T = TypeVar("T")
-K = TypeVar("K")
+T = typ.TypeVar("T")
+K = typ.TypeVar("K")
 
 
 def _parse_multi_search(

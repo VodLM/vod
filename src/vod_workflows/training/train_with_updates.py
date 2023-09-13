@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import functools
 import pathlib
 from typing import Any, Iterable, Optional, TypeVar
@@ -27,7 +25,7 @@ def train_with_index_updates(  # noqa: C901, PLR0915
     fabric: L.Fabric,
     ranker: vod_models.Ranker,
     config: vod_configs.TrainWithIndexUpdatesConfigs | omegaconf.DictConfig,
-    resume_from_checkpoint: Optional[str] = None,
+    resume_from_checkpoint: None | str = None,
 ) -> vod_models.Ranker:
     """Train a ranking model while periodically updating the index."""
     barrier = functools.partial(helpers.barrier_fn, fabric=fabric)

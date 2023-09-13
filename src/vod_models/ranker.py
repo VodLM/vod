@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import copy
 import functools
 from typing import Any, Optional, Union
@@ -31,11 +29,11 @@ class Ranker(torch.nn.Module):
     """Deep ranking model using a Transformer encoder as a backbone."""
 
     _output_size: int
-    encoder: vod_encoder.VodBaseEncoder
+    encoder: vod_encoder.VodEncoder
 
     def __init__(  # noqa: PLR0913
         self,
-        encoder: vod_encoder.VodBaseEncoder,
+        encoder: vod_encoder.VodEncoder,
         gradients: vod_gradients.Gradients,
         optimizer: Optional[dict | DictConfig | functools.partial] = None,
         scheduler: Optional[dict | DictConfig | functools.partial] = None,
@@ -68,7 +66,7 @@ class Ranker(torch.nn.Module):
 
         self.encoder = encoder
 
-    def get_output_shape(self, model_output_key: Optional[str] = None) -> tuple[int, ...]:  # noqa: ARG002
+    def get_output_shape(self, model_output_key: None | str = None) -> tuple[int, ...]:  # noqa: ARG002
         """Dimension of the model output."""
         return self.encoder.get_output_shape()
 

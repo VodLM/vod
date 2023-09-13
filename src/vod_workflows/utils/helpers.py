@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import contextlib
 import dataclasses
 import functools
@@ -7,24 +5,25 @@ import typing
 from multiprocessing.managers import DictProxy
 from typing import Any, Callable, Generic, Optional, Protocol, TypeVar
 
-import datasets  # noqa: E402
+import datasets
 import lightning as L
 import numpy as np
 import torch
 import transformers
 import vod_datasets
+import vod_types as vt
 from lightning.fabric import wrappers as fabric_wrappers
 from loguru import logger
 from torch.utils import data as torch_data
 from typing_extensions import Self, Type
-from vod_tools import dstruct
 from vod_tools.misc.schedule import BaseSchedule, schedule_factory
+from vod_tools.ts_factory.ts_factory import TensorStoreFactory
 
 from src import vod_configs, vod_dataloaders, vod_search
 
 T = TypeVar("T")
 K = TypeVar("K")
-D = TypeVar("D", bound=typing.Union[dstruct.SizedDataset, datasets.Dataset])
+D = TypeVar("D", bound=vt.Sequence)
 
 
 def _maybe_concatenate_parts(parts: list[D]) -> D:
@@ -32,7 +31,7 @@ def _maybe_concatenate_parts(parts: list[D]) -> D:
         if all(isinstance(p, datasets.Dataset) for p in parts):
             data_ = datasets.concatenate_datasets(parts)  # type: ignore
         else:
-            data_ = dstruct.ConcatenatedSizedDataset(parts)  # type: ignore
+            data_ = vt.ConcatenatedSizedDataset(parts)  # type: ignore
     else:
         data_ = parts[0]
 
@@ -45,7 +44,7 @@ class RetrievalTask(Generic[K]):
 
     queries: list[vod_configs.QueriesDatasetConfig]
     sections: list[vod_configs.SectionsDatasetConfig]
-    vectors: None | dict[vod_configs.BaseDatasetConfig, dstruct.TensorStoreFactory]
+    vectors: None | dict[vod_configs.BaseDatasetConfig, TensorStoreFactory]
 
 
 def none_ok(func: Callable[..., T]) -> Callable[..., Optional[T]]:
@@ -60,7 +59,7 @@ def none_ok(func: Callable[..., T]) -> Callable[..., Optional[T]]:
     return wrapper
 
 
-maybe_as_lazy_array = none_ok(dstruct.as_lazy_array)
+maybe_as_lazy_array = none_ok(vt.as_lazy_array)
 
 
 def is_engine_enabled(parameters: Optional[dict | DictProxy], engine: str) -> bool:
@@ -70,7 +69,7 @@ def is_engine_enabled(parameters: Optional[dict | DictProxy], engine: str) -> bo
     return parameters.get(engine, 1.0) >= 0
 
 
-class _WithExtrasAttributes(dstruct.SizedDataset[dict[str, Any]]):
+class _WithExtrasAttributes(vt.DictsSequence):
     """A class that adds extra attributes to the accessed items."""
 
     __slots__ = ("data", "extras")
@@ -78,11 +77,11 @@ class _WithExtrasAttributes(dstruct.SizedDataset[dict[str, Any]]):
     def __init__(
         self,
         *,
-        data: dstruct.SizedDataset[dict[str, Any]] | datasets.Dataset,
+        data: vt.DictsSequence,
         extras: dict[str, Any],
     ) -> None:
         self.data = data
-        self.extras = extras
+        self.extras = extras or {}
 
     def __len__(self) -> int:
         """Get the length data the dataset."""
@@ -102,16 +101,16 @@ class _WithExtrasAttributes(dstruct.SizedDataset[dict[str, Any]]):
 class PrecomputedDsetVectors:
     """Holds the vectors for a given dataset and field."""
 
-    questions: dstruct.TensorStoreFactory
-    sections: dstruct.TensorStoreFactory
+    questions: TensorStoreFactory
+    sections: TensorStoreFactory
 
 
-def _load_dataset_with_target_shard(config: vod_configs.BaseDatasetConfig) -> dstruct.SizedDataset[dict[str, Any]]:
+def _load_dataset_with_target_shard(config: vod_configs.BaseDatasetConfig) -> vt.DictsSequence:
     """Load the dataset and potentially wrap it to include the target shard name."""
     if isinstance(config, vod_configs.SectionsDatasetConfig):
         return vod_datasets.load_sections(config)  # type: ignore
     if isinstance(config, vod_configs.QueriesDatasetConfig):
-        data = vod_datasets.load_queries(config)  # type: ignore
+        data: datasets.Dataset = vod_datasets.load_queries(config)
         return _WithExtrasAttributes(data=data, extras={vod_configs.TARGET_SHARD_KEY: config.link})
 
     raise TypeError(f"Unsupported dataset config: `{config}`")
@@ -121,8 +120,8 @@ def _load_dataset_with_target_shard(config: vod_configs.BaseDatasetConfig) -> ds
 class ShardedDsetWithVectors:
     """Holds a dataset and its vectors."""
 
-    data: dstruct.SizedDataset[dict[str, Any]]
-    vectors: None | dstruct.SizedDataset[np.ndarray]
+    data: vt.DictsSequence
+    vectors: None | vt.Sequence[np.ndarray]
 
     def __post_init__(self):
         """Check that the dataset and vectors have the same length."""
@@ -137,11 +136,7 @@ class ShardedDsetWithVectors:
         cls: Type[Self],
         *,
         data: list[vod_configs.QueriesDatasetConfig | vod_configs.SectionsDatasetConfig],
-        vectors: None
-        | np.ndarray
-        | list[dstruct.TensorStoreFactory]
-        | list[dstruct.SizedDataset[np.ndarray]]
-        | list[np.ndarray] = None,
+        vectors: None | np.ndarray | list[TensorStoreFactory] | list[vt.Sequence[np.ndarray]] | list[np.ndarray] = None,
     ) -> Self:
         """Load multiple dataset shards from their respective configs.
 
@@ -160,10 +155,7 @@ class ShardedDsetWithVectors:
         data_ = _maybe_concatenate_parts([_load_dataset_with_target_shard(cfg) for cfg in data])
 
         # Concatenate the vectors
-        if vectors is not None:
-            vectors_ = _maybe_concatenate_parts([dstruct.as_lazy_array(v) for v in vectors])
-        else:
-            vectors_ = None
+        vectors_ = _maybe_concatenate_parts([vt.as_lazy_array(v) for v in vectors]) if vectors is not None else None
 
         return cls(
             data=data_,  # type: ignore
@@ -187,10 +179,10 @@ def instantiate_retrieval_dataloader(
     collate_config: vod_configs.RetrievalCollateConfig,
     dataloader_config: vod_configs.DataLoaderConfig,
     parameters: Optional[dict | DictProxy],
-    dl_sampler: typing.Optional[vod_dataloaders.SamplerFactory] = None,
+    dl_sampler: typing.Optional[vod_dataloaders.DlSamplerFactory] = None,
 ) -> torch_data.DataLoader[dict[str, Any]]:
     """Instantiate a dataloader for the retrieval task."""
-    collate_fn = vod_dataloaders.RetrievalCollate(
+    collate_fn = vod_dataloaders.RealmCollate(
         tokenizer=tokenizer,
         sections=sections.data,
         search_client=search_client,
@@ -209,7 +201,7 @@ def instantiate_retrieval_dataloader(
     return torch_data.DataLoader(dataset=dataset, collate_fn=collate_fn, **kws)  # type: ignore
 
 
-class IndexWithVectors(dstruct.SizedDataset[dict[str, Any]]):
+class IndexWithVectors(vt.DictsSequence):
     """A wrapper around a dataset that adds vectors to each accessed item."""
 
     __slots__ = ("dataset", "vectors", "vector_key")
@@ -217,8 +209,8 @@ class IndexWithVectors(dstruct.SizedDataset[dict[str, Any]]):
     def __init__(
         self,
         *,
-        dataset: dstruct.SizedDataset[dict[str, Any]] | datasets.Dataset,
-        vectors: None | dstruct.SizedDataset[np.ndarray],
+        dataset: vt.DictsSequence,
+        vectors: None | vt.Sequence[np.ndarray],
         vector_key: str = "vector",
     ) -> None:
         self.dataset = dataset
@@ -235,16 +227,6 @@ class IndexWithVectors(dstruct.SizedDataset[dict[str, Any]]):
         if self.vectors is not None:
             item[self.vector_key] = self.vectors[index]
         return item
-
-
-def _concat_data(data: list[D]) -> D:
-    if len(data) == 1:
-        return data[0]
-
-    if all(isinstance(d, datasets.Dataset) for d in data):
-        return datasets.concatenate_datasets(data)  # type: ignore
-
-    return dstruct.ConcatenatedSizedDataset(data)  # type: ignore
 
 
 def barrier_fn(name: str, fabric: L.Fabric) -> None:
@@ -304,7 +286,7 @@ def unwrap_optimizer(optimizer: torch.optim.Optimizer | _OptimizerWrapper) -> to
         if isinstance(optimizer, torch.optim.Optimizer) and not type(optimizer).__name__.startswith("Fabric"):
             break
         try:
-            optimizer = optimizer.optimizer
+            optimizer = optimizer.optimizer  # type: ignore
         except AttributeError as exc:
             raise AttributeError(f"Could not find optimizer in `{optimizer}`") from exc
 

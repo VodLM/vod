@@ -1,8 +1,6 @@
-from __future__ import annotations
-
 import dataclasses
 import pathlib
-from typing import Any, Optional, Union
+import typing as typ
 
 import hydra
 import omegaconf
@@ -24,10 +22,10 @@ class TuningConfig(StrictModel):
     steps: int = 1000
     batch_size: int = 100
     learning_rate: float = 1e-3
-    collate_overrides: dict[str, Any] = {}
+    collate_overrides: dict[str, typ.Any] = {}
 
     @pydantic.field_validator("collate_overrides", mode="before")
-    def _validate_collate_overrides(cls, v: None | dict[str, Any]) -> dict[str, Any]:
+    def _validate_collate_overrides(cls, v: None | dict[str, typ.Any]) -> dict[str, typ.Any]:
         if v is None:
             return {}
 
@@ -47,17 +45,17 @@ class BenchmarkConfig(StrictModel):
         frozen = False
 
     on_init: bool = False
-    n_max_eval: Optional[int] = None
-    tuning: Optional[TuningConfig] = None
+    n_max_eval: None | int = None
+    tuning: None | TuningConfig = None
     parameters: dict[str, float] = {}
     metrics: list[str] = ["ndcg", "mrr", "hitrate@01", "hitrate@03", "hitrate@10", "hitrate@30"]
-    search: dict[str, Any] = {}
+    search: dict[str, typ.Any] = {}
 
     # Validators
     _validate_metrics = pydantic.field_validator("metrics", mode="before")(as_pyobj_validator)
 
     @pydantic.field_validator("search", mode="before")
-    def _validate_searchs(cls, v: None | dict[str, Any]) -> dict[str, Any]:
+    def _validate_searchs(cls, v: None | dict[str, typ.Any]) -> dict[str, typ.Any]:
         if v is None:
             return {}
         if isinstance(v, omegaconf.DictConfig):
@@ -80,11 +78,11 @@ class TrainerConfig(StrictModel):
     max_steps: int = 1_000_000
     val_check_interval: int = 500
     log_interval: int = 100
-    gradient_clip_val: Optional[float] = None
-    period: Union[int, list[int]]
+    gradient_clip_val: None | float = None
+    period: int | list[int]
     parameters: dict[str, BaseSchedule] = {}
-    n_max_eval: Optional[int] = None
-    checkpoint_path: Optional[str] = None
+    n_max_eval: None | int = None
+    checkpoint_path: None | str = None
     pbar_keys: list[str] = ["loss", "hitrate_3"]
 
     # validators
@@ -92,7 +90,7 @@ class TrainerConfig(StrictModel):
     _validate_pbark_keys = pydantic.field_validator("pbar_keys", mode="before")(as_pyobj_validator)
 
     @pydantic.field_validator("parameters", mode="before")
-    def _validate_parameters(cls, x: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
+    def _validate_parameters(cls, x: None | dict[str, typ.Any]) -> dict[str, typ.Any]:
         if x is None:
             return {}
 
@@ -205,7 +203,7 @@ class TrainWithIndexUpdatesConfigs:
     benchmark: BenchmarkConfig
     batch_size: BatchSizeConfig
     sys: SysConfig
-    dl_sampler: Optional[SamplerFactoryConfig | list[SamplerFactoryConfig]] = None
+    dl_sampler: None | SamplerFactoryConfig | list[SamplerFactoryConfig] = None
 
     @classmethod
     def parse(cls: Type[Self], config: DictConfig) -> Self:
@@ -225,7 +223,7 @@ class TrainWithIndexUpdatesConfigs:
 
 def _parse_dl_sampler(
     config: DictConfig | ListConfig | None,
-) -> Optional[SamplerFactoryConfig | list[SamplerFactoryConfig]]:
+) -> None | SamplerFactoryConfig | list[SamplerFactoryConfig]:
     """Parse an omegaconf config into a SamplerFactoryConfig instance."""
     if config is None or len(config) == 0:
         return None

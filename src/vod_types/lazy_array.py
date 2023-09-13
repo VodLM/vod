@@ -1,17 +1,14 @@
-# pylint: disable=no-member
-from __future__ import annotations
-
 import abc
 from typing import Iterable, Optional
 
 import datasets
 import numpy as np
-import tensorstore as ts
-from vod_tools.dstruct.sized_dataset import SizedDataset, SliceType
-from vod_tools.dstruct.ts_factory import TensorStoreFactory
+from tensorstore import _tensorstore as ts
+from vod_tools.ts_factory.ts_factory import TensorStoreFactory
+from vod_types.sequence import Sequence, SliceType
 
 
-class LazyArray(abc.ABC, SizedDataset[np.ndarray]):
+class LazyArray(abc.ABC, Sequence[np.ndarray]):
     """A class that handles input array and provides lazy slicing into np.ndarray."""
 
     @abc.abstractmethod
@@ -51,7 +48,7 @@ class LazyArray(abc.ABC, SizedDataset[np.ndarray]):
 class ImplicitLazyArray(LazyArray):
     """Handles `SizedDataset`."""
 
-    def __init__(self, data: SizedDataset[np.ndarray]):
+    def __init__(self, data: Sequence[np.ndarray]):
         if not isinstance(data[0], np.ndarray):
             raise TypeError(f"Cannot handle type {type(data[0])}")
         self.data = data
@@ -92,7 +89,7 @@ class TensorStoreFactoryLazyArray(TensorStoreLazyArray):
     def store(self) -> ts.TensorStore:
         """Return an open store."""
         if self._open_store is None:
-            self._open_store = self.factory.open(create=False)
+            self._open_store = self.factory.open(create=False)  # type: ignore
         return self._open_store
 
     def __getstate__(self) -> dict[str, object]:
@@ -106,10 +103,10 @@ class TensorStoreFactoryLazyArray(TensorStoreLazyArray):
 
 
 def as_lazy_array(
-    x: SizedDataset[np.ndarray] | TensorStoreFactory | ts.TensorStore | np.ndarray,
+    x: Sequence[np.ndarray] | TensorStoreFactory | ts.TensorStore | np.ndarray,
 ) -> LazyArray:
     """Return a vector handler for the given vector type."""
-    if isinstance(x, SizedDataset):
+    if isinstance(x, Sequence):
         return ImplicitLazyArray(x)
 
     if isinstance(x, TensorStoreFactory):

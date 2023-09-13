@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import functools
 import pathlib
 import tempfile
@@ -13,9 +11,10 @@ import transformers
 import vod_configs
 import vod_dataloaders
 import vod_search
+import vot_types as vt
 from rich.progress import track
 from torch.utils import data as torch_data
-from vod_tools import arguantic, dstruct, pipes, predict
+from vod_tools import arguantic, pipes, predict
 from vod_workflows.utils import helpers
 
 from src import vod_datasets
@@ -100,7 +99,7 @@ def run(args: Args) -> None:
         # 4. Spin up a hybrid search engine
         with vod_search.build_hybrid_search_engine(
             sections=sections,  # type: ignore
-            vectors=dstruct.as_lazy_array(section_vectors),
+            vectors=vt.as_lazy_array(section_vectors),
             config=vod_configs.SearchConfig(
                 dense=vod_configs.FaissFactoryConfig(
                     factory="IVFauto,Flat",
@@ -118,7 +117,7 @@ def run(args: Args) -> None:
             rich.print(search_client)
 
             # 5. Setup the VOD retrieval dataloader
-            collate_fn = vod_dataloaders.RetrievalCollate(
+            collate_fn = vod_dataloaders.RealmCollate(
                 tokenizer=tokenizer,
                 sections=sections,  # type: ignore
                 search_client=search_client,
@@ -127,7 +126,7 @@ def run(args: Args) -> None:
             )
             dataset_with_vectors = helpers.IndexWithVectors(
                 dataset=questions,
-                vectors=dstruct.as_lazy_array(question_vectors),  # type: ignore
+                vectors=vt.as_lazy_array(question_vectors),  # type: ignore
                 vector_key="vector",
             )
             dataloader = torch_data.DataLoader(

@@ -2,12 +2,8 @@ from typing import Optional
 
 import numba
 import numpy as np
+import vod_types as vt
 from numpy import typing as npt
-from typing_extensions import TypeVar
-
-from src import vod_search
-
-DtypeVar = TypeVar("DtypeVar", bound=np.dtype)
 
 CACHE_NUMBA_JIT = True
 
@@ -143,9 +139,9 @@ def gather_values_by_indices(
 
 
 def merge_search_results(
-    search_results: dict[str, vod_search.RetrievalBatch[npt.NDArray]],
+    search_results: dict[str, vt.RetrievalBatch],
     weights: Optional[dict[str, float]] = None,
-) -> tuple[vod_search.RetrievalBatch, dict[str, npt.NDArray]]:
+) -> tuple[vt.RetrievalBatch, dict[str, npt.NDArray]]:
     """Merge search results with weights."""
     if weights is None:
         weights = {k: 1.0 for k in search_results}
@@ -166,7 +162,7 @@ def merge_search_results(
 
 
 def normalize_scores_(
-    search_results: dict[str, vod_search.RetrievalBatch[npt.NDArray]],
+    search_results: dict[str, vt.RetrievalBatch],
     offset: float = 0.0,
 ) -> None:
     """Subtract the minimum score from all score to allow consistent aggregation."""
@@ -183,9 +179,9 @@ def _subtract_min_score(scores: npt.NDArray, offset: float) -> npt.NDArray:
 
 
 def _merge_n_search_results(
-    search_results: dict[str, vod_search.RetrievalBatch[npt.NDArray]],
+    search_results: dict[str, vt.RetrievalBatch],
     weights: dict[str, float],
-) -> tuple[vod_search.RetrievalBatch, dict[str, npt.NDArray]]:
+) -> tuple[vt.RetrievalBatch, dict[str, npt.NDArray]]:
     keys = list(search_results.keys())
     first_result = search_results[keys[0]]
     first_weight = weights[keys[0]]
@@ -214,13 +210,10 @@ def _merge_n_search_results(
     return output, raw_scores
 
 
-def _merge_two_search_results(
-    a: vod_search.RetrievalBatch[npt.NDArray],
-    b: vod_search.RetrievalBatch[npt.NDArray],
-) -> vod_search.RetrievalBatch[npt.NDArray]:
+def _merge_two_search_results(a: vt.RetrievalBatch, b: vt.RetrievalBatch) -> vt.RetrievalBatch:
     """Merge two search results."""
     scores, indices = _nopy_merge_two_search_results(a.scores, a.indices, b.scores, b.indices)
-    return vod_search.RetrievalBatch(scores=scores, indices=indices)
+    return vt.RetrievalBatch(scores=scores, indices=indices)
 
 
 @numba.njit(fastmath=True)
@@ -365,19 +358,19 @@ def _gumbel_1d_like(x: npt.NDArray, eps: float = 1e-18) -> npt.NDArray:
 
 
 def sample(
-    search_results: vod_search.RetrievalBatch[npt.NDArray],
+    search_results: vt.RetrievalBatch,
     total: int,
-    n_positives: Optional[int] = None,
+    n_positives: None | int = None,
     temperature: float = 0.0,
-    max_support_size: Optional[int] = None,
-) -> vod_search.RetrievalBatch[npt.NDArray]:
+    max_support_size: None | int = None,
+) -> vt.RetrievalBatch:
     """Sample search results."""
     bs = search_results.scores.shape[0]
     total = total or search_results.scores.shape[1]
     n_positives = n_positives or total
     total = min(total, search_results.scores.shape[1])
     if search_results.labels is None:
-        is_positive = np.zeros_like(search_results.indices, dtype=np.bool)
+        is_positive = np.zeros_like(search_results.indices, dtype=np.bool_)
     else:
         is_positive = search_results.labels > 0
 
@@ -387,7 +380,7 @@ def sample(
     is_positive.setflags(write=False)
 
     # Instantiate the output buffer
-    output = vod_search.RetrievalBatch(
+    output = vt.RetrievalBatch(
         scores=np.full((bs, total), fill_value=np.nan),
         indices=np.full((bs, total), fill_value=-1),
         labels=np.full((bs, total), fill_value=-1),

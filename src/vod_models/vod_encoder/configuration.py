@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import Any, Optional, Union
 
 import transformers
@@ -13,15 +11,15 @@ class VodPoolerConfig:
     """Configuration for a VOD head."""
 
     projection_size: Optional[int] = None
-    output_activation: Optional[str] = None
-    output_norm: Optional[str] = None
+    output_activation: None | str = None
+    output_norm: None | str = None
     agg_method: AggMethod = "mean"
 
     def __init__(
         self,
         projection_size: Optional[int] = None,
-        output_activation: Optional[str] = None,
-        output_norm: Optional[str] = None,
+        output_activation: None | str = None,
+        output_norm: None | str = None,
         agg_method: AggMethod = "mean",
         **kwargs: Any,
     ) -> None:

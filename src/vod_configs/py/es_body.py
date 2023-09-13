@@ -1,7 +1,5 @@
-from __future__ import annotations
-
 import copy
-from typing import Any, TypeVar
+import typing as typ
 
 from loguru import logger
 
@@ -74,10 +72,10 @@ def _normalize_language(language: str) -> str:
     raise NotImplementedError(f"Language `{language}` is not supported.")
 
 
-T = TypeVar("T")
+T = typ.TypeVar("T")
 
 
-def _search_value_in_json_struct(x: Any, value: Any) -> bool:  # noqa: ANN401
+def _search_value_in_json_struct(x: typ.Any, value: typ.Any) -> bool:  # noqa: ANN401
     """Return True if `value` can be found in x."""
     if isinstance(x, dict):
         return any(_search_value_in_json_struct(y, value) for y in x.values())  # type: ignore
@@ -87,7 +85,7 @@ def _search_value_in_json_struct(x: Any, value: Any) -> bool:  # noqa: ANN401
     return x == value
 
 
-def _replace_value_in_json_struct(x: T, old_value: Any, new_value: Any) -> T:  # noqa: ANN401
+def _replace_value_in_json_struct(x: T, old_value: typ.Any, new_value: typ.Any) -> T:  # noqa: ANN401
     """Replace a value in a json structure."""
     if isinstance(x, dict):
         return {key: _replace_value_in_json_struct(y, old_value, new_value) for key, y in x.items()}  # type: ignore

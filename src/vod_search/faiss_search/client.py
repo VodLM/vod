@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import os
 import sys
 import time
@@ -9,8 +7,8 @@ from pathlib import Path
 import numpy as np
 import requests
 import rich
-import torch
-from vod_search import base, io, rdtypes
+import vod_types as vt
+from vod_search import base, io
 from vod_search.socket import find_available_port
 
 # get the path to the server script
@@ -46,11 +44,8 @@ class FaissClient(base.SearchClient):
         response.raise_for_status()
         return "OK" in response.text
 
-    def search_py(
-        self, query_vec: rdtypes.Ts, top_k: int = 3, timeout: float = 120
-    ) -> rdtypes.RetrievalBatch[rdtypes.Ts]:
+    def search_py(self, query_vec: np.ndarray, top_k: int = 3, timeout: float = 120) -> vt.RetrievalBatch:
         """Search the server given a batch of vectors (slow implementation)."""
-        input_type = type(query_vec)
         response = requests.post(
             f"{self.url}/search",
             json={
@@ -61,39 +56,28 @@ class FaissClient(base.SearchClient):
         )
         response.raise_for_status()
         data = response.json()
-        indices_list = data["indices"]
-        scores_list = data["scores"]
-        cast_fn = {
-            torch.Tensor: torch.tensor,
-            np.ndarray: np.array,
-        }[input_type]
-        indices = cast_fn(indices_list)
-        scores = cast_fn(scores_list)
-        return rdtypes.RetrievalBatch(indices=indices, scores=scores)
+        return vt.RetrievalBatch.cast(
+            indices=data["indices"],
+            scores=data["scores"],
+        )
 
     def search(
         self,
         *,
-        vector: rdtypes.Ts,
+        vector: np.ndarray,
         text: None | list[str] = None,  # noqa: ARG
         ids: None | list[list[str]] = None,  # noqa: ARG
         subset_ids: None | list[list[str]] = None,  # noqa: ARG
         shard: None | list[str] = None,  # noqa: ARG
         top_k: int = 3,
         timeout: float = 120,
-    ) -> rdtypes.RetrievalBatch[rdtypes.Ts]:
+    ) -> vt.RetrievalBatch:
         """Search the server given a batch of vectors."""
         start_time = time.time()
-        input_type = type(vector)
-        input_type_enum, serialized_fn = {
-            torch.Tensor: (rdtypes.RetrievalDataType.TORCH, io.serialize_torch_tensor),
-            np.ndarray: (rdtypes.RetrievalDataType.NUMPY, io.serialize_np_array),
-        }[input_type]
-        serialized_vectors = serialized_fn(vector)
+        serialized_vectors = io.serialize_np_array(vector)
         payload = {
             "vectors": serialized_vectors,
             "top_k": top_k,
-            "array_type": input_type_enum.value,
         }
         response = requests.post(f"{self.url}/fast-search", json=payload, timeout=timeout)
         try:
@@ -108,22 +92,16 @@ class FaissClient(base.SearchClient):
         data = response.json()
         indices_list = io.deserialize_np_array(data["indices"])
         scores_list = io.deserialize_np_array(data["scores"])
-        cast_fn = {
-            torch.Tensor: torch.tensor,
-            np.ndarray: np.array,
-        }[input_type]
-        indices = cast_fn(indices_list)
-        scores = cast_fn(scores_list)
 
         try:
-            return rdtypes.RetrievalBatch(
-                indices=indices,
-                scores=scores,
+            return vt.RetrievalBatch.cast(
+                indices=indices_list,
+                scores=scores_list,
                 labels=None,
                 meta={"time": time.time() - start_time},
             )
         except Exception as exc:
-            rich.print({"indices": indices, "scores": scores})
+            rich.print({"indices": indices_list, "scores": scores_list})
             raise exc
 
 

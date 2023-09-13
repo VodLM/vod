@@ -1,22 +1,20 @@
-from __future__ import annotations
-
 import contextlib  # noqa: I001
 import pathlib
 import shutil
+import typing as typ
 from pathlib import Path
-from typing import Any, Iterable, Literal, Optional
 
 import lightning as L
 import numpy as np
-import tensorstore as ts
+from tensorstore import _tensorstore as ts
 import torch
 from loguru import logger
 from omegaconf import DictConfig
 from rich.progress import track
 from torch.utils.data.dataloader import default_collate
-from vod_tools import dstruct, interfaces, pipes
-
-from src import vod_configs
+import vod_configs
+from vod_tools.ts_factory.ts_factory import TensorStoreFactory
+import vod_types as vt
 
 from .compute import LoaderKwargs, compute_and_store_predictions
 from .fingerprint import make_predict_fingerprint
@@ -41,11 +39,11 @@ class Predict:
     def __init__(
         self,
         *,
-        dataset: dstruct.SizedDataset,
+        dataset: vt.Sequence,
         cache_dir: str | pathlib.Path,
-        model: torch.nn.Module | interfaces.ProtocolEncoder,
-        collate_fn: pipes.Collate = default_collate,  # type: ignore
-        model_output_key: Optional[str] = None,
+        model: torch.nn.Module | vt.EncoderLike,
+        collate_fn: vt.Collate = default_collate,  # type: ignore
+        model_output_key: None | str = None,
     ):
         self._dataset = dataset
         self._model = model
@@ -74,12 +72,12 @@ class Predict:
 
     def __call__(
         self,
-        fabric: Optional[L.Fabric] = None,
-        loader_kwargs: Optional[LoaderKwargs] = None,
-        ts_kwargs: Optional[dict[str, Any]] = None,
+        fabric: None | L.Fabric = None,
+        loader_kwargs: None | LoaderKwargs = None,
+        ts_kwargs: None | dict[str, typ.Any] = None,
         validate_store: bool | int = True,
-        open_mode: Optional[Literal["x", "r", "a"]] = None,
-    ) -> dstruct.TensorStoreFactory:
+        open_mode: None | typ.Literal["x", "r", "a"] = None,
+    ) -> TensorStoreFactory:
         """Compute vectors for a dataset and store them in a tensorstore."""
         if open_mode in {None, "r"} and self.exists():
             logger.info(f"Store already exists at `{self.store_path}`.")
@@ -142,7 +140,7 @@ class Predict:
             shutil.rmtree(self.store_path)
             raise exc
 
-    def instantiate(self, ts_kwargs: Optional[dict[str, Any]] = None) -> dstruct.TensorStoreFactory:
+    def instantiate(self, ts_kwargs: None | dict[str, typ.Any] = None) -> TensorStoreFactory:
         """Create the tensorstore (write mode)."""
         self.store_path.parent.mkdir(parents=True, exist_ok=True)
         if self.exists():
@@ -158,7 +156,7 @@ class Predict:
 
         # build the store config and open the store
         dset_shape = (len(self._dataset), *vector_shape)
-        factory = dstruct.TensorStoreFactory.instantiate(
+        factory = TensorStoreFactory.instantiate(
             path=self.store_path,
             shape=dset_shape,
             **(ts_kwargs or {}),
@@ -167,9 +165,9 @@ class Predict:
         factory.open(create=True, delete_existing=False)
         return factory
 
-    def read(self) -> dstruct.TensorStoreFactory:
+    def read(self) -> TensorStoreFactory:
         """Open the tensorstore in read mode."""
-        return dstruct.TensorStoreFactory.from_path(path=self.store_path)
+        return TensorStoreFactory.from_path(path=self.store_path)
 
     def exists(self) -> bool:
         """Return whether the store exists."""
@@ -219,18 +217,18 @@ class Predict:
 
 
 def predict(
-    dataset: dstruct.SizedDataset,
+    dataset: vt.Sequence,
     *,
     fabric: L.Fabric,
     cache_dir: str | Path,
-    model: torch.nn.Module | interfaces.ProtocolEncoder,
-    collate_fn: pipes.Collate,
-    model_output_key: Optional[str] = None,
-    loader_kwargs: Optional[dict[str, Any] | DictConfig | vod_configs.DataLoaderConfig] = None,
-    ts_kwargs: Optional[dict[str, Any]] = None,
+    model: torch.nn.Module | vt.EncoderLike,
+    collate_fn: vt.Collate,
+    model_output_key: None | str = None,
+    loader_kwargs: None | dict[str, typ.Any] | DictConfig | vod_configs.DataLoaderConfig = None,
+    ts_kwargs: None | dict[str, typ.Any] = None,
     validate_store: bool | int = True,
-    open_mode: Optional[Literal["x", "r", "a"]] = None,
-) -> dstruct.TensorStoreFactory:
+    open_mode: None | typ.Literal["x", "r", "a"] = None,
+) -> TensorStoreFactory:
     """Compute predictions for a dataset and store them in a tensorstore.
 
     Open modes:
@@ -257,11 +255,11 @@ def predict(
 
 
 def _infer_vector_shape(
-    model: torch.nn.Module,
-    model_output_key: Optional[str],
+    model: torch.nn.Module | vt.EncoderLike,
+    model_output_key: None | str,
     *,
-    dataset: dstruct.SizedDataset,
-    collate_fn: pipes.Collate,
+    dataset: vt.Sequence,
+    collate_fn: vt.Collate,
 ) -> tuple[int, ...]:
     try:
         vector_shape = model.get_output_shape(model_output_key)  # type: ignore
@@ -275,12 +273,12 @@ def _infer_vector_shape(
         one_vec = model(batch)  # type: ignore
         if model_output_key is not None:
             one_vec = one_vec[model_output_key]
-        vector_shape = one_vec.shape[1:]
+        vector_shape = one_vec.shape[1:]  # type: ignore
 
     return vector_shape
 
 
-def _get_zero_vec_indices(store: ts.TensorStore, n_samples: int) -> Iterable[int]:
+def _get_zero_vec_indices(store: ts.TensorStore, n_samples: int) -> typ.Iterable[int]:
     """Validate that the store has been written in all positions."""
     store_size = store.shape[0]
     if n_samples < store_size:

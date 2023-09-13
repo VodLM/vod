@@ -1,26 +1,25 @@
-from __future__ import annotations
-
+import typing as typ
 from asyncio import Future
-from typing import Any, List, Optional, Union
 
 import lightning as L
+import numpy as np
 import omegaconf
 import pydantic
-import tensorstore as ts
 import torch
+import vod_types as vt
 from lightning.fabric import wrappers as fabric_wrappers
 from loguru import logger
 from omegaconf import DictConfig
+from tensorstore import _tensorstore as ts
 from torch.utils import data as torch_data
-from typing_extensions import TypeAlias
-from vod_tools import dstruct, pipes
+from typing_extensions import Self, Type, TypeAlias
 from vod_tools.misc.progress import IterProgressBar
 
 from src import vod_configs
 
 from .wrappers import PREDICT_IDX_COL_NAME, CollateWithIndices, DatasetWithIndices
 
-LoaderKwargs: TypeAlias = Union[dict[str, Any], DictConfig, vod_configs.DataLoaderConfig]
+LoaderKwargs: TypeAlias = typ.Union[dict[str, typ.Any], DictConfig, vod_configs.DataLoaderConfig]
 
 
 class DataLoaderForPredictKwargs(vod_configs.DataLoaderConfig):
@@ -33,7 +32,7 @@ class DataLoaderForPredictKwargs(vod_configs.DataLoaderConfig):
         return False
 
     @classmethod
-    def instantiate(cls, config: None | LoaderKwargs) -> DataLoaderForPredictKwargs:  # noqa: ANN102
+    def instantiate(cls: Type[Self], config: None | LoaderKwargs) -> Self:
         """Instantiate a `DataLoaderForPredictKwargs` from a config."""
         config = config or {}
         if isinstance(config, DictConfig):
@@ -51,27 +50,27 @@ class DataLoaderForPredictKwargs(vod_configs.DataLoaderConfig):
 
 def compute_and_store_predictions(
     fabric: L.Fabric,
-    dataset: dstruct.SizedDataset,
+    dataset: vt.Sequence,
     model: torch.nn.Module,
-    collate_fn: pipes.Collate,
+    collate_fn: vt.Collate,
     store: ts.TensorStore,
-    loader_kwargs: Optional[LoaderKwargs] = None,
-    model_output_key: Optional[str] = None,
+    loader_kwargs: None | LoaderKwargs = None,
+    model_output_key: None | str = None,
 ) -> ts.TensorStore:
     """Compute predictions for a dataset and store them in a tensorstore."""
     if not fabric_wrappers.is_wrapped(model):
         raise ValueError("The model must be wrapped with `lightning.fabric.wrappers`.")
 
     # wrap the dataset and collate_fn to include the indices
-    dset_with_ids: dstruct.SizedDataset[dict] = DatasetWithIndices[dict](dataset)
-    collate_fn_with_ids: pipes.Collate = CollateWithIndices(collate_fn)
+    dset_with_ids: vt.Sequence[dict] = DatasetWithIndices[dict](dataset)
+    collate_fn_with_ids: vt.Collate = CollateWithIndices(collate_fn)
 
     # build the dataloader
     loader_kwargs = DataLoaderForPredictKwargs.instantiate(loader_kwargs)
     loader = torch_data.DataLoader(
         dset_with_ids,  # type: ignore
         collate_fn=collate_fn_with_ids,
-        **loader_kwargs.dict(),
+        **loader_kwargs.model_dump(),  # type: ignore
     )
 
     # process the dataset and store the predictions in the tensorstore
@@ -86,7 +85,7 @@ def _predict_loop(
     dataloader: torch_data.DataLoader,
     store: ts.TensorStore,
     model: torch.nn.Module,
-    model_output_key: Optional[str] = None,
+    model_output_key: None | str = None,
 ) -> ts.TensorStore:
     """Run predictions and store the output in a `TensorStore`."""
     dataloader_ = fabric.setup_dataloaders(dataloader)
@@ -120,32 +119,32 @@ def _predict_loop(
 def _write_vectors_to_store(
     store: ts.TensorStore,
     vectors: torch.Tensor,
-    idx: List[int],
+    idx: list[int],
     asynchronous: bool = False,
-) -> Optional[Future]:
+) -> None | Future:
     """Write vectors to a `TensorStore`."""
     if idx is None:
         raise ValueError("idx must be provided")
     if vectors.dtype == torch.bfloat16:
         vectors = vectors.to(torch.float32)
-    vectors = vectors.detach().cpu().numpy()
+    np_vectors: np.ndarray = vectors.detach().cpu().numpy()
     dtype = store.spec().dtype
-    vectors = vectors.astype(dtype.numpy_dtype)
+    np_vectors = np_vectors.astype(dtype.numpy_dtype)
 
     if asynchronous:
-        return store[idx].write(vectors)
+        return store[idx].write(np_vectors)
 
-    store[idx] = vectors
+    store[idx] = np_vectors
     return None
 
 
-def _select_vector_from_output(batch: torch.Tensor | dict, key: Optional[str] = None) -> torch.Tensor:
+def _select_vector_from_output(batch: torch.Tensor | dict, key: None | str = None) -> torch.Tensor:
     if key is None:
         if isinstance(batch, dict):
             raise TypeError("Input batch is a dictionary, the argument `field` must be set.")
         return batch
 
-    if key not in batch:
-        raise ValueError(f"Key {key} not found in batch. Found {batch.keys()}")
-
-    return batch[key]
+    try:
+        return batch[key]  # type: ignore
+    except KeyError as exc:
+        raise KeyError(f"Key `{key}` not found in batch. Found `{batch.keys()}`") from exc

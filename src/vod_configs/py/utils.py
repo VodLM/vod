@@ -1,4 +1,4 @@
-import typing
+import typing as typ
 
 import pydantic
 
@@ -25,7 +25,7 @@ class AllowMutations:
         self.model.model_config["frozen"] = False
         return self.model
 
-    def __exit__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+    def __exit__(self, *args: typ.Any, **kws: typ.Any) -> None:
         if self._is_frozen is None:
             self.model.model_config.pop("frozen", None)
         else:

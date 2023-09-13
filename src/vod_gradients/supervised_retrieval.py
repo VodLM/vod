@@ -1,8 +1,6 @@
-from __future__ import annotations
-
 import math
+import typing as typ
 import warnings
-from typing import Any, Callable, Literal, Optional
 
 import lightning as L
 import torch
@@ -16,7 +14,7 @@ class SupervisedRetrievalGradients(base.Gradients):
     def __init__(
         self,
         guidance_weight: float = 0.0,
-        guidance: Literal["sparse", "zero"] = "sparse",
+        guidance: typ.Literal["sparse", "zero"] = "sparse",
         self_supervision_weight: float = 0.0,
         anchor_weight: float = 0.0,
     ):
@@ -30,8 +28,8 @@ class SupervisedRetrievalGradients(base.Gradients):
         self,
         inputs: dict[str, torch.Tensor],
         skip_diagnostics: bool = False,
-        retriever_scores: Optional[torch.Tensor] = None,
-        **kwargs: Any,
+        retriever_scores: None | torch.Tensor = None,
+        **kws: typ.Any,
     ) -> dict[str, torch.Tensor]:
         """Parse the inputs and compute the loss."""
         data = base.GradientInputs(**inputs)
@@ -122,11 +120,11 @@ class SupervisedRetrievalGradients(base.Gradients):
     def forward_backward(
         self,
         batch: dict[str, torch.Tensor],
-        fwd_fn: Callable[[dict], dict],
+        fwd_fn: typ.Callable[[dict], dict],
         fabric: None | L.Fabric = None,
         loss_scaler: float | None = None,
         no_backward_sync: bool = False,
-        **kwargs: Any,
+        **kws: typ.Any,
     ) -> dict[str, torch.Tensor]:
         """Forward and backward pass with gradient accumulation."""
         return super().forward_backward(
@@ -135,7 +133,7 @@ class SupervisedRetrievalGradients(base.Gradients):
             fabric=fabric,
             loss_scaler=loss_scaler,
             no_backward_sync=no_backward_sync,
-            fwd_kwargs={**kwargs, "compute_metrics": True, "mode": "evaluate"},
+            fwd_kws={**kws, "compute_metrics": True, "mode": "evaluate"},
         )
 
 
@@ -173,7 +171,11 @@ def _compute_hubert_loss(a_scores: torch.Tensor, b_scores: torch.Tensor) -> torc
 
 
 @torch.jit.script  # type: ignore
-def _compute_retriever_scores(hq: torch.Tensor, hd: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+def _compute_retriever_scores(
+    hq: torch.Tensor,
+    hd: torch.Tensor,
+    mask: torch.Tensor,
+) -> torch.Tensor:
     """Compute the score for each pair of (question, section) assigned by the model."""
     if hd.dim() == 2:  # noqa: PLR2004
         retriever_scores = torch.einsum("bh, dh -> bd", hq, hd)
@@ -182,19 +184,21 @@ def _compute_retriever_scores(hq: torch.Tensor, hd: torch.Tensor, mask: Optional
     else:
         raise ValueError(f"Invalid dimension for `hd`: {hd.shape}")
 
-    if mask is not None:
-        retriever_scores.masked_fill_(mask, -torch.inf)
+    # Mask the scores
+    retriever_scores.masked_fill_(mask, -torch.inf)
 
     return retriever_scores
 
 
 @torch.jit.script  # type: ignore
 @torch.no_grad()
-def _cast_data_targets(data_targets: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+def _cast_data_targets(
+    data_targets: torch.Tensor,
+    mask: torch.Tensor,
+) -> torch.Tensor:
     """Compute the reference probabilities for each pair of (question, section)."""
     data_targets = data_targets.float()
-    if mask is not None:
-        data_targets.masked_fill_(mask, 0.0)
+    data_targets.masked_fill_(mask, 0.0)
 
     return data_targets
 

@@ -1,28 +1,23 @@
-from __future__ import annotations
+import typing as typ
 
-import typing
-from typing import Any, Iterable
-
-from vod_tools import dstruct, pipes
+import vod_types as vt
 
 PREDICT_IDX_COL_NAME = "__idx__"
 
-T = typing.TypeVar("T", bound=dict)
-
-D_co = typing.TypeVar("D_co", bound=dict, covariant=True)
+T = typ.TypeVar("T")
 
 
-class DatasetWithIndices(dstruct.SizedDataset[D_co]):
+class DatasetWithIndices(vt.DictsSequence):
     """This class is used to add the column `IDX_COL` to the batch."""
 
-    def __init__(self, dataset: dstruct.SizedDataset[D_co]):
+    def __init__(self, dataset: vt.DictsSequence):
         self.dataset = dataset
 
     def __len__(self) -> int:
         """Returns the number of rows in the dataset."""
         return len(self.dataset)
 
-    def __getitem__(self, item: int) -> D_co:
+    def __getitem__(self, item: int) -> dict[str, typ.Any]:
         """Returns a row from the dataset."""
         batch = self.dataset[item]
         if PREDICT_IDX_COL_NAME in batch:
@@ -34,7 +29,7 @@ class DatasetWithIndices(dstruct.SizedDataset[D_co]):
         batch[PREDICT_IDX_COL_NAME] = item
         return batch
 
-    def __iter__(self) -> Iterable[dict]:
+    def __iter__(self) -> typ.Iterable[dict]:
         """Returns an iterator over the rows of the dataset."""
         for i in range(len(self)):
             yield self[i]
@@ -50,19 +45,21 @@ def _safely_fetch_key(row: dict) -> int:
         ) from exc
 
 
-def _collate_with_indices(examples: Iterable[dict[str, Any]], *, collate_fn: pipes.Collate, **kwargs: Any) -> dict:
+def _collate_with_indices(
+    examples: typ.Iterable[dict[str, typ.Any]], *, collate_fn: vt.Collate, **kws: typ.Any
+) -> dict[str, typ.Any]:
     ids = [_safely_fetch_key(row) for row in examples]
-    batch = collate_fn(examples, **kwargs)
+    batch = collate_fn(examples, **kws)  # type: ignore
     batch[PREDICT_IDX_COL_NAME] = ids
     return batch
 
 
-class CollateWithIndices(pipes.Collate):
+class CollateWithIndices(vt.Collate):
     """Wraps a `Collate` to add the column `IDX_COL` to the batch."""
 
-    def __init__(self, collate_fn: pipes.Collate):  # type: ignore
+    def __init__(self, collate_fn: vt.Collate):  # type: ignore
         self.collate_fn = collate_fn
 
-    def __call__(self, examples: Iterable[dict[str, Any]], **kwargs: Any) -> dict:
+    def __call__(self, examples: typ.Iterable[dict[str, typ.Any]], **kws: typ.Any) -> dict[str, typ.Any]:
         """Collate the rows along with the row indixes (`IDX_COL`)."""
-        return _collate_with_indices(examples, collate_fn=self.collate_fn, **kwargs)
+        return _collate_with_indices(examples, collate_fn=self.collate_fn, **kws)  # type: ignore

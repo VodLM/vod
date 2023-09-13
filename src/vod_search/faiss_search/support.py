@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import math
 import re
 from multiprocessing import pool as mp_pool
@@ -43,7 +41,7 @@ index_factory_pattern = re.compile(
 class IVFPQFactory(pydantic.BaseModel):
     """Parse an IVFPQFactory string."""
 
-    preproc: Optional[str] = None
+    preproc: None | str = None
     n_centroids: int
     ncodes: Optional[int] = None
     nbits: Optional[int] = None

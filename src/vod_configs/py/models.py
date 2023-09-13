@@ -1,6 +1,4 @@
-from __future__ import annotations
-
-from typing import Any, Optional
+import typing as typ
 
 import transformers
 
@@ -11,14 +9,14 @@ class TokenizerConfig(StrictModel):
     """Configuration for a tokenizer."""
 
     name_or_path: str
-    use_fast: Optional[bool] = True
+    use_fast: None | bool = True
 
     def instantiate(
         self,
-        **kwargs: dict[str, Any],
+        **kws: dict[str, typ.Any],
     ) -> transformers.PreTrainedTokenizer | transformers.PreTrainedTokenizerFast:
         """Instantiate the tokenizer."""
         if self.use_fast is not None:
-            kwargs["use_fast"] = self.use_fast  # type: ignore
+            kws["use_fast"] = self.use_fast  # type: ignore
 
-        return transformers.AutoTokenizer.from_pretrained(self.name_or_path, **kwargs)
+        return transformers.AutoTokenizer.from_pretrained(self.name_or_path, **kws)

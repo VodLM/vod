@@ -1,22 +1,20 @@
-from __future__ import annotations
-
 import functools
 import pathlib
-from typing import Any
 
-import datasets
 import lightning as L
 import loguru
 import transformers
-from vod_dataloaders.predict_collate import PredictCollate
-from vod_tools import dstruct, predict
+import vod_types as vt
+from vod_dataloaders.tokenizer_collate import TokenizerCollate
+from vod_tools import predict
+from vod_tools.ts_factory.ts_factory import TensorStoreFactory
 from vod_workflows.utils import helpers
 
 from src import vod_configs, vod_models
 
 
 def compute_vectors(
-    dataset: dstruct.SizedDataset[dict[str, Any]] | datasets.Dataset,
+    dataset: vt.DictsSequence,
     *,
     ranker: vod_models.Ranker,
     fabric: L.Fabric,
@@ -27,9 +25,9 @@ def compute_vectors(
     field: str,
     validate_store: int = 1_000,
     locator: None | str = None,
-) -> dstruct.TensorStoreFactory:
+) -> TensorStoreFactory:
     """Compute the vectors for a given dataset and field. Hanldes distributed execution on a single node."""
-    collate_fn = PredictCollate.from_config(collate_config, field=field, tokenizer=tokenizer)
+    collate_fn = TokenizerCollate.from_config(collate_config, field=field, tokenizer=tokenizer)
     barrier_fn = functools.partial(helpers.barrier_fn, fabric=fabric)
 
     # construct the `predict` function

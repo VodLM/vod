@@ -1,26 +1,24 @@
-from __future__ import annotations
-
-import typing
+import typing as typ
 
 import datasets
 import numpy as np
 import torch
-from vod_tools.dstruct.sized_dataset import SizedDataset, SliceType, T_co
+from vod_types.sequence import Sequence, SliceType, T_co
 
-T = typing.TypeVar("T")
+T = typ.TypeVar("T")
 
 
-class ConcatenatedSizedDataset(SizedDataset[T_co]):
-    """A partition of indexables."""
+class ConcatenatedSequences(Sequence[T_co]):
+    """A concatenation of sequences."""
 
-    parts: list[SizedDataset[T_co]]
+    parts: list[Sequence[T_co]]
 
-    def __init__(self, parts: typing.Iterable[SizedDataset[T_co]]) -> None:
+    def __init__(self, parts: typ.Iterable[Sequence[T_co]]) -> None:
         self.parts = list(parts)
 
     def __getitem__(self, idx: SliceType) -> T_co:
         """Get an item by index."""
-        if isinstance(idx, (int, np.int64, np.int32, np.uint64, np.uint32)):
+        if isinstance(idx, (int, np.int64, np.int32, np.uint64, np.uint32)):  # type: ignore
             return _get_item_int(idx, self.parts)
 
         if isinstance(idx, slice):
@@ -47,12 +45,12 @@ class ConcatenatedSizedDataset(SizedDataset[T_co]):
         return str(self)
 
 
-def _get_item_int(idx: int, parts: typing.Iterable[SizedDataset[T]]) -> T:
+def _get_item_int(idx: int, parts: typ.Iterable[Sequence[T]]) -> T:
     i, part = _get_intersect(idx, parts)
     return part[i]
 
 
-def _get_intersect(idx: int, parts: typing.Iterable[SizedDataset[T]]) -> tuple[int, SizedDataset[T]]:
+def _get_intersect(idx: int, parts: typ.Iterable[Sequence[T]]) -> tuple[int, Sequence[T]]:
     if idx < 0:
         raise NotImplementedError("Negative indices are not supported.")
     for part in parts:
@@ -65,8 +63,8 @@ def _get_intersect(idx: int, parts: typing.Iterable[SizedDataset[T]]) -> tuple[i
 
 def _get_interset_slice(
     idx: slice,
-    parts: typing.Iterable[SizedDataset[T]],
-) -> typing.Iterable[tuple[slice, SizedDataset[T]]]:
+    parts: typ.Iterable[Sequence[T]],
+) -> typ.Iterable[tuple[slice, Sequence[T]]]:
     """Return the list of intersecting slices with their relative slices."""
     total_length = sum([len(p) for p in parts])
     if idx.step is not None and idx.step != 1:
@@ -92,7 +90,7 @@ def _get_interset_slice(
         offset += len(part)
 
 
-def _join_results(results: typing.Iterable[T]) -> T:
+def _join_results(results: typ.Iterable[T]) -> T:
     results = list(results)
     if isinstance(results[0], list):
         return [el for result in results for el in result]  # type: ignore
@@ -107,7 +105,7 @@ def _join_results(results: typing.Iterable[T]) -> T:
     raise TypeError(f"Unsupported type {type(results[0])}")
 
 
-def _stack_results(results: typing.Iterable[T]) -> T:
+def _stack_results(results: typ.Iterable[T]) -> T:
     results = list(results)
     if isinstance(results[0], list):
         return list(results)  # type: ignore
@@ -122,9 +120,9 @@ def _stack_results(results: typing.Iterable[T]) -> T:
     return results  # type: ignore
 
 
-@datasets.fingerprint.hashregister(ConcatenatedSizedDataset)
+@datasets.fingerprint.hashregister(ConcatenatedSequences)
 def _hash_partitioned_indexable(
-    hasher: datasets.fingerprint.Hasher, value: ConcatenatedSizedDataset  # noqa: ARG001
+    hasher: datasets.fingerprint.Hasher, value: ConcatenatedSequences  # noqa: ARG001
 ) -> str:  # noqa: ARG001
     hasher_ = datasets.fingerprint.Hasher()
     for part in value.parts:

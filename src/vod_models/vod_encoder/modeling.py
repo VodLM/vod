@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import abc
 import functools
 import io
@@ -338,3 +336,6 @@ class VodRobertaEncoderDebug(EmbeddingOnlyOverride, VodRobertaEncoder):
 
 
 VodRobertaEncoderDebug.register_for_auto_class()
+
+
+VodEncoder = VodBertEncoder | VodT5Encoder | VodRobertaEncoder

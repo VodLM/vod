@@ -1,16 +1,16 @@
-from __future__ import annotations  # noqa: I001
+# noqa: I001
 
 import os
 import pathlib
-import typing
-
+import typing as typ
 import uuid
+
 import pydantic
 
 VOD_CACHE_DIR = str(pathlib.Path(os.environ.get("VOD_CACHE_DIR", "~/.cache/vod")).expanduser())
 DATASETS_CACHE_PATH = str(pathlib.Path(VOD_CACHE_DIR, "datasets"))
 
-DatasetType = typing.Literal["queries_with_context", "queries", "sections"]
+DatasetType = typ.Literal["queries_with_context", "queries", "sections"]
 
 
 class QueryModel(pydantic.BaseModel):
@@ -66,11 +66,11 @@ class SectionModel(pydantic.BaseModel):
         ...,
         description="The main textual content of the section.",
     )
-    title: typing.Optional[str] = pydantic.Field(
+    title: None | str = pydantic.Field(
         default=None,
         description="The title of the section, if available.",
     )
-    subset_id: typing.Optional[str] = pydantic.Field(
+    subset_id: None | str = pydantic.Field(
         default=None,
         description="An optional ID representing a subset of knowledge.",
     )
@@ -83,7 +83,7 @@ class QueryWithContextsModel(QueryModel):
         ...,
         description="The main textual content of the section.",
     )
-    titles: typing.Optional[list[str]] = pydantic.Field(
+    titles: None | list[str] = pydantic.Field(
         default=None,
         description="The title of the section, if available.",
     )

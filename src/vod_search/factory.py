@@ -1,20 +1,19 @@
-from __future__ import annotations
-
 import copy
 import os
 import pathlib
-from typing import Any, Callable, Optional
+import typing as typ
 
 import faiss
 import lightning as L
 import numpy as np
 import torch
+import vod_types as vt
 from datasets import fingerprint
 from loguru import logger
 from vod_configs.py.es_body import validate_es_body
 from vod_search import base, es_search, faiss_search, qdrant_search
 from vod_search.socket import find_available_port
-from vod_tools import dstruct, pipes
+from vod_tools import pipes
 from vod_tools.misc.template import Template
 
 from src import vod_configs
@@ -26,12 +25,12 @@ from .sharded_search import ShardedSearchMaster
 def build_search_index(
     index_type: str,
     *,
-    sections: None | dstruct.SizedDataset[dict[str, Any]],
-    vectors: None | dstruct.SizedDataset[np.ndarray],
-    config: dict[str, Any],
+    sections: None | vt.DictsSequence,
+    vectors: None | vt.Sequence[np.ndarray],
+    config: dict[str, typ.Any],
     cache_dir: str | pathlib.Path,
     skip_setup: bool = False,
-    barrier_fn: None | Callable[[str], None] = None,
+    barrier_fn: None | typ.Callable[[str], None] = None,
     serve_on_gpu: bool = False,
     free_resources: bool = False,
 ) -> base.SearchMaster:
@@ -77,7 +76,7 @@ def build_search_index(
 
 
 def build_elasticsearch_index(
-    sections: dstruct.SizedDataset[dict[str, Any]],
+    sections: vt.DictsSequence,
     config: dict | vod_configs.ElasticsearchFactoryConfig,
     skip_setup: bool = False,
     free_resources: bool = False,
@@ -103,7 +102,7 @@ def build_elasticsearch_index(
         f"subset_id: `{config.subset_id_key}`"
     )
     row = next(iter(sections))
-    if not template.is_valide(row):
+    if not template.is_valid(row):
         raise ValueError(f"Invalid template `{template.template}` for row with keys `{list(row.keys())}`")
     texts = (template.render(row) for row in iter(sections))
     if config.section_id_key is not None and config.section_id_key not in row:
@@ -135,12 +134,12 @@ def build_elasticsearch_index(
 
 
 def build_faiss_index(
-    vectors: dstruct.SizedDataset[np.ndarray],
+    vectors: vt.Sequence[np.ndarray],
     *,
     config: vod_configs.FaissFactoryConfig | dict,
     cache_dir: str | pathlib.Path,
     skip_setup: bool = False,
-    barrier_fn: None | Callable[[str], None] = None,
+    barrier_fn: None | typ.Callable[[str], None] = None,
     serve_on_gpu: bool = False,
     free_resources: bool = False,
 ) -> faiss_search.FaissMaster:
@@ -197,8 +196,8 @@ def build_faiss_index(
 
 
 def build_qdrant_index(
-    vectors: dstruct.SizedDataset[np.ndarray],
-    sections: dstruct.SizedDataset[dict[str, Any]],
+    vectors: vt.Sequence[np.ndarray],
+    sections: vt.DictsSequence,
     config: vod_configs.QdrantFactoryConfig | dict,
     skip_setup: bool = False,
     free_resources: bool = False,
@@ -236,7 +235,7 @@ def _rank_info() -> str:
     return winfo
 
 
-def _infer_offsets(x: list[dstruct.SizedDataset[Any]]) -> list[int]:
+def _infer_offsets(x: list[vt.Sequence]) -> list[int]:
     """Infer the offsets of a list of SizedDatasets."""
     if len(x) == 0:
         return []
@@ -245,7 +244,7 @@ def _infer_offsets(x: list[dstruct.SizedDataset[Any]]) -> list[int]:
 
 def _resolve_ports(
     config: vod_configs.HybridSearchFactoryConfig,
-    fabric: Optional[L.Fabric],
+    fabric: None | L.Fabric,
 ) -> vod_configs.HybridSearchFactoryConfig:
     """Resolve missing ports."""
     engines: dict[str, vod_configs.SingleSearchFactoryConfig] = copy.copy(config.engines)
@@ -263,14 +262,14 @@ def _resolve_ports(
 def build_hybrid_search_engine(  # noqa: C901, PLR0912
     *,
     shard_names: list[str],
-    sections: None | list[dstruct.SizedDataset[dict[str, Any]]],
-    vectors: None | list[dstruct.SizedDataset[np.ndarray]],
+    sections: None | list[vt.DictsSequence],
+    vectors: None | list[vt.Sequence[np.ndarray]],
     configs: list[vod_configs.HybridSearchFactoryConfig],
     cache_dir: str | pathlib.Path,
     dense_enabled: bool = True,
     sparse_enabled: bool = True,
     skip_setup: bool = False,
-    barrier_fn: None | Callable[[str], None] = None,
+    barrier_fn: None | typ.Callable[[str], None] = None,
     serve_on_gpu: bool = False,
     free_resources: None | bool = None,
     fabric: None | L.Fabric = None,
@@ -359,12 +358,12 @@ def build_hybrid_search_engine(  # noqa: C901, PLR0912
 
 
 def _init_dense_search_engine(
-    sections: None | dstruct.SizedDataset[dict[str, Any]],
-    vectors: dstruct.SizedDataset[np.ndarray],
+    sections: None | vt.DictsSequence,
+    vectors: vt.Sequence[np.ndarray],
     config: vod_configs.FaissFactoryConfig | vod_configs.QdrantFactoryConfig,
     cache_dir: str | pathlib.Path,
     skip_setup: bool,
-    barrier_fn: None | Callable[[str], None],
+    barrier_fn: None | typ.Callable[[str], None],
     serve_on_gpu: bool,
     free_resources: bool = False,
 ) -> qdrant_search.QdrantSearchMaster | faiss_search.FaissMaster:

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import collections
 import dataclasses
 import functools
@@ -40,8 +38,8 @@ class FrankQueryModel(models.QueryModel):
     """A Frank query."""
 
     query: str = pydantic.Field(..., alias="question")
-    category: Optional[str] = None
-    label_method_type: Optional[str] = None
+    category: None | str = None
+    label_method_type: None | str = None
     answer_id: int
     subset_ids: list[str] = pydantic.Field(..., alias="knowledge_base_id")
     retrieval_ids: list[str] = pydantic.Field(...)

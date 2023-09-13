@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import collections
 import dataclasses
 import functools
@@ -75,7 +73,7 @@ def _gen_queries(*, qrels: dict[int, Iterable[int]], language: str, queries_tabl
         ).dict()
 
 
-def _download_and_parse_questions(language: str = "en", local_path: Optional[str] = None) -> datasets.DatasetDict:
+def _download_and_parse_questions(language: str = "en", local_path: None | str = None) -> datasets.DatasetDict:
     if language != "en":
         raise NotImplementedError("Only English MSMARCO is supported")
 
@@ -137,7 +135,7 @@ def _download_and_parse_questions(language: str = "en", local_path: Optional[str
     return datasets.DatasetDict(qa_splits)
 
 
-def _download_and_parse_sections(language: str = "en", local_path: Optional[str] = None) -> datasets.Dataset:
+def _download_and_parse_sections(language: str = "en", local_path: None | str = None) -> datasets.Dataset:
     if language != "en":
         raise NotImplementedError("Only English MSMARCO is supported")
 
@@ -167,7 +165,7 @@ def _download_and_parse_sections(language: str = "en", local_path: Optional[str]
 
 def load_msmarco(
     language: str = "en",
-    subset_name: Optional[str] = None,
+    subset_name: None | str = None,
     cache_dir: Optional[str | pathlib.Path] = None,
     keep_in_memory: Optional[bool] = None,
     only_positive_sections: bool = False,

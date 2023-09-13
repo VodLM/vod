@@ -1,23 +1,22 @@
-from __future__ import annotations
+import typing as typ
 
-from typing import Any, Iterable
-
+import torch
 import transformers
 import vod_configs
+import vod_types as vt
 from typing_extensions import Self, Type
-from vod_tools import pipes
 from vod_tools.misc.template import Template
 
 
-class PredictCollate(pipes.Collate):
-    """Collate function for the `predict` step."""
+class TokenizerCollate(vt.Collate[typ.Any, torch.Tensor]):
+    """Collate function to format text and tokenize into `field.input_ids and `field.attention_mask` tensors."""
 
     def __init__(
         self,
         template: str,
         tokenizer: transformers.PreTrainedTokenizerBase,
         prefix_key: str = "",
-        tokenizer_kws: None | dict[str, Any] = None,
+        tokenizer_kws: None | dict[str, typ.Any] = None,
     ) -> None:
         """Initialize the collate function."""
         self.template = Template(template)
@@ -27,17 +26,12 @@ class PredictCollate(pipes.Collate):
 
     def __call__(
         self,
-        examples: Iterable[dict[str, Any]] | dict[str, list[Any]],
-        **kws: Any,
-    ) -> dict[str, Any]:
-        """Render a template and tokenize the result."""
-        if isinstance(examples, dict):
-            texts = self.template.render_batch(examples)  # type: ignore
-        else:
-            texts = [self.template.render(ex) for ex in examples]
-        # tokenize the result
+        inputs: typ.Iterable[dict[str, typ.Any]] | dict[str, list[typ.Any]],
+        **kws: typ.Any,
+    ) -> dict[str, torch.Tensor]:
+        """Render a template, tokenize the resulting text and append the `prefix_key`."""
+        texts = self.template(inputs)
         outputs = self.tokenizer(texts, **self.tokenizer_kws)
-        # prefix the keys
         return {f"{self.prefix_key}{k}": v for k, v in outputs.items()}
 
     @classmethod

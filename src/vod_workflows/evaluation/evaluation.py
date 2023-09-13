@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import collections
 import dataclasses
 import json
@@ -9,10 +7,10 @@ from typing import Any, Iterable, Optional
 import numpy as np
 import torch
 import transformers
+import vod_types as vt
 from lightning.pytorch import utilities as pl_utils
 from loguru import logger
 from vod_models.monitor import RetrievalMetricCollection
-from vod_tools import dstruct
 from vod_tools.misc.config import flatten_dict
 from vod_tools.misc.progress import IterProgressBar
 from vod_workflows.utils import helpers
@@ -50,9 +48,7 @@ def benchmark(
     with vod_search.build_hybrid_search_engine(
         shard_names=[cfg.identifier for cfg in task.sections],
         sections=[vod_datasets.load_sections(cfg) for cfg in task.sections],  # type: ignore
-        vectors=[dstruct.as_lazy_array(task.vectors[d]) for d in task.sections]
-        if task.vectors
-        else None,  # type: ignore
+        vectors=[vt.as_lazy_array(task.vectors[d]) for d in task.sections] if task.vectors else None,  # type: ignore
         configs=[cfg.search for cfg in task.sections],  # type: ignore
         cache_dir=cache_dir,
         dense_enabled=helpers.is_engine_enabled(parameters, "dense"),

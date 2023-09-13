@@ -1,120 +1,38 @@
-from __future__ import annotations
-
 import abc
 import copy
 import math
+import typing as typ
 import warnings
-from abc import ABC
-from enum import Enum
 from numbers import Number
-from typing import Any, Callable, Generic, Iterable, Optional, TypeVar, Union
 
 import numba
 import numpy as np
+import numpy.typing as npt
 import torch
 from numba.typed import List
-from typing_extensions import Type, TypeAlias
+from typing_extensions import Self, Type
+
+from .sequence import SliceType
 
 
-class RetrievalDataType(Enum):
-    """Type of retrieval data."""
-
-    NUMPY = "NUMPY"
-    TORCH = "TORCH"
-
-
-SliceType: TypeAlias = Union[int, slice, Iterable[int]]
-Ts = TypeVar("Ts", np.ndarray, torch.Tensor)
-Ts_co = TypeVar("Ts_co", np.ndarray, torch.Tensor, covariant=True)
-Ts_out = TypeVar("Ts_out", np.ndarray, torch.Tensor)
-
-
-def _type_repr(x: Ts) -> str:
-    return f"{type(x).__name__}"
-
-
-def _array_repr(x: Ts) -> str:
-    return f"{type(x).__name__}(shape={x.shape}, dtype={x.dtype}))"
-
-
-def _convert_array(scores: Union[np.ndarray, torch.Tensor], target_type: Type[Ts_out]) -> Ts_out:
-    conversions = {
-        torch.Tensor: {
-            np.ndarray: torch.from_numpy,
-            torch.Tensor: lambda x: x,
-        },
-        np.ndarray: {
-            np.ndarray: lambda x: x,
-            torch.Tensor: lambda x: x.detach().cpu().numpy(),
-        },
-    }
-    converter = conversions[target_type][type(scores)]
-    return converter(scores)
-
-
-def _stack_arrays(arrays: Iterable[Ts]) -> Ts:
-    first, *rest = arrays
-    operator = {
-        torch.Tensor: torch.stack,
-        np.ndarray: np.stack,
-    }[type(first)]
-    return operator([first, *rest])
-
-
-def _concat_arrays(arrays: Iterable[Ts]) -> Ts:
-    first, *rest = arrays
-    operator = {
-        torch.Tensor: torch.cat,
-        np.ndarray: np.concatenate,
-    }[type(first)]
-    return operator([first, *rest])
-
-
-def _full_like(x: Ts, fill_value: Union[int, float]) -> Ts:
-    return {
-        torch.Tensor: torch.full_like,
-        np.ndarray: np.full_like,
-    }[
-        type(x)
-    ](x, fill_value)
-
-
-def _merge_labels(
-    a: None | Ts,
-    b: None | Ts,
-    op: Callable[[Ts, Ts], Ts],
-) -> None | Ts:
-    if a is None and a is None:
-        return None
-
-    if a is None:
-        a = _full_like(b, fill_value=-1)
-        return op([a, b])
-    if b is None:
-        b = _full_like(a, fill_value=-1)
-        return op([a, b])
-
-    return op([a, b])
-
-
-class RetrievalData(ABC, Generic[Ts_co]):
+class RetrievalData(abc.ABC):
     """Model search results."""
 
     __slots__ = ("scores", "indices", "labels")
     _expected_dim: int
     _str_sep: str = ""
     _repr_sep: str = ""
-    scores: Ts_co
-    indices: Ts_co
-    labels: None | Ts_co
-    meta: dict[str, Any]
+    scores: np.ndarray
+    indices: np.ndarray
+    labels: None | np.ndarray
+    meta: dict[str, typ.Any]
 
     def __init__(
         self,
-        scores: Ts_co,
-        indices: Ts_co,
-        labels: Optional[Ts_co] = None,
-        meta: Optional[dict[str, Any]] = None,
+        scores: np.ndarray,
+        indices: np.ndarray,
+        labels: None | np.ndarray = None,
+        meta: None | dict[str, typ.Any] = None,
         allow_unsafe: bool = False,
     ):
         dim = len(indices.shape)
@@ -139,15 +57,23 @@ class RetrievalData(ABC, Generic[Ts_co]):
         self.labels = labels
         self.meta = meta or {}
 
-    def to(self, target_type: Type[Ts_out]) -> RetrievalData[Ts_out]:
-        """Cast a `RetrievalData` object to a different type."""
-        output: RetrievalData = type(self)(
-            scores=_convert_array(self.scores, target_type),
-            indices=_convert_array(self.indices, target_type),
-            labels=_convert_array(self.labels, target_type) if self.labels is not None else None,
-            meta=copy.copy(self.meta),
+    @classmethod
+    def cast(
+        cls: Type[Self],
+        scores: npt.ArrayLike,
+        indices: npt.ArrayLike,
+        labels: None | npt.ArrayLike = None,
+        meta: None | dict[str, typ.Any] = None,
+        allow_unsafe: bool = False,
+    ) -> Self:
+        """Cast the input to a `RetrievalData` object."""
+        return cls(
+            scores=_cast_to_numpy(scores),
+            indices=_cast_to_numpy(indices),
+            labels=_cast_to_numpy(labels) if labels is not None else None,
+            meta=meta,
+            allow_unsafe=allow_unsafe,
         )
-        return output
 
     @abc.abstractmethod
     def __getitem__(self, item: SliceType) -> "RetrievalData":
@@ -155,7 +81,7 @@ class RetrievalData(ABC, Generic[Ts_co]):
         ...
 
     @abc.abstractmethod
-    def __iter__(self) -> Iterable["RetrievalData"]:
+    def __iter__(self) -> typ.Iterable["RetrievalData"]:
         """Iterate over the data."""
         ...
 
@@ -207,21 +133,21 @@ class RetrievalData(ABC, Generic[Ts_co]):
         }
 
 
-class RetrievalTuple(RetrievalData[Ts]):
+class RetrievalTuple(RetrievalData):
     """A single search result."""
 
     _expected_dim = 0
 
-    def __getitem__(self, item: Any) -> Any:  # noqa: ANN401
+    def __getitem__(self, item: typ.Any) -> typ.Any:  # noqa: ANN401
         """Not implemented for single samples."""
         raise NotImplementedError("RetrievalTuple is not iterable")
 
-    def __iter__(self) -> Any:  # noqa: ANN401
+    def __iter__(self) -> typ.Any:  # noqa: ANN401
         """Not implemented for single samples."""
         raise NotImplementedError("RetrievalTuple is not iterable")
 
 
-class RetrievalSample(RetrievalData[Ts_co]):
+class RetrievalSample(RetrievalData):
     """A single value of a search result."""
 
     _expected_dim = 1
@@ -235,21 +161,17 @@ class RetrievalSample(RetrievalData[Ts_co]):
             labels=self.labels[item] if self.labels is not None else None,
         )
 
-    def __iter__(self) -> Iterable[RetrievalTuple[Ts_co]]:
+    def __iter__(self) -> typ.Iterable[RetrievalTuple]:
         """Iterate over the sample dimension."""
         for i in range(len(self)):
             yield self[i]
 
-    def __add__(self, other: "RetrievalSample") -> "RetrievalBatch":
+    def __add__(self, other: Self) -> "RetrievalBatch":
         """Concatenate two samples along the sample dimension."""
-        return RetrievalBatch(
-            scores=_stack_arrays([self.scores, other.scores]),
-            indices=_stack_arrays([self.indices, other.indices]),
-            labels=_merge_labels(self.labels, other.labels, _stack_arrays),
-        )
+        return _stack_samples([self, other])
 
 
-class RetrievalBatch(RetrievalData[Ts_co]):
+class RetrievalBatch(RetrievalData):
     """A batch of search results."""
 
     _expected_dim = 2
@@ -263,7 +185,7 @@ class RetrievalBatch(RetrievalData[Ts_co]):
             labels=self.labels[item] if self.labels is not None else None,
         )
 
-    def __iter__(self) -> Iterable[RetrievalSample[Ts]]:
+    def __iter__(self) -> typ.Iterable[RetrievalSample]:
         """Iterate over the batch dimension."""
         for i in range(len(self)):
             yield self[i]
@@ -271,48 +193,26 @@ class RetrievalBatch(RetrievalData[Ts_co]):
     def __add__(self, other: "RetrievalBatch") -> "RetrievalBatch":
         """Concatenate two batches along the batch dimension."""
         return RetrievalBatch(
-            scores=_concat_arrays([self.scores, other.scores]),
-            indices=_concat_arrays([self.indices, other.indices]),
-            labels=_merge_labels(self.labels, other.labels, _concat_arrays),
+            scores=np.concatenate([self.scores, other.scores]),
+            indices=np.concatenate([self.indices, other.indices]),
+            labels=_merge_labels(self.labels, other.labels, np.concatenate),
         )
 
-    def to(self, target_type: Type[Ts_out]) -> RetrievalBatch[Ts_out]:
-        """Cast a `RetrievalBatch` object to a different type."""
+    def sorted(self) -> Self:
+        """Sort the batch by score in descending order."""
+        sort_ids = np.argsort(self.scores, axis=-1)
+        sort_ids = np.flip(sort_ids, axis=-1)
         return RetrievalBatch(
-            scores=_convert_array(self.scores, target_type),
-            indices=_convert_array(self.indices, target_type),
-            labels=_convert_array(self.labels, target_type) if self.labels is not None else None,
+            scores=np.take_along_axis(self.scores, sort_ids, axis=-1),
+            indices=np.take_along_axis(self.indices, sort_ids, axis=-1),
+            labels=np.take_along_axis(self.labels, sort_ids, axis=-1) if self.labels is not None else None,
             meta=copy.copy(self.meta),
         )
 
-    def sorted(self) -> RetrievalBatch[Ts_co]:
-        """Sort the batch by score in descending order."""
-        if isinstance(self.indices, np.ndarray):
-            if not isinstance(self.scores, np.ndarray):
-                raise TypeError(f"Incomapatible types {type(self.scores)} and {type(self.indices)}")
-            sort_ids = np.argsort(self.scores, axis=-1)
-            sort_ids = np.flip(sort_ids, axis=-1)
-            return RetrievalBatch(
-                scores=np.take_along_axis(self.scores, sort_ids, axis=-1),
-                indices=np.take_along_axis(self.indices, sort_ids, axis=-1),
-                labels=np.take_along_axis(self.labels, sort_ids, axis=-1) if self.labels is not None else None,
-                meta=copy.copy(self.meta),
-            )
-        if isinstance(self.indices, torch.Tensor):
-            if not isinstance(self.scores, torch.Tensor):
-                raise TypeError(f"Incomapatible types {type(self.scores)} and {type(self.indices)}")
-            sort_ids = torch.argsort(self.scores, dim=-1, descending=True)
-            return RetrievalBatch(
-                scores=torch.gather(self.scores, -1, sort_ids),
-                indices=torch.gather(self.indices, -1, sort_ids),
-                labels=torch.gather(self.labels, -1, sort_ids) if self.labels is not None else None,
-                meta=copy.copy(self.meta),
-            )
-
-        raise NotImplementedError(f"Sorting is not implemented for {type(self.scores)}")
-
-    def __mul__(self, value: float) -> RetrievalBatch[Ts_co]:
+    def __mul__(self, value: float) -> Self:
         """Multiply scores by a value."""
+        if not isinstance(value, Number):
+            raise TypeError(f"Expected a number, but got `{type(value)}`")
         with warnings.catch_warnings():  # TODO: move this filter to a more appropriate place
             warnings.filterwarnings("ignore", category=RuntimeWarning)
             return RetrievalBatch(
@@ -322,6 +222,22 @@ class RetrievalBatch(RetrievalData[Ts_co]):
                 meta=copy.copy(self.meta),
             )
 
+    @classmethod
+    def stack_samples(cls: Type[Self], samples: typ.Iterable[RetrievalSample]) -> Self:
+        """Stack a list of samples into a batch."""
+        return _stack_samples(samples)
+
+    @classmethod
+    def concatenate_batches(cls: Type[Self], batches: typ.Iterable[Self]) -> Self:
+        """Concatenate a list of batches into a batch."""
+        output = None
+        for batch in batches:
+            output = batch if output is None else output + batch
+
+        if output is None:
+            raise ValueError("Cannot concatenate an empty list of batches")
+        return output
+
 
 @numba.njit(cache=True)
 def _write_array(arr: np.ndarray, writes: list[np.ndarray]) -> None:
@@ -330,7 +246,7 @@ def _write_array(arr: np.ndarray, writes: list[np.ndarray]) -> None:
         arr[j, : len(y)] = y
 
 
-def _stack_np_1darrays(arrays: list[np.ndarray], fill_values: Any) -> np.ndarray:  # noqa: ANN401
+def _stack_np_1darrays(arrays: list[np.ndarray], fill_values: typ.Any) -> np.ndarray:  # noqa: ANN401
     """Stack a list of 1D arrays into a 2D array."""
     if not isinstance(arrays, list):
         raise TypeError(f"Expected a list, but got {type(arrays)}")
@@ -342,22 +258,48 @@ def _stack_np_1darrays(arrays: list[np.ndarray], fill_values: Any) -> np.ndarray
 
     # Create a new array and fill it with the fill value
     output = np.full((max_len, batch_size), fill_values, dtype=arrays[0].dtype)
-    _write_array(output, List(arrays))
+    _write_array(output, List(arrays))  # type: ignore
 
     return output
 
 
-def stack_samples(samples: Iterable[RetrievalSample[Ts]]) -> RetrievalBatch[np.ndarray]:
+def _stack_samples(samples: typ.Iterable[RetrievalSample]) -> RetrievalBatch:
     """Stack a list of samples into a batch."""
     scores = [sample.scores for sample in samples]
     indices = [sample.indices for sample in samples]
     labels = [sample.labels for sample in samples]
     if any(lbl is None for lbl in labels):
         labels = None
-    if not isinstance(scores[0], np.ndarray):
-        raise TypeError(f"Expected a list of numpy arrays, but got {type(scores[0])}")
     return RetrievalBatch(
         scores=_stack_np_1darrays(scores, fill_values=-math.inf),  # type: ignore
         indices=_stack_np_1darrays(indices, fill_values=-1),  # type: ignore
         labels=_stack_np_1darrays(labels, -1) if labels is not None else None,  # type: ignore
     )
+
+
+def _type_repr(x: typ.Any) -> str:  # noqa: ANN401
+    return f"{type(x).__name__}"
+
+
+def _array_repr(x: np.ndarray | torch.Tensor) -> str:
+    return f"{type(x).__name__}(shape={x.shape}, dtype={x.dtype}))"
+
+
+def _merge_labels(
+    a: None | np.ndarray,
+    b: None | np.ndarray,
+    op: typ.Callable[[list[np.ndarray]], np.ndarray],
+) -> None | np.ndarray:
+    if a is None and a is None:
+        return None
+    if a is None:
+        a = np.full_like(b, fill_value=-1)
+    if b is None:
+        b = np.full_like(a, fill_value=-1)
+    return op([a, b])
+
+
+def _cast_to_numpy(x: npt.ArrayLike) -> np.ndarray:
+    if isinstance(x, torch.Tensor):
+        return x.cpu().numpy()
+    return np.asarray(x)

@@ -1,5 +1,7 @@
 """Tools for indexing and searching knowledge bases."""
-from __future__ import annotations
+
+
+from vod_types.retrieval import RetrievalBatch, RetrievalData, RetrievalSample
 
 from .base import (
     SearchClient,
@@ -26,11 +28,6 @@ from .hybrid_search import (
 from .qdrant_search import (
     QdrantSearchClient,
     QdrantSearchMaster,
-)
-from .rdtypes import (
-    RetrievalBatch,
-    RetrievalData,
-    RetrievalSample,
 )
 from .sharded_search import (
     ShardedSearchClient,

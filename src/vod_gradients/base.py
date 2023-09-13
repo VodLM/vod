@@ -1,7 +1,5 @@
-from __future__ import annotations
-
 import abc
-from typing import Any, Callable, Optional
+import typing as typ
 
 import lightning as L
 import pydantic
@@ -21,17 +19,17 @@ class Gradients:
     def forward_backward(
         self,
         batch: dict[str, torch.Tensor],
-        fwd_fn: None | Callable[[dict], dict],
+        fwd_fn: None | typ.Callable[[dict], dict],
         fabric: None | L.Fabric = None,
-        loss_scaler: Optional[float] = None,
-        backward_kwargs: Optional[dict] = None,
+        loss_scaler: None | float = None,
+        backward_kws: None | dict[str, typ.Any] = None,
         no_backward_sync: bool = False,
-        fwd_kwargs: None | dict = None,
-        **kwargs: Any,
+        fwd_kws: None | dict = None,
+        **kws: typ.Any,
     ) -> dict[str, torch.Tensor]:
         """Run a forward pass with a backward pass."""
-        fwd_kwargs = fwd_kwargs or {}
-        grad_output = fwd_fn(batch, **fwd_kwargs) if fwd_fn is not None else {}
+        fwd_kws = fwd_kws or {}
+        grad_output = fwd_fn(batch, **fwd_kws) if fwd_fn is not None else {}
 
         # compute the loss
         loss = grad_output["loss"]
@@ -39,12 +37,12 @@ class Gradients:
             loss *= loss_scaler
 
         # backward pass
-        backward_kwargs = backward_kwargs or {}
+        backward_kws = backward_kws or {}
         if fabric is None:
-            loss.backward(**backward_kwargs)
+            loss.backward(**backward_kws)
         else:
             with fabric.no_backward_sync(fwd_fn, enabled=no_backward_sync):  # type: ignore
-                fabric.backward(loss, **backward_kwargs)
+                fabric.backward(loss, **backward_kws)
 
         return grad_output
 
@@ -57,8 +55,8 @@ class GradientInputs(pydantic.BaseModel):
 
         arbitrary_types_allowed = True
 
-    hq: Optional[torch.Tensor] = None
-    hd: Optional[torch.Tensor] = None
+    hq: None | torch.Tensor = None
+    hd: None | torch.Tensor = None
     targets: torch.Tensor = pydantic.Field(
         ...,
         description="Retrieval labels.",
@@ -69,17 +67,17 @@ class GradientInputs(pydantic.BaseModel):
         description="Retrieval scores.",
         alias="section.score",
     )
-    sparse: Optional[torch.Tensor] = pydantic.Field(
+    sparse: None | torch.Tensor = pydantic.Field(
         None,
         description="Sparse retrieval scores.",
         alias="section.sparse",
     )
-    dense: Optional[torch.Tensor] = pydantic.Field(
+    dense: None | torch.Tensor = pydantic.Field(
         None,
         description="dense retrieval scores.",
         alias="section.dense",
     )
 
-    def pprint(self, **kwargs: Any) -> None:
+    def pprint(self, **kws: typ.Any) -> None:
         """Pretty print the inputs."""
-        pipes.pprint_batch({k: v for k, v in self.dict().items() if v is not None}, **kwargs)
+        pipes.pprint_batch({k: v for k, v in self.dict().items() if v is not None}, **kws)

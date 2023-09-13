@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import asyncio
 import collections
 import contextlib
@@ -15,6 +13,7 @@ import elasticsearch as es
 import numpy as np
 import rich
 import rich.progress
+import vod_types as vt
 from elasticsearch import helpers as es_helpers
 from loguru import logger
 from vod_configs.py.es_body import (
@@ -24,7 +23,7 @@ from vod_configs.py.es_body import (
     SUBSET_ID_KEY,
     validate_es_body,
 )
-from vod_search import base, rdtypes
+from vod_search import base
 
 es_logger = logging.getLogger("elastic_transport")
 es_logger.setLevel(logging.WARNING)
@@ -83,12 +82,12 @@ class ElasticsearchClient(base.SearchClient):
         self,
         *,
         text: list[str],
-        vector: Optional[rdtypes.Ts] = None,  # noqa: ARG
+        vector: None | np.ndarray = None,  # noqa
         subset_ids: Optional[list[list[str]]] = None,
         ids: Optional[list[list[str]]] = None,
         shard: Optional[list[str]] = None,  # noqa: ARG002
         top_k: int = 3,
-    ) -> rdtypes.RetrievalBatch[np.ndarray]:
+    ) -> vt.RetrievalBatch:
         """Search elasticsearch for the batch of text queries using `msearch`. NB: `vector` is not used here."""
         start_time = time.time()
         if self.support_subsets and subset_ids is None:
@@ -145,7 +144,7 @@ class ElasticsearchClient(base.SearchClient):
         scores = np.stack(scores)
         labels = (scores > -np.inf).astype(np.int64) if ids is not None else None
 
-        return rdtypes.RetrievalBatch(
+        return vt.RetrievalBatch(
             indices=indices,
             scores=scores,
             labels=labels,
@@ -248,14 +247,14 @@ class ElasticSearchMaster(base.SearchMaster[ElasticsearchClient]):
         section_ids: Optional[Iterable[str]] = None,
         host: str = "http://localhost",
         port: int = 9200,  # hardcoded for now
-        index_name: Optional[str] = None,
+        index_name: None | str = None,
         input_size: Optional[int] = None,
         persistent: bool = False,
         exist_ok: bool = False,
         skip_setup: bool = False,
         free_resources: bool = False,
         es_body: Optional[dict] = None,
-        language: Optional[str] = None,
+        language: None | str = None,
         **proc_kwargs: Any,
     ):
         super().__init__(skip_setup=skip_setup, free_resources=free_resources)

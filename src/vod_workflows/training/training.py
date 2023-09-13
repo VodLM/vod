@@ -1,12 +1,10 @@
-from __future__ import annotations
-
 import collections
 import dataclasses
 import functools
 import multiprocessing as mp
 import pathlib
 import time
-import typing
+import typing as typ
 from multiprocessing.managers import DictProxy
 
 import lightning as L
@@ -14,20 +12,22 @@ import numpy as np
 import rich
 import torch
 import transformers
+import vod_types as vt
 from lightning.fabric import wrappers as fabric_wrappers
 from loguru import logger
 from rich import progress
 from torch.utils import data as torch_data
-from vod_tools import dstruct, pipes
+from vod_tools import pipes
 from vod_tools.misc.progress import IterProgressBar
+from vod_tools.ts_factory.ts_factory import TensorStoreFactory
 from vod_workflows.utils import helpers, io
 
 from src import vod_configs, vod_dataloaders, vod_datasets, vod_models, vod_search
 
-K = typing.TypeVar("K")
+K = typ.TypeVar("K")
 
 
-class OnFirstBatchCallback(typing.Protocol):
+class OnFirstBatchCallback(typ.Protocol):
     """A callback that is called on the first batch of the first epoch."""
 
     def __call__(self, fabric: L.Fabric, batch: dict[str, torch.Tensor], ranker: vod_models.Ranker) -> None:
@@ -48,23 +48,23 @@ def index_and_train(
     *,
     ranker: vod_models.Ranker,
     optimizer: torch.optim.Optimizer,
-    scheduler: typing.Optional[torch.optim.lr_scheduler._LRScheduler] = None,
+    scheduler: None | torch.optim.lr_scheduler._LRScheduler = None,
     trainer_state: helpers.TrainerState,
     fabric: L.Fabric,
     train_queries: list[vod_configs.QueriesDatasetConfig],
     val_queries: list[vod_configs.QueriesDatasetConfig],
     sections: list[vod_configs.SectionsDatasetConfig],
-    vectors: None | dict[vod_configs.BaseDatasetConfig, dstruct.TensorStoreFactory],
+    vectors: None | dict[vod_configs.BaseDatasetConfig, TensorStoreFactory],
     tokenizer: transformers.PreTrainedTokenizer | transformers.PreTrainedTokenizerFast,
     collate_config: vod_configs.RetrievalCollateConfig,
     train_dataloader_config: vod_configs.DataLoaderConfig,
     eval_dataloader_config: vod_configs.DataLoaderConfig,
-    dl_sampler: typing.Optional[vod_dataloaders.SamplerFactory] = None,
+    dl_sampler: None | vod_dataloaders.DlSamplerFactory = None,
     cache_dir: pathlib.Path,
     serve_on_gpu: bool = False,
-    checkpoint_path: typing.Optional[str] = None,
-    on_first_batch_fn: typing.Optional[OnFirstBatchCallback] = None,
-    pbar_keys: typing.Optional[list[str]] = None,
+    checkpoint_path: None | str = None,
+    on_first_batch_fn: None | OnFirstBatchCallback = None,
+    pbar_keys: None | list[str] = None,
 ) -> helpers.TrainerState:
     """Index the sections and train the ranker."""
     barrier_fn = functools.partial(helpers.barrier_fn, fabric=fabric)
@@ -101,7 +101,7 @@ def index_and_train(
     with vod_search.build_hybrid_search_engine(
         shard_names=[cfg.identifier for cfg in sections],
         sections=[vod_datasets.load_sections(cfg) for cfg in sections],  # type: ignore
-        vectors=[dstruct.as_lazy_array(vectors[d]) for d in sections] if vectors else None,  # type: ignore
+        vectors=[vt.as_lazy_array(vectors[d]) for d in sections] if vectors else None,  # type: ignore
         configs=[cfg.search for cfg in sections],  # type: ignore
         cache_dir=cache_dir,
         dense_enabled=helpers.is_engine_enabled(parameters, "dense"),
@@ -167,7 +167,7 @@ def _training_loop(  # noqa: C901, PLR0915
     fabric: L.Fabric,
     train_dl: torch_data.DataLoader,
     val_dl: torch_data.DataLoader,
-    scheduler: typing.Optional[torch.optim.lr_scheduler._LRScheduler] = None,
+    scheduler: None | torch.optim.lr_scheduler._LRScheduler = None,
     checkpoint_path: None | str = None,
     on_first_batch_fn: None | OnFirstBatchCallback = None,
     pbar_keys: None | list[str] = None,
@@ -369,7 +369,7 @@ def _validation_loop(
     return dict(metrics)
 
 
-def _format_metric(v: typing.Any) -> typing.Any:  # noqa: ANN401
+def _format_metric(v: typ.Any) -> typ.Any:  # noqa: ANN401
     if isinstance(v, torch.Tensor):
         return v.detach().mean().cpu()
 
@@ -380,7 +380,7 @@ class Chrono:
     """A simple chronometer."""
 
     _laps: list[tuple[float, float]]
-    _start_time: typing.Optional[float]
+    _start_time: None | float
 
     def __init__(self, buffer_size: int = 100) -> None:
         self._laps = []
@@ -428,9 +428,9 @@ def _extract_learning_rates(optimizer: torch.optim.Optimizer) -> dict[str, float
 
 def _pbar_info(
     state: helpers.TrainerState,
-    train_metrics: typing.Optional[dict[str, typing.Any]] = None,
-    eval_metrics: typing.Optional[dict[str, typing.Any]] = None,
-    keys: typing.Optional[list[str]] = None,
+    train_metrics: None | dict[str, typ.Any] = None,
+    eval_metrics: None | dict[str, typ.Any] = None,
+    keys: None | list[str] = None,
 ) -> str:
     keys = keys or ["loss"]
     desc = (
