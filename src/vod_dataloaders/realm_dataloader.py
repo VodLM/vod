@@ -1,0 +1,167 @@
+import typing as typ
+
+import datasets
+import numpy as np
+import transformers
+import vod_configs
+import vod_search
+import vod_types as vt
+from torch.utils import data as torch_data
+from torch.utils.data.dataloader import _worker_init_fn_t
+from typing_extensions import Self, Type
+from vod_dataloaders.tools.dl_sampler import DlSamplerFactory
+from vod_dataloaders.tools.utils import VECTOR_KEY
+from vod_search import ShardName
+
+from .realm_collate import RealmCollate
+
+T = typ.TypeVar("T")
+K = typ.TypeVar("K")
+D = typ.TypeVar("D", bound=vt.Sequence)
+
+
+class RealmDataloader(torch_data.DataLoader[dict[str, typ.Any]]):
+    """A subclass of `torch.utils.data.DataLoader` to implement VOD's magic."""
+
+    @classmethod
+    def factory(  # noqa: ANN206
+        cls: Type[Self],
+        *,
+        queries: dict[K, tuple[ShardName, vt.DictsSequence]],
+        queries_vectors: None | dict[K, vt.Sequence[np.ndarray]] = None,
+        # Parameters for the Collate function
+        sections: dict[ShardName, vt.DictsSequence],
+        search_client: vod_search.HybridSearchClient,
+        tokenizer: transformers.PreTrainedTokenizer | transformers.PreTrainedTokenizerFast,
+        collate_config: vod_configs.RetrievalCollateConfig,
+        parameters: None | typ.MutableMapping = None,
+        # Base `torch.utils.data.Dataloader` arguments
+        batch_size: int | None = 1,
+        shuffle: bool | None = None,
+        sampler: torch_data.Sampler | typ.Iterable | DlSamplerFactory | None = None,
+        batch_sampler: torch_data.Sampler[typ.Sequence] | typ.Iterable[typ.Sequence] | None = None,
+        num_workers: int = 0,
+        pin_memory: bool = False,
+        drop_last: bool = False,
+        timeout: float = 0,
+        worker_init_fn: _worker_init_fn_t | None = None,
+        multiprocessing_context=None,  # noqa: ANN001
+        prefetch_factor: int | None = None,
+        persistent_workers: bool = False,
+        pin_memory_device: str = "",
+    ):
+        """Instantiate a `RealmDataloader`.
+
+        NB: We don't override the `__init__` method because it breaks
+            some of the functionality of `torch.utils.data.DataLoader` if not done correctly.
+        """
+        queries_shards = {s for s, _ in queries.values()}
+        if queries_shards != set(search_client.shard_list):
+            raise ValueError(
+                "The keys (shard) of `queries` and `search_client` must match. "
+                f"Found {queries_shards} and {search_client.shard_list}"
+            )
+        if queries_shards != sections.keys():
+            raise ValueError("The keys (shard) of `queries` and `sections` must match.")
+
+        # Validate the vectors
+        if queries_vectors is not None and set(queries_vectors.keys()) != set(queries.keys()):
+            raise ValueError("The keys (dataset ID) of `queries_vectors` and `queries` must match.")
+        queries_vectors = queries_vectors or {}
+
+        # Augment the queries with the shard information
+        # This is used so the collate function can acces
+        #      the `TARGET_SHARD_KEY`: str field
+        #      and the `VECTOR_KEY`: np.ndarray field.
+        queries_with_extras: list[vt.DictsSequence] = [
+            _WithExtrasAndVectors(
+                dataset=dset,
+                vectors=queries_vectors.get(key, None),
+                extras={vod_configs.TARGET_SHARD_KEY: shard},
+            )
+            for key, (shard, dset) in queries.items()
+        ]
+
+        # Concatenate the queries into a single sequence
+        concatenated_queries = _concatenate_dsets(queries_with_extras)
+
+        # Concatenate the sections into a single sequence
+        concatenated_sections = _concatenate_dsets(
+            [sections[shard] for shard in search_client.shard_list],  # type: ignore
+        )
+
+        # Instantiate the Collate function
+        collate_fn = RealmCollate(
+            tokenizer=tokenizer,
+            search_client=search_client,
+            sections=concatenated_sections,
+            config=collate_config,
+            parameters=parameters,
+        )
+
+        # Instantiate the Sampler
+        if isinstance(sampler, DlSamplerFactory):
+            sampler = sampler(concatenated_sections)
+
+        return cls(
+            dataset=concatenated_queries,  # type: ignore
+            batch_size=batch_size,
+            shuffle=shuffle,
+            sampler=sampler,
+            batch_sampler=batch_sampler,
+            num_workers=num_workers,
+            collate_fn=collate_fn,
+            pin_memory=pin_memory,
+            drop_last=drop_last,
+            timeout=timeout,
+            worker_init_fn=worker_init_fn,
+            multiprocessing_context=multiprocessing_context,
+            prefetch_factor=prefetch_factor,
+            persistent_workers=persistent_workers,
+            pin_memory_device=pin_memory_device,
+        )
+
+
+class _WithExtrasAndVectors(vt.DictsSequence[T]):
+    """A wrapper around a dataset to add extra fields and vectors to a sampled row."""
+
+    __slots__ = ("dataset", "vectors", "vector_key", "extras")
+
+    def __init__(
+        self,
+        *,
+        dataset: vt.DictsSequence,
+        vectors: None | vt.Sequence[T],
+        vector_key: str = VECTOR_KEY,
+        extras: dict[str, T],
+    ) -> None:
+        self.dataset = dataset
+        self.vectors = vectors
+        self.vector_key = vector_key
+        self.extras = extras or {}
+
+    def __getitem__(self, index: vt.SliceType) -> dict[str, T]:
+        row = self.dataset[index]
+        row.update(self.extras)
+        if self.vectors is not None:
+            row[self.vector_key] = self.vectors[index]
+        return row
+
+    def __len__(self) -> int:
+        return len(self.dataset)
+
+    def _vector_desc(self) -> str:
+        return f"[{len(self.vectors)},?]" if self.vectors is not None else "None"
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}(vectors={self._vector_desc()}, extras={self.extras}, dataset={self.dataset})"
+
+
+def _concatenate_dsets(parts: list[D]) -> D:
+    """Concatenate a list of datasets."""
+    if len(parts) > 1:
+        if all(isinstance(p, datasets.Dataset) for p in parts):
+            return datasets.concatenate_datasets(parts)  # type: ignore
+        return vt.ConcatenatedSequences(parts)  # type: ignore
+
+    return parts[0]

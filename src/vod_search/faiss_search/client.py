@@ -66,9 +66,9 @@ class FaissClient(base.SearchClient):
         *,
         vector: np.ndarray,
         text: None | list[str] = None,  # noqa: ARG
-        ids: None | list[list[str]] = None,  # noqa: ARG
-        subset_ids: None | list[list[str]] = None,  # noqa: ARG
-        shard: None | list[str] = None,  # noqa: ARG
+        subset_ids: None | list[list[base.SubsetId]] = None,  # noqa: ARG
+        ids: None | list[list[base.SectionId]] = None,  # noqa: ARG
+        shard: None | list[base.ShardName] = None,  # noqa: ARG
         top_k: int = 3,
         timeout: float = 120,
     ) -> vt.RetrievalBatch:

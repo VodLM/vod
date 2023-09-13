@@ -1,45 +1,28 @@
 import contextlib
 import dataclasses
 import functools
-import typing
-from multiprocessing.managers import DictProxy
-from typing import Any, Callable, Generic, Optional, Protocol, TypeVar
+import typing as typ
 
-import datasets
 import lightning as L
 import numpy as np
 import torch
-import transformers
+import vod_configs
 import vod_datasets
 import vod_types as vt
 from lightning.fabric import wrappers as fabric_wrappers
 from loguru import logger
-from torch.utils import data as torch_data
 from typing_extensions import Self, Type
+from vod_search.base import ShardName
 from vod_tools.misc.schedule import BaseSchedule, schedule_factory
 from vod_tools.ts_factory.ts_factory import TensorStoreFactory
 
-from src import vod_configs, vod_dataloaders, vod_search
-
-T = TypeVar("T")
-K = TypeVar("K")
-D = TypeVar("D", bound=vt.Sequence)
-
-
-def _maybe_concatenate_parts(parts: list[D]) -> D:
-    if len(parts) > 1:
-        if all(isinstance(p, datasets.Dataset) for p in parts):
-            data_ = datasets.concatenate_datasets(parts)  # type: ignore
-        else:
-            data_ = vt.ConcatenatedSizedDataset(parts)  # type: ignore
-    else:
-        data_ = parts[0]
-
-    return data_  # type: ignore
+T = typ.TypeVar("T")
+K = typ.TypeVar("K")
+D = typ.TypeVar("D", bound=vt.Sequence)
 
 
 @dataclasses.dataclass
-class RetrievalTask(Generic[K]):
+class RetrievalTask(typ.Generic[K]):
     """A retrieval task with queries, sections and the config required to build a search engine."""
 
     queries: list[vod_configs.QueriesDatasetConfig]
@@ -47,11 +30,11 @@ class RetrievalTask(Generic[K]):
     vectors: None | dict[vod_configs.BaseDatasetConfig, TensorStoreFactory]
 
 
-def none_ok(func: Callable[..., T]) -> Callable[..., Optional[T]]:
+def none_ok(func: typ.Callable[..., T]) -> typ.Callable[..., None | T]:
     """Decorator that allows `None` as an input."""
 
     @functools.wraps(func)
-    def wrapper(*args: Any, **kwargs: Any) -> Optional[T]:
+    def wrapper(*args: typ.Any, **kwargs: typ.Any) -> None | T:
         if args[0] is None:
             return None
         return func(*args, **kwargs)
@@ -62,171 +45,63 @@ def none_ok(func: Callable[..., T]) -> Callable[..., Optional[T]]:
 maybe_as_lazy_array = none_ok(vt.as_lazy_array)
 
 
-def is_engine_enabled(parameters: Optional[dict | DictProxy], engine: str) -> bool:
+def is_engine_enabled(parameters: None | typ.MutableMapping, engine: str) -> bool:
     """Check if an engine is enabled."""
     if parameters is None:
         return True
     return parameters.get(engine, 1.0) >= 0
 
 
-class _WithExtrasAttributes(vt.DictsSequence):
-    """A class that adds extra attributes to the accessed items."""
-
-    __slots__ = ("data", "extras")
-
-    def __init__(
-        self,
-        *,
-        data: vt.DictsSequence,
-        extras: dict[str, Any],
-    ) -> None:
-        self.data = data
-        self.extras = extras or {}
-
-    def __len__(self) -> int:
-        """Get the length data the dataset."""
-        return len(self.data)
-
-    def __getitem__(self, index: int | list[int] | slice) -> dict[str, Any]:
-        """Get an item from the dataset and add the extras."""
-        item = self.data[index]
-        item.update(self.extras)
-        return item
-
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}(extras={self.extras}, data={self.data})"
-
-
 @dataclasses.dataclass(frozen=True)
-class PrecomputedDsetVectors:
-    """Holds the vectors for a given dataset and field."""
+class QueriesWithVectors:
+    """Holds a dict of queries and their vectors."""
 
-    questions: TensorStoreFactory
-    sections: TensorStoreFactory
-
-
-def _load_dataset_with_target_shard(config: vod_configs.BaseDatasetConfig) -> vt.DictsSequence:
-    """Load the dataset and potentially wrap it to include the target shard name."""
-    if isinstance(config, vod_configs.SectionsDatasetConfig):
-        return vod_datasets.load_sections(config)  # type: ignore
-    if isinstance(config, vod_configs.QueriesDatasetConfig):
-        data: datasets.Dataset = vod_datasets.load_queries(config)
-        return _WithExtrasAttributes(data=data, extras={vod_configs.TARGET_SHARD_KEY: config.link})
-
-    raise TypeError(f"Unsupported dataset config: `{config}`")
-
-
-@dataclasses.dataclass(frozen=True)
-class ShardedDsetWithVectors:
-    """Holds a dataset and its vectors."""
-
-    data: vt.DictsSequence
-    vectors: None | vt.Sequence[np.ndarray]
-
-    def __post_init__(self):
-        """Check that the dataset and vectors have the same length."""
-        if self.vectors is not None and len(self.data) != len(self.vectors):
-            raise ValueError(
-                f"Dataset and vectors must have the same length, "
-                f"but got {len(self.data)} and {len(self.vectors)}, respectively."
-            )
+    queries: dict[str, tuple[ShardName, vt.DictsSequence]]
+    vectors: None | dict[str, vt.Sequence[np.ndarray]]
 
     @classmethod
     def from_configs(
         cls: Type[Self],
-        *,
-        data: list[vod_configs.QueriesDatasetConfig | vod_configs.SectionsDatasetConfig],
-        vectors: None | np.ndarray | list[TensorStoreFactory] | list[vt.Sequence[np.ndarray]] | list[np.ndarray] = None,
+        queries: list[vod_configs.QueriesDatasetConfig],
+        vectors: None | dict[vod_configs.BaseDatasetConfig, TensorStoreFactory],
     ) -> Self:
-        """Load multiple dataset shards from their respective configs.
-
-        NB: query dataset are augmented such that each item has a `__LINKED_SHARD__` key.
-        This key is necessary for the sharded search engine to function. It would be great
-        to find a better way to do this. For instance, implementing a custom `torch.utils.data.DataLoader`,
-        which would automatically concatenate datasets, could do the trick.
-        """
-        if vectors is not None and len(data) != len(vectors):
-            raise ValueError(
-                f"Dataset and vectors must have the same length, "
-                f"but got {len(data)} and {len(vectors)}, respectively."
-            )
-
-        # Load the datasets and concatenate them
-        data_ = _maybe_concatenate_parts([_load_dataset_with_target_shard(cfg) for cfg in data])
-
-        # Concatenate the vectors
-        vectors_ = _maybe_concatenate_parts([vt.as_lazy_array(v) for v in vectors]) if vectors is not None else None
-
+        """Load a list of datasets from their respective configs."""
+        key_map = {cfg.hexdigest(): cfg for cfg in queries}
+        queries_by_key = {key: (cfg.link, vod_datasets.load_queries(cfg)) for key, cfg in key_map.items()}
+        vectors_by_key = (
+            {key: vt.as_lazy_array(vectors[cfg]) for key, cfg in key_map.items()} if vectors is not None else None
+        )
         return cls(
-            data=data_,  # type: ignore
-            vectors=vectors_,
-        )
-
-    def __str__(self) -> str:
-        """Return a string representation of the object."""
-        return (
-            f"{type(self).__name__}(data.len={len(self.data)}, "
-            f"vectors.len={len(self.vectors) if self.vectors is not None else None})"
+            queries=queries_by_key,  # type: ignore
+            vectors=vectors_by_key,  # type: ignore
         )
 
 
-def instantiate_retrieval_dataloader(
-    *,
-    queries: ShardedDsetWithVectors,
-    sections: ShardedDsetWithVectors,
-    tokenizer: transformers.PreTrainedTokenizer | transformers.PreTrainedTokenizerFast,
-    search_client: vod_search.HybridSearchClient,
-    collate_config: vod_configs.RetrievalCollateConfig,
-    dataloader_config: vod_configs.DataLoaderConfig,
-    parameters: Optional[dict | DictProxy],
-    dl_sampler: typing.Optional[vod_dataloaders.DlSamplerFactory] = None,
-) -> torch_data.DataLoader[dict[str, Any]]:
-    """Instantiate a dataloader for the retrieval task."""
-    collate_fn = vod_dataloaders.RealmCollate(
-        tokenizer=tokenizer,
-        sections=sections.data,
-        search_client=search_client,
-        config=collate_config,
-        parameters=parameters,
-    )
-    dataset = IndexWithVectors(
-        dataset=queries.data,
-        vectors=queries.vectors,
-        vector_key="vector",
-    )
-    kws = dataloader_config.dict()
-    if dl_sampler is not None:
-        kws["sampler"] = dl_sampler(queries.data)
-        kws["shuffle"] = False
-    return torch_data.DataLoader(dataset=dataset, collate_fn=collate_fn, **kws)  # type: ignore
+@dataclasses.dataclass(frozen=True)
+class SectionsWithVectors(typ.Generic[K]):
+    """Holds a dict of sections and their vectors."""
 
+    sections: dict[ShardName, vt.DictsSequence]
+    vectors: None | dict[ShardName, vt.Sequence[np.ndarray]]
+    search_configs: dict[ShardName, vod_configs.HybridSearchFactoryConfig]
 
-class IndexWithVectors(vt.DictsSequence):
-    """A wrapper around a dataset that adds vectors to each accessed item."""
-
-    __slots__ = ("dataset", "vectors", "vector_key")
-
-    def __init__(
-        self,
-        *,
-        dataset: vt.DictsSequence,
-        vectors: None | vt.Sequence[np.ndarray],
-        vector_key: str = "vector",
-    ) -> None:
-        self.dataset = dataset
-        self.vectors = vectors
-        self.vector_key = vector_key
-
-    def __len__(self) -> int:
-        """Get the length of the dataset."""
-        return len(self.dataset)
-
-    def __getitem__(self, index: int | list[int] | slice) -> dict[str, Any]:
-        """Get an item from the dataset and inhject the vector."""
-        item = self.dataset[index]
-        if self.vectors is not None:
-            item[self.vector_key] = self.vectors[index]
-        return item
+    @classmethod
+    def from_configs(
+        cls: Type[Self],
+        sections: list[vod_configs.SectionsDatasetConfig],
+        vectors: None | dict[vod_configs.BaseDatasetConfig, TensorStoreFactory],
+    ) -> Self:
+        """Load a list of datasets from their respective configs."""
+        sections_by_shard_name = {cfg.identifier: vod_datasets.load_sections(cfg) for cfg in sections}
+        vectors_by_shard_name = (
+            {cfg.identifier: vt.as_lazy_array(vectors[cfg]) for cfg in sections} if vectors is not None else None
+        )
+        configs_by_shard_name = {cfg.identifier: cfg.search for cfg in sections}
+        return cls(
+            sections=sections_by_shard_name,  # type: ignore
+            vectors=vectors_by_shard_name,  # type: ignore
+            search_configs=configs_by_shard_name,  # type: ignore
+        )
 
 
 def barrier_fn(name: str, fabric: L.Fabric) -> None:
@@ -249,32 +124,32 @@ class TrainerState:
     epoch: int
     pidx: int
     period: int | list[int]
-    period_max_steps: Optional[int]
+    period_max_steps: None | int
     max_steps: int
     parameters: dict[str, BaseSchedule] = dataclasses.field(default_factory=dict)
     val_check_interval: int = 500
     log_interval: int = 100
     accumulate_grad_batches: int = 1
-    gradient_clip_val: Optional[float] = None
-    n_max_eval: Optional[int] = None
+    gradient_clip_val: None | float = None
+    n_max_eval: None | int = None
 
     def get_parameters(self) -> dict[str, float]:
         """Return the parameters for a given step."""
         return {k: v(self.step) for k, v in self.parameters.items()}
 
-    def __getstate__(self) -> dict[str, Any]:
+    def __getstate__(self) -> dict[str, typ.Any]:
         """Return the state of the object."""
         state = dataclasses.asdict(self)
         state["parameters"] = {k: v.model_dump() for k, v in self.parameters.items()}
         return state
 
-    def __setstate__(self, state: dict[str, Any]) -> None:
+    def __setstate__(self, state: dict[str, typ.Any]) -> None:
         """Set the state of the object."""
         state["parameters"] = {k: schedule_factory(**v) for k, v in state["parameters"].items()}
         self.__dict__.update(state)
 
 
-class _OptimizerWrapper(Protocol):
+class _OptimizerWrapper(typ.Protocol):
     @property
     def optimizer(self) -> torch.optim.Optimizer:
         ...

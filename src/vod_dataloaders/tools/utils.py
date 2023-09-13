@@ -10,6 +10,8 @@ import vod_search
 
 T = typ.TypeVar("T")
 
+VECTOR_KEY: str = "__vector__"
+
 
 class BlockTimer:
     """A context manager for timing code blocks."""

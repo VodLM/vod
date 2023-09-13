@@ -1,22 +1,43 @@
 import asyncio
+import copy
 import typing as typ
 
 import numpy as np
 import vod_types as vt
 from typing_extensions import Self
-from vod_search import base
+
+from .base import (
+    SearchClient,
+    SearchMaster,
+    SectionId,
+    ShardName,
+    SubsetId,
+)
+
+ClientName: typ.TypeAlias = str
 
 
-class HybridSearchClient(base.SearchClient):
+class HybridSearchClient(SearchClient):
     """A client to interact with a search server."""
 
-    clients: dict[str, base.SearchClient]
+    clients: dict[ClientName, SearchClient]
+    _shard_list: list[ShardName]
 
-    def __init__(self, clients: dict[str, base.SearchClient]) -> None:
+    def __init__(
+        self,
+        clients: dict[ClientName, SearchClient],
+        shard_list: list[ShardName],
+    ) -> None:
         self.clients = clients
+        self._shard_list = shard_list
+
+    @property
+    def shard_list(self) -> list[ShardName]:
+        """Get the available shards."""
+        return copy.copy(self._shard_list)
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}(clients={self.clients})"
+        return f"{type(self).__name__}(clients={self.clients}, shards={self.shard_list})"
 
     @property
     def requires_vectors(self) -> bool:
@@ -32,11 +53,11 @@ class HybridSearchClient(base.SearchClient):
         *,
         text: list[str],
         vector: None | np.ndarray = None,
-        subset_ids: None | list[list[str]] = None,
-        ids: None | list[list[str]] = None,
-        shard: None | list[str] = None,
+        subset_ids: None | list[list[SubsetId]] = None,
+        ids: None | list[list[SectionId]] = None,
+        shard: None | list[ShardName] = None,
         top_k: int = 3,
-    ) -> dict[str, vt.RetrievalBatch]:
+    ) -> dict[ClientName, vt.RetrievalBatch]:
         """Search the server given a batch of text and/or vectors."""
         return {
             name: client.search(
@@ -55,11 +76,11 @@ class HybridSearchClient(base.SearchClient):
         *,
         text: list[str],
         vector: None | np.ndarray = None,
-        subset_ids: None | list[list[str]] = None,
-        ids: None | list[list[str]] = None,
-        shard: None | list[str] = None,
+        subset_ids: None | list[list[SubsetId]] = None,
+        ids: None | list[list[SectionId]] = None,
+        shard: None | list[ShardName] = None,
         top_k: int = 3,
-    ) -> dict[str, vt.RetrievalBatch]:
+    ) -> dict[ClientName, vt.RetrievalBatch]:
         """Search the server given a batch of text and/or vectors."""
 
         def search_fn(args: dict[str, typ.Any]) -> vt.RetrievalBatch:
@@ -89,21 +110,29 @@ class HybridSearchClient(base.SearchClient):
         return dict(zip(names, results))
 
 
-class HyrbidSearchMaster(base.SearchMaster):
+class HyrbidSearchMaster(SearchMaster):
     """Handle multiple search servers."""
 
-    servers: dict[str, base.SearchMaster]
+    servers: dict[str, SearchMaster]
+    _shard_list: list[ShardName]
 
     def __init__(
         self,
-        servers: dict[str, base.SearchMaster],
+        servers: dict[str, SearchMaster],
         skip_setup: bool = False,
         free_resources: bool = False,
+        shard_list: None | list[ShardName] = None,
     ):
         """Initialize the search master."""
         self.skip_setup = skip_setup
         self.servers = servers
         self.free_resources = free_resources
+        self._shard_list = shard_list or []
+
+    @property
+    def shard_list(self) -> list[ShardName]:
+        """Get the available shards."""
+        return copy.copy(self._shard_list)
 
     def __enter__(self) -> Self:
         """Start the servers."""
@@ -125,7 +154,10 @@ class HyrbidSearchMaster(base.SearchMaster):
 
     def get_client(self) -> HybridSearchClient:
         """Get the client for interacting with the Faiss server."""
-        return HybridSearchClient(clients={name: server.get_client() for name, server in self.servers.items()})
+        return HybridSearchClient(
+            clients={name: server.get_client() for name, server in self.servers.items()},
+            shard_list=self.shard_list,
+        )
 
     def _free_resources(self) -> None:
         for server in self.servers.values():

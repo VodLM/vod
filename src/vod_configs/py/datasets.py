@@ -119,6 +119,10 @@ class BaseDatasetConfig(StrictModel):
         """Hash the object based on its name and split."""
         return hash(self.descriptor)
 
+    def hexdigest(self) -> str:
+        """Return the hexdigest of the hash."""
+        return fingerprint.Hasher.hash(self.model_dump())
+
     _validate_options = pydantic.field_validator("options", mode="before")(as_pyobj_validator)
 
     @pydantic.field_validator("subsets", mode="before")

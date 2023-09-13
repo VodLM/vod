@@ -31,7 +31,7 @@ class TokenizerCollate(vt.Collate[typ.Any, torch.Tensor]):
     ) -> dict[str, torch.Tensor]:
         """Render a template, tokenize the resulting text and append the `prefix_key`."""
         texts = self.template(inputs)
-        outputs = self.tokenizer(texts, **self.tokenizer_kws)
+        outputs = self.tokenizer(texts, **self.tokenizer_kws, return_tensors="pt")  # <- hard code return_tensors="pt"
         return {f"{self.prefix_key}{k}": v for k, v in outputs.items()}
 
     @classmethod
@@ -60,6 +60,5 @@ class TokenizerCollate(vt.Collate[typ.Any, torch.Tensor]):
                 "max_length": max_length,
                 "truncation": True,
                 "padding": "max_length",
-                "return_tensors": "pt",
             },
         )

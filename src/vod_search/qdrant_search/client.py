@@ -111,9 +111,9 @@ class QdrantSearchClient(base.SearchClient):
         *,
         text: None | list[str] = None,  # noqa: ARG002
         vector: None | np.ndarray,
-        subset_ids: None | list[list[str]] = None,
-        ids: None | list[list[str]] = None,  # noqa: ARG002
-        shard: None | list[str] = None,  # noqa: ARG002
+        subset_ids: None | list[list[base.SubsetId]] = None,
+        ids: None | list[list[base.SectionId]] = None,  # noqa: ARG002
+        shard: None | list[base.ShardName] = None,  # noqa: ARG002
         top_k: int = 3,
     ) -> vt.RetrievalBatch:
         """Search the server given a batch of text and/or vectors."""

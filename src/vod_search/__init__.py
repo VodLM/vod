@@ -32,4 +32,5 @@ from .qdrant_search import (
 from .sharded_search import (
     ShardedSearchClient,
     ShardedSearchMaster,
+    ShardName,
 )

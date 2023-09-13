@@ -48,7 +48,6 @@ class RetrievalCollateConfig(BaseCollateConfig):
     prep_num_proc: int = 4
 
     # name of the keys to use on the query side and on the section side
-    vector_keys: KeyMap = KeyMap(query="vector", section="vector")  #  vector field
     section_id_keys: KeyMap = KeyMap(query="retrieval_ids", section="id")  #  label field (section ids)
     subset_id_keys: KeyMap = KeyMap(query="subset_ids", section="subset_id")  #  group hash (kb_id, lang, etc.)
 

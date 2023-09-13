@@ -7,6 +7,7 @@ import faiss
 import lightning as L
 import numpy as np
 import torch
+import vod_configs
 import vod_types as vt
 from datasets import fingerprint
 from loguru import logger
@@ -16,8 +17,7 @@ from vod_search.socket import find_available_port
 from vod_tools import pipes
 from vod_tools.misc.template import Template
 
-from src import vod_configs
-
+from .base import ShardName
 from .hybrid_search import HyrbidSearchMaster
 from .sharded_search import ShardedSearchMaster
 
@@ -229,134 +229,6 @@ def build_qdrant_index(
     )
 
 
-def _rank_info() -> str:
-    rank = os.getenv("RANK", None)
-    winfo = f"[{rank}] " if rank is not None else ""
-    return winfo
-
-
-def _infer_offsets(x: list[vt.Sequence]) -> list[int]:
-    """Infer the offsets of a list of SizedDatasets."""
-    if len(x) == 0:
-        return []
-    return [0, *np.cumsum([len(d) for d in x])[:-1]]
-
-
-def _resolve_ports(
-    config: vod_configs.HybridSearchFactoryConfig,
-    fabric: None | L.Fabric,
-) -> vod_configs.HybridSearchFactoryConfig:
-    """Resolve missing ports."""
-    engines: dict[str, vod_configs.SingleSearchFactoryConfig] = copy.copy(config.engines)
-    for key, engine in engines.items():
-        if engine.port < 0:
-            new_port = find_available_port()
-            if fabric is not None:
-                # Sync the port across all ranks
-                new_port = fabric.broadcast(new_port, 0)
-            engines[key] = engine.model_copy(update={"port": new_port})
-
-    return config.model_copy(update={"engines": engines})
-
-
-def build_hybrid_search_engine(  # noqa: C901, PLR0912
-    *,
-    shard_names: list[str],
-    sections: None | list[vt.DictsSequence],
-    vectors: None | list[vt.Sequence[np.ndarray]],
-    configs: list[vod_configs.HybridSearchFactoryConfig],
-    cache_dir: str | pathlib.Path,
-    dense_enabled: bool = True,
-    sparse_enabled: bool = True,
-    skip_setup: bool = False,
-    barrier_fn: None | typ.Callable[[str], None] = None,
-    serve_on_gpu: bool = False,
-    free_resources: None | bool = None,
-    fabric: None | L.Fabric = None,
-    resolve_ports: bool = True,
-) -> HyrbidSearchMaster:
-    """Build a hybrid search engine."""
-    if free_resources is None:
-        free_resources = eval(os.environ.get("FREE_SEARCH_RESOURCES", "True"))
-        free_resources = bool(free_resources)
-    if skip_setup:
-        free_resources = False
-
-    # Resolve missing ports
-    if resolve_ports:
-        if fabric is None:
-            logger.debug("No fabric provided. Ports may not be synced across ranks.")
-        configs = [_resolve_ports(config, fabric=fabric) for config in configs]
-
-    if sections is not None:
-        offsets = _infer_offsets(sections)
-    elif vectors is not None:
-        offsets = _infer_offsets(vectors)
-    else:
-        raise ValueError("Must provide either `sections` or `vectors`")
-
-    servers: dict[str, ShardedSearchMaster] = {}
-    if dense_enabled:
-        dense_shards: dict[str, base.SearchMaster] = {}
-        offsets_dict: dict[str, int] = {}
-        for i, shard_name in enumerate(shard_names):
-            offsets_dict[shard_name] = offsets[i]
-            if vectors is None:
-                raise ValueError("`vectors` must be provided if `dense_enabled`")
-            if configs[i].engines.get("dense", None) is None:
-                raise ValueError("`dense` must be provided if `dense_enabled`")
-
-            dense_shards[shard_name] = _init_dense_search_engine(
-                sections=sections[i] if sections is not None else None,
-                vectors=vectors[i],
-                config=configs[i].engines["dense"],  # type: ignore
-                cache_dir=cache_dir,
-                skip_setup=skip_setup,
-                barrier_fn=barrier_fn,
-                serve_on_gpu=serve_on_gpu,
-                free_resources=False,  # <- let the HyrbidSearchMaster handle this
-            )
-        servers["dense"] = ShardedSearchMaster(
-            shards=dense_shards,
-            offsets=offsets_dict,
-            skip_setup=skip_setup,
-            free_resources=False,  # <- let the HyrbidSearchMaster handle this
-        )
-
-    if sparse_enabled:
-        sparse_shards: dict[str, base.SearchMaster] = {}
-        offsets_dict: dict[str, int] = {}
-        for i, shard_name in enumerate(shard_names):
-            offsets_dict[shard_name] = offsets[i]
-            if sections is None:
-                raise ValueError("`sections` must be provided if `sparse_enabled`")
-            if configs[i].engines.get("sparse", None) is None:
-                raise ValueError("`sparse` must be provided if `sparse_enabled`")
-
-            sparse_shards[shard_name] = build_elasticsearch_index(
-                sections=sections[i],
-                config=configs[i].engines["sparse"],  # type: ignore
-                skip_setup=skip_setup,
-                free_resources=False,  # <- let the HyrbidSearchMaster handle this
-            )
-
-        servers["sparse"] = ShardedSearchMaster(
-            shards=sparse_shards,
-            offsets=offsets_dict,
-            skip_setup=skip_setup,
-            free_resources=False,  # <- let the HyrbidSearchMaster handle this
-        )
-
-    if len(servers) == 0:
-        raise ValueError("No search servers were enabled.")
-
-    return HyrbidSearchMaster(
-        servers=servers,  # type: ignore
-        skip_setup=skip_setup,
-        free_resources=free_resources,
-    )
-
-
 def _init_dense_search_engine(
     sections: None | vt.DictsSequence,
     vectors: vt.Sequence[np.ndarray],
@@ -389,3 +261,162 @@ def _init_dense_search_engine(
         )
 
     raise TypeError(f"Unknown dense factory config type `{type(config)}`")
+
+
+def build_hybrid_search_engine(  # noqa: C901, PLR0912
+    *,
+    sections: None | dict[ShardName, vt.DictsSequence],
+    vectors: None | dict[ShardName, vt.Sequence[np.ndarray]],
+    configs: dict[ShardName, vod_configs.HybridSearchFactoryConfig],
+    cache_dir: str | pathlib.Path,
+    dense_enabled: bool = True,
+    sparse_enabled: bool = True,
+    skip_setup: bool = False,
+    barrier_fn: None | typ.Callable[[str], None] = None,
+    serve_on_gpu: bool = False,
+    free_resources: None | bool = None,
+    fabric: None | L.Fabric = None,
+    resolve_ports: bool = True,
+) -> HyrbidSearchMaster:
+    """Build a hybrid search engine."""
+    if free_resources is None:
+        free_resources = eval(os.environ.get("FREE_SEARCH_RESOURCES", "True"))
+        free_resources = bool(free_resources)
+    if skip_setup:
+        free_resources = False
+
+    # Get the list of shard names
+    shard_names = _get_list_of_shard_names(configs, sections=sections, vectors=vectors)
+
+    # Compute the dataset offsets given the list of shard names
+    offsets: dict[ShardName, int] = _infer_and_validate_offsets(sections, vectors, shard_names)
+
+    # Resolve missing ports
+    if resolve_ports:
+        if fabric is None:
+            logger.debug("No fabric provided. Ports may not be synced across ranks.")
+        configs = {shard: _resolve_ports(configs[shard], fabric=fabric) for shard in shard_names}
+
+    servers: dict[str, ShardedSearchMaster] = {}
+    if dense_enabled:
+        dense_shards: dict[str, base.SearchMaster] = {}
+        for shard_name in shard_names:
+            if vectors is None:
+                raise ValueError("`vectors` must be provided if `dense_enabled`")
+            if configs[shard_name].engines.get("dense", None) is None:
+                raise ValueError("`dense` must be provided if `dense_enabled`")
+
+            dense_shards[shard_name] = _init_dense_search_engine(
+                sections=sections[shard_name] if sections is not None else None,
+                vectors=vectors[shard_name],
+                config=configs[shard_name].engines["dense"],  # type: ignore
+                cache_dir=cache_dir,
+                skip_setup=skip_setup,
+                barrier_fn=barrier_fn,
+                serve_on_gpu=serve_on_gpu,
+                free_resources=False,  # <- let the HyrbidSearchMaster handle this
+            )
+        servers["dense"] = ShardedSearchMaster(
+            shards=dense_shards,
+            offsets=offsets,
+            skip_setup=skip_setup,
+            free_resources=False,  # <- let the HyrbidSearchMaster handle this
+        )
+
+    if sparse_enabled:
+        sparse_shards: dict[str, base.SearchMaster] = {}
+        for shard_name in shard_names:
+            if sections is None:
+                raise ValueError("`sections` must be provided if `sparse_enabled`")
+            if configs[shard_name].engines.get("sparse", None) is None:
+                raise ValueError("`sparse` must be provided if `sparse_enabled`")
+
+            sparse_shards[shard_name] = build_elasticsearch_index(
+                sections=sections[shard_name],
+                config=configs[shard_name].engines["sparse"],  # type: ignore
+                skip_setup=skip_setup,
+                free_resources=False,  # <- let the HyrbidSearchMaster handle this
+            )
+
+        servers["sparse"] = ShardedSearchMaster(
+            shards=sparse_shards,
+            offsets=offsets,
+            skip_setup=skip_setup,
+            free_resources=False,  # <- let the HyrbidSearchMaster handle this
+        )
+
+    if len(servers) == 0:
+        raise ValueError("No search servers were enabled.")
+
+    return HyrbidSearchMaster(
+        servers=servers,  # type: ignore
+        skip_setup=skip_setup,
+        free_resources=free_resources,
+        shard_list=shard_names,
+    )
+
+
+def _rank_info() -> str:
+    rank = os.getenv("RANK", None)
+    winfo = f"[{rank}] " if rank is not None else ""
+    return winfo
+
+
+def _resolve_ports(
+    config: vod_configs.HybridSearchFactoryConfig,
+    fabric: None | L.Fabric,
+) -> vod_configs.HybridSearchFactoryConfig:
+    """Resolve missing ports."""
+    engines: dict[str, vod_configs.SingleSearchFactoryConfig] = copy.copy(config.engines)
+    for key, engine in engines.items():
+        if engine.port < 0:
+            new_port = find_available_port()
+            if fabric is not None:
+                # Sync the port across all ranks
+                new_port = fabric.broadcast(new_port, 0)
+            engines[key] = engine.model_copy(update={"port": new_port})
+
+    return config.model_copy(update={"engines": engines})
+
+
+def _infer_offsets(x: dict[ShardName, typ.Sized], shard_names: list[ShardName]) -> dict[ShardName, int]:
+    """Infer the offsets of a list of SizedDatasets."""
+    if len(x) == 0:
+        return {}
+    offsets = [0, *np.cumsum([len(x[name]) for name in shard_names])[:-1]]
+    return dict(zip(shard_names, offsets))
+
+
+def _infer_and_validate_offsets(
+    sections: None | dict[ShardName, typ.Sized],
+    vectors: None | dict[ShardName, typ.Sized],
+    shard_names: list[ShardName],
+) -> dict[ShardName, int]:
+    if sections is not None and vectors is not None:
+        sec_offsets = _infer_offsets(sections, shard_names)
+        vec_offsets = _infer_offsets(vectors, shard_names)
+        if sec_offsets != vec_offsets:
+            raise ValueError(
+                f"The offsets of `sections` and `vectors` must match. Found Offsets: {sec_offsets} != {vec_offsets}"
+            )
+        return sec_offsets
+    if sections is not None:
+        return _infer_offsets(sections, shard_names)
+    if vectors is not None:
+        return _infer_offsets(vectors, shard_names)
+
+    raise ValueError("Must provide either `sections` or `vectors`")
+
+
+def _get_list_of_shard_names(
+    configs: dict[ShardName, vod_configs.HybridSearchFactoryConfig],
+    sections: None | dict[ShardName, vt.DictsSequence] = None,
+    vectors: None | dict[ShardName, vt.Sequence[np.ndarray]] = None,
+) -> list[ShardName]:
+    """Get the list of shard names."""
+    shard_names = list(configs.keys())
+    if sections is not None and set(shard_names) != set(sections.keys()):
+        raise ValueError("The keys of `sections` and `configs` must match.")
+    if vectors is not None and set(shard_names) != set(vectors.keys()):
+        raise ValueError("The keys of `vectors` and `configs` must match.")
+    return shard_names

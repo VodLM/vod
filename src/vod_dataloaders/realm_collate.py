@@ -152,7 +152,7 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
         query_text: list[str] = self.query_collate_fn.template.render_batch(batch)
         # Get the query vectors
         if self.search_client.requires_vectors:
-            query_vectors = batch[self.config.vector_keys.query]
+            query_vectors = batch[utils.VECTOR_KEY]
             if isinstance(query_vectors, list):
                 query_vectors = np.stack(query_vectors)
         else:

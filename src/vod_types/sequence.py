@@ -27,3 +27,4 @@ class DictsSequence(Sequence[dict[str, T]]):
 
 # Register `datasets.Dataset` as a `SequenceDict`.
 DictsSequence.register(datasets.Dataset)  # type: ignore
+DictsSequence.register(DictsSequence)  # type: ignore
