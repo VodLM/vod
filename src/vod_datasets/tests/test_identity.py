@@ -1,5 +1,6 @@
 import datasets
-from vod_datasets.rosetta import models, testing
+from vod_datasets.rosetta import models
+from vod_datasets.tests import utils
 
 from src.vod_datasets.rosetta.adapters.identity import (
     IdentityQueryAdapter,
@@ -18,7 +19,7 @@ def test_identity_dummy_queries() -> None:
         },
     ]
     data = datasets.Dataset.from_list(dummy_queries)
-    return testing.test_parse_dataset(
+    return utils.test_parse_dataset(
         data=data,
         adapter_cls=IdentityQueryAdapter,
         output_model=models.QueryModel,
@@ -35,7 +36,7 @@ def test_identity_dummy_sections() -> None:
         },
     ]
     data = datasets.Dataset.from_list(dummy_sections)
-    return testing.test_parse_dataset(
+    return utils.test_parse_dataset(
         data=data,
         adapter_cls=IdentitySectionAdapter,
         output_model=models.SectionModel,
@@ -56,7 +57,7 @@ def test_identity_dummy_query_with_contexts() -> None:
         },
     ]
     data = datasets.Dataset.from_list(dummy_data)
-    return testing.test_parse_dataset(
+    return utils.test_parse_dataset(
         data=data,
         adapter_cls=IdentityQueryWithContextAdapter,
         output_model=models.QueryWithContextsModel,

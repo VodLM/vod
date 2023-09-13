@@ -64,11 +64,11 @@ def benchmark(
         # Instantiate the dataloader
         dataloader = helpers.instantiate_retrieval_dataloader(
             queries=helpers.ShardedDsetWithVectors.from_configs(
-                data=task.queries,
+                data=task.queries,  # type: ignore
                 vectors=[task.vectors[d] for d in task.queries] if task.vectors else None,
             ),
             sections=helpers.ShardedDsetWithVectors.from_configs(
-                data=task.sections,
+                data=task.sections,  # type: ignore
                 vectors=[task.vectors[d] for d in task.sections] if task.vectors else None,
             ),
             tokenizer=tokenizer,

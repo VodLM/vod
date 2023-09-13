@@ -141,6 +141,7 @@ def train_with_index_updates(  # noqa: C901, PLR0915
                     tokenizer=tokenizer,
                 )
                 barrier("Completed benchmarks.")
+                raise NotImplementedError()
 
             if state.period_max_steps is None:
                 # If there is no defined `end_step`, we reached the end of the training

@@ -1,9 +1,13 @@
+import collections
+import functools
 from typing import Any
 
 import datasets
 import numpy as np
+import vod_configs
+from vod_tools.misc.template import Template
 
-from src import vod_configs
+from .sectioning import Sectionizer, init_sectionizer
 
 
 def postprocess_queries(
@@ -12,9 +16,8 @@ def postprocess_queries(
     config: vod_configs.DatasetOptions,
 ) -> datasets.Dataset:
     """Post-process `queries` dataset. E.g., format `text` using `template`."""
-    # Common post-processing (add extra attributes, etc.)
-    output = _postprocessing(dset, identifier=identifier, config=config)
-    return output
+    dset = _postprocessing(dset, identifier=identifier, config=config)
+    return dset
 
 
 def postprocess_sections(
@@ -23,9 +26,52 @@ def postprocess_sections(
     config: vod_configs.DatasetOptions,
 ) -> datasets.Dataset:
     """Post-process `queries` dataset."""
-    # TODO: sectioning
-    output = _postprocessing(dset, identifier=identifier, config=config)
-    return output
+    if config.sectioning is not None:
+        dset = _extract_sections(
+            dset,
+            config=config.sectioning,
+            map_kwargs=_prep_map_kwargs(
+                base=config.prep_map_kwargs,
+                batched=True,
+                desc=f"Extracting sections for `{identifier}`",
+            ),
+        )
+    dset = _postprocessing(dset, identifier=identifier, config=config)
+    return dset
+
+
+def _extract_sections(
+    data: datasets.Dataset,
+    *,
+    config: vod_configs.SectioningConfig,
+    map_kwargs: None | dict[str, Any] = None,
+) -> datasets.Dataset:
+    sectionizer = init_sectionizer(config)
+    template = Template(config.section_template)
+
+    def _section_extractor(
+        batch: dict[str, list[Any]],
+        idx: None | list[int] = None,  # noqa: ARG001
+        *,
+        sectionizer: Sectionizer,
+    ) -> dict[str, list[Any]]:
+        contents = batch["content"]
+        new_batch = collections.defaultdict(list)
+        for i, content in enumerate(contents):
+            # Render a section without content to infer how many tokens the prefix takes up
+            rendered_section_zero = template.render({"content": "", "title": batch["title"][i]})
+            for chunk in sectionizer(content, prefix=rendered_section_zero, add_prefix=False):
+                new_batch["content"].append(chunk)
+                for key in batch.keys() - {"content"}:
+                    new_batch[key].append(batch[key][i])
+
+        return new_batch
+
+    return data.map(
+        functools.partial(_section_extractor, sectionizer=sectionizer),
+        remove_columns=data.column_names,
+        **(map_kwargs or {}),
+    )
 
 
 def _postprocessing(

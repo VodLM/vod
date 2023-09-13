@@ -11,7 +11,6 @@ from .py.datasets import (
     DatasetLoader,
     DatasetOptions,
     DatasetsConfig,
-    DsetDescriptorRegex,
     QueriesDatasetConfig,
     SectionsDatasetConfig,
     TrainDatasetsConfig,
@@ -24,11 +23,16 @@ from .py.search import (
     ElasticsearchFactoryConfig,
     FaissFactoryConfig,
     FaissGpuConfig,
-    MutliSearchFactoryConfig,
+    HybridSearchFactoryConfig,
     QdrantFactoryConfig,
-    SearchBackends,
+    SearchBackend,
     SearchFactoryDefaults,
     SingleSearchFactoryConfig,
+)
+from .py.sectioning import (
+    FixedLengthSectioningConfig,
+    SectioningConfig,
+    SentenceSectioningConfig,
 )
 from .py.templates import (
     TemplatesConfig,

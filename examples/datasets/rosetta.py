@@ -4,12 +4,9 @@ import typing
 
 import datasets
 import rich
+import vod_configs
+import vod_datasets
 from vod_tools import arguantic
-
-from src import (
-    vod_configs,
-    vod_datasets,
-)
 
 
 def my_loader(
@@ -95,6 +92,24 @@ DATASET_CONFIGS = {
             vod_datasets.RaffleSquadDatasetLoader(language="da", what="queries"),
             vod_datasets.RaffleSquadDatasetLoader(language="da", what="sections"),
         ],
+    },
+    "beir-scifact": {
+        "identifier": "beir-scifact",
+        "name_or_path": [
+            vod_datasets.BeirDatasetLoader(what="queries"),
+            vod_datasets.BeirDatasetLoader(what="sections"),
+        ],
+        "subsets": "scifact",
+        "split": "train",
+    },
+    "beir-mmarco": {
+        "identifier": "beir-mmarco",
+        "name_or_path": [
+            vod_datasets.BeirDatasetLoader(what="queries"),
+            vod_datasets.BeirDatasetLoader(what="sections"),
+        ],
+        "subsets": "mmarco/french",
+        "split": "train",
     },
 }
 

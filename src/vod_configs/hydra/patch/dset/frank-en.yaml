@@ -21,9 +21,6 @@ dataset:
             what: queries
           split: train
           link: frank_a_sections
-        - identifier: squad_en_train
-          name_or_path: squad_v2
-          split: train
       val:
         - identifier: frank_a_en_val
           name_or_path:
@@ -42,37 +39,31 @@ dataset:
             frank_split: A
             language: en
             what: sections
-          split: validation
-        - identifier: squad_en_sections
-          name_or_path: squad_v2
 
   # Benchmarks
   benchmark:
     - queries:
-        identifier: frank_a_en_train
+        identifier: frank_a_en_val
         name_or_path:
           _target_: vod_datasets.FrankDatasetLoader
           frank_split: A
           language: en
           what: queries
-        split: train
-        link: frank_a_sections
+        split: validation
       sections:
         identifier: frank_a_sections
         name_or_path:
           _target_: vod_datasets.FrankDatasetLoader
           frank_split: A
           what: sections
-        split: validation
     - queries:
-        identifier: frank_b_en_train
+        identifier: frank_b_en_val
         name_or_path:
           _target_: vod_datasets.FrankDatasetLoader
           frank_split: B
           language: en
           what: queries
-        split: train
-        link: frank_b_sections
+        split: validation
       sections:
         identifier: frank_b_sections
         name_or_path:
@@ -80,4 +71,3 @@ dataset:
           frank_split: B
           language: en
           what: sections
-        split: validation

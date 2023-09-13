@@ -22,7 +22,7 @@ benchmark:
   tuning: null
   parameters:
     sparse: 1.0
-    dense: 1.0 # deactivate `dense` search
+    dense: -1.0 # deactivate `dense` search
 
 trainer:
   max_steps: 30
@@ -31,7 +31,7 @@ trainer:
   n_max_eval: 100
   parameters:
     sparse: 1.0
-    dense: 1.0 # deactivate `dense` search
+    dense: -1.0 # deactivate `dense` search
 
 batch_size:
   effective: 16
@@ -51,14 +51,12 @@ collates:
     prefetch_n_sections: 32
     do_sample: false
     in_batch_negatives: false
-    post_filter: null
 
   benchmark:
     n_sections: 64
     max_pos_sections: 16
     prefetch_n_sections: 128
     do_sample: false
-    post_filter: null
 
 dataloaders:
   benchmark:

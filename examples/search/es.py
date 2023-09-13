@@ -1,49 +1,108 @@
 from __future__ import annotations
 
 import rich
+import vod_configs
+import vod_datasets
+import vod_search
+from rich.console import Console
 from vod_tools import arguantic
 
-from src import (
-    vod_configs,
-    vod_datasets,
-    vod_search,
+from examples.search.utils import (
+    QUERY_HIGHLIGHTER_THEME,
+    QueryHighlighter,
 )
+
+DATASET_CONFIGS = {
+    "squad": {
+        "identifier": "squad",
+        "name_or_path": "squad_v2",
+        "split": "validation",
+    },
+    "quality": {
+        "identifier": "quality",
+        "name_or_path": "emozilla/quality",
+    },
+    "race": {
+        "identifier": "race",
+        "name_or_path": "race",
+        "subset": "high",
+        "split": "test",
+    },
+    "frank": {
+        "identifier": "frank",
+        "name_or_path": [
+            vod_datasets.FrankDatasetLoader(frank_split="A", language="en", what="queries"),
+            vod_datasets.FrankDatasetLoader(frank_split="A", language="en", what="sections"),
+        ],
+    },
+    "mmarco-french": {
+        "identifier": "mmarco-french",
+        "name_or_path": [
+            vod_datasets.BeirDatasetLoader(what="queries"),
+            vod_datasets.BeirDatasetLoader(what="sections"),
+        ],
+        "subsets": "mmarco/french",
+        "split": "train",
+    },
+    "scifact": {
+        "identifier": "scifact",
+        "name_or_path": [
+            vod_datasets.BeirDatasetLoader(what="queries"),
+            vod_datasets.BeirDatasetLoader(what="sections"),
+        ],
+        "subsets": "scifact",
+        "split": "train",
+    },
+}
 
 
 class _Args(arguantic.Arguantic):
-    name_or_path: str = "squad_v2"
-    split: str = "validation[:20]"
-    cleanup_cache: bool = False
+    name: str = "scifact"
+    use_sectioning: bool = False
 
 
 def run(args: _Args) -> None:
     """Run the script."""
     rich.print(args)
-    # datasets.logging.set_verbosity_debug()
+    dataset_config = DATASET_CONFIGS[args.name]
+    name_or_path = dataset_config.pop("name_or_path")
+    if isinstance(name_or_path, list):
+        queries_name_or_path, sections_name_or_path = name_or_path
+    else:
+        queries_name_or_path = sections_name_or_path = name_or_path
 
     # Load queries
     queries = vod_datasets.load_dataset(
         vod_configs.QueriesDatasetConfig(
-            identifier="queries",
-            name_or_path=args.name_or_path,
-            split=args.split,
+            name_or_path=queries_name_or_path,
+            **dataset_config,
         )  # type: ignore
     )
-    if args.cleanup_cache:
-        queries.cleanup_cache_files()
     rich.print(queries)
     rich.print(queries[0])
+
+    # Sectioning configuration
+    sectionizer = (
+        vod_configs.FixedLengthSectioningConfig(
+            section_template=r"{{ title }} {{ content }}",
+            tokenizer_name_or_path="t5-base",
+            max_length=200,
+            stride=150,
+        )
+        if args.use_sectioning
+        else None
+    )
 
     # Load sections
     sections = vod_datasets.load_dataset(
         vod_configs.SectionsDatasetConfig(
-            identifier="sections",
-            name_or_path=args.name_or_path,
-            split=args.split,  # <--- load all sections
-        )  # type: ignore
+            name_or_path=sections_name_or_path,
+            **dataset_config,
+            options=vod_configs.DatasetOptions(
+                sectioning=sectionizer,
+            ),  # type: ignore
+        )
     )
-    if args.cleanup_cache:
-        sections.cleanup_cache_files()
     rich.print(sections)
     rich.print(sections[0])
 
@@ -59,9 +118,20 @@ def run(args: _Args) -> None:
 
         batch = queries[:1]
 
+        # Make a rich console highlighter
+
+        console = Console(
+            highlighter=QueryHighlighter(
+                batch["query"][0],
+                subset_ids=batch.get("subset_ids", [[]])[0],
+                retrieval_ids=batch.get("retrieval_ids", [[]])[0],
+            ),
+            theme=QUERY_HIGHLIGHTER_THEME,
+        )
+
         # Play with the query
-        # batch["query"] = ["Normans"]
-        # batch["retrieval_ids"] = None # batch["subset_ids"]
+        # batch["query"] = [""]
+        # batch["retrieval_ids"] = None  # batch["subset_ids"]
         # batch["subset_ids"] = None
 
         sr = client.search(
@@ -72,19 +142,21 @@ def run(args: _Args) -> None:
         )
         rich.print(sr)
         results = [sections[int(i)] for i in sr.indices[0]]
-        rich.print(
+        console.print(
             {
                 "query": {
                     "query": batch["query"],
                     "subset_ids": batch.get("subset_ids", None),
                     "retrieval_ids": batch.get("retrieval_ids", None),
+                    "answers": batch.get("answers", None),
+                    "answer_scores": batch.get("answer_scores", None),
                 },
                 "results": [
                     {
                         "title": results[j]["title"],
                         "content": results[j]["content"],
                         "id": results[j]["id"],
-                        "subset_id": results[j]["subset_id"],
+                        "subset_id": results[j].get("subset_id", None),
                         "score": sr.scores[0, j],
                         "_id": sr.indices[0, j],
                     }

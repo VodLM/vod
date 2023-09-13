@@ -9,7 +9,9 @@ import faiss
 import lightning as L
 import numpy as np
 import torch
+from datasets import fingerprint
 from loguru import logger
+from vod_configs.py.es_body import validate_es_body
 from vod_search import base, es_search, faiss_search, qdrant_search
 from vod_search.socket import find_available_port
 from vod_tools import dstruct, pipes
@@ -76,14 +78,23 @@ def build_search_index(
 
 def build_elasticsearch_index(
     sections: dstruct.SizedDataset[dict[str, Any]],
-    config: vod_configs.ElasticsearchFactoryConfig | dict,
+    config: dict | vod_configs.ElasticsearchFactoryConfig,
     skip_setup: bool = False,
     free_resources: bool = False,
 ) -> es_search.ElasticSearchMaster:
     """Build a sparse elasticsearch index."""
     if isinstance(config, dict):
         config = vod_configs.ElasticsearchFactoryConfig(**config)
-    index_fingerprint = f"{pipes.fingerprint(sections)}-{config.fingerprint()}"
+
+    # Validate the ES body and use it to compute the index fingerprint
+    es_body = validate_es_body(config.es_body, language=config.language)
+    index_fingerprint = "-".join(
+        [
+            f"{pipes.fingerprint(sections)}",
+            f"{config.fingerprint(exclude=['es_body'])}",
+            f"{fingerprint.Hasher.hash(es_body)}",
+        ]
+    )
     template = Template(config.section_template)
     logger.info(
         f"Init. elasticsearch index `{index_fingerprint}`, "
@@ -91,18 +102,21 @@ def build_elasticsearch_index(
         f"section_id_key: `{config.section_id_key}`,"
         f"subset_id: `{config.subset_id_key}`"
     )
-    for row in iter(sections):
-        if not template.is_valide(row):
-            raise ValueError(f"Invalid template `{template.template}` for row with keys `{list(row.keys())}`")
-        if config.section_id_key is not None and config.section_id_key not in row:
-            raise ValueError(f"Could not find `{config.section_id_key}` in `{row.keys()}`")
-        if config.subset_id_key is not None and config.subset_id_key not in row:
-            raise ValueError(f"Could not find `{config.subset_id_key}` in `{row.keys()}`")
-        break  # test only the first one
-
+    row = next(iter(sections))
+    if not template.is_valide(row):
+        raise ValueError(f"Invalid template `{template.template}` for row with keys `{list(row.keys())}`")
     texts = (template.render(row) for row in iter(sections))
-    subset_ids = (row[config.subset_id_key] for row in iter(sections)) if config.subset_id_key else None
+    if config.section_id_key is not None and config.section_id_key not in row:
+        raise ValueError(f"Could not find `{config.section_id_key}` in `{row.keys()}`")
     sections_ids = (row[config.section_id_key] for row in iter(sections)) if config.section_id_key else None
+    if config.subset_id_key is not None and config.subset_id_key not in row:
+        logger.warning(
+            f"Could not find subset ID key `{config.subset_id_key}` in row `{row.keys()}`. "
+            "Filtering by subset ID will be disabled. This may be intentional."
+        )
+        subset_ids = None
+    else:
+        subset_ids = (row[config.subset_id_key] for row in iter(sections)) if config.subset_id_key else None
     return es_search.ElasticSearchMaster(
         texts=texts,
         subset_ids=subset_ids,
@@ -112,7 +126,8 @@ def build_elasticsearch_index(
         index_name=f"vod-{index_fingerprint}",
         input_size=len(sections),
         persistent=config.persistent,
-        es_body=config.es_body,
+        es_body=es_body,
+        language=config.language,
         exist_ok=True,
         skip_setup=skip_setup,
         free_resources=free_resources,
@@ -229,9 +244,9 @@ def _infer_offsets(x: list[dstruct.SizedDataset[Any]]) -> list[int]:
 
 
 def _resolve_ports(
-    config: vod_configs.MutliSearchFactoryConfig,
+    config: vod_configs.HybridSearchFactoryConfig,
     fabric: Optional[L.Fabric],
-) -> vod_configs.MutliSearchFactoryConfig:
+) -> vod_configs.HybridSearchFactoryConfig:
     """Resolve missing ports."""
     engines: dict[str, vod_configs.SingleSearchFactoryConfig] = copy.copy(config.engines)
     for key, engine in engines.items():
@@ -250,7 +265,7 @@ def build_hybrid_search_engine(  # noqa: C901, PLR0912
     shard_names: list[str],
     sections: None | list[dstruct.SizedDataset[dict[str, Any]]],
     vectors: None | list[dstruct.SizedDataset[np.ndarray]],
-    configs: list[vod_configs.MutliSearchFactoryConfig],
+    configs: list[vod_configs.HybridSearchFactoryConfig],
     cache_dir: str | pathlib.Path,
     dense_enabled: bool = True,
     sparse_enabled: bool = True,

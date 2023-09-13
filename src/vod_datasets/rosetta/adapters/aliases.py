@@ -7,6 +7,7 @@ QUERY_ID_ALIASES = pydantic.AliasChoices(
     "query_id",
 )
 SECTION_ID_ALIASES = pydantic.AliasChoices(
+    "_id",
     "id",
     "uid",
     "section_id",

@@ -1,12 +1,13 @@
 section_template: "{% if title %}{{ title }}{% endif %} {{ content }}"
 persistent: true
+language: en
 es_body:
   # defining a mapping will help: (1) optimize the performance, (2) save disk space
   mappings:
     properties:
       __body__: # section content
         type: text
-        analyzer: custom
+        analyzer: custom_analyzer
       __subset_id__: # susbet ID
         type: keyword
         ignore_above: 1024
@@ -21,12 +22,13 @@ es_body:
     # Defines changes to the text before tokenization and indexing
     analysis:
       analyzer:
-        custom:
-          # token filters
+        custom_analyzer:
           filter:
             - lowercase # Converts tokens to lowercase
-            - asciifolding # Converts a-z, 1-9, and symbolic characters to their ASCII equivalent
-          tokenizer: standard
+            - icu_folding # This is similar to asciifolding, but it's better at handling a wide variety of characters that appear in different languages.
+            - icu_normalizer # Normalizes unicode text to a canonical form
+            - __auto_stopwords__ #  Automatically picks up a stopword list based on `language`
+          tokenizer: icu_tokenizer # Tokenizes the text using ICU tokenizer
           type: custom
     # Replicas are copies of the shards and provide reliability if a node is lost
     number_of_replicas: 0

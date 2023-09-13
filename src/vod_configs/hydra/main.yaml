@@ -18,10 +18,11 @@ defaults:
 
 seed: ${global_seed:}
 model_name: ${model.encoder.pretrained_model_name_or_path}
-exp_version: "v2.5"
+exp_version: "v3.0"
 exp_suffix: ""
 exp_name: retrieval
 run_name: ${fmt_mn:${model_name}}--${rdn_name:}-${exp_version}${exp_suffix}
+languages: [en, da, de, nl, fr, is]
 load_from: null
 
 dataloaders:
@@ -37,7 +38,7 @@ dataloaders:
     pin_memory: True
     shuffle: True
   benchmark:
-    batch_size: 16
+    batch_size: ${batch_size.per_device_eval}
     num_workers: ${resources.num_workers}
     pin_memory: True
     shuffle: True
@@ -59,7 +60,6 @@ collates:
     max_pos_sections: 4
     support_size: 100
     prefetch_n_sections: 300
-    post_filter: null
     do_sample: false
     in_batch_negatives: false
     prep_num_proc: ${resources.num_proc}
@@ -72,7 +72,6 @@ collates:
     max_pos_sections: null
     support_size: null
     prefetch_n_sections: 1000
-    post_filter: null
     do_sample: false
     in_batch_negatives: false
     prep_num_proc: ${resources.num_proc}

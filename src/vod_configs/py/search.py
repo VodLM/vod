@@ -91,13 +91,13 @@ class FaissGpuConfig(StrictModel):
         return _get_gpu_resources(self.devices, self.tempmem or -1)
 
 
-SearchBackends = Literal["elasticsearch", "faiss", "qdrant"]
+SearchBackend = Literal["elasticsearch", "faiss", "qdrant"]
 
 
 class BaseSearchFactoryConfig(StrictModel):
     """Base config for all search engines."""
 
-    backend: SearchBackends = pydantic.Field(..., description="Search backend to use.")
+    backend: SearchBackend = pydantic.Field(..., description="Search backend to use.")
     subset_id_key: Optional[str] = pydantic.Field("subset_id", description="Subset ID field to be indexed.")
     section_id_key: Optional[str] = pydantic.Field("id", description="Section ID field to be indexed.")
 
@@ -105,7 +105,7 @@ class BaseSearchFactoryConfig(StrictModel):
 class BaseSearchFactoryDiff(StrictModel):
     """Relative search configs."""
 
-    backend: SearchBackends
+    backend: SearchBackend
     group_key: Optional[str] = None
     section_id_key: Optional[str] = None
 
@@ -153,7 +153,7 @@ class FaissFactoryConfig(BaseSearchFactoryConfig):
     def fingerprint(self) -> str:
         """Return a fingerprint for this config."""
         excludes = {"host", "port", "logging_level"}
-        return pipes.fingerprint(self.dict(exclude=excludes))
+        return pipes.fingerprint(self.model_dump(exclude=excludes))
 
 
 class ElasticsearchFactoryDiff(BaseSearchFactoryDiff):
@@ -164,6 +164,7 @@ class ElasticsearchFactoryDiff(BaseSearchFactoryDiff):
     port: Optional[int] = None
     persistent: Optional[bool] = None
     es_body: Optional[dict] = None
+    language: Optional[str] = None
 
 
 class ElasticsearchFactoryConfig(BaseSearchFactoryConfig):
@@ -173,8 +174,9 @@ class ElasticsearchFactoryConfig(BaseSearchFactoryConfig):
     host: str = "http://localhost"
     port: int = 9200
     persistent: bool = True
-    section_template: str = r"{{ title }} {{ content }}"
+    section_template: str = r"{% if title %}{{ title }}{% endif %} {{ content }}"
     es_body: Optional[dict] = None
+    language: Optional[str] = None
 
     def __add__(self, diff: None | ElasticsearchFactoryDiff) -> Self:
         if diff is None:
@@ -183,15 +185,19 @@ class ElasticsearchFactoryConfig(BaseSearchFactoryConfig):
         return self.model_copy(update=diffs)
 
     @pydantic.field_validator("es_body", mode="before")
-    def _validate_es_body(cls, v: dict | None) -> dict | None:
+    @classmethod
+    def _validate_es_body(cls: Type[Self], v: dict | None) -> dict | None:
         if isinstance(v, omegaconf.DictConfig):
             v = omegaconf.OmegaConf.to_container(v, resolve=True)  # type: ignore
+
         return v
 
-    def fingerprint(self) -> str:
+    def fingerprint(self, exclude: None | list[str] = None) -> str:  # noqa: ARG002
         """Return a fingerprint for this config."""
-        excludes = {"host", "port", "persistent"}
-        return pipes.fingerprint(self.model_dump(exclude=excludes))
+        base_exclude = {"host", "port", "persistent"}
+        if exclude:
+            base_exclude.update(exclude)
+        return pipes.fingerprint(self.model_dump(exclude=base_exclude))
 
 
 class QdrantFactoryDiff(BaseSearchFactoryDiff):
@@ -255,13 +261,13 @@ class QdrantFactoryConfig(BaseSearchFactoryConfig):
 SingleSearchFactoryConfig = Union[ElasticsearchFactoryConfig, FaissFactoryConfig, QdrantFactoryConfig]
 SingleSearchFactoryDiff = Union[ElasticsearchFactoryDiff, FaissFactoryDiff, QdrantFactoryDiff]
 
-FactoryConfigsByBackend: dict[SearchBackends, Type[BaseSearchFactoryConfig]] = {
+FactoryConfigsByBackend: dict[SearchBackend, Type[BaseSearchFactoryConfig]] = {
     "elasticsearch": ElasticsearchFactoryConfig,
     "faiss": FaissFactoryConfig,
     "qdrant": QdrantFactoryConfig,
 }
 
-FactoryDiffByBackend: dict[SearchBackends, Type[BaseSearchFactoryDiff]] = {
+FactoryDiffByBackend: dict[SearchBackend, Type[BaseSearchFactoryDiff]] = {
     "elasticsearch": ElasticsearchFactoryDiff,
     "faiss": FaissFactoryDiff,
     "qdrant": QdrantFactoryDiff,
@@ -287,7 +293,7 @@ class MutliSearchFactoryDiff(BaseSearchFactoryDiff):
         return cls(engines=config)  # type: ignore
 
 
-class MutliSearchFactoryConfig(BaseSearchFactoryConfig):
+class HybridSearchFactoryConfig(BaseSearchFactoryConfig):
     """Configures a hybrid search engine."""
 
     _defaults = pydantic.PrivateAttr(None)
@@ -341,13 +347,13 @@ class SearchFactoryDefaults(StrictModel):
         return cls(**config)
 
     # methods
-    def __add__(self, diff: MutliSearchFactoryDiff) -> MutliSearchFactoryConfig:
+    def __add__(self, diff: MutliSearchFactoryDiff) -> HybridSearchFactoryConfig:
         engine_factories = {}
         for key, cfg_diff in diff.engines.items():
             default_config = getattr(self, cfg_diff.backend)
             engine_factories[key] = default_config + cfg_diff
 
-        cfg = MutliSearchFactoryConfig(engines=engine_factories)
+        cfg = HybridSearchFactoryConfig(engines=engine_factories)
         cfg._defaults = self  # <- save the defaults for better resolution of diffs
         return cfg
 
