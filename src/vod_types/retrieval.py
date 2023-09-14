@@ -153,6 +153,11 @@ class RetrievalSample(RetrievalData):
     _expected_dim = 1
     _str_sep: str = ""
 
+    @property
+    def shape(self) -> tuple[int]:
+        """Shape of the data."""
+        return self.scores.shape  # type: ignore
+
     def __getitem__(self, item: int) -> RetrievalTuple:
         """Get a single value from the sample."""
         return RetrievalTuple(
@@ -176,6 +181,11 @@ class RetrievalBatch(RetrievalData):
 
     _expected_dim = 2
     _str_sep: str = "\n"
+
+    @property
+    def shape(self) -> tuple[int, int]:
+        """Shape of the data."""
+        return self.scores.shape  # type: ignore
 
     def __getitem__(self, item: int) -> RetrievalSample:
         """Get a single sample from the batch."""

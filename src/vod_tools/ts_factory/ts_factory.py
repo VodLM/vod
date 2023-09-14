@@ -1,6 +1,3 @@
-# pylint: disable=no-member
-
-
 import pathlib
 from pathlib import Path
 from typing import Any, Iterable, Literal, Union
@@ -74,6 +71,7 @@ class TensorStoreFactory(BaseModel):
                 "dtype": {"float16": "<f2", "float32": "<f4", "float64": "<f8"}[dtype],
                 "shape": shape,
                 "chunks": [chunk_size, *shape[1:]],
+                "fill_value": "NaN",
             },
         }
         metadata = driver_meta[driver]

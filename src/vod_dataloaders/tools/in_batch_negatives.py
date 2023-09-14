@@ -1,9 +1,8 @@
 import math
 
 import numpy as np
+import vod_search
 from vod_dataloaders.tools import fast
-
-from src import vod_search
 
 
 def flatten_sections(

@@ -1,5 +1,5 @@
 import abc
-from typing import Iterable, Optional
+import typing as typ
 
 import datasets
 import numpy as np
@@ -29,7 +29,7 @@ class LazyArray(abc.ABC, Sequence[np.ndarray]):
         """Return the length of the vector."""
         return self.shape[0]
 
-    def iter_batches(self, batch_size: int) -> Iterable[tuple[np.ndarray, np.ndarray]]:
+    def iter_batches(self, batch_size: int) -> typ.Iterable[tuple[np.ndarray, np.ndarray]]:
         """Iterate over vector elements."""
         for i in range(0, len(self), batch_size):
             j = min(i + batch_size, len(self))
@@ -80,7 +80,7 @@ class TensorStoreLazyArray(LazyArray):
 class TensorStoreFactoryLazyArray(TensorStoreLazyArray):
     """Handles TensorStoreFactory."""
 
-    _open_store: Optional[ts.TensorStore] = None
+    _open_store: None | ts.TensorStore = None
 
     def __init__(self, factory: TensorStoreFactory):
         self.factory = factory
@@ -102,9 +102,10 @@ class TensorStoreFactoryLazyArray(TensorStoreLazyArray):
         self._open_store = None
 
 
-def as_lazy_array(
-    x: Sequence[np.ndarray] | TensorStoreFactory | ts.TensorStore | np.ndarray,
-) -> LazyArray:
+Array: typ.TypeAlias = Sequence[np.ndarray] | TensorStoreFactory | ts.TensorStore | np.ndarray
+
+
+def as_lazy_array(x: Array) -> LazyArray:
     """Return a vector handler for the given vector type."""
     if isinstance(x, Sequence):
         return ImplicitLazyArray(x)

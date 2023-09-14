@@ -3,11 +3,10 @@ import collections
 import typing as typ
 
 import omegaconf
+import vod_configs
 import vod_types as vt
 from torch.utils import data as torch_data
 from vod_tools.misc.config import maybe_cast_omegaconf
-
-from src import vod_configs
 
 
 class DlSamplerFactory(abc.ABC):
@@ -75,7 +74,7 @@ class ProductDlSamplerFactory(DlSamplerFactory):
 
 
 def sampler_factory(
-    config: dict
+    config: typ.Mapping[str, typ.Any]
     | omegaconf.DictConfig
     | vod_configs.SamplerFactoryConfig
     | list[dict | omegaconf.DictConfig]

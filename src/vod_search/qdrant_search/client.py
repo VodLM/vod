@@ -22,7 +22,7 @@ from rich import status
 from rich.markup import escape
 from rich.progress import track
 from vod_search import base
-from vod_tools.misc.pretty import human_format_nb
+from vod_tools import pretty
 
 QDRANT_SUBSET_ID_KEY: str = "_SUBSET_ID_"
 
@@ -434,7 +434,7 @@ def _ingest_data(
     groups_iter = iter(groups) if groups is not None else itertools.repeat(None)
     for j in track(
         range(0, len(vectors), batch_size),
-        description=f"{_collection_name(collection_name)}: Ingesting {human_format_nb(len(vectors))} vectors",
+        description=f"{_collection_name(collection_name)}: Ingesting {pretty.human_format_nb(len(vectors))} vectors",
     ):
         vec_chunk = vectors[j : j + batch_size]
         if groups is None:

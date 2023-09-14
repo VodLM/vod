@@ -6,6 +6,7 @@ from .functional import (
     Pipe,
 )
 from .lazy_array import (
+    Array,
     LazyArray,
     as_lazy_array,
 )

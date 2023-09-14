@@ -1,6 +1,3 @@
-# pylint: disable=unused-import
-
-
 import argparse
 import pathlib
 import re

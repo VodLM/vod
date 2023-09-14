@@ -5,7 +5,7 @@ import lightning as L
 import pydantic
 import torch
 import torch.nn
-from vod_tools import pipes
+from vod_tools import pretty
 
 
 class Gradients:
@@ -80,4 +80,4 @@ class GradientInputs(pydantic.BaseModel):
 
     def pprint(self, **kws: typ.Any) -> None:
         """Pretty print the inputs."""
-        pipes.pprint_batch({k: v for k, v in self.dict().items() if v is not None}, **kws)
+        pretty.pprint_batch({k: v for k, v in self.dict().items() if v is not None}, **kws)

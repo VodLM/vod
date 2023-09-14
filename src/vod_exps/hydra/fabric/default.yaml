@@ -1,0 +1,10 @@
+defaults:
+  - strategy: single_device
+  - loggers:
+      - csv
+  - _self_
+
+_target_: vod_exps.utils.init_fabric
+accelerator: auto
+devices: ${resources.n_devices}
+precision: 32

@@ -14,7 +14,7 @@ from .utils import BlockTimer
 FLOAT_INF_THRES = 3e12  # <-- values above this threshold are considered as inf
 
 
-def multi_search(
+def async_hybrid_search(
     *,
     text: list[str],
     shards: list[str],

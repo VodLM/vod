@@ -16,7 +16,7 @@ import rich.progress
 import vod_types as vt
 from elasticsearch import helpers as es_helpers
 from loguru import logger
-from vod_configs.py.es_body import (
+from vod_configs.es_body import (
     BODY_KEY,
     ROW_IDX_KEY,
     SECTION_ID_KEY,

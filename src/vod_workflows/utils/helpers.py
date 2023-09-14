@@ -4,40 +4,27 @@ import functools
 import typing as typ
 
 import lightning as L
-import numpy as np
 import torch
 import vod_configs
-import vod_datasets
 import vod_types as vt
 from lightning.fabric import wrappers as fabric_wrappers
 from loguru import logger
 from typing_extensions import Self, Type
-from vod_search.base import ShardName
 from vod_tools.misc.schedule import BaseSchedule, schedule_factory
-from vod_tools.ts_factory.ts_factory import TensorStoreFactory
 
 T = typ.TypeVar("T")
-K = typ.TypeVar("K")
 D = typ.TypeVar("D", bound=vt.Sequence)
+P = typ.ParamSpec("P")
 
 
-@dataclasses.dataclass
-class RetrievalTask(typ.Generic[K]):
-    """A retrieval task with queries, sections and the config required to build a search engine."""
-
-    queries: list[vod_configs.QueriesDatasetConfig]
-    sections: list[vod_configs.SectionsDatasetConfig]
-    vectors: None | dict[vod_configs.BaseDatasetConfig, TensorStoreFactory]
-
-
-def none_ok(func: typ.Callable[..., T]) -> typ.Callable[..., None | T]:
+def none_ok(func: typ.Callable[P, T]) -> typ.Callable[P, None | T]:
     """Decorator that allows `None` as an input."""
 
     @functools.wraps(func)
-    def wrapper(*args: typ.Any, **kwargs: typ.Any) -> None | T:
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> None | T:
         if args[0] is None:
             return None
-        return func(*args, **kwargs)
+        return func(*args, **kwargs)  # type: ignore
 
     return wrapper
 
@@ -50,58 +37,6 @@ def is_engine_enabled(parameters: None | typ.MutableMapping, engine: str) -> boo
     if parameters is None:
         return True
     return parameters.get(engine, 1.0) >= 0
-
-
-@dataclasses.dataclass(frozen=True)
-class QueriesWithVectors:
-    """Holds a dict of queries and their vectors."""
-
-    queries: dict[str, tuple[ShardName, vt.DictsSequence]]
-    vectors: None | dict[str, vt.Sequence[np.ndarray]]
-
-    @classmethod
-    def from_configs(
-        cls: Type[Self],
-        queries: list[vod_configs.QueriesDatasetConfig],
-        vectors: None | dict[vod_configs.BaseDatasetConfig, TensorStoreFactory],
-    ) -> Self:
-        """Load a list of datasets from their respective configs."""
-        key_map = {cfg.hexdigest(): cfg for cfg in queries}
-        queries_by_key = {key: (cfg.link, vod_datasets.load_queries(cfg)) for key, cfg in key_map.items()}
-        vectors_by_key = (
-            {key: vt.as_lazy_array(vectors[cfg]) for key, cfg in key_map.items()} if vectors is not None else None
-        )
-        return cls(
-            queries=queries_by_key,  # type: ignore
-            vectors=vectors_by_key,  # type: ignore
-        )
-
-
-@dataclasses.dataclass(frozen=True)
-class SectionsWithVectors(typ.Generic[K]):
-    """Holds a dict of sections and their vectors."""
-
-    sections: dict[ShardName, vt.DictsSequence]
-    vectors: None | dict[ShardName, vt.Sequence[np.ndarray]]
-    search_configs: dict[ShardName, vod_configs.HybridSearchFactoryConfig]
-
-    @classmethod
-    def from_configs(
-        cls: Type[Self],
-        sections: list[vod_configs.SectionsDatasetConfig],
-        vectors: None | dict[vod_configs.BaseDatasetConfig, TensorStoreFactory],
-    ) -> Self:
-        """Load a list of datasets from their respective configs."""
-        sections_by_shard_name = {cfg.identifier: vod_datasets.load_sections(cfg) for cfg in sections}
-        vectors_by_shard_name = (
-            {cfg.identifier: vt.as_lazy_array(vectors[cfg]) for cfg in sections} if vectors is not None else None
-        )
-        configs_by_shard_name = {cfg.identifier: cfg.search for cfg in sections}
-        return cls(
-            sections=sections_by_shard_name,  # type: ignore
-            vectors=vectors_by_shard_name,  # type: ignore
-            search_configs=configs_by_shard_name,  # type: ignore
-        )
 
 
 def barrier_fn(name: str, fabric: L.Fabric) -> None:
@@ -148,6 +83,28 @@ class TrainerState:
         state["parameters"] = {k: schedule_factory(**v) for k, v in state["parameters"].items()}
         self.__dict__.update(state)
 
+    @classmethod
+    def from_config(
+        cls: Type[Self],
+        config: vod_configs.PeriodicTrainingConfig,
+        fabric: L.Fabric,
+    ) -> Self:
+        """Instantiate the training state from the configuration and Lightning environment."""
+        return cls(
+            step=0,
+            pidx=0,
+            epoch=0,
+            period=config.trainer.period,
+            period_max_steps=None,
+            max_steps=config.trainer.max_steps,
+            log_interval=config.trainer.log_interval,
+            val_check_interval=config.trainer.val_check_interval,
+            n_max_eval=config.trainer.n_max_eval,
+            accumulate_grad_batches=_infer_accumulate_grad_batches(fabric, config.batch_size),
+            gradient_clip_val=config.trainer.gradient_clip_val,
+            parameters=config.trainer.parameters,
+        )
+
 
 class _OptimizerWrapper(typ.Protocol):
     @property
@@ -171,10 +128,30 @@ def unwrap_optimizer(optimizer: torch.optim.Optimizer | _OptimizerWrapper) -> to
 unwrap_fabric_object = fabric_wrappers._unwrap_objects
 
 
-def _gen_dummy_batch(bs: int = 8, r: int = 0) -> dict[str, torch.Tensor]:
-    return {
-        "question.input_ids": r + torch.randint(0, 100, (bs, 10)),
-        "question.attention_mask": torch.ones((bs, 10), dtype=torch.long),
-        "section.input_ids": r + torch.randint(0, 100, (bs, 8, 10)),
-        "section.attention_mask": torch.ones((bs, 8, 10), dtype=torch.long),
-    }
+def _infer_accumulate_grad_batches(fabric: L.Fabric, config: vod_configs.BatchSizeConfig) -> int:
+    step_batch_size = fabric.world_size * config.per_device
+
+    # warn if the batch size per step is larger than the effective batch size
+    if step_batch_size > config.effective:
+        logger.warning(
+            f"Effective batch size ({config.effective}) is smaller than the batch size per step "
+            f"({step_batch_size}). This will lead to a slower training."
+        )
+        return 1
+
+    # accumulate gradients if the effective batch size is larger than the batch size per step
+    accumulation_steps = -(-config.effective // step_batch_size)
+
+    # warn if the effective batch size is not divisible by the batch size per step
+    if config.effective % step_batch_size != 0:
+        logger.warning(
+            f"The effective batch size ({config.effective}) is not divisible by the batch size per step "
+            f"({step_batch_size}). This will lead to a slower training."
+        )
+
+    logger.info(
+        f"Using {accumulation_steps} accumulation steps. "
+        f"Effective batch size: {fabric.world_size * accumulation_steps * config.per_device} "
+        f"(requested={config.effective})."
+    )
+    return accumulation_steps

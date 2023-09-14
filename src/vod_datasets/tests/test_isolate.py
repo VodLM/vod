@@ -2,7 +2,7 @@ import functools
 import typing
 
 import datasets
-from datasets.fingerprint import Hasher
+from vod_tools import fingerprint
 
 from src.vod_datasets.rosetta.adapters import SquadQueryWithContextsAdapter
 from src.vod_datasets.rosetta.preprocessing import isolate_qa_and_sections
@@ -53,6 +53,6 @@ def test_isolate_qa_and_sections(num_proc: int = 1) -> None:
         if set(row_ori.keys()) != set(row_new.keys()):
             raise ValueError(f"Row keys do not match: {row_ori.keys()} != {row_new.keys()}")
         for key in set(row_ori.keys()) - {"subset_ids"}:
-            v_or = Hasher.hash(row_ori[key])
-            v_new = Hasher.hash(row_new[key])
+            v_or = fingerprint.Hasher.hash(row_ori[key])
+            v_new = fingerprint.Hasher.hash(row_new[key])
             assert v_or == v_new, f"Key=`{key}`. Row values do not match: {row_ori[key]} != {row_new[key]}"

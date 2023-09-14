@@ -3,23 +3,25 @@ import os
 import pathlib
 import typing as typ
 
+import datasets
 import faiss
 import lightning as L
 import numpy as np
 import torch
 import vod_configs
 import vod_types as vt
-from datasets import fingerprint
 from loguru import logger
-from vod_configs.py.es_body import validate_es_body
+from vod_configs.es_body import validate_es_body
 from vod_search import base, es_search, faiss_search, qdrant_search
 from vod_search.socket import find_available_port
-from vod_tools import pipes
+from vod_tools import fingerprint
 from vod_tools.misc.template import Template
 
 from .base import ShardName
 from .hybrid_search import HyrbidSearchMaster
 from .sharded_search import ShardedSearchMaster
+
+D = typ.TypeVar("D", bound=vt.Sequence)
 
 
 def build_search_index(
@@ -89,7 +91,7 @@ def build_elasticsearch_index(
     es_body = validate_es_body(config.es_body, language=config.language)
     index_fingerprint = "-".join(
         [
-            f"{pipes.fingerprint(sections)}",
+            f"{fingerprint.fingerprint(sections)}",
             f"{config.fingerprint(exclude=['es_body'])}",
             f"{fingerprint.Hasher.hash(es_body)}",
         ]
@@ -148,7 +150,7 @@ def build_faiss_index(
         config = vod_configs.FaissFactoryConfig(**config)
     if not torch.cuda.is_available():
         serve_on_gpu = False
-    index_fingerprint = f"{pipes.fingerprint(vectors)}-{config.fingerprint()}"
+    index_fingerprint = f"{fingerprint.fingerprint(vectors)}-{config.fingerprint()}"
     logger.info(
         f"Init. faiss index `{index_fingerprint}`, "
         f"factory: `{config.factory}`, "
@@ -205,7 +207,7 @@ def build_qdrant_index(
     """Build a dense Qdrant index."""
     if isinstance(config, dict):
         config = vod_configs.QdrantFactoryConfig(**config)
-    index_fingerprint = f"{pipes.fingerprint(vectors)}-{config.fingerprint()}"
+    index_fingerprint = f"{fingerprint.fingerprint(vectors)}-{config.fingerprint()}"
     logger.info(
         f"Init. Qdrant index `{index_fingerprint}`, "
         f"vector: `{[len(vectors), *vectors[0].shape]}`, "
@@ -348,11 +350,17 @@ def build_hybrid_search_engine(  # noqa: C901, PLR0912
     if len(servers) == 0:
         raise ValueError("No search servers were enabled.")
 
+    # Concatenate the sections
+    concatenated_sections = _concatenate_dsets(
+        [sections[shard] for shard in shard_names],  # type: ignore
+    )
+
     return HyrbidSearchMaster(
         servers=servers,  # type: ignore
         skip_setup=skip_setup,
         free_resources=free_resources,
         shard_list=shard_names,
+        sections=concatenated_sections,
     )
 
 
@@ -420,3 +428,13 @@ def _get_list_of_shard_names(
     if vectors is not None and set(shard_names) != set(vectors.keys()):
         raise ValueError("The keys of `vectors` and `configs` must match.")
     return shard_names
+
+
+def _concatenate_dsets(parts: list[D]) -> D:
+    """Concatenate a list of datasets."""
+    if len(parts) > 1:
+        if all(isinstance(p, datasets.Dataset) for p in parts):
+            return datasets.concatenate_datasets(parts)  # type: ignore
+        return vt.ConcatenatedSequences(parts)  # type: ignore
+
+    return parts[0]

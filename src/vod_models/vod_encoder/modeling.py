@@ -2,7 +2,7 @@ import abc
 import functools
 import io
 import json
-from typing import Any, Callable, Generic, Optional
+import typing as typ
 
 import numpy as np
 import torch
@@ -119,9 +119,9 @@ class VodPooler(torch.nn.Module):
     """
 
     aggregator: Aggregator
-    projection: Optional[nn.Linear]
-    activation: Optional[nn.Module]
-    norm_fn: Optional[Callable[[torch.Tensor], torch.Tensor]]
+    projection: None | nn.Linear
+    activation: None | nn.Module
+    norm_fn: None | typ.Callable[[torch.Tensor], torch.Tensor]
     output_vector_size: int
 
     def __init__(self, config: dict | VodPoolerConfig, backbone_output_size: int):
@@ -179,22 +179,22 @@ class VodPooler(torch.nn.Module):
 Cfg = TypeVar("Cfg", bound=VodEncoderConfig)
 
 
-class VodEncoderBase(Generic[Cfg], transformers.PreTrainedModel, abc.ABC):
+class VodEncoderBase(typ.Generic[Cfg], transformers.PreTrainedModel, abc.ABC):
     """A VOD transformer encoder."""
 
     config_class: Type[Cfg]
     vod_pooler: VodPooler
 
-    def __init__(self, config: Cfg, **kwargs: Any) -> None:
+    def __init__(self, config: Cfg, **kwargs: typ.Any) -> None:
         super().__init__(config, **kwargs)
         self.vod_pooler = VodPooler(config.pooler, self.config.hidden_size)
 
     def _backbone_forward(
         self,
-        input_ids: Optional[torch.Tensor] = None,
-        attention_mask: Optional[torch.Tensor] = None,
-        input_type: Optional[VodEncoderInputType] = None,  # noqa: ARG002
-        **kwargs: Any,
+        input_ids: None | torch.Tensor = None,
+        attention_mask: None | torch.Tensor = None,
+        input_type: None | VodEncoderInputType = None,  # noqa: ARG002
+        **kwargs: typ.Any,
     ) -> modeling_outputs.BaseModelOutput:
         """Forward the input through the backbone."""
         return super().forward(
@@ -205,11 +205,11 @@ class VodEncoderBase(Generic[Cfg], transformers.PreTrainedModel, abc.ABC):
 
     def forward(
         self,
-        input_ids: Optional[torch.Tensor] = None,
-        attention_mask: Optional[torch.Tensor] = None,
-        return_dict: Optional[bool] = False,
-        input_type: Optional[VodEncoderInputType] = None,  # noqa: ARG002
-        **kwargs: Any,
+        input_ids: None | torch.Tensor = None,
+        attention_mask: None | torch.Tensor = None,
+        return_dict: None | bool = False,
+        input_type: None | VodEncoderInputType = None,  # noqa: ARG002
+        **kwargs: typ.Any,
     ) -> dict | modeling_outputs.BaseModelOutputWithPooling:
         """Encode the input."""
         output = self._backbone_forward(
@@ -292,10 +292,10 @@ class EmbeddingOnlyOverride(VodEncoderBase):
 
     def _backbone_forward(
         self: VodEncoderBase,
-        input_ids: Optional[torch.Tensor] = None,
-        attention_mask: Optional[torch.Tensor] = None,  # noqa: ARG002
-        input_type: Optional[VodEncoderInputType] = None,  # noqa: ARG002
-        **kwargs: Any,
+        input_ids: None | torch.Tensor = None,
+        attention_mask: None | torch.Tensor = None,  # noqa: ARG002
+        input_type: None | VodEncoderInputType = None,  # noqa: ARG002
+        **kwargs: typ.Any,
     ) -> modeling_outputs.BaseModelOutput:
         """Forward the through the embedding layer."""
         try:

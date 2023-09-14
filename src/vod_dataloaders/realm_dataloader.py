@@ -24,13 +24,12 @@ class RealmDataloader(torch_data.DataLoader[dict[str, typ.Any]]):
     """A subclass of `torch.utils.data.DataLoader` to implement VOD's magic."""
 
     @classmethod
-    def factory(  # noqa: ANN206
+    def factory(  # noqa: ANN206, D417
         cls: Type[Self],
         *,
         queries: dict[K, tuple[ShardName, vt.DictsSequence]],
-        queries_vectors: None | dict[K, vt.Sequence[np.ndarray]] = None,
+        vectors: None | dict[K, vt.Sequence[np.ndarray]] = None,
         # Parameters for the Collate function
-        sections: dict[ShardName, vt.DictsSequence],
         search_client: vod_search.HybridSearchClient,
         tokenizer: transformers.PreTrainedTokenizer | transformers.PreTrainedTokenizerFast,
         collate_config: vod_configs.RetrievalCollateConfig,
@@ -52,8 +51,17 @@ class RealmDataloader(torch_data.DataLoader[dict[str, typ.Any]]):
     ):
         """Instantiate a `RealmDataloader`.
 
-        NB: We don't override the `__init__` method because it breaks
-            some of the functionality of `torch.utils.data.DataLoader` if not done correctly.
+        NB: We don't override the `__init__` method because doing so breaks
+            the base functionality of `torch.utils.data.DataLoader` (multiprocessing).
+
+        Args:
+            queries: the dataset of queries.
+            vectors: the vectors associated with the queries.
+            search_client: the hybrid search client (e.g. elasticsearch + faiss).
+            tokenizer: the huggingface tokenizer.
+            collate_config: the configuration for the `RealmCollate` function.
+            parameters: the parameters used to weight the search engines (e.g., dense, sparse).
+
         """
         queries_shards = {s for s, _ in queries.values()}
         if queries_shards != set(search_client.shard_list):
@@ -61,22 +69,19 @@ class RealmDataloader(torch_data.DataLoader[dict[str, typ.Any]]):
                 "The keys (shard) of `queries` and `search_client` must match. "
                 f"Found {queries_shards} and {search_client.shard_list}"
             )
-        if queries_shards != sections.keys():
-            raise ValueError("The keys (shard) of `queries` and `sections` must match.")
 
         # Validate the vectors
-        if queries_vectors is not None and set(queries_vectors.keys()) != set(queries.keys()):
+        if vectors is not None and set(vectors.keys()) != set(queries.keys()):
             raise ValueError("The keys (dataset ID) of `queries_vectors` and `queries` must match.")
-        queries_vectors = queries_vectors or {}
+        vectors = vectors or {}
 
-        # Augment the queries with the shard information
-        # This is used so the collate function can acces
-        #      the `TARGET_SHARD_KEY`: str field
-        #      and the `VECTOR_KEY`: np.ndarray field.
+        # Augment the queries rows with
+        #    the shard information (at key `TARGET_SHARD_KEY``)
+        #    and cached vectors at key `VECTOR_KEY`.
         queries_with_extras: list[vt.DictsSequence] = [
             _WithExtrasAndVectors(
                 dataset=dset,
-                vectors=queries_vectors.get(key, None),
+                vectors=vectors.get(key, None),
                 extras={vod_configs.TARGET_SHARD_KEY: shard},
             )
             for key, (shard, dset) in queries.items()
@@ -85,23 +90,17 @@ class RealmDataloader(torch_data.DataLoader[dict[str, typ.Any]]):
         # Concatenate the queries into a single sequence
         concatenated_queries = _concatenate_dsets(queries_with_extras)
 
-        # Concatenate the sections into a single sequence
-        concatenated_sections = _concatenate_dsets(
-            [sections[shard] for shard in search_client.shard_list],  # type: ignore
-        )
-
         # Instantiate the Collate function
         collate_fn = RealmCollate(
             tokenizer=tokenizer,
             search_client=search_client,
-            sections=concatenated_sections,
             config=collate_config,
             parameters=parameters,
         )
 
         # Instantiate the Sampler
         if isinstance(sampler, DlSamplerFactory):
-            sampler = sampler(concatenated_sections)
+            sampler = sampler(concatenated_queries)
 
         return cls(
             dataset=concatenated_queries,  # type: ignore
@@ -131,7 +130,7 @@ class _WithExtrasAndVectors(vt.DictsSequence[T]):
         self,
         *,
         dataset: vt.DictsSequence,
-        vectors: None | vt.Sequence[T],
+        vectors: None | vt.Sequence[np.ndarray],
         vector_key: str = VECTOR_KEY,
         extras: dict[str, T],
     ) -> None:
@@ -151,7 +150,10 @@ class _WithExtrasAndVectors(vt.DictsSequence[T]):
         return len(self.dataset)
 
     def _vector_desc(self) -> str:
-        return f"[{len(self.vectors)},?]" if self.vectors is not None else "None"
+        if self.vectors is None:
+            return "None"
+        dims = [len(self.vectors), *self.vectors[0].shape]
+        return f"[{','.join([str(d) for d in dims])}]"
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(vectors={self._vector_desc()}, extras={self.extras}, dataset={self.dataset})"

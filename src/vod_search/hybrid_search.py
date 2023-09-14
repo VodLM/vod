@@ -21,20 +21,32 @@ class HybridSearchClient(SearchClient):
     """A client to interact with a search server."""
 
     clients: dict[ClientName, SearchClient]
-    _shard_list: list[ShardName]
+    _shard_list: None | list[ShardName]
+    _sections: None | vt.DictsSequence
 
     def __init__(
         self,
         clients: dict[ClientName, SearchClient],
-        shard_list: list[ShardName],
+        shard_list: None | list[ShardName] = None,
+        sections: None | vt.DictsSequence = None,
     ) -> None:
         self.clients = clients
         self._shard_list = shard_list
+        self._sections = sections
 
     @property
     def shard_list(self) -> list[ShardName]:
         """Get the available shards."""
+        if self._shard_list is None:
+            raise ValueError("The shard list has not been set.")
         return copy.copy(self._shard_list)
+
+    @property
+    def sections(self) -> vt.DictsSequence:
+        """Get the sections."""
+        if self._sections is None:
+            raise ValueError("The sections have not been set.")
+        return self._sections
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(clients={self.clients}, shards={self.shard_list})"
@@ -114,7 +126,8 @@ class HyrbidSearchMaster(SearchMaster):
     """Handle multiple search servers."""
 
     servers: dict[str, SearchMaster]
-    _shard_list: list[ShardName]
+    _shard_list: None | list[ShardName]
+    _sections: None | vt.DictsSequence
 
     def __init__(
         self,
@@ -122,17 +135,28 @@ class HyrbidSearchMaster(SearchMaster):
         skip_setup: bool = False,
         free_resources: bool = False,
         shard_list: None | list[ShardName] = None,
+        sections: None | vt.DictsSequence = None,
     ):
         """Initialize the search master."""
         self.skip_setup = skip_setup
         self.servers = servers
         self.free_resources = free_resources
-        self._shard_list = shard_list or []
+        self._shard_list = shard_list
+        self._sections = sections
 
     @property
     def shard_list(self) -> list[ShardName]:
         """Get the available shards."""
+        if self._shard_list is None:
+            raise ValueError("The shard list has not been set.")
         return copy.copy(self._shard_list)
+
+    @property
+    def sections(self) -> vt.DictsSequence:
+        """Get the sections."""
+        if self._sections is None:
+            raise ValueError("The sections have not been set.")
+        return self._sections
 
     def __enter__(self) -> Self:
         """Start the servers."""
@@ -156,7 +180,8 @@ class HyrbidSearchMaster(SearchMaster):
         """Get the client for interacting with the Faiss server."""
         return HybridSearchClient(
             clients={name: server.get_client() for name, server in self.servers.items()},
-            shard_list=self.shard_list,
+            shard_list=self._shard_list,
+            sections=self._sections,
         )
 
     def _free_resources(self) -> None:

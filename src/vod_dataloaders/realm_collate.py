@@ -5,10 +5,10 @@ import warnings
 import numpy as np
 import torch
 import transformers
+import vod_configs
+import vod_search
 import vod_types as vt
 from loguru import logger
-
-from src import vod_configs, vod_search
 
 from .tokenizer_collate import TokenizerCollate
 from .tools import (
@@ -19,6 +19,8 @@ from .tools import (
 )
 
 T = typ.TypeVar("T")
+P = typ.ParamSpec("P")
+
 
 ROW_IDX_COL_NAME: str = "__row_idx__"
 
@@ -37,7 +39,6 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
 
     tokenizer: transformers.PreTrainedTokenizerBase
     search_client: vod_search.HybridSearchClient
-    sections: vt.DictsSequence
     config: vod_configs.RetrievalCollateConfig
     query_collate_fn: TokenizerCollate
     section_collate_fn: TokenizerCollate
@@ -47,7 +48,6 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
         *,
         tokenizer: transformers.PreTrainedTokenizerBase,
         search_client: vod_search.HybridSearchClient,
-        sections: vt.DictsSequence,
         config: vod_configs.RetrievalCollateConfig,
         parameters: None | typ.MutableMapping = None,
     ):
@@ -58,11 +58,15 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
             )
         self.tokenizer = tokenizer
         self.search_client = search_client
-        self.sections = sections
         self.config = config
         self.parameters = _validate_parameters(parameters or {}, search_client)
         self.query_collate_fn = TokenizerCollate.from_config(self.config, tokenizer=self.tokenizer, field="query")
         self.section_collate_fn = TokenizerCollate.from_config(self.config, tokenizer=self.tokenizer, field="section")
+
+    @property
+    def sections(self) -> vt.DictsSequence:
+        """Get all indexed sections."""
+        return self.search_client.sections
 
     def __call__(
         self,
@@ -102,7 +106,7 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
             )
 
         # Replace negative indices with random ones
-        #    this is requiered because `datasets.Dataset` doesn't support negative indices
+        #    this is required because `datasets.Dataset` doesn't support negative indices
         sections = utils.replace_negative_indices(sections, world_size=len(self.sections))
 
         # Fetch the content of each section from the huggingface `datasets.Dataset`
@@ -123,7 +127,7 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
         attributes = _get_extra_attributes(
             batch,
             flat_sections_content,
-            sections_shape=sections.indices.shape,
+            sections_shape=sections.shape,
             config=self.config,
         )
 
@@ -152,14 +156,22 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
         query_text: list[str] = self.query_collate_fn.template.render_batch(batch)
         # Get the query vectors
         if self.search_client.requires_vectors:
-            query_vectors = batch[utils.VECTOR_KEY]
+            try:
+                query_vectors = batch[utils.VECTOR_KEY]
+            except KeyError as exc:
+                raise ValueError(
+                    f"The search client `{type(self.search_client).__name__}` requires vectors. "
+                    f"Please make sure indexing the provided dataset returns a dict with a key "
+                    f"`{utils.VECTOR_KEY}` and value being a vector representation for that row. "
+                    f"Found keys: `{list(batch.keys())}`."
+                ) from exc
             if isinstance(query_vectors, list):
                 query_vectors = np.stack(query_vectors)
         else:
             query_vectors = None
 
         # Async search the query text using `search_client.async_search`
-        return search.multi_search(
+        return search.async_hybrid_search(
             text=query_text,
             shards=batch[vod_configs.TARGET_SHARD_KEY],
             vector=query_vectors,
@@ -223,7 +235,7 @@ def _get_extra_attributes(
     *,
     sections_shape: tuple[int, int],
     config: vod_configs.RetrievalCollateConfig,
-) -> dict[str, None | typ.Callable[[typ.Any], typ.Any]]:
+) -> dict[str, None | dict[str, typ.Any]]:
     extras_keys_ops = {
         "id": None,
         "language": None,

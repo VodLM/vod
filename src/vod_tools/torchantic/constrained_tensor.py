@@ -17,6 +17,8 @@ class ConstrainedTensor:
     have the same number of channels and pixels.
 
     See `validate_shapes_consistency` for more details.
+
+    TODO: need a re-write - didn't maintain this for a while (-VL)
     """
 
     allow_casting: bool = False
