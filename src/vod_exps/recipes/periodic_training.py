@@ -11,7 +11,7 @@ import vod_datasets
 import vod_models
 import vod_types as vt
 from loguru import logger
-from vod_dataloaders.tools.dl_sampler import sampler_factory
+from vod_dataloaders.dl_sampler import dl_sampler_factory
 from vod_tools import cache_manager, pretty
 from vod_tools.pretty.print_metrics import pprint_metric_dict
 from vod_workflows.evaluation.retrieval import ToDiskConfig, benchmark_retrieval
@@ -138,7 +138,7 @@ def periodic_training(  # noqa: C901, PLR0915
                 collate_config=config.collates.train,
                 train_dataloader_config=config.dataloaders.train,
                 eval_dataloader_config=config.dataloaders.eval,
-                dl_sampler=sampler_factory(config.dl_sampler) if config.dl_sampler is not None else None,
+                dl_sampler=dl_sampler_factory(config.dl_sampler) if config.dl_sampler is not None else None,
                 cache_dir=cache_dir,
                 serve_on_gpu=False,
                 trainer_state=state,

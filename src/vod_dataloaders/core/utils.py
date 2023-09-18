@@ -2,11 +2,9 @@ import collections
 import math
 import time
 import typing as typ
-import warnings
 
 import numpy as np
 import torch
-import vod_search
 
 T = typ.TypeVar("T")
 
@@ -25,27 +23,6 @@ class BlockTimer:
 
     def __exit__(self, *args: typ.Any) -> None:
         self.output[self.name] = time.perf_counter() - self.start
-
-
-def fill_nans_with_min(values: np.ndarray, offset_min_value: None | float = -1, axis: int = -1) -> np.ndarray:
-    """Replace NaNs with the minimum value along each dimension."""
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore")
-        min_scores = np.nanmin(values, axis=axis, keepdims=True)
-        min_scores = np.where(np.isnan(min_scores), 0, min_scores)
-        if offset_min_value is not None:
-            min_scores += offset_min_value  # make sure the min is lower than the rest
-        return np.where(np.isnan(values), min_scores, values)
-
-
-def replace_negative_indices(sections: vod_search.RetrievalBatch, world_size: int) -> vod_search.RetrievalBatch:
-    """Replace negative indices with random ones."""
-    is_negative = sections.indices < 0
-    n_negative = is_negative.sum()
-    if n_negative:
-        sections.indices.setflags(write=True)
-        sections.indices[is_negative] = np.random.randint(0, world_size, size=n_negative)
-    return sections
 
 
 def reshape_flat_list(lst: list[T], shape: tuple[int, int]) -> list[list[T]]:

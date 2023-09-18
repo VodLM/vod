@@ -35,13 +35,13 @@ def benchmark_retrieval(
     queries: schemas.QueriesWithVectors,
     sections: schemas.SectionsWithVectors,
     *,
-    metrics: typ.Iterable[str],
+    metrics: list[str],
     collate_config: vod_configs.RetrievalCollateConfig,
     dataloader_config: vod_configs.DataLoaderConfig,
     cache_dir: pathlib.Path,
     parameters: None | dict[str, float] = None,
     output_keys: None | list[str] = None,
-    serve_on_gpu: bool = True,
+    serve_search_on_gpu: bool = True,
     n_max: None | int = None,
     to_disk_config: None | ToDiskConfig = None,
 ) -> dict[str, float]:
@@ -53,7 +53,7 @@ def benchmark_retrieval(
         cache_dir=cache_dir,
         dense_enabled=helpers.is_engine_enabled(parameters, "dense"),
         sparse_enabled=True,
-        serve_on_gpu=serve_on_gpu,
+        serve_on_gpu=serve_search_on_gpu,
     ) as master:
         search_client = master.get_client()
 
@@ -111,9 +111,9 @@ def benchmark_retrieval(
             logger.warning("Evaluation interrupted (KeyboardInterrupt).")
 
         # aggregate the metrics and the diagnostics
-        metrics = {key: monitor.compute() for key, monitor in monitors.items()}
-        metrics["diagnostics"] = {k: np.mean(v) for k, v in diagnostics.items()}  # type: ignore
-        return flatten_dict(metrics, sep="/")
+        metrics_dict = {key: monitor.compute() for key, monitor in monitors.items()}
+        metrics_dict["diagnostics"] = {k: np.mean(v) for k, v in diagnostics.items()}
+        return flatten_dict(metrics_dict, sep="/")
 
 
 def _log_retrieval_batch(to_disk_config: ToDiskConfig, batch: dict[str, typ.Any], batch_idx: int) -> None:

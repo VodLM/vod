@@ -210,7 +210,7 @@ class Predict:
                 f"Vector at indices {zero_ids_} are all zeros ({frac:.1%}). "
                 f"This happens if the store has been initialized but not updated with predictions. "
                 f"Please delete the store at `{self.store_path}` and try again. "
-                f"NB: this could happen if the model outputs zero vectors."
+                f"NOTE: this could happen if the model outputs zero vectors."
             )
 
         return len(zero_ids) == 0

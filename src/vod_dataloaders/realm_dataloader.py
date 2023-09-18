@@ -9,8 +9,8 @@ import vod_types as vt
 from torch.utils import data as torch_data
 from torch.utils.data.dataloader import _worker_init_fn_t
 from typing_extensions import Self, Type
-from vod_dataloaders.tools.dl_sampler import DlSamplerFactory
-from vod_dataloaders.tools.utils import VECTOR_KEY
+from vod_dataloaders.core.utils import VECTOR_KEY
+from vod_dataloaders.dl_sampler import DlSamplerFactory
 from vod_search import ShardName
 
 from .realm_collate import RealmCollate
@@ -51,7 +51,7 @@ class RealmDataloader(torch_data.DataLoader[dict[str, typ.Any]]):
     ):
         """Instantiate a `RealmDataloader`.
 
-        NB: We don't override the `__init__` method because doing so breaks
+        NOTE: We don't override the `__init__` method because doing so breaks
             the base functionality of `torch.utils.data.DataLoader` (multiprocessing).
 
         Args:

@@ -73,7 +73,7 @@ class ProductDlSamplerFactory(DlSamplerFactory):
         )
 
 
-def sampler_factory(
+def dl_sampler_factory(
     config: typ.Mapping[str, typ.Any]
     | omegaconf.DictConfig
     | vod_configs.SamplerFactoryConfig
@@ -85,10 +85,10 @@ def sampler_factory(
         config = omegaconf.OmegaConf.to_container(config, resolve=True)  # type: ignore
 
     if isinstance(config, list):
-        return ProductDlSamplerFactory([sampler_factory(sub_config) for sub_config in config])
+        return ProductDlSamplerFactory([dl_sampler_factory(sub_config) for sub_config in config])
 
     if not isinstance(config, vod_configs.SamplerFactoryConfig):
-        config = vod_configs.SamplerFactoryConfig(**config)
+        config = vod_configs.SamplerFactoryConfig(**config)  # type: ignore
 
     if config.mode == "lookup":
         if config.lookup is None:

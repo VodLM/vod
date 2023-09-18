@@ -1,17 +1,17 @@
 import math
 
 import numpy as np
-import vod_search
-from vod_dataloaders.tools import fast
+import vod_types as vt
+from vod_dataloaders.core import numpy_ops
 
 
 def flatten_sections(
-    samples: vod_search.RetrievalBatch,
-    search_results: vod_search.RetrievalBatch,
+    samples: vt.RetrievalBatch,
+    search_results: vt.RetrievalBatch,
     raw_scores: dict[str, np.ndarray],
     world_size: int,
     padding: bool = True,
-) -> tuple[vod_search.RetrievalBatch, dict[str, np.ndarray]]:
+) -> tuple[vt.RetrievalBatch, dict[str, np.ndarray]]:
     """Merge all sections (positive and negative) as a flat batch."""
     unique_indices = np.unique(samples.indices)
     if padding:
@@ -25,24 +25,26 @@ def flatten_sections(
         unique_indices = np.concatenate([unique_indices, random_indices])
 
     # Repeat the unique indices for each section
-    unique_indices_: np.ndarray = unique_indices[None, :].repeat(samples.indices.shape[0], axis=0)
+    unique_indices_: np.ndarray = unique_indices[None, :].repeat(samples.shape[0], axis=0)
 
     # Gather the scores from the `candidates` batch, set the NaNs to the minimum score
-    scores = fast.gather_values_by_indices(unique_indices_, search_results.indices, search_results.scores)
+    scores = numpy_ops.gather_values_by_indices(unique_indices_, search_results.indices, search_results.scores)
 
     # Gather the labels from the `positives` batch, set NaNs to negatives
     if search_results.labels is None:
         raise ValueError("The `search_results` must have labels.")
-    labels = fast.gather_values_by_indices(unique_indices_, search_results.indices, search_results.labels)
+    labels = numpy_ops.gather_values_by_indices(unique_indices_, search_results.indices, search_results.labels)
     labels[np.isnan(labels)] = -1
 
     # Other scores (client scores)
     flat_raw_scores = {}
     for key in raw_scores:
-        flat_raw_scores[key] = fast.gather_values_by_indices(unique_indices_, search_results.indices, raw_scores[key])
+        flat_raw_scores[key] = numpy_ops.gather_values_by_indices(
+            unique_indices_, search_results.indices, raw_scores[key]
+        )
 
     return (
-        vod_search.RetrievalBatch(
+        vt.RetrievalBatch(
             indices=unique_indices,
             scores=scores,
             labels=labels,

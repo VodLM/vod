@@ -88,7 +88,7 @@ class ElasticsearchClient(base.SearchClient):
         shard: None | list[base.ShardName] = None,  # noqa: ARG002
         top_k: int = 3,
     ) -> vt.RetrievalBatch:
-        """Search elasticsearch for the batch of text queries using `msearch`. NB: `vector` is not used here."""
+        """Search elasticsearch for the batch of text queries using `msearch`. NOTE: `vector` is not used here."""
         start_time = time.time()
         if self.support_subsets and subset_ids is None:
             warnings.warn(f"This `{type(self).__name__}` supports subset ids, but no label is provided.", stacklevel=2)

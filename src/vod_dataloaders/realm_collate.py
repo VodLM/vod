@@ -10,13 +10,14 @@ import vod_search
 import vod_types as vt
 from loguru import logger
 
-from .tokenizer_collate import TokenizerCollate
-from .tools import (
+from .core import (
     in_batch_negatives,
+    numpy_ops,
     sample,
     search,
     utils,
 )
+from .tokenizer_collate import TokenizerCollate
 
 T = typ.TypeVar("T")
 P = typ.ParamSpec("P")
@@ -83,31 +84,30 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
 
         # Sample the sections given the positive ones and the pool of candidates
         with utils.BlockTimer(name="diagnostics.sample_sections_time", output=diagnostics):
-            if self.config.n_sections is None:
-                sections, sampled_raw = search_results, raw_scores
-            else:
-                sections, sampled_raw = sample.sample_sections(
-                    search_results=search_results,
-                    raw_scores=raw_scores,
-                    n_sections=self.config.n_sections,
-                    max_pos_sections=self.config.max_pos_sections,
-                    temperature=float(self.config.do_sample),
-                    max_support_size=self.config.support_size,  # <-- limit the candidate pool size
-                )
+            samples = sample.sample_search_results(
+                search_results=search_results,
+                raw_scores=raw_scores,
+                total=self.config.n_sections,
+                max_pos_sections=self.config.max_pos_sections,
+                temperature=float(self.config.do_sample),
+                max_support_size=self.config.support_size,  # <-- limit the candidate pool size
+            )
 
         # Flatten sections (in-batch negative)
         if self.config.in_batch_negatives:
             sections, sampled_raw = in_batch_negatives.flatten_sections(
-                sections,
+                samples.samples,
                 search_results=search_results,
                 raw_scores=raw_scores,
                 world_size=len(self.sections),
                 padding=True,  # <-- padding is required for `torch.compile()` to compile a single graph.
             )
+        else:
+            sampled_raw = samples.search_results
 
         # Replace negative indices with random ones
         #    this is required because `datasets.Dataset` doesn't support negative indices
-        sections = utils.replace_negative_indices(sections, world_size=len(self.sections))
+        sections = numpy_ops.replace_negative_indices(samples.samples, world_size=len(self.sections))
 
         # Fetch the content of each section from the huggingface `datasets.Dataset`
         flat_ids = sections.indices.flatten().tolist()
