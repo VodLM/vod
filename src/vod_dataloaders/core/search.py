@@ -12,7 +12,7 @@ from vod_dataloaders.core import merge, normalize
 from .utils import BlockTimer
 
 FLOAT_INF_THRES = 3e12  # <-- values above this threshold are considered as +inf
-LOKUUP_CLIENT_NAME = "lookup"
+LOOKUP_CLIENT_NAME = "lookup"
 
 
 def async_hybrid_search(
@@ -64,12 +64,12 @@ def async_hybrid_search(
         search_results = asyncio.run(_execute_search([lookup_payload] + payloads))
 
     # Unpack the results
-    search_results = dict(zip([LOKUUP_CLIENT_NAME] + client_names, search_results))
+    search_results = dict(zip([LOOKUP_CLIENT_NAME] + client_names, search_results))
 
     # Discard the scores for the `lookup` client, discard the labels for all other clients
-    search_results[LOKUUP_CLIENT_NAME].scores.fill(0.0)
+    search_results[LOOKUP_CLIENT_NAME].scores.fill(0.0)
     for name, result in search_results.items():
-        if name == LOKUUP_CLIENT_NAME:
+        if name == LOOKUP_CLIENT_NAME:
             continue
         result.labels = None
 
@@ -82,26 +82,39 @@ def async_hybrid_search(
         for key, value in result.meta.items():
             meta[f"{name}_{key}"] = value
 
+    rich.print(
+        {
+            "search_results": search_results,
+        }
+    )
+
     # Normalize the scores (make sure to substract the minimum score from all scores)
     # this is required for the scores to be in comparable ranges before applying the merge function.
     normalize.normalize_search_scores_(search_results, offset=1.0)
 
+    rich.print(
+        {
+            "normalized_search_results": search_results,
+        }
+    )
+
     # Combine the results using the weights
     combined_results, raw_scores = merge.merge_search_results(
         search_results=search_results,
-        weights={LOKUUP_CLIENT_NAME: 0.0, **weights},
+        weights={LOOKUP_CLIENT_NAME: 0.0, **weights},
     )
+
+    rich.print(
+        {
+            "combined_results": combined_results,
+            "raw_scores": raw_scores,
+        }
+    )
+    raise NotImplementedError
 
     # Assign the `meta` dict to the `combined_results`
     combined_results.meta = meta
-    raw_scores.pop(LOKUUP_CLIENT_NAME)
-
-    # Set -inf to the mask section (index -1) and replace the neg. indices with random indices
-    # TODO: this should be redondant after the sampling method is correctly implemented
-    is_masked = combined_results.indices < 0
-    combined_results.scores[is_masked] = -np.inf
-    for scores in raw_scores.values():
-        scores[is_masked] = -np.inf
+    raw_scores.pop(LOOKUP_CLIENT_NAME)
 
     return combined_results, raw_scores
 

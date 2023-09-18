@@ -20,7 +20,7 @@ def test_labeled_priority_sampling(
     """Generate a simple mean estimattion problem and check that the estimates are close to the true values."""
     f = np.random.normal(size=n)
     unorm_log_p = np.random.uniform(size=n)
-    unorm_log_p[unorm_log_p < inf_thres] = -np.inf # simulate some -inf scores
+    unorm_log_p[unorm_log_p < inf_thres] = -np.inf  # simulate some -inf scores
     labels = np.random.normal(size=n)
     labels = np.where(labels > label_thres, 1, 0)
 
