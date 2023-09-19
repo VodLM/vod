@@ -46,6 +46,7 @@ class RetrievalCollateConfig(BaseCollateConfig):
     in_batch_negatives: bool = False
     in_batch_neg_offset: int = 0
     prep_num_proc: int = 4
+    lookup_engine: str = "sparse"  # Name of the search engine to use to lookup gold sections
 
     # name of the keys to use on the query side and on the section side
     section_id_keys: KeyMap = KeyMap(query="retrieval_ids", section="id")  #  label field (section ids)

@@ -60,21 +60,20 @@ trainer:
 benchmark:
   n_max_eval: 1_000
   on_init: false
-  tuning: null # TODO: add tuning
   parameters:
     sparse: 0.5
     dense: 1.0
 
 collates:
-  # Defines the configurations for `dataset_builder.HfBuilder._collate_config`
   train:
     n_sections: 24 # sample `x` sections from the candidate `z` sections
     max_pos_sections: 8 # include at max `y` positive sections
     support_size: 100
     prefetch_n_sections: 128 # retrieve `z` candidate sections
     do_sample: true # sample the sections from the candidate sections (randomly)
-    in_batch_negatives: false # TODO
+    in_batch_negatives: false
   benchmark:
     n_sections: null
+    support_size: null
     prefetch_n_sections: 512
     do_sample: false

@@ -13,7 +13,7 @@ class PrioritySampledSections:
 
     samples: vt.RetrievalBatch
     log_weights: np.ndarray
-    search_results: dict[str, np.ndarray]
+    raw_scores: dict[str, np.ndarray]
 
 
 def sample_search_results(
@@ -38,12 +38,12 @@ def sample_search_results(
     if search_results.labels is None:
         labels_ref: np.ndarray = np.zeros_like(search_results.scores, dtype=np.bool_)
     else:
-        labels_ref: np.ndarray = search_results.labels
+        labels_ref: np.ndarray = search_results.labels > 0  # <- make sure to cast to bool
 
     # Sample section using priority sampling
     local_ids, log_weights, labels = labeled_priority_sampling(
         scores=scores_ref,
-        labels=labels_ref > 0,  # <- make sure to cast to bool
+        labels=labels_ref,
         k_positive=max_pos_sections,
         k_total=total,
         normalized=True,  # <- self-normalized the importance weights
@@ -67,7 +67,7 @@ def sample_search_results(
             labels=labels,
         ),
         log_weights=log_weights,
-        search_results=sampled_raw_scores,
+        raw_scores=sampled_raw_scores,
     )
 
 
@@ -271,14 +271,14 @@ def _labeled_priority_sampling_1d_(  # noqa: PLR0913
         npo.log_softmax_1d_(pos_log_weights)
 
     # Priority samples the negative labels
-    neg_samples, neg_log_weights = _priority_sampling_1d(
+    neg_samples_, neg_log_weights = _priority_sampling_1d(
         scores[labels_],
         exponential_noise_[labels_],
         k_total - len(pos_samples_),
         temperature=temperature,
         max_support_size=max_support_size,
     )
-    neg_samples = indices[labels_][neg_samples]
+    neg_samples = indices[labels_][neg_samples_]
     if normalized and len(neg_samples) > 0:
         npo.log_softmax_1d_(neg_log_weights)
 
@@ -296,7 +296,7 @@ def _labeled_priority_sampling_1d_(  # noqa: PLR0913
         j += 1
 
 
-# @numba.njit(fastmath=True, cache=npo.CACHE_NUMBA_JIT)
+@numba.njit(fastmath=True, cache=npo.CACHE_NUMBA_JIT)
 def _labeled_priority_sampling_2d_(  # noqa: PLR0913
     scores: npt.NDArray[npo.Float],
     labels: npt.NDArray[npo.Bool],

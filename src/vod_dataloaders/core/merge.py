@@ -2,7 +2,7 @@ import numba
 import numpy as np
 import numpy.typing as npt
 import vod_types as vt
-from vod_dataloaders.core import numpy_ops
+from vod_dataloaders.core import numpy_ops as npo
 
 
 def merge_search_results(
@@ -44,7 +44,7 @@ def _merge_n_search_results(
     # gather scores
     raw_scores = {}
     for key, value in search_results.items():
-        raw_scores[key] = numpy_ops.gather_values_by_indices(
+        raw_scores[key] = npo.gather_values_by_indices(
             queries=output.indices, indices=value.indices, values=value.scores
         )
 
@@ -52,7 +52,7 @@ def _merge_n_search_results(
     output.labels = None
     for r in search_results.values():
         if r.labels is not None:
-            output.labels = numpy_ops.gather_values_by_indices(
+            output.labels = npo.gather_values_by_indices(
                 queries=output.indices,
                 indices=r.indices,
                 values=r.labels,
@@ -68,7 +68,7 @@ def _merge_two_search_results(a: vt.RetrievalBatch, b: vt.RetrievalBatch) -> vt.
     return vt.RetrievalBatch(scores=scores, indices=indices)
 
 
-@numba.njit(fastmath=True)
+@numba.njit(fastmath=True, cache=npo.CACHE_NUMBA_JIT)
 def _search_1d_arr(arr: npt.NDArray, x: int | float) -> int:
     """Search for values in a sorted array."""
     if arr.ndim != 1:
@@ -81,10 +81,10 @@ def _search_1d_arr(arr: npt.NDArray, x: int | float) -> int:
     return -1
 
 
-@numba.njit(fastmath=True, cache=numpy_ops.CACHE_NUMBA_JIT)
+@numba.njit(fastmath=True, cache=npo.CACHE_NUMBA_JIT)
 def _write_1d_arr(
-    indices: npt.NDArray,
-    scores: npt.NDArray,
+    indices: npt.NDArray[npo.Int],
+    scores: npt.NDArray[npo.Dtyp],
     index: int,
     score: int | float,
     cursor: int,
@@ -105,17 +105,17 @@ def _write_1d_arr(
     return cursor
 
 
-@numba.njit(parallel=True, fastmath=True, cache=numpy_ops.CACHE_NUMBA_JIT)
+@numba.njit(parallel=True, fastmath=True, cache=npo.CACHE_NUMBA_JIT)
 def _nopy_merge_two_search_results(
-    a_scores: npt.NDArray,
-    a_indices: npt.NDArray,
-    b_scores: npt.NDArray,
-    b_indices: npt.NDArray,
-) -> tuple[npt.NDArray, npt.NDArray]:
+    a_scores: npt.NDArray[npo.Dtyp],
+    a_indices: npt.NDArray[npo.Int],
+    b_scores: npt.NDArray[npo.Dtyp],
+    b_indices: npt.NDArray[npo.Int],
+) -> tuple[npt.NDArray[npo.Dtyp], npt.NDArray[npo.Int]]:
     """Merge two search results."""
     scores = np.full(
         (a_scores.shape[0], (a_scores.shape[1] + b_scores.shape[1])),
-        fill_value=np.nan,
+        fill_value=-np.inf,
         dtype=a_scores.dtype,
     )
     indices = np.full(

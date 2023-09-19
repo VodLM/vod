@@ -4,51 +4,46 @@ import numpy as np
 import vod_types as vt
 from vod_dataloaders.core import numpy_ops
 
+from .sample import PrioritySampledSections
 
-def flatten_sections(
-    samples: vt.RetrievalBatch,
-    search_results: vt.RetrievalBatch,
-    raw_scores: dict[str, np.ndarray],
-    world_size: int,
-    padding: bool = True,
-) -> tuple[vt.RetrievalBatch, dict[str, np.ndarray]]:
+
+def flatten_samples(samples: PrioritySampledSections, padding: bool = True) -> PrioritySampledSections:
     """Merge all sections (positive and negative) as a flat batch."""
-    unique_indices = np.unique(samples.indices)
+    indices = samples.samples.indices
+    unique_indices = np.unique(indices)
     if padding:
-        # pad the unique indices with random indices to a fixed size
-        n_full = math.prod(samples.indices.shape)
+        # pad the unique indices with -1
+        n_full = math.prod(samples.samples.indices.shape)
         n_pad = n_full - unique_indices.shape[0]
-        # We sample sections iid so there might be some collisions
-        #   but in practice this is sufficiently unlikely,
-        #   so it's not worth the extra computation to check.
-        random_indices = np.random.randint(0, world_size, size=n_pad)
+        random_indices = np.ones((n_pad,), dtype=np.int64)
         unique_indices = np.concatenate([unique_indices, random_indices])
 
     # Repeat the unique indices for each section
-    unique_indices_: np.ndarray = unique_indices[None, :].repeat(samples.shape[0], axis=0)
+    unique_indices_: np.ndarray = unique_indices[None, :].repeat(samples.samples.shape[0], axis=0)
 
     # Gather the scores from the `candidates` batch, set the NaNs to the minimum score
-    scores = numpy_ops.gather_values_by_indices(unique_indices_, search_results.indices, search_results.scores)
+    scores = numpy_ops.gather_values_by_indices(unique_indices_, indices, samples.samples.scores)
 
     # Gather the labels from the `positives` batch, set NaNs to negatives
-    if search_results.labels is None:
+    if samples.samples.labels is None:
         raise ValueError("The `search_results` must have labels.")
-    labels = numpy_ops.gather_values_by_indices(unique_indices_, search_results.indices, search_results.labels)
-    labels[np.isnan(labels)] = -1
+    labels = numpy_ops.gather_values_by_indices(unique_indices_, indices, samples.samples.labels, fill_value=0)
+
+    # Gather the `log_weights`
+    log_weights = numpy_ops.gather_values_by_indices(unique_indices_, indices, samples.log_weights)
 
     # Other scores (client scores)
     flat_raw_scores = {}
-    for key in raw_scores:
-        flat_raw_scores[key] = numpy_ops.gather_values_by_indices(
-            unique_indices_, search_results.indices, raw_scores[key]
-        )
+    for key in samples.raw_scores:
+        flat_raw_scores[key] = numpy_ops.gather_values_by_indices(unique_indices_, indices, samples.raw_scores[key])
 
-    return (
-        vt.RetrievalBatch(
+    return PrioritySampledSections(
+        samples=vt.RetrievalBatch(
             indices=unique_indices,
             scores=scores,
             labels=labels,
             allow_unsafe=True,
         ),
-        flat_raw_scores,
+        raw_scores=flat_raw_scores,
+        log_weights=log_weights,
     )

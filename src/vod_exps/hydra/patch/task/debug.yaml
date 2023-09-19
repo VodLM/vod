@@ -19,7 +19,6 @@ env:
 benchmark:
   n_max_eval: 100
   on_init: false
-  tuning: null
   parameters:
     sparse: 1.0
     dense: -1.0 # deactivate `dense` search
@@ -49,12 +48,13 @@ collates:
     max_pos_sections: 4
     support_size: 30
     prefetch_n_sections: 32
-    do_sample: false
+    do_sample: true
     in_batch_negatives: false
 
   benchmark:
-    n_sections: 64
-    max_pos_sections: 16
+    n_sections: null
+    support_size: null
+    max_pos_sections: null
     prefetch_n_sections: 128
     do_sample: false
 

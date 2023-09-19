@@ -108,7 +108,6 @@ def periodic_training(  # noqa: C901, PLR0915
                     tokenizer=tokenizer,
                 )
                 barrier("Completed benchmarks.")
-                raise NotImplementedError()
 
             if state.period_max_steps is None:
                 # If there is no defined `end_step`, we reached the end of the training
@@ -253,7 +252,9 @@ def _run_benchmarks(
             )
             if metrics is not None:
                 header = f"{bench_loc} - Period {state.pidx + 1}"
-                _log_print_metrics(fabric=fabric, state=state, locator=bench_loc, metrics=metrics, header=header)
+                _log_print_metrics(
+                    fabric=fabric, state=state, locator=task.queries.identifier, metrics=metrics, header=header
+                )
             logger.info(f"{1+j}/{len(config.dataset.benchmark)} - saved to `{logdir.absolute()}`")
 
 

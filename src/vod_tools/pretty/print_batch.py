@@ -18,16 +18,16 @@ import torch
 import transformers
 import yaml
 
-_PPRINT_DISPLAY_PREC = 2
+_PPRINT_PREC = 2
 
 
 def _smart_str(x: Number) -> str:
     if isinstance(x, float):
-        return f"{x:.{_PPRINT_DISPLAY_PREC}e}"
+        return f"{x:.{_PPRINT_PREC}e}"
     if isinstance(x, int):
         return f"{x}"
     if isinstance(x, complex):
-        return f"{x.real:.{_PPRINT_DISPLAY_PREC}e} + {x.imag:.{_PPRINT_DISPLAY_PREC}e}j"
+        return f"{x.real:.{_PPRINT_PREC}e} + {x.imag:.{_PPRINT_PREC}e}j"
 
     return str(x)
 
@@ -274,7 +274,7 @@ def _safe_yaml(section: str) -> str:
     return section
 
 
-def pprint_retrieval_batch(  # noqa: C901, PLR0915
+def pprint_retrieval_batch(  # noqa: C901, PLR0915, PLR0912
     batch: dict[str, typ.Any],
     idx: None | list[int] = None,  # noqa: ARG
     *,
@@ -301,9 +301,9 @@ def pprint_retrieval_batch(  # noqa: C901, PLR0915
         return x
 
     tree = rich.tree.Tree(header, guide_style="dim")
-    query_keys = ["id", "section_ids", "answer_id", "kb_id", "language", "group_hash", "link"]
+    query_keys = ["id", "retrieval_ids", "subset_ids", "language"]
     query_keys = [f"query.{key}" for key in query_keys]
-    section_keys = ["id", "answer_id", "kb_id", "score", "label", "language", "group_hash", "dset_uid"]
+    section_keys = ["id", "subset_id", "score", "log_weight", "label", "language"]
     section_keys = [f"section.{key}" for key in section_keys]
     need_expansion = [
         "section.input_ids",
@@ -311,28 +311,37 @@ def pprint_retrieval_batch(  # noqa: C901, PLR0915
         "section.token_type_ids",
         "section.idx",
         "section.id",
-        "section.answer_id",
-        "section.kb_id",
-        "section.group_hash",
+        "section.language",
+        "section.subset_id",
     ]
 
     # Fetch the querys
-    batch = copy.copy(batch)  # noqa: F821
+    batch = copy.deepcopy(batch)  # noqa: F821
     query_input_ids = batch["query.input_ids"]
+    batch_size = len(query_input_ids)
 
     # Fetch and expand section attributes if needed
     if batch["section.input_ids"].ndim == 2:  # noqa: PLR2004
+        # Sections are flatten, expand them
         for k, v in batch.items():
             if k in need_expansion:
-                batch[k] = v[None, :].expand(len(query_input_ids), *(-1 for _ in v.shape))
+                if isinstance(v, torch.Tensor):
+                    batch[k] = v[None, :].expand(batch_size, *(-1 for _ in v.shape))
+                elif isinstance(v, np.ndarray):
+                    batch[k] = v[None, :].repeat(batch_size, axis=0)
+                elif isinstance(v, list):
+                    batch[k] = [v for _ in range(batch_size)]
+                else:
+                    raise TypeError(f"Cannot expand {k} of type {type(v)}")
     elif batch["section.input_ids"].ndim == 3:  # noqa: PLR2004
-        ...
+        # We have K sections per queries, that's the default case
+        pass
     else:
         raise ValueError(
             f"Section input ids should be a 2D or 3D tensor. Found shape: `{batch['section.input_ids'].shape}`"
         )
-    section_input_ids = batch["section.input_ids"]
 
+    section_input_ids = batch["section.input_ids"]
     for i, q_ids in enumerate(query_input_ids):
         query = tokenizer.decode(q_ids, **kwargs)
         query_data = {

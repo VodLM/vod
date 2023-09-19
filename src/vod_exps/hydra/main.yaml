@@ -60,7 +60,7 @@ collates:
     max_pos_sections: 4
     support_size: 100
     prefetch_n_sections: 300
-    do_sample: false
+    do_sample: true
     in_batch_negatives: false
     prep_num_proc: ${resources.num_proc}
     query_max_length: ${collates.predict.query_max_length}

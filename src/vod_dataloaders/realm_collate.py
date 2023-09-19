@@ -3,7 +3,6 @@ import typing as typ
 import warnings
 
 import numpy as np
-import rich
 import torch
 import transformers
 import vod_configs
@@ -30,13 +29,16 @@ ROW_IDX_COL_NAME: str = "__row_idx__"
 class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
     """Collate function for retrieval-augmented language modeling tasks.
 
-    This function is used to convert a list of examples into a batch.
-    Steps:
+    This function is used to convert a list of queries into a batch.
+    For each queries, the function will search the search engine for the top results, and sample a subset.
+
+    This function implements the following steps:
         1. search & merge
         2. sample the sections
-        3. fetch the content of each section from the huggingface `datasets.Dataset`
-        4. tokenize the sections & querys
-        5. cast & return the batch (`torch.Tensor`)
+        3. (optional) flatten sections (in-batch negative)
+        4. fetch the content of each section from the huggingface `datasets.Dataset`
+        5. tokenize the sections & querys
+        6. cast & return the batch (`torch.Tensor`)
     """
 
     tokenizer: transformers.PreTrainedTokenizerBase
@@ -53,17 +55,18 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
         config: vod_configs.RetrievalCollateConfig,
         parameters: None | typ.MutableMapping = None,
     ):
-        if "sparse" not in search_client.clients:
-            raise ValueError(
-                "The `sparse` client is required to lookup positive sections. "
-                "Please add it to the `search_client` instance"
-            )
         self.tokenizer = tokenizer
         self.search_client = search_client
         self.config = config
         self.parameters = _validate_parameters(parameters or {}, search_client)
         self.query_collate_fn = TokenizerCollate.from_config(self.config, tokenizer=self.tokenizer, field="query")
         self.section_collate_fn = TokenizerCollate.from_config(self.config, tokenizer=self.tokenizer, field="section")
+
+        if config.lookup_engine not in search_client.clients:
+            raise ValueError(
+                f"The `{config.lookup_engine}` client is required to lookup positive sections. "
+                f"Please add it to the `search_client` instance"
+            )
 
     @property
     def sections(self) -> vt.DictsSequence:
@@ -93,26 +96,21 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
                 temperature=float(self.config.do_sample),
                 max_support_size=self.config.support_size,  # <-- limit the candidate pool size
             )
-            rich.print(samples)
-            raise NotImplementedError
 
         # Flatten sections (in-batch negative)
         if self.config.in_batch_negatives:
-            sections, sampled_raw = in_batch_negatives.flatten_sections(
-                samples.samples,
-                search_results=search_results,
-                raw_scores=raw_scores,
-                world_size=len(self.sections),
-                padding=True,  # <-- padding is required for `torch.compile()` to compile a single graph.
+            # NOTE: padding is required to output the same number of sections
+            #       so `torch.compile()` to compile a single graph.
+            samples = in_batch_negatives.flatten_samples(
+                samples,
+                padding=True,
             )
-        else:
-            sampled_raw = samples.search_results
-
         # Replace negative indices with random ones
         #    this is required because `datasets.Dataset` doesn't support negative indices
         sections = numpy_ops.replace_negative_indices(samples.samples, world_size=len(self.sections))
 
         # Fetch the content of each section from the huggingface `datasets.Dataset`
+        sections_shape = sections.indices.shape
         flat_ids = sections.indices.flatten().tolist()
         flat_sections_content: dict[str, typ.Any] = self.sections[flat_ids]
 
@@ -130,7 +128,7 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
         attributes = _get_extra_attributes(
             batch,
             flat_sections_content,
-            sections_shape=sections.shape,
+            sections_shape=sections_shape,  # type: ignore
             config=self.config,
         )
 
@@ -138,7 +136,13 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
         batch = {
             **tokenized_querys,
             **tokenized_sections,
-            **_sections_to_dict(sections, sampled_raw, prefix="section.", as_torch=True),
+            **_sections_to_dict(
+                sections,
+                sampling_log_weights=samples.log_weights,
+                raw_scores=samples.raw_scores,
+                prefix="section.",
+                as_torch=True,
+            ),
             **attributes,
             **diagnostics,
             **{f"diagnostics.parameters.{k}": v for k, v in self.parameters.items()},
@@ -187,6 +191,7 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
 
 def _sections_to_dict(
     sections: vod_search.RetrievalBatch,
+    sampling_log_weights: None | np.ndarray = None,
     raw_scores: None | dict[str, np.ndarray] = None,
     prefix: str = "",
     as_torch: bool = False,
@@ -197,11 +202,15 @@ def _sections_to_dict(
     output = {
         f"{prefix}idx": sections.indices,
         f"{prefix}score": sections.scores,
+        f"{prefix}score": sections.scores,
         f"{prefix}label": sections.labels > 0,
     }
 
     if raw_scores is not None:
         output.update({f"{prefix}{k}": v for k, v in raw_scores.items()})
+
+    if sampling_log_weights is not None:
+        output[f"{prefix}log_weight"] = sampling_log_weights
 
     if as_torch:
         with warnings.catch_warnings():
@@ -235,9 +244,13 @@ def _get_extra_attributes(
     batch: dict[str, typ.Any],
     flat_sections_content: dict[str, typ.Any],
     *,
-    sections_shape: tuple[int, int],
+    sections_shape: tuple[int, int] | tuple[int],
     config: vod_configs.RetrievalCollateConfig,
 ) -> dict[str, None | dict[str, typ.Any]]:
+    if len(sections_shape) > 2:  # noqa: PLR2004
+        raise ValueError(f"Expected a 1D or 2D shape. Found {sections_shape}")
+
+    # Define operators to apply to each extra key
     extras_keys_ops = {
         "id": None,
         "language": None,
@@ -263,12 +276,13 @@ def _get_extra_attributes(
             continue
         v = flat_sections_content[k]
         v = fn(v) if fn is not None else v
-        if isinstance(v, torch.Tensor):
-            v = v.view(sections_shape)
-        elif isinstance(v, np.ndarray):
-            v = v.reshape(sections_shape)
-        elif isinstance(v, list):
-            v = utils.reshape_flat_list(v, sections_shape)
+        if len(sections_shape) == 2:  # noqa: PLR2004
+            if isinstance(v, torch.Tensor):
+                v = v.view(sections_shape)
+            elif isinstance(v, np.ndarray):
+                v = v.reshape(sections_shape)
+            elif isinstance(v, list):
+                v = utils.reshape_flat_list(v, sections_shape)
         sections_extras[f"section.{k}"] = v
 
     return {**query_extras, **sections_extras}
