@@ -105,6 +105,7 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
                 samples,
                 padding=True,
             )
+
         # Replace negative indices with random ones
         #    this is required because `datasets.Dataset` doesn't support negative indices
         sections = numpy_ops.replace_negative_indices(samples.samples, world_size=len(self.sections))
@@ -132,7 +133,7 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
             config=self.config,
         )
 
-        # Build the batch
+        # Make the final batch and potentially cast attributes to `torch.Tensor``
         batch = {
             **tokenized_querys,
             **tokenized_sections,
