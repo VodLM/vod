@@ -3,6 +3,7 @@ import typing as typ
 import warnings
 
 import numpy as np
+import rich
 import torch
 import transformers
 import vod_configs
@@ -92,6 +93,8 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
                 temperature=float(self.config.do_sample),
                 max_support_size=self.config.support_size,  # <-- limit the candidate pool size
             )
+            rich.print(samples)
+            raise NotImplementedError
 
         # Flatten sections (in-batch negative)
         if self.config.in_batch_negatives:
@@ -151,7 +154,6 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
         """Search the batch of queries and return the top `top_k` results."""
         # Get the query ids
         query_subset_ids = batch[self.config.subset_id_keys.query]
-
         # Get the query text
         query_text: list[str] = self.query_collate_fn.template.render_batch(batch)
         # Get the query vectors

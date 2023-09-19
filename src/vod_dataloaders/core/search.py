@@ -66,7 +66,27 @@ def async_hybrid_search(
     # Unpack the results
     search_results = dict(zip([LOOKUP_CLIENT_NAME] + client_names, search_results))
 
-    # Discard the scores for the `lookup` client, discard the labels for all other clients
+    # Merge the search results into one
+    search_results, raw_scores = _merge_search_results(search_results, weights)
+
+    # Assign the `meta` dict to the `search_results` and return
+    search_results.meta.update(meta)
+    return search_results, raw_scores
+
+
+def _merge_search_results(
+    search_results: dict[str, vt.RetrievalBatch],
+    weights: dict[str, float],
+) -> tuple[vt.RetrievalBatch, dict[str, np.ndarray]]:
+    """Merge the search results into one.
+
+    This implementation is dependent of `async_hybrid_search` and requires the `lookup` client to be specified.
+    """
+    meta = {}
+    if LOOKUP_CLIENT_NAME not in search_results:
+        raise ValueError(f"The `{LOOKUP_CLIENT_NAME}` client must be specified to lookup the golden/positive sections.")
+
+    # NOTE: Discard the scores for the `lookup` client, discard the labels for all other clients
     search_results[LOOKUP_CLIENT_NAME].scores.fill(0.0)
     for name, result in search_results.items():
         if name == LOOKUP_CLIENT_NAME:
@@ -82,40 +102,27 @@ def async_hybrid_search(
         for key, value in result.meta.items():
             meta[f"{name}_{key}"] = value
 
-    rich.print(
-        {
-            "search_results": search_results,
-        }
-    )
-
     # Normalize the scores (make sure to substract the minimum score from all scores)
     # this is required for the scores to be in comparable ranges before applying the merge function.
+    # NOTE: Here we apply an offset of `1.0`, so all defined scores are at minimum `1.0`.
+    #       The idea is to make defined scores more important than the scores that don't
+    #       appear in the search results. This is not properly tested, but the intuition checks out.
     normalize.normalize_search_scores_(search_results, offset=1.0)
 
-    rich.print(
-        {
-            "normalized_search_results": search_results,
-        }
-    )
-
-    # Combine the results using the weights
+    # Combine the results using the weights. The combined scores
+    # are a weighted sum of the input scores.
+    # NOTE: The `lookup` client is weighted with `0.0` so it doesn't
+    #       contribute to the final scores.
+    # NOTE: The labels are only read from the `lookup` client since they
+    #       have been set to `None` for all other clients.
     combined_results, raw_scores = merge.merge_search_results(
         search_results=search_results,
         weights={LOOKUP_CLIENT_NAME: 0.0, **weights},
     )
-
-    rich.print(
-        {
-            "combined_results": combined_results,
-            "raw_scores": raw_scores,
-        }
-    )
-    raise NotImplementedError
-
-    # Assign the `meta` dict to the `combined_results`
-    combined_results.meta = meta
     raw_scores.pop(LOOKUP_CLIENT_NAME)
 
+    # Assign the `meta` dict to the `combined_results` and return
+    combined_results.meta = meta
     return combined_results, raw_scores
 
 

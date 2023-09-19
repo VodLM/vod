@@ -244,7 +244,7 @@ def _run_benchmarks(
                 ),
                 cache_dir=cache_dir,
                 parameters=parameters,
-                serve_on_gpu=True,
+                serve_search_on_gpu=True,
                 n_max=config.benchmark.n_max_eval,
                 to_disk_config=ToDiskConfig(
                     logdir=logdir,
