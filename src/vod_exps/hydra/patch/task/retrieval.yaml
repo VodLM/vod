@@ -47,7 +47,7 @@ trainer:
   val_check_interval: 500
   log_interval: 20
   n_max_eval: 5_000
-  pbar_keys: ["kl_data", "hitrate_3", "mrr_10"]
+  pbar_keys: ["kl_data", "hitrate_03"]
   parameters:
     sparse: 0.5
     dense:

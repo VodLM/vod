@@ -30,5 +30,5 @@ qdrant_body:
       always_ram: true
   optimizers_config:
     # https://qdrant.tech/documentation/tutorials/optimize/
-    default_segment_number: 2
+    default_segment_number: 4 # recommended: 2 for high throughtput, c_cores for high latency
     memmap_threshold: null

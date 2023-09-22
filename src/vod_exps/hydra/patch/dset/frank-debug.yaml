@@ -6,7 +6,7 @@ dataset:
     engines:
       dense:
         backend: faiss
-        factory: Flat
+        factory: IVFauto,Flat
       sparse:
         backend: elasticsearch
 

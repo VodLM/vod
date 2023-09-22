@@ -9,15 +9,15 @@ class TemplatesConfig(StrictModel):
     """Prompt templates."""
 
     query: str = pydantic.Field(
-        default=r"Q: {{ query }}",
+        default=r"query: {{ query }}",
         description="Template for formatting a query",
     )
     answer: str = pydantic.Field(
-        default=r"A: {{ answer }}",
+        default=r"answer: {{ answer }}",
         description="Template formatting answers before encoding for retrieval.",
     )
     section: str = pydantic.Field(
-        default=r"D: {{ content }}",
+        default=r"passage: {{ content }}",
         description="Template formatting documents before encoding for retrieval.",
     )
 

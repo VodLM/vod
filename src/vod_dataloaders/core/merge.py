@@ -48,7 +48,7 @@ def _merge_n_search_results(
             queries=output.indices, indices=value.indices, values=value.scores
         )
 
-    # lookup labels
+    # lookup labels - all labels are None, except for the `lookup` client
     output.labels = None
     for r in search_results.values():
         if r.labels is not None:
