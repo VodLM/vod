@@ -144,7 +144,7 @@ def labeled_priority_sampling(
         raise ValueError(f"Expected a 1D or 2D array. Got {scores.ndim}D.")
 
 
-@numba.njit(fastmath=True, cache=npo.CACHE_NUMBA_JIT)
+@numba.njit(fastmath=True, cache=npo.CACHE_NUMBA_JIT, nogil=True)
 def _priority_sampling_1d(
     scores: npt.NDArray[npo.Float],
     exponential_noise_: npt.NDArray[npo.Float],
@@ -225,7 +225,7 @@ def priority_sampling_1d(
     )
 
 
-@numba.njit(fastmath=True, cache=npo.CACHE_NUMBA_JIT, nogil=True)  # TODO
+@numba.njit(fastmath=True, cache=npo.CACHE_NUMBA_JIT, nogil=True)
 def _labeled_priority_sampling_1d_(  # noqa: PLR0913
     scores: npt.NDArray[npo.Float],
     labels: npt.NDArray[npo.Bool],
@@ -297,7 +297,7 @@ def _labeled_priority_sampling_1d_(  # noqa: PLR0913
         j += 1
 
 
-@numba.njit(fastmath=True, cache=npo.CACHE_NUMBA_JIT)
+@numba.njit(parallel=True, fastmath=True, cache=npo.CACHE_NUMBA_JIT, nogil=True)
 def _labeled_priority_sampling_2d_(  # noqa: PLR0913
     scores: npt.NDArray[npo.Float],
     labels: npt.NDArray[npo.Bool],
