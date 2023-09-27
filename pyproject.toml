@@ -64,6 +64,10 @@ pydantic = "^2"
 numpy = "^1.24" # <-- setting this for numba
 numba = "^0.57.1"
 qdrant-client = "^1.4.0"
+peft = "^0.5.0"
+bitsandbytes = "^0.41.1"
+scipy = "^1.11.2"
+accelerate = "^0.23.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.1"

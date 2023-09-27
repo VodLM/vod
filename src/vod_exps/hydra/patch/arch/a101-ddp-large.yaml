@@ -9,11 +9,11 @@ resources:
   num_workers: 3
 
 batch_size:
-  per_device: 8
-  per_device_eval: 16
+  per_device: 16
+  per_device_eval: 32
   per_device_predict: 1024
 
 collates:
   train:
-    n_sections: 16 # sample `x` sections from the candidate `z` sections
-    max_pos_sections: 4 # include at max `y` positive sections
+    n_sections: 8 # sample `x` sections from the candidate `z` sections
+    max_pos_sections: 2 # include at max `y` positive sections

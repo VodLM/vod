@@ -65,7 +65,7 @@ class Aggregator(abc.ABC, nn.Module):
 
     def __init__(self) -> None:
         super().__init__()
-        self._dtype_marker = torch.nn.Parameter(torch.tensor(0.0), requires_grad=False)
+        self._dtype_marker = torch.nn.Parameter(torch.zeros(1), requires_grad=False)
 
     @abc.abstractmethod
     def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
@@ -185,7 +185,7 @@ class VodEncoderBase(typ.Generic[Cfg], transformers.PreTrainedModel, abc.ABC):
     config_class: Type[Cfg]
     vod_pooler: VodPooler
 
-    def __init__(self, config: Cfg, **kwargs: typ.Any) -> None:
+    def __init__(self, config: Cfg, *args: typ.Any, **kwargs: typ.Any) -> None:
         super().__init__(config, **kwargs)
         self.vod_pooler = VodPooler(config.pooler, self.config.hidden_size)
 

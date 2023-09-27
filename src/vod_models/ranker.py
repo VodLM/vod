@@ -1,5 +1,6 @@
 import copy
 import functools
+import math
 from typing import Any, Optional, Union
 
 import torch
@@ -14,10 +15,10 @@ from vod_models.monitor import RetrievalMonitor
 from vod_tools import fingerprint
 
 
-def _maybe_instantiate(conf_or_obj: Union[Any, DictConfig], **kwargs: Any) -> object:
+def _maybe_instantiate(conf_or_obj: Union[Any, DictConfig], **kws: Any) -> object:
     """Instantiate a config if needed."""
     if isinstance(conf_or_obj, (DictConfig, dict)):
-        return instantiate(conf_or_obj, **kwargs)
+        return instantiate(conf_or_obj, **kws)
     return None
 
 
@@ -39,6 +40,7 @@ class Ranker(torch.nn.Module):
         monitor: Optional[RetrievalMonitor] = None,
         compile_encoder: bool = False,
         compile_kwargs: Optional[dict] = None,
+        gradient_checkpointing: bool = False,
     ):
         super().__init__()
         if isinstance(optimizer, (dict, DictConfig)):
@@ -55,13 +57,21 @@ class Ranker(torch.nn.Module):
         self.gradients = gradients
         self.monitor = monitor
 
-        # compile the encoder
+        # Enable gradient checkpointing
+        if gradient_checkpointing:
+            try:
+                encoder.gradient_checkpointing_enable()
+                logger.debug("Gradient checkpointing Enabled.")
+            except Exception as exc:
+                logger.warning(f"Failed to enable gradient checkpointing: {exc}")
+
+        # Compile the encoder
         if compile_encoder:
-            logger.info("Compiling the encoder..")
             encoder = torch.compile(
                 encoder,
                 **(compile_kwargs or {}),
             )  # type: ignore
+            logger.info("`torch.compile` enabled (encoder)")
 
         self.encoder = encoder
 
@@ -115,48 +125,74 @@ class Ranker(torch.nn.Module):
 
         return self.scheduler_cls(optimizer)
 
-    def _forward_field(self, batch: dict, field: Optional[vod_encoder.VodEncoderInputType] = None) -> torch.Tensor:
-        input_ids = batch["input_ids"]
-        attention_mask = batch["attention_mask"]
+    def _forward_encoder(self, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
         original_shape = input_ids.shape
         input_ids = input_ids.view(-1, original_shape[-1])
         attention_mask = attention_mask.view(-1, original_shape[-1])
-        output: modeling_outputs.BaseModelOutputWithPooling = self.encoder(input_ids, attention_mask, input_type=field)
+        output: modeling_outputs.BaseModelOutputWithPooling = self.encoder(input_ids, attention_mask)
         embedding = output.pooler_output
         embedding = embedding.view(*original_shape[:-1], -1)
         return embedding
 
     @staticmethod
-    def _fetch_field_attrs(batch: dict, field: str) -> Optional[dict[str, torch.Tensor]]:
-        keys = ["input_ids", "attention_mask"]
-        keys_map = {f"{field}.{key}": key for key in keys}
-        if not all(key in batch for key in keys_map):
+    def _fetch_field_inputs(batch: dict, field: str) -> Optional[tuple[torch.Tensor, torch.Tensor]]:
+        keys = [f"{field}.{key}" for key in ["input_ids", "attention_mask"]]
+        if not all(key in batch for key in keys):
             return None
-        return {key_to: batch[key_from] for key_from, key_to in keys_map.items()}
+        return (batch[keys[0]], batch[keys[1]])
 
-    def encode(self, batch: dict, **kwargs: Any) -> dict[str, torch.Tensor]:
-        """Computes the embeddings for the query and the document."""
-        output = {}
-        for field, key in FIELD_MAPPING.items():
-            fields = self._fetch_field_attrs(batch, field)
-            if fields is None:
+    def encode(self, batch: dict, **kws: Any) -> dict[str, torch.Tensor]:
+        """Computes the embeddings for the query and the document.
+
+        NOTE: queries and documents are concatenated so representations can be obainted with a single encoder pass.
+        """
+        fields_data: list[tuple[str, torch.Size]] = []
+        input_ids: None | torch.Tensor = None
+        attention_mask: None | torch.Tensor = None
+
+        # Collect fields_data and concatenate `input_ids`/`attention_mask`.
+        for field, output_key in FIELD_MAPPING.items():
+            inputs = self._fetch_field_inputs(batch, field)
+            if inputs is None:
                 continue
-            output[key] = self._forward_field(fields, field)
 
-        # Output validation
-        if len(output) == 0:
+            # Unpack `input_ids`/`attention_mask` and concatenate with the other keys
+            input_ids_, attention_mask_ = inputs
+            fields_data.append((output_key, input_ids_.shape[:-1]))
+            input_ids_ = _flatten(input_ids_, data_dim=1)
+            attention_mask_ = _flatten(attention_mask_, data_dim=1)
+            if input_ids is None:
+                input_ids = input_ids_
+                attention_mask = attention_mask_
+            else:
+                input_ids = torch.cat([input_ids, input_ids_], dim=0)
+                attention_mask = torch.cat([attention_mask, attention_mask_], dim=0)  # type: ignore
+
+        # Input validation
+        if input_ids is None:
             raise ValueError(
                 f"No fields to process. Batch keys = {batch.keys()}. Expected fields = {FIELD_MAPPING.keys()}."
             )
 
-        return output
+        # Process the inputs with the Encoder
+        encoded: modeling_outputs.BaseModelOutputWithPooling = self.encoder(input_ids, attention_mask)
+        embedding = encoded.pooler_output
 
-    def forward(self, batch: dict, *, mode: str = "encode", **kwargs: Any) -> dict[str, torch.Tensor]:
+        # Unpack the embedding
+        outputs = {}
+        embedding_dim = embedding.shape[1:]
+        chuncks = torch.split(embedding, [math.prod(s) for _, s in fields_data])
+        for (key, shape), chunk in zip(fields_data, chuncks):
+            outputs[key] = chunk.view(*shape, *embedding_dim)
+
+        return outputs
+
+    def forward(self, batch: dict, *, mode: str = "encode", **kws: Any) -> dict[str, torch.Tensor]:
         """Forward pass."""
         if mode == "encode":
-            return self.encode(batch, **kwargs)
+            return self.encode(batch, **kws)
         if mode == "evaluate":
-            return self.evaluate(batch, **kwargs)
+            return self.evaluate(batch, **kws)
 
         raise ValueError(f"Unknown mode {mode}.")
 
@@ -166,7 +202,7 @@ class Ranker(torch.nn.Module):
         *,
         filter_output: bool = True,
         compute_metrics: bool = True,
-        **kwargs: Any,
+        **kws: Any,
     ) -> dict[str, Any]:  # noqa: ARG002
         """Run a forward pass, compute the gradients, compute & return the metrics."""
         fwd_output = self.forward(batch)
@@ -203,3 +239,7 @@ def _filter_model_output(output: dict[str, Any]) -> dict[str, Any]:
 @hashregister(Ranker)
 def _hash_ranker(hasher: Hasher, value: Ranker) -> str:  # noqa: ARG001
     return fingerprint.fingerprint_torch_module(value)
+
+
+def _flatten(x: torch.Tensor, data_dim: int = 0) -> torch.Tensor:
+    return x.view(-1, *x.shape[-data_dim:])

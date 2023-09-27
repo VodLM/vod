@@ -7,3 +7,5 @@ defaults:
   - _self_
 
 _target_: vod_models.Ranker
+compile_encoder: false
+gradient_checkpointing: false
