@@ -105,6 +105,17 @@ def register_omgeaconf_resolvers() -> None:  # noqa: C901, PLR0915
             y = max(x, y)
         return int(y)
 
+    def _normalize_dtype(x: str | int) -> str:
+        return {
+            "float16": "float16",
+            "bfloat16": "bfloat16",
+            "bf16": "bfloat16",
+            "bf16-mixed": "bfloat16",
+            "float32": "float32",
+            "16": "float16",
+            "32": "float32",
+        }[str(x)]
+
     # Register resolvers
     OmegaConf.register_new_resolver("whoami", lambda: os.environ.get("USER"))
     OmegaConf.register_new_resolver("hostname", socket.gethostname)
@@ -134,3 +145,4 @@ def register_omgeaconf_resolvers() -> None:  # noqa: C901, PLR0915
     OmegaConf.register_new_resolver("join_path", _join_path)
     OmegaConf.register_new_resolver("abs_path", lambda x: pathlib.Path(x).absolute().as_posix())
     OmegaConf.register_new_resolver("n_cpus", lambda *_: n_cpus)
+    OmegaConf.register_new_resolver("normalize_dtype", _normalize_dtype)

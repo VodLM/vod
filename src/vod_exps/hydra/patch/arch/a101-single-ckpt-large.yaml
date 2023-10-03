@@ -12,8 +12,9 @@ defaults:
 
 
 model:
-  compile_encoder: false
-  gradient_checkpointing: true
+  optim_config:
+    compile: false
+    gradient_checkpointing: true
 
 resources:
   num_workers: 2

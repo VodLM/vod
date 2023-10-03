@@ -13,6 +13,7 @@ class PrioritySampledSections:
 
     samples: vt.RetrievalBatch
     log_weights: np.ndarray
+    rel_ids: np.ndarray
     raw_scores: dict[str, np.ndarray]
 
 
@@ -66,6 +67,7 @@ def sample_search_results(
             scores=scores,
             labels=labels,
         ),
+        rel_ids=local_ids,
         log_weights=log_weights,
         raw_scores=sampled_raw_scores,
     )

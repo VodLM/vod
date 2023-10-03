@@ -1,28 +1,78 @@
 import copy
 import functools
 import math
-from typing import Any, Optional, Union
+import typing as typ
 
+import omegaconf as omg
 import torch
+import vod_configs
 import vod_gradients
 from datasets.fingerprint import Hasher, hashregister
 from hydra.utils import instantiate
 from loguru import logger
-from omegaconf import DictConfig
+from peft import mapping as peft_mapping
+from peft import utils as peft_utils
 from transformers import modeling_outputs, pytorch_utils, trainer_pt_utils
 from vod_models import vod_encoder  # type: ignore
 from vod_models.monitor import RetrievalMonitor
 from vod_tools import fingerprint
 
 
-def _maybe_instantiate(conf_or_obj: Union[Any, DictConfig], **kws: Any) -> object:
+def _maybe_instantiate(conf_or_obj: typ.Any | omg.DictConfig, **kws: typ.Any) -> object:
     """Instantiate a config if needed."""
-    if isinstance(conf_or_obj, (DictConfig, dict)):
+    if isinstance(conf_or_obj, (omg.DictConfig, dict)):
         return instantiate(conf_or_obj, **kws)
     return None
 
 
 FIELD_MAPPING: dict[vod_encoder.VodEncoderInputType, str] = {"query": "hq", "section": "hd"}
+
+
+def _prepare_encoder(
+    encoder: vod_encoder.VodEncoder,
+    optim_config: None | vod_configs.models.ModelOptimConfig,
+) -> vod_encoder.VodEncoder:
+    if optim_config is None:
+        return encoder
+    if optim_config.prepare_for_kbit_training:
+        # Cast parameters and register hooks to enable checkpointing
+        encoder = peft_utils.other.prepare_model_for_kbit_training(
+            encoder,
+            use_gradient_checkpointing=optim_config.gradient_checkpointing,
+        )
+        logger.debug("Prepared for kbit training.")
+
+    if optim_config.gradient_checkpointing:
+        # Enable gradient checkpointing
+        try:
+            encoder.gradient_checkpointing_enable()
+            logger.debug("Gradient checkpointing Enabled.")
+        except Exception as exc:
+            logger.warning(f"Failed to enable gradient checkpointing: {exc}")
+
+    if optim_config.peft_config is not None:
+        # Apply PEFT optimizations
+        encoder = peft_mapping.get_peft_model(encoder, optim_config.peft_config)  # type: ignore
+        logger.debug(f"PEFT enabled `{type(optim_config.peft_config).__name__}`.")
+
+    if optim_config.params_dtype is not None:
+        # Cast the parameters to the specified dtype
+        dtype = {
+            "float16": torch.float16,
+            "bfloat16": torch.bfloat16,
+            "float32": torch.float32,
+        }[optim_config.params_dtype]
+        for _, param in encoder.named_parameters():
+            if param.dtype in [torch.float16, torch.bfloat16, torch.float32]:
+                param.data = param.data.to(dtype)
+        logger.debug(f"PEFT dtype `{dtype}` applied to float parameters.")
+
+    if optim_config.compile:
+        # Compile the model
+        encoder = torch.compile(encoder, **optim_config.compile_kwargs)  # type: ignore
+        logger.debug("`torch.compile` enabled (encoder)")
+
+    return encoder
 
 
 class Ranker(torch.nn.Module):
@@ -35,19 +85,17 @@ class Ranker(torch.nn.Module):
         self,
         encoder: vod_encoder.VodEncoder,
         gradients: vod_gradients.Gradients,
-        optimizer: Optional[dict | DictConfig | functools.partial] = None,
-        scheduler: Optional[dict | DictConfig | functools.partial] = None,
-        monitor: Optional[RetrievalMonitor] = None,
-        compile_encoder: bool = False,
-        compile_kwargs: Optional[dict] = None,
-        gradient_checkpointing: bool = False,
+        optimizer: None | dict | omg.DictConfig | functools.partial = None,
+        scheduler: None | dict | omg.DictConfig | functools.partial = None,
+        monitor: None | RetrievalMonitor = None,
+        optim_config: None | vod_configs.models.ModelOptimConfig = None,
     ):
         super().__init__()
-        if isinstance(optimizer, (dict, DictConfig)):
+        if isinstance(optimizer, (dict, omg.DictConfig)):
             optimizer = _maybe_instantiate(optimizer)  # type: ignore
             if not isinstance(optimizer, functools.partial):
                 raise TypeError(f"Expected a partial function, got {type(optimizer)}")
-        if isinstance(scheduler, (dict, DictConfig)):
+        if isinstance(scheduler, (dict, omg.DictConfig)):
             scheduler = _maybe_instantiate(scheduler)  # type: ignore
             if not isinstance(scheduler, functools.partial):
                 raise TypeError(f"Expected a partial function, got {type(scheduler)}")
@@ -57,23 +105,8 @@ class Ranker(torch.nn.Module):
         self.gradients = gradients
         self.monitor = monitor
 
-        # Enable gradient checkpointing
-        if gradient_checkpointing:
-            try:
-                encoder.gradient_checkpointing_enable()
-                logger.debug("Gradient checkpointing Enabled.")
-            except Exception as exc:
-                logger.warning(f"Failed to enable gradient checkpointing: {exc}")
-
-        # Compile the encoder
-        if compile_encoder:
-            encoder = torch.compile(
-                encoder,
-                **(compile_kwargs or {}),
-            )  # type: ignore
-            logger.info("`torch.compile` enabled (encoder)")
-
-        self.encoder = encoder
+        # Prepare the encoder with optional optimizations
+        self.encoder = _prepare_encoder(encoder, optim_config)
 
     def get_output_shape(self, model_output_key: None | str = None) -> tuple[int, ...]:  # noqa: ARG002
         """Dimension of the model output."""
@@ -86,7 +119,7 @@ class Ranker(torch.nn.Module):
         except AttributeError:
             return fingerprint.fingerprint_torch_module(self)
 
-    def get_optimizer(self, module: Optional[torch.nn.Module] = None) -> torch.optim.Optimizer:
+    def get_optimizer(self, module: None | torch.nn.Module = None) -> torch.optim.Optimizer:
         """Configure the optimizer and the learning rate scheduler."""
         opt_model = module or self
 
@@ -135,13 +168,13 @@ class Ranker(torch.nn.Module):
         return embedding
 
     @staticmethod
-    def _fetch_field_inputs(batch: dict, field: str) -> Optional[tuple[torch.Tensor, torch.Tensor]]:
+    def _fetch_field_inputs(batch: dict, field: str) -> None | tuple[torch.Tensor, torch.Tensor]:
         keys = [f"{field}.{key}" for key in ["input_ids", "attention_mask"]]
         if not all(key in batch for key in keys):
             return None
         return (batch[keys[0]], batch[keys[1]])
 
-    def encode(self, batch: dict, **kws: Any) -> dict[str, torch.Tensor]:
+    def encode(self, batch: dict, **kws: typ.Any) -> dict[str, torch.Tensor]:
         """Computes the embeddings for the query and the document.
 
         NOTE: queries and documents are concatenated so representations can be obainted with a single encoder pass.
@@ -187,7 +220,7 @@ class Ranker(torch.nn.Module):
 
         return outputs
 
-    def forward(self, batch: dict, *, mode: str = "encode", **kws: Any) -> dict[str, torch.Tensor]:
+    def forward(self, batch: dict, *, mode: str = "encode", **kws: typ.Any) -> dict[str, torch.Tensor]:
         """Forward pass."""
         if mode == "encode":
             return self.encode(batch, **kws)
@@ -198,12 +231,12 @@ class Ranker(torch.nn.Module):
 
     def evaluate(
         self,
-        batch: dict[str, Any],
+        batch: dict[str, typ.Any],
         *,
         filter_output: bool = True,
         compute_metrics: bool = True,
-        **kws: Any,
-    ) -> dict[str, Any]:  # noqa: ARG002
+        **kws: typ.Any,
+    ) -> dict[str, typ.Any]:  # noqa: ARG002
         """Run a forward pass, compute the gradients, compute & return the metrics."""
         fwd_output = self.forward(batch)
         grad_output = self.gradients({**batch, **fwd_output})
@@ -229,7 +262,7 @@ class Ranker(torch.nn.Module):
         return output
 
 
-def _filter_model_output(output: dict[str, Any]) -> dict[str, Any]:
+def _filter_model_output(output: dict[str, typ.Any]) -> dict[str, typ.Any]:
     def _filter_fn(key: str, _: torch.Tensor) -> bool:
         return not str(key).startswith("_")
 

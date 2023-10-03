@@ -17,6 +17,7 @@ from .datasets import (
     TrainDatasetsConfig,
 )
 from .models import (
+    ModelOptimConfig,
     TokenizerConfig,
 )
 from .search import (

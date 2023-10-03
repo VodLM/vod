@@ -9,6 +9,7 @@ import vod_configs
 import vod_search
 import vod_types as vt
 from loguru import logger
+from vod_tools.misc.exceptions import dump_exceptions_to_file
 
 from .core import (
     in_batch_negatives,
@@ -73,6 +74,7 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
         """Get all indexed sections."""
         return self.search_client.sections
 
+    @dump_exceptions_to_file
     def __call__(
         self,
         inputs: list[dict[str, typ.Any]],

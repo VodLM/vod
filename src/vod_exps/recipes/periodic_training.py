@@ -50,6 +50,8 @@ def periodic_training(  # noqa: C901, PLR0915
 
     # Setup Fabric model & optimizer
     ranker, optimizer = fabric.setup(ranker, optimizer)
+    if fabric.is_global_zero:
+        pretty.pprint_params(ranker, header="Model Parameters (setup)")
 
     # Get the tokenizer
     tokenizer = config.tokenizer.instantiate()
