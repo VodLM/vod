@@ -4,3 +4,4 @@ from .hydra import (
     init_hydra_config,
     register_omgeaconf_resolvers,
 )
+from .train import run_exp

@@ -2,7 +2,7 @@ defaults:
   - dataset: fiqa
   - templates: default
   - dl_sampler: none
-  - model: default
+  - model: ranker
   - tokenizer: default
   - trainer: default
   - benchmark: default
@@ -54,10 +54,10 @@ collates:
     templates: ${templates} # Templates for the encoder input
   train:
     # Configuration for the training/evaluation `Collate`
-    n_sections: 16 # Number of sections for each query
-    max_pos_sections: 4 # Maximum number of positive sections for each query
+    n_sections: 32 # Number of sections for each query
+    max_pos_sections: 8 # Maximum number of positive sections for each query
     support_size: 100 # Maximum number of sections to sample from
-    prefetch_n_sections: 300 # Number of sections to fetch from each search service
+    prefetch_n_sections: 128 # Number of sections to fetch from each search service
     do_sample: true # Whether to sample or use the top-k sections
     in_batch_negatives: false # Whether to share sections across all queries in a batch
     encoder_max_length: ${collates.predict.encoder_max_length}
@@ -67,7 +67,7 @@ collates:
     n_sections: null
     max_pos_sections: null
     support_size: null
-    prefetch_n_sections: 1000
+    prefetch_n_sections: 300
     do_sample: false
     in_batch_negatives: false
     prep_num_proc: ${resources.num_proc}

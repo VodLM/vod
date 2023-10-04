@@ -283,7 +283,9 @@ class _FilterAndAssignRetrievalIds:
 
 
 @fingerprint.hashregister(_FilterAndAssignRetrievalIds)
-def _hash_filter_and_format_retrieval_ids(hasher: datasets.fingerprint.Hasher, obj: _FilterAndAssignRetrievalIds) -> str:
+def _hash_filter_and_format_retrieval_ids(
+    hasher: datasets.fingerprint.Hasher, obj: _FilterAndAssignRetrievalIds
+) -> str:
     """Register the `_FormatQueries` class to work with `datasets.map()`."""
     return hasher.hash(
         {

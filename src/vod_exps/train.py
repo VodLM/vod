@@ -20,7 +20,7 @@ except RuntimeError:
 import vod_configs
 import vod_models
 from vod_exps import recipes
-from vod_exps import utils as cli_utils
+from vod_exps import utils as exp_utils
 from vod_tools import pretty
 
 from .hydra import hyra_conf_path, register_omgeaconf_resolvers
@@ -34,7 +34,12 @@ def _is_gloabl_zero() -> bool:
 
 
 @hydra.main(config_path=hyra_conf_path(), config_name="train", version_base="1.3")
-def run(hydra_config: DictConfig) -> None:
+def cli(hydra_config: DictConfig) -> None:
+    """Training CLI.."""
+    run_exp(hydra_config)
+
+
+def run_exp(hydra_config: DictConfig) -> None:
     """Train a ranker for a retrieval task."""
     if hydra_config.load_from is not None:
         logger.info(f"Loading checkpoint from `{hydra_config.load_from}`")
@@ -50,7 +55,7 @@ def run(hydra_config: DictConfig) -> None:
 
     logger.debug(f"Setting environment variables from config: {hydra_config.env}")
     os.environ.update({k: str(v) for k, v in hydra_config.env.items()})
-    cli_utils.set_training_context()
+    exp_utils.set_training_context()
     exp_dir = Path()
     logger.info(f"Experiment directory: {exp_dir.absolute()}")
 
@@ -72,10 +77,10 @@ def run(hydra_config: DictConfig) -> None:
     # Log config & setup logger
     _customize_logger(fabric=fabric)
     if fabric.is_global_zero:
-        cli_utils.log_config(
+        exp_utils.log_config(
             config=hydra_config,
             exp_dir=exp_dir,
-            extras={"meta": cli_utils._get_ranker_meta_data(ranker)},
+            extras={"meta": exp_utils._get_ranker_meta_data(ranker)},
             fabric=fabric,
         )
 
@@ -94,7 +99,7 @@ def run(hydra_config: DictConfig) -> None:
 
 if __name__ == "__main__":
     try:
-        run()
+        cli()
         logger.info(f"Success. Experiment logged to {Path().absolute()}")
     except Exception as exc:
         loguru.logger.warning(f"Failure. Experiment logged to {Path().absolute()}")
