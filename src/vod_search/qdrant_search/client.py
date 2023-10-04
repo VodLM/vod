@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import abc
 import copy
 import dataclasses
@@ -13,6 +11,7 @@ import numba
 import numpy as np
 import qdrant_client
 import rich
+import vod_types as vt
 from grpc import StatusCode
 from grpc._channel import _InactiveRpcError
 from loguru import logger
@@ -22,9 +21,8 @@ from qdrant_client.qdrant_remote import QdrantRemote
 from rich import status
 from rich.markup import escape
 from rich.progress import track
-from vod_search import base, rdtypes
-from vod_tools import dstruct
-from vod_tools.misc.pretty import human_format_nb
+from vod_search import base
+from vod_tools import pretty
 
 QDRANT_SUBSET_ID_KEY: str = "_SUBSET_ID_"
 
@@ -112,12 +110,12 @@ class QdrantSearchClient(base.SearchClient):
         self,
         *,
         text: None | list[str] = None,  # noqa: ARG002
-        vector: None | rdtypes.Ts,
-        subset_ids: None | list[list[str]] = None,
-        ids: None | list[list[str]] = None,  # noqa: ARG002
-        shard: None | list[str] = None,  # noqa: ARG002
+        vector: None | np.ndarray,
+        subset_ids: None | list[list[base.SubsetId]] = None,
+        ids: None | list[list[base.SectionId]] = None,  # noqa: ARG002
+        shard: None | list[base.ShardName] = None,  # noqa: ARG002
         top_k: int = 3,
-    ) -> rdtypes.RetrievalBatch[rdtypes.Ts]:
+    ) -> vt.RetrievalBatch:
         """Search the server given a batch of text and/or vectors."""
         if vector is None:
             raise ValueError("vector cannot be None")
@@ -155,7 +153,7 @@ class QdrantSearchClient(base.SearchClient):
 
 
 @numba.jit(forceobj=True, looplift=True)
-def _search_batch_to_rdtypes(batch: list[list[qdrm.ScoredPoint]], top_k: int) -> rdtypes.RetrievalBatch:
+def _search_batch_to_rdtypes(batch: list[list[qdrm.ScoredPoint]], top_k: int) -> vt.RetrievalBatch:
     """Convert a batch of search results to rdtypes."""
     scores = np.full((len(batch), top_k), -np.inf, dtype=np.float32)
     indices = np.full((len(batch), top_k), -1, dtype=np.int64)
@@ -167,7 +165,7 @@ def _search_batch_to_rdtypes(batch: list[list[qdrm.ScoredPoint]], top_k: int) ->
             if j > max_j:
                 max_j = j
 
-    return rdtypes.RetrievalBatch(
+    return vt.RetrievalBatch(
         scores=scores[:, : max_j + 1],
         indices=indices[:, : max_j + 1],
     )
@@ -188,13 +186,13 @@ class QdrantSearchMaster(base.SearchMaster[QdrantSearchClient], abc.ABC):
 
     def __init__(
         self,
-        vectors: dstruct.SizedDataset[np.ndarray],
+        vectors: vt.Sequence[np.ndarray],
         *,
         subset_ids: Optional[Iterable[str | int]] = None,
         host: str = "http://localhost",
         port: int = 6333,
         grpc_port: None | int = 6334,
-        index_name: Optional[str] = None,
+        index_name: None | str = None,
         persistent: bool = True,
         exist_ok: bool = True,
         skip_setup: bool = False,
@@ -312,7 +310,7 @@ class QdrantSearchMaster(base.SearchMaster[QdrantSearchClient], abc.ABC):
 def _validate(
     client: qdrant_client.QdrantClient,
     collection_name: str,
-    vectors: dstruct.SizedDataset[np.ndarray],
+    vectors: vt.Sequence[np.ndarray],
     raise_if_invalid: bool = False,
 ) -> IndexValidationStatus:
     """Validate the index."""
@@ -428,7 +426,7 @@ def _make_qdrant_body(dim: int, body: Optional[dict[str, Any]]) -> dict[str, Any
 def _ingest_data(
     client: qdrant_client.QdrantClient,
     collection_name: str,
-    vectors: dstruct.SizedDataset[np.ndarray],
+    vectors: vt.Sequence[np.ndarray],
     groups: Optional[Iterable[str | int]] = None,
     batch_size: int = 1_000,
 ) -> None:
@@ -436,7 +434,7 @@ def _ingest_data(
     groups_iter = iter(groups) if groups is not None else itertools.repeat(None)
     for j in track(
         range(0, len(vectors), batch_size),
-        description=f"{_collection_name(collection_name)}: Ingesting {human_format_nb(len(vectors))} vectors",
+        description=f"{_collection_name(collection_name)}: Ingesting {pretty.human_format_nb(len(vectors))} vectors",
     ):
         vec_chunk = vectors[j : j + batch_size]
         if groups is None:

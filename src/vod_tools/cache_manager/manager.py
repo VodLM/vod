@@ -1,10 +1,8 @@
-from __future__ import annotations
-
 import pathlib
 import shutil
 
 import loguru
-from lightning.pytorch import utilities as pl_utils
+from lightning_utilities.core.rank_zero import rank_zero_only
 
 
 class CacheManager:
@@ -30,13 +28,13 @@ class CacheManager:
         if not self.persist:
             self._cleanup(self.path)
 
-    @pl_utils.rank_zero_only
+    @rank_zero_only
     def _create(self, path: pathlib.Path) -> None:
         if self.delete_existing and path.exists():
             shutil.rmtree(path)
         path.mkdir(parents=True, exist_ok=True)
 
-    @pl_utils.rank_zero_only
+    @rank_zero_only
     def _cleanup(self, path: pathlib.Path) -> None:
         for f in path.iterdir():
             loguru.logger.info(f"Deleting file ({f.stat().st_size / 1e6:.2f} MB): `{f}`")

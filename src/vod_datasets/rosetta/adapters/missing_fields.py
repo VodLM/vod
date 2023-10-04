@@ -60,7 +60,7 @@ class MissingFieldSectionModel(pydantic.BaseModel):
         ...,
         validation_alias=aliases.SECTION_ALIASES,
     )
-    title: typing.Optional[str] = pydantic.Field(
+    title: None | str = pydantic.Field(
         default=None,
         validation_alias=aliases.TITLES_ALIASES,
     )

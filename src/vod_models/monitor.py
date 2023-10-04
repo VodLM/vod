@@ -1,11 +1,6 @@
-# pylint: disable=no-member,arguments-differ
-
-from __future__ import annotations
-
 import abc
 import math
-from abc import ABC
-from typing import Any, Iterable, Optional, Tuple
+import typing as typ
 
 import hydra
 import omegaconf
@@ -26,7 +21,7 @@ def _rank_labels(*, labels: torch.Tensor, scores: torch.Tensor) -> torch.Tensor:
 
 
 @torch.jit.script
-def _mask_inputs(preds: torch.Tensor, target: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+def _mask_inputs(preds: torch.Tensor, target: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     mask = preds.isnan()
     preds = preds.masked_fill(mask, -math.inf)
     mask = mask | preds.isinf()
@@ -41,8 +36,8 @@ class HitRate(torchmetrics.Metric):
     higher_is_better: bool = True
     full_state_update: bool = False
 
-    def __init__(self, top_k: int, **kwargs: Any):
-        super().__init__(**kwargs)
+    def __init__(self, top_k: int, **kws: typ.Any):
+        super().__init__(**kws)
         self.top_k = top_k
         self.add_state("hits", default=torch.tensor(0), dist_reduce_fx="sum")
         self.add_state("total", default=torch.tensor(0), dist_reduce_fx="sum")
@@ -61,11 +56,11 @@ class HitRate(torchmetrics.Metric):
         return self.hits.float() / self.total
 
 
-class AveragedMetric(torchmetrics.Metric, ABC):
+class AveragedMetric(torchmetrics.Metric, abc.ABC):
     """Base class for metrics that are computed at the sample level and averaged over the entire dataset."""
 
-    def __init__(self, top_k: Optional[int] = None, **kwargs: Any):
-        super().__init__(**kwargs)
+    def __init__(self, top_k: None | int = None, **kws: typ.Any):
+        super().__init__(**kws)
         self.top_k = top_k
         self.add_state("value", default=torch.tensor(0.0), dist_reduce_fx="sum")
         self.add_state("weight", default=torch.tensor(0.0), dist_reduce_fx="sum")
@@ -123,7 +118,7 @@ class LightningAveragedMetric(AveragedMetric):
         self._update(batch_avg)
 
     @abc.abstractmethod
-    def _metric_fn(self, preds: torch.Tensor, target: torch.Tensor, top_k: Optional[int]) -> torch.Tensor:
+    def _metric_fn(self, preds: torch.Tensor, target: torch.Tensor, top_k: None | int) -> torch.Tensor:
         """Compute the metric given the predictions and the targets."""
         ...
 
@@ -131,25 +126,25 @@ class LightningAveragedMetric(AveragedMetric):
 class NormalizedDCG(LightningAveragedMetric):
     """Normalized Discounted Cumulative Gain (NDCG)."""
 
-    def _metric_fn(self, preds: torch.Tensor, target: torch.Tensor, top_k: Optional[int]) -> torch.Tensor:
+    def _metric_fn(self, preds: torch.Tensor, target: torch.Tensor, top_k: None | int) -> torch.Tensor:
         return retrieval_normalized_dcg(preds=preds, target=target, top_k=top_k)
 
 
 class Recall(LightningAveragedMetric):
     """Recall metric."""
 
-    def _metric_fn(self, preds: torch.Tensor, target: torch.Tensor, top_k: Optional[int]) -> torch.Tensor:
+    def _metric_fn(self, preds: torch.Tensor, target: torch.Tensor, top_k: None | int) -> torch.Tensor:
         return retrieval_recall(preds=preds, target=target, top_k=top_k)
 
 
 class Precision(LightningAveragedMetric):
     """Precision metric."""
 
-    def _metric_fn(self, preds: torch.Tensor, target: torch.Tensor, top_k: Optional[int]) -> torch.Tensor:
+    def _metric_fn(self, preds: torch.Tensor, target: torch.Tensor, top_k: None | int) -> torch.Tensor:
         return retrieval_precision(preds=preds, target=target, top_k=top_k)
 
 
-def retrieval_metric_factory(name: str, **kwargs: Any) -> Metric:
+def retrieval_metric_factory(name: str, **kws: typ.Any) -> Metric:
     """Instantiate a torchmetrics retrieval metric from a string name."""
     if "@" in name:
         name, k = name.split("@")
@@ -167,31 +162,31 @@ def retrieval_metric_factory(name: str, **kwargs: Any) -> Metric:
 
     cls = avail_cls[name]
 
-    return cls(top_k=top_k, **kwargs)
+    return cls(top_k=top_k, **kws)
 
 
 class RetrievalMetricCollection(MetricCollection):
     """A collection of `torchmetrics.Metric` for information retrieval."""
 
-    def __init__(self, metrics: Iterable[str], **kwargs: Any):
+    def __init__(self, metrics: typ.Iterable[str], **kws: typ.Any):
         def clean_name(x: str) -> str:
             return x.replace("@", "_")
 
-        metrics = {clean_name(name): retrieval_metric_factory(name=name, **kwargs) for name in metrics}
+        metrics = {clean_name(name): retrieval_metric_factory(name=name, **kws) for name in metrics}
         super().__init__(metrics=metrics)
 
 
 class RetrievalMonitor(RetrievalMetricCollection):
     """Compute retrieval metrics from a batch of data."""
 
-    def __init__(self, metrics: Iterable[str] | omegaconf.DictConfig, **kwargs: Any):
+    def __init__(self, metrics: typ.Iterable[str] | omegaconf.DictConfig, **kws: typ.Any):
         if isinstance(metrics, omegaconf.DictConfig):
             metrics = hydra.utils.instantiate(metrics)
 
-        super().__init__(metrics, **kwargs)
+        super().__init__(metrics, **kws)
 
     @torch.no_grad()
-    def forward(self, data: dict) -> dict[str, Any]:
+    def forward(self, data: dict) -> dict[str, typ.Any]:
         """Compute the metrics."""
         args = self._make_args(data)
         return super().forward(*args)
@@ -203,7 +198,7 @@ class RetrievalMonitor(RetrievalMetricCollection):
         super().update(*args)
 
     @staticmethod
-    def _make_args(data: dict) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _make_args(data: dict) -> tuple[torch.Tensor, torch.Tensor]:
         preds: torch.Tensor = data["_logits"]
         targets: torch.Tensor = data["_targets"]
         return preds, targets

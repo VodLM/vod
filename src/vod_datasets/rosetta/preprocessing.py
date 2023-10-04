@@ -160,7 +160,7 @@ def isolate_qa_and_sections(
 
     Each unique `context` will be converted into a section.
     The `subset_id` will be used to link queries to sections.
-    NB: make sure to sort the `remove_columns` to ensure the fingerprint is consistent.
+    NOTE: make sure to sort the `remove_columns` to ensure the fingerprint is consistent.
     """
     sections = data.map(
         _ExtractSections(

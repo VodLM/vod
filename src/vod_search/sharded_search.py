@@ -1,31 +1,37 @@
-from __future__ import annotations
-
 import asyncio
 import collections
 import dataclasses
-from typing import Any, Generic, Optional, TypeVar
+import typing as typ
 
 import numpy as np
-from vod_search import base, rdtypes
+import vod_types as vt
+from typing_extensions import Self
+from vod_search.base import (
+    SearchClient,
+    SearchMaster,
+    SectionId,
+    ShardName,
+    SubsetId,
+)
 
-Sc = TypeVar("Sc", bound=base.SearchClient, covariant=True)
-Sm = TypeVar("Sm", bound=base.SearchMaster, covariant=True)
-K = TypeVar("K", covariant=True)
+Sc = typ.TypeVar("Sc", bound=SearchClient, covariant=True)
+Sm = typ.TypeVar("Sm", bound=SearchMaster, covariant=True)
+T_co = typ.TypeVar("T_co", covariant=True)
 
 
 @dataclasses.dataclass
-class _ShardedQueries(Generic[K]):
-    shards: dict[K, dict[str, Any]]
-    lookup: list[tuple[K, int]]
+class _ShardedQueries(typ.Generic[T_co]):
+    shards: dict[T_co, dict[str, typ.Any]]
+    lookup: list[tuple[T_co, int]]
 
 
-class ShardedSearchClient(Generic[K, Sc], base.SearchClient):
+class ShardedSearchClient(typ.Generic[Sc], SearchClient):
     """A sharded search client."""
 
-    _shards: dict[K, Sc]
-    _offsets: dict[K, int]
+    _shards: dict[ShardName, Sc]
+    _offsets: dict[ShardName, int]
 
-    def __init__(self, shards: dict[K, Sc], offsets: dict[K, int]):
+    def __init__(self, shards: dict[ShardName, Sc], offsets: dict[ShardName, int]):
         self._shards = shards
         self._offsets = offsets
 
@@ -38,12 +44,12 @@ class ShardedSearchClient(Generic[K, Sc], base.SearchClient):
         return f"{type(self).__name__}(shards={self._shards})"
 
     @property
-    def shards(self) -> dict[K, Sc]:
+    def shards(self) -> dict[ShardName, Sc]:
         """The shards."""
         return self._shards.copy()
 
     @property
-    def offsets(self) -> dict[K, int]:
+    def offsets(self) -> dict[ShardName, int]:
         """The offsets."""
         return self._offsets.copy()
 
@@ -60,12 +66,12 @@ class ShardedSearchClient(Generic[K, Sc], base.SearchClient):
         self,
         *,
         text: list[str],
-        vector: None | rdtypes.Ts = None,
-        subset_ids: None | list[list[str]] = None,
-        ids: None | list[list[str]] = None,
-        shard: Optional[list[K]] = None,
+        vector: None | np.ndarray = None,
+        subset_ids: None | list[list[SubsetId]] = None,
+        ids: None | list[list[SectionId]] = None,
+        shard: None | list[ShardName] = None,
         top_k: int = 3,
-    ) -> rdtypes.RetrievalBatch[np.ndarray]:
+    ) -> vt.RetrievalBatch:
         """Search the server given a batch of text and/or vectors."""
         if shard is None:
             raise ValueError("Must specify `shard`")
@@ -103,12 +109,12 @@ class ShardedSearchClient(Generic[K, Sc], base.SearchClient):
         self,
         *,
         text: list[str],
-        shard: None | list[K] = None,
+        shard: None | list[ShardName] = None,
         vector: None | np.ndarray = None,
-        subset_ids: None | list[list[str]] = None,
-        ids: None | list[list[str]] = None,
+        subset_ids: None | list[list[SubsetId]] = None,
+        ids: None | list[list[SectionId]] = None,
         top_k: int = 3,
-    ) -> rdtypes.RetrievalBatch[np.ndarray]:
+    ) -> vt.RetrievalBatch:
         """Search the server given a batch of text and/or vectors."""
         if shard is None:
             raise ValueError("Must specify `shard`")
@@ -125,7 +131,7 @@ class ShardedSearchClient(Generic[K, Sc], base.SearchClient):
         )
 
         # Make the queries
-        shard_names: list[K] = list(sharded_queries.shards.keys())
+        shard_names: list[ShardName] = list(sharded_queries.shards.keys())
         payloads = [
             {
                 "shard_name": shard_name,
@@ -136,7 +142,7 @@ class ShardedSearchClient(Generic[K, Sc], base.SearchClient):
             for shard_name in shard_names
         ]
 
-        def _search_fn(payload: dict[str, Any]) -> rdtypes.RetrievalBatch[np.ndarray]:
+        def _search_fn(payload: dict[str, typ.Any]) -> vt.RetrievalBatch:
             """Search a single shard."""
             result = payload["search_shard"].search(
                 text=payload["query"]["text"],
@@ -161,9 +167,7 @@ class ShardedSearchClient(Generic[K, Sc], base.SearchClient):
         ]
 
         # Unpack the results
-        results_by_shard: dict[K, rdtypes.RetrievalBatch[np.ndarray]] = dict(
-            zip(shard_names, await asyncio.gather(*futures))
-        )
+        results_by_shard: dict[ShardName, vt.RetrievalBatch] = dict(zip(shard_names, await asyncio.gather(*futures)))
 
         # Gather the results and stack them
         return _gather_results(lookup=sharded_queries.lookup, results=results_by_shard)
@@ -171,11 +175,11 @@ class ShardedSearchClient(Generic[K, Sc], base.SearchClient):
 
 def _scatter_queries(
     text: list[str],
-    shard: list[K],
-    vector: Optional[rdtypes.Ts] = None,
-    subset_ids: Optional[list[list[str]]] = None,
-    ids: Optional[list[list[str]]] = None,
-) -> _ShardedQueries[K]:
+    shard: list[ShardName],
+    vector: None | np.ndarray = None,
+    subset_ids: None | list[list[str]] = None,
+    ids: None | list[list[str]] = None,
+) -> _ShardedQueries[ShardName]:
     shards = collections.defaultdict(lambda: collections.defaultdict(list))
     lookup = []
     for i, shard_name in enumerate(shard):
@@ -192,22 +196,22 @@ def _scatter_queries(
 
 
 def _gather_results(
-    lookup: list[tuple[K, int]],
-    results: dict[K, rdtypes.RetrievalBatch[rdtypes.Ts]],
-) -> rdtypes.RetrievalBatch[np.ndarray]:
+    lookup: list[tuple[ShardName, int]],
+    results: dict[ShardName, vt.RetrievalBatch],
+) -> vt.RetrievalBatch:
     gathered_results = [results[name][j] for name, j in lookup]
-    return rdtypes.stack_samples(gathered_results)
+    return vt.RetrievalBatch.stack_samples(gathered_results)
 
 
-class ShardedSearchMaster(Generic[K, Sm, Sc], base.SearchMaster[ShardedSearchClient]):
+class ShardedSearchMaster(typ.Generic[Sm, Sc], SearchMaster[ShardedSearchClient]):
     """Handle multiple search servers."""
 
-    shards: dict[K, Sm]
+    shards: dict[ShardName, Sm]
 
     def __init__(
         self,
-        shards: dict[K, Sm],
-        offsets: dict[K, int],
+        shards: dict[ShardName, Sm],
+        offsets: dict[ShardName, int],
         skip_setup: bool = False,
         free_resources: bool = False,
     ):
@@ -224,7 +228,7 @@ class ShardedSearchMaster(Generic[K, Sm, Sc], base.SearchMaster[ShardedSearchCli
         """Make the command to start the server."""
         raise NotImplementedError(f"{type(self).__name__} does not implement `_make_cmd`")
 
-    def __enter__(self) -> ShardedSearchMaster:
+    def __enter__(self) -> Self:
         """Start the servers."""
         for shard in self.shards.values():
             shard.__enter__()
@@ -236,7 +240,7 @@ class ShardedSearchMaster(Generic[K, Sm, Sc], base.SearchMaster[ShardedSearchCli
         for shard in self.shards.values():
             shard.__exit__(*args, **kwargs)
 
-    def get_client(self) -> ShardedSearchClient[K, Sc]:
+    def get_client(self) -> ShardedSearchClient[Sc]:
         """Get the client for interacting with the Faiss server."""
         return ShardedSearchClient(
             shards={name: shard.get_client() for name, shard in self.shards.items()},

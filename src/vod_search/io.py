@@ -1,8 +1,6 @@
-from __future__ import annotations
-
 import base64
 import io
-from typing import Optional, Type
+import typing as typ
 
 import numpy as np
 import torch
@@ -24,7 +22,7 @@ def serialize_np_array(array: np.ndarray) -> str:
     return _bytes_to_unicode(bytes_buffer)
 
 
-def deserialize_np_array(encoded_array: str, *, dtype: Optional[Type[np.dtype]] = None) -> np.ndarray:
+def deserialize_np_array(encoded_array: str, *, dtype: None | typ.Type[np.dtype] = None) -> np.ndarray:
     """Deserializes a numpy array from a string."""
     np_bytes = _unicode_to_bytes(encoded_array)
     load_bytes = io.BytesIO(np_bytes)
@@ -42,7 +40,7 @@ def serialize_torch_tensor(tensor: torch.Tensor) -> str:
     return base64.urlsafe_b64encode(bytes_buffer).decode("utf-8")
 
 
-def deserialize_torch_tensor(encoded_tensor: str, *, dtype: Optional[torch.dtype] = None) -> torch.Tensor:
+def deserialize_torch_tensor(encoded_tensor: str, *, dtype: None | typ.Type[torch.dtype] = None) -> torch.Tensor:
     """Deserializes a torch tensor from a string."""
     bytes_buffer = base64.urlsafe_b64decode(encoded_tensor)
     bytes_buffer = io.BytesIO(bytes_buffer)

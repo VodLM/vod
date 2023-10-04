@@ -1,5 +1,7 @@
+import copy
 import re
-import typing
+import typing as typ
+from typing import Any
 
 import datasets
 import jinja2
@@ -14,42 +16,55 @@ class Template:
     """
 
     template: str
+    _input_vars: list[str]
     _jinja_template: None | jinja2.Template = None
 
     def __init__(self, template: str) -> None:
         """Initialize the template."""
         self.template = template
+        self._input_vars = list(MATCH_JINJA_VARS.findall(self.template))
 
-    @property
-    def input_vars(self) -> list[str]:
-        """Get the template variables."""
-        return list(MATCH_JINJA_VARS.findall(self.template))
-
-    def is_valide(self, row: dict[str, typing.Any] | datasets.Dataset) -> bool:
-        """Validate a row."""
-        input_keys = set(row.keys()) if isinstance(row, dict) else set(row.features.keys())
-        return all(var in input_keys for var in self.input_vars)
-
-    def render(self, row: dict[str, typing.Any]) -> str:
+    def render(self, row: dict[str, typ.Any]) -> str:
         """Render the template."""
         return self.jinja_template.render(**{key: row[key] for key in self.input_vars})
 
-    def render_batch(self, batch: dict[str, list[typing.Any]]) -> list[str]:
+    def render_batch(self, batch: dict[str, typ.Any]) -> list[str]:
         """Render a batch."""
         input_vars = self.input_vars
         return [self.render({k: batch[k][i] for k in input_vars}) for i in range(len(batch[input_vars[0]]))]
+
+    def __call__(self, inputs: typ.Iterable[typ.Any] | dict[str, list[typ.Any]], **kws: Any) -> list[str]:
+        """Render a batch of inputs."""
+        if isinstance(inputs, dict):
+            return self.render_batch(inputs)
+
+        return [self.render(ex) for ex in inputs]
 
     def __repr__(self) -> str:
         """Get the string representation."""
         return f"Template({self.template!r})"
 
-    def __getstate__(self) -> dict[str, typing.Any]:
+    ## Utilities
+
+    @property
+    def input_vars(self) -> list[str]:
+        """Get the template variables."""
+        return copy.copy(self._input_vars)
+
+    def is_valid(self, row: dict[str, typ.Any] | datasets.Dataset) -> bool:
+        """Validate a row."""
+        input_keys = set(row.keys()) if isinstance(row, dict) else set(row.features.keys())
+        return all(var in input_keys for var in self.input_vars)
+
+    ## Handle pickling of the Jinja template
+
+    def __getstate__(self) -> dict[str, typ.Any]:
         """Get the state for pickling."""
         state = self.__dict__.copy()
         state["_jinja_template"] = None
         return state
 
-    def __setstate__(self, state: dict[str, typing.Any]) -> None:
+    def __setstate__(self, state: dict[str, typ.Any]) -> None:
         """Set the state after unpickling."""
         self.__dict__.update(state)
 

@@ -42,10 +42,10 @@ class SentenceSectionizer(Sectionizer):
 class FixedLengthSectionizer(Sectionizer):
     """A tokenizer that splits text into fixed-length chunks.
 
-    NB: `ellipsis_start` is added to the start of each chunk except the first.
-    NB: `ellipsis_end` is added to the end of each chunk except the last.
-    NB: `prefix` is added accounted in the token count for each chunk such as to ensure a fixed `max_length`.
-    NB: `add_prefix` determines whether the `prefix` is added to each yielded chunk.
+    NOTE: `ellipsis_start` is added to the start of each chunk except the first.
+    NOTE: `ellipsis_end` is added to the end of each chunk except the last.
+    NOTE: `prefix` is added accounted in the token count for each chunk such as to ensure a fixed `max_length`.
+    NOTE: `add_prefix` determines whether the `prefix` is added to each yielded chunk.
     """
 
     def __init__(  # noqa: PLR0913

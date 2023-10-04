@@ -11,7 +11,7 @@ from datasets import fingerprint
 from loguru import logger
 from tqdm import tqdm
 from typing_extensions import Self, Type
-from vod_configs.py.datasets import DatasetLoader
+from vod_configs.datasets import DatasetLoader
 from vod_datasets.rosetta import models
 from vod_datasets.rosetta.adapters.rename_fields import RenameSectionAdapter
 

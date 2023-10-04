@@ -1,19 +1,16 @@
-from __future__ import annotations
-
 from typing import Optional
 
 import faiss
 import numpy as np
 import torch
+import vod_configs
+import vod_types as vt
 from loguru import logger
 from vod_search.faiss_search import build_gpu, support
-from vod_tools import dstruct
-
-from src import vod_configs
 
 
 def build_faiss_index(
-    vectors: dstruct.SizedDataset[np.ndarray],
+    vectors: vt.Sequence[np.ndarray],
     *,
     factory_string: str,
     train_size: Optional[int] = None,
@@ -52,7 +49,7 @@ def build_faiss_index(
 
 
 def _build_faiss_index_on_cpu(
-    vectors: dstruct.SizedDataset[np.ndarray],
+    vectors: vt.Sequence[np.ndarray],
     *,
     factory_string: str,
     train_size: Optional[int] = None,

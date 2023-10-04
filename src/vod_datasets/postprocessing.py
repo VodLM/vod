@@ -30,8 +30,8 @@ def postprocess_sections(
         dset = _extract_sections(
             dset,
             config=config.sectioning,
-            map_kwargs=_prep_map_kwargs(
-                base=config.prep_map_kwargs,
+            map_kwargs=_prep_map_kws(
+                base=config.prep_map_kws,
                 batched=True,
                 desc=f"Extracting sections for `{identifier}`",
             ),
@@ -83,7 +83,7 @@ def _postprocessing(
     return dset
 
 
-def _prep_map_kwargs(base: dict[str, Any], **overrides: Any) -> dict[str, Any]:
+def _prep_map_kws(base: dict[str, Any], **overrides: Any) -> dict[str, Any]:
     always_on = {"batched": True, "with_indices": True}
     return {**base, **always_on, **overrides}
 

@@ -1,22 +1,55 @@
-from __future__ import annotations
-
 import asyncio
-from typing import Any, Optional
+import copy
+import typing as typ
 
 import numpy as np
-from vod_search import base, rdtypes
+import vod_types as vt
+from typing_extensions import Self
+
+from .base import (
+    SearchClient,
+    SearchMaster,
+    SectionId,
+    ShardName,
+    SubsetId,
+)
+
+ClientName: typ.TypeAlias = str
 
 
-class HybridSearchClient(base.SearchClient):
+class HybridSearchClient(SearchClient):
     """A client to interact with a search server."""
 
-    clients: dict[str, base.SearchClient]
+    clients: dict[ClientName, SearchClient]
+    _shard_list: None | list[ShardName]
+    _sections: None | vt.DictsSequence
 
-    def __init__(self, clients: dict[str, base.SearchClient]) -> None:
+    def __init__(
+        self,
+        clients: dict[ClientName, SearchClient],
+        shard_list: None | list[ShardName] = None,
+        sections: None | vt.DictsSequence = None,
+    ) -> None:
         self.clients = clients
+        self._shard_list = shard_list
+        self._sections = sections
+
+    @property
+    def shard_list(self) -> list[ShardName]:
+        """Get the available shards."""
+        if self._shard_list is None:
+            raise ValueError("The shard list has not been set.")
+        return copy.copy(self._shard_list)
+
+    @property
+    def sections(self) -> vt.DictsSequence:
+        """Get the sections."""
+        if self._sections is None:
+            raise ValueError("The sections have not been set.")
+        return self._sections
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}(clients={self.clients})"
+        return f"{type(self).__name__}(clients={self.clients}, shards={self.shard_list})"
 
     @property
     def requires_vectors(self) -> bool:
@@ -31,12 +64,12 @@ class HybridSearchClient(base.SearchClient):
         self,
         *,
         text: list[str],
-        vector: None | rdtypes.Ts = None,
-        subset_ids: None | list[list[str]] = None,
-        ids: None | list[list[str]] = None,
-        shard: None | list[str] = None,
+        vector: None | np.ndarray = None,
+        subset_ids: None | list[list[SubsetId]] = None,
+        ids: None | list[list[SectionId]] = None,
+        shard: None | list[ShardName] = None,
         top_k: int = 3,
-    ) -> dict[str, rdtypes.RetrievalBatch[rdtypes.Ts]]:
+    ) -> dict[ClientName, vt.RetrievalBatch]:
         """Search the server given a batch of text and/or vectors."""
         return {
             name: client.search(
@@ -54,15 +87,15 @@ class HybridSearchClient(base.SearchClient):
         self,
         *,
         text: list[str],
-        vector: Optional[rdtypes.Ts] = None,
-        subset_ids: None | list[list[str]] = None,
-        ids: None | list[list[str]] = None,
-        shard: None | list[str] = None,
+        vector: None | np.ndarray = None,
+        subset_ids: None | list[list[SubsetId]] = None,
+        ids: None | list[list[SectionId]] = None,
+        shard: None | list[ShardName] = None,
         top_k: int = 3,
-    ) -> dict[str, rdtypes.RetrievalBatch[np.ndarray]]:
+    ) -> dict[ClientName, vt.RetrievalBatch]:
         """Search the server given a batch of text and/or vectors."""
 
-        def search_fn(args: dict[str, Any]) -> rdtypes.RetrievalBatch[np.ndarray]:
+        def search_fn(args: dict[str, typ.Any]) -> vt.RetrievalBatch:
             client = args.pop("client")
             return client.search(**args)
 
@@ -89,23 +122,43 @@ class HybridSearchClient(base.SearchClient):
         return dict(zip(names, results))
 
 
-class HyrbidSearchMaster(base.SearchMaster):
+class HyrbidSearchMaster(SearchMaster):
     """Handle multiple search servers."""
 
-    servers: dict[str, base.SearchMaster]
+    servers: dict[str, SearchMaster]
+    _shard_list: None | list[ShardName]
+    _sections: None | vt.DictsSequence
 
     def __init__(
         self,
-        servers: dict[str, base.SearchMaster],
+        servers: dict[str, SearchMaster],
         skip_setup: bool = False,
         free_resources: bool = False,
+        shard_list: None | list[ShardName] = None,
+        sections: None | vt.DictsSequence = None,
     ):
         """Initialize the search master."""
         self.skip_setup = skip_setup
         self.servers = servers
         self.free_resources = free_resources
+        self._shard_list = shard_list
+        self._sections = sections
 
-    def __enter__(self) -> HyrbidSearchMaster:
+    @property
+    def shard_list(self) -> list[ShardName]:
+        """Get the available shards."""
+        if self._shard_list is None:
+            raise ValueError("The shard list has not been set.")
+        return copy.copy(self._shard_list)
+
+    @property
+    def sections(self) -> vt.DictsSequence:
+        """Get the sections."""
+        if self._sections is None:
+            raise ValueError("The sections have not been set.")
+        return self._sections
+
+    def __enter__(self) -> Self:
         """Start the servers."""
         if self.free_resources:
             self._free_resources()
@@ -125,7 +178,11 @@ class HyrbidSearchMaster(base.SearchMaster):
 
     def get_client(self) -> HybridSearchClient:
         """Get the client for interacting with the Faiss server."""
-        return HybridSearchClient(clients={name: server.get_client() for name, server in self.servers.items()})
+        return HybridSearchClient(
+            clients={name: server.get_client() for name, server in self.servers.items()},
+            shard_list=self._shard_list,
+            sections=self._sections,
+        )
 
     def _free_resources(self) -> None:
         for server in self.servers.values():

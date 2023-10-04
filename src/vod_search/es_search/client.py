@@ -1,30 +1,29 @@
-from __future__ import annotations
-
 import asyncio
 import collections
 import contextlib
 import itertools
 import logging
 import time
+import typing as typ
 import uuid
 import warnings
-from typing import Any, Iterable, Optional
 
 import datasets
 import elasticsearch as es
 import numpy as np
 import rich
 import rich.progress
+import vod_types as vt
 from elasticsearch import helpers as es_helpers
 from loguru import logger
-from vod_configs.py.es_body import (
+from vod_configs.es_body import (
     BODY_KEY,
     ROW_IDX_KEY,
     SECTION_ID_KEY,
     SUBSET_ID_KEY,
     validate_es_body,
 )
-from vod_search import base, rdtypes
+from vod_search import base
 
 es_logger = logging.getLogger("elastic_transport")
 es_logger.setLevel(logging.WARNING)
@@ -63,13 +62,13 @@ class ElasticsearchClient(base.SearchClient):
         except es.exceptions.ConnectionError:
             return False
 
-    def __getstate__(self) -> dict[str, Any]:
+    def __getstate__(self) -> dict[str, typ.Any]:
         """Serialize the client state."""
         state = self.__dict__.copy()
         state.pop("_client", None)
         return state
 
-    def __setstate__(self, state: dict[str, Any]) -> None:
+    def __setstate__(self, state: dict[str, typ.Any]) -> None:
         """Recreate the client from the state."""
         self.__dict__.update(state)
         self._client = es.Elasticsearch(self.url)
@@ -83,13 +82,13 @@ class ElasticsearchClient(base.SearchClient):
         self,
         *,
         text: list[str],
-        vector: Optional[rdtypes.Ts] = None,  # noqa: ARG
-        subset_ids: Optional[list[list[str]]] = None,
-        ids: Optional[list[list[str]]] = None,
-        shard: Optional[list[str]] = None,  # noqa: ARG002
+        vector: None | np.ndarray = None,  # noqa: ARG002
+        subset_ids: None | list[list[base.SubsetId]] = None,
+        ids: None | list[list[base.SectionId]] = None,
+        shard: None | list[base.ShardName] = None,  # noqa: ARG002
         top_k: int = 3,
-    ) -> rdtypes.RetrievalBatch[np.ndarray]:
-        """Search elasticsearch for the batch of text queries using `msearch`. NB: `vector` is not used here."""
+    ) -> vt.RetrievalBatch:
+        """Search elasticsearch for the batch of text queries using `msearch`. NOTE: `vector` is not used here."""
         start_time = time.time()
         if self.support_subsets and subset_ids is None:
             warnings.warn(f"This `{type(self).__name__}` supports subset ids, but no label is provided.", stacklevel=2)
@@ -145,7 +144,7 @@ class ElasticsearchClient(base.SearchClient):
         scores = np.stack(scores)
         labels = (scores > -np.inf).astype(np.int64) if ids is not None else None
 
-        return rdtypes.RetrievalBatch(
+        return vt.RetrievalBatch(
             indices=indices,
             scores=scores,
             labels=labels,
@@ -157,8 +156,8 @@ class ElasticsearchClient(base.SearchClient):
         texts: list[str],
         *,
         top_k: int,
-        subset_ids: Optional[list[str] | list[list[str]]] = None,
-        ids: Optional[list[str] | list[list[str]]] = None,
+        subset_ids: None | list[base.SubsetId] | list[list[base.SubsetId]] = None,
+        ids: None | list[base.SectionId] | list[list[base.SectionId]] = None,
     ) -> list:
         if subset_ids is None:
             subset_ids = []
@@ -167,9 +166,9 @@ class ElasticsearchClient(base.SearchClient):
 
         def _make_search_body(
             text: str,
-            subset_ids: Optional[str | list[str]] = None,
-            section_ids: Optional[str | list[str]] = None,
-        ) -> dict[str, Any]:
+            subset_ids: None | str | list[str] = None,
+            section_ids: None | str | list[str] = None,
+        ) -> dict[str, typ.Any]:
             body = collections.defaultdict(list)
             if len(text):
                 body["should"].append(
@@ -215,10 +214,10 @@ class ElasticsearchClient(base.SearchClient):
 
 
 def _yield_input_data(
-    texts: Iterable[str],
-    subset_ids: Optional[Iterable[str]] = None,
-    section_ids: Optional[Iterable[str]] = None,
-) -> Iterable[dict[str, Any]]:
+    texts: typ.Iterable[str],
+    subset_ids: None | typ.Iterable[base.SubsetId] = None,
+    section_ids: None | typ.Iterable[base.SectionId] = None,
+) -> typ.Iterable[dict[str, int | str | base.SubsetId | base.SectionId]]:
     """Yield the input data for indexing."""
     for row_idx, (text, subset_id, section_id) in enumerate(
         itertools.zip_longest(
@@ -242,21 +241,21 @@ class ElasticSearchMaster(base.SearchMaster[ElasticsearchClient]):
 
     def __init__(
         self,
-        texts: Iterable[str],
+        texts: typ.Iterable[str],
         *,
-        subset_ids: Optional[Iterable[str]] = None,
-        section_ids: Optional[Iterable[str]] = None,
+        subset_ids: None | typ.Iterable[base.SubsetId] = None,
+        section_ids: None | typ.Iterable[base.SectionId] = None,
         host: str = "http://localhost",
         port: int = 9200,  # hardcoded for now
-        index_name: Optional[str] = None,
-        input_size: Optional[int] = None,
+        index_name: None | str = None,
+        input_size: None | int = None,
         persistent: bool = False,
         exist_ok: bool = False,
         skip_setup: bool = False,
         free_resources: bool = False,
-        es_body: Optional[dict] = None,
-        language: Optional[str] = None,
-        **proc_kwargs: Any,
+        es_body: None | dict[str, typ.Any] = None,
+        language: None | str = None,
+        **proc_kwargs: typ.Any,
     ):
         super().__init__(skip_setup=skip_setup, free_resources=free_resources)
         self._host = host
@@ -328,13 +327,13 @@ class ElasticSearchMaster(base.SearchMaster[ElasticsearchClient]):
 
 
 def maybe_ingest_data(
-    stream: Iterable[dict[str, Any]],
+    stream: typ.Iterable[dict[str, typ.Any]],
     *,
     url: str,
     index_name: str,
     chunk_size: int = 1000,
     exist_ok: bool = False,
-    es_body: Optional[dict] = None,
+    es_body: None | dict[str, typ.Any] = None,
 ) -> None:
     """Ingest data into Elasticsearch."""
     asyncio.run(
@@ -345,13 +344,13 @@ def maybe_ingest_data(
 
 
 async def _async_maybe_ingest_data(
-    stream: Iterable[dict[str, Any]],
+    stream: typ.Iterable[dict[str, typ.Any]],
     *,
     url: str,
     index_name: str,
     chunk_size: int = 1000,
     exist_ok: bool = False,
-    es_body: Optional[dict] = None,
+    es_body: None | dict[str, typ.Any] = None,
 ) -> None:
     async with es.AsyncElasticsearch(url) as client:
         if await client.indices.exists(index=index_name):

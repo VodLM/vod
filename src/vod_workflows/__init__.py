@@ -1,6 +1,6 @@
-"""Collection of workflows such as training, evaluation, etc."""
-from __future__ import annotations
+"""Collection of workflows such as training, processing, and benchmarking."""
 
-from .evaluation.evaluation import benchmark
-from .support.precompute import compute_vectors
-from .training.train_with_updates import train_with_index_updates
+
+from .evaluation.retrieval import benchmark_retrieval
+from .processing.vectors import compute_vectors
+from .training.train import spawn_search_and_train

@@ -1,0 +1,63 @@
+# @package _global_
+
+defaults:
+  - override /model/encoder: mini-lm
+  - _self_
+
+seed: 1
+
+model:
+  gradients:
+    anchor_weight: 0
+    self_supervision_weight: 0
+    guidance_weight: 0
+    guidance: sparse
+
+env:
+  OMP_NUM_THREADS: 8
+
+benchmark:
+  n_max_eval: 100
+  on_init: false
+  parameters:
+    sparse: 1.0
+    dense: -1.0 # deactivate `dense` search
+
+trainer:
+  max_steps: 30
+  period: 10
+  val_check_interval: 5
+  n_max_eval: 100
+  parameters:
+    sparse: 1.0
+    dense: -1.0 # deactivate `dense` search
+
+batch_size:
+  effective: 16
+  per_device: 2
+  per_device_eval: 2
+  per_device_predict: 32
+
+resources:
+  num_workers: 1
+  num_proc: 4
+
+collates:
+  train:
+    n_sections: 12
+    max_pos_sections: 4
+    support_size: 30
+    prefetch_n_sections: 32
+    do_sample: true
+    in_batch_negatives: false
+
+  benchmark:
+    n_sections: null
+    support_size: null
+    max_pos_sections: null
+    prefetch_n_sections: 128
+    do_sample: false
+
+dataloaders:
+  benchmark:
+    batch_size: 3

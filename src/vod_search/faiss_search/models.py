@@ -1,9 +1,4 @@
-from __future__ import annotations
-
-from typing import Optional
-
 import pydantic
-from vod_search import rdtypes
 
 
 class FaissInitConfig(pydantic.BaseModel):
@@ -29,7 +24,7 @@ class InitResponse(pydantic.BaseModel):
         extra = "forbid"
 
     success: bool
-    exception: Optional[str]
+    exception: None | str
 
 
 class SearchFaissQuery(pydantic.BaseModel):
@@ -54,10 +49,7 @@ class FastSearchFaissQuery(pydantic.BaseModel):
         frozen = False
         extra = "forbid"
 
-    vectors: str = pydantic.Field(
-        ..., description="A batch of serialized vectors`. Implicitly defines `np.ndarray` or `torch.Tensor`."
-    )
-    array_type: rdtypes.RetrievalDataType = rdtypes.RetrievalDataType.NUMPY
+    vectors: str = pydantic.Field(..., description="A batch of serialized vectors")
     top_k: int = 3
 
 

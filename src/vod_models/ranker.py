@@ -1,10 +1,9 @@
-from __future__ import annotations
-
 import copy
 import functools
 from typing import Any, Optional, Union
 
 import torch
+import vod_gradients
 from datasets.fingerprint import Hasher, hashregister
 from hydra.utils import instantiate
 from loguru import logger
@@ -12,9 +11,7 @@ from omegaconf import DictConfig
 from transformers import modeling_outputs, pytorch_utils, trainer_pt_utils
 from vod_models import vod_encoder  # type: ignore
 from vod_models.monitor import RetrievalMonitor
-from vod_tools import pipes
-
-from src import vod_gradients
+from vod_tools import fingerprint
 
 
 def _maybe_instantiate(conf_or_obj: Union[Any, DictConfig], **kwargs: Any) -> object:
@@ -31,11 +28,11 @@ class Ranker(torch.nn.Module):
     """Deep ranking model using a Transformer encoder as a backbone."""
 
     _output_size: int
-    encoder: vod_encoder.VodBaseEncoder
+    encoder: vod_encoder.VodEncoder
 
     def __init__(  # noqa: PLR0913
         self,
-        encoder: vod_encoder.VodBaseEncoder,
+        encoder: vod_encoder.VodEncoder,
         gradients: vod_gradients.Gradients,
         optimizer: Optional[dict | DictConfig | functools.partial] = None,
         scheduler: Optional[dict | DictConfig | functools.partial] = None,
@@ -68,7 +65,7 @@ class Ranker(torch.nn.Module):
 
         self.encoder = encoder
 
-    def get_output_shape(self, model_output_key: Optional[str] = None) -> tuple[int, ...]:  # noqa: ARG002
+    def get_output_shape(self, model_output_key: None | str = None) -> tuple[int, ...]:  # noqa: ARG002
         """Dimension of the model output."""
         return self.encoder.get_output_shape()
 
@@ -77,7 +74,7 @@ class Ranker(torch.nn.Module):
         try:
             return self.encoder.get_fingerprint()
         except AttributeError:
-            return pipes.fingerprint_torch_module(None, self)  # type: ignore
+            return fingerprint.fingerprint_torch_module(self)
 
     def get_optimizer(self, module: Optional[torch.nn.Module] = None) -> torch.optim.Optimizer:
         """Configure the optimizer and the learning rate scheduler."""
@@ -204,5 +201,5 @@ def _filter_model_output(output: dict[str, Any]) -> dict[str, Any]:
 
 
 @hashregister(Ranker)
-def _hash_ranker(hasher: Hasher, value: Ranker) -> str:
-    return pipes.fingerprint_torch_module(hasher, value)
+def _hash_ranker(hasher: Hasher, value: Ranker) -> str:  # noqa: ARG001
+    return fingerprint.fingerprint_torch_module(value)

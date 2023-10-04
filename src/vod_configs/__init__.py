@@ -1,12 +1,13 @@
-from .py.dataloaders import (
+from .dataloaders import (
     BaseCollateConfig,
     DataLoaderConfig,
     KeyMap,
     RetrievalCollateConfig,
     SamplerFactoryConfig,
 )
-from .py.datasets import (
+from .datasets import (
     BaseDatasetConfig,
+    BenchmarkDatasetConfig,
     DatasetConfig,
     DatasetLoader,
     DatasetOptions,
@@ -15,10 +16,10 @@ from .py.datasets import (
     SectionsDatasetConfig,
     TrainDatasetsConfig,
 )
-from .py.models import (
+from .models import (
     TokenizerConfig,
 )
-from .py.search import (
+from .search import (
     FAISS_METRICS_INV,
     ElasticsearchFactoryConfig,
     FaissFactoryConfig,
@@ -29,29 +30,22 @@ from .py.search import (
     SearchFactoryDefaults,
     SingleSearchFactoryConfig,
 )
-from .py.sectioning import (
+from .sectioning import (
     FixedLengthSectioningConfig,
     SectioningConfig,
     SentenceSectioningConfig,
 )
-from .py.templates import (
+from .templates import (
     TemplatesConfig,
 )
-from .py.workflows import (
+from .workflows import (
     BatchSizeConfig,
     BenchmarkConfig,
     CollateConfigs,
     DataLoaderConfigs,
+    PeriodicTrainingConfig,
     SysConfig,
     TrainerConfig,
-    TrainWithIndexUpdatesConfigs,
 )
 
 TARGET_SHARD_KEY = "__LINKED_SHARD__"
-
-
-def hyra_conf_path() -> str:
-    """Return the path to the hydra config directory."""
-    import pathlib
-
-    return (pathlib.Path(__file__).parent / "hydra").as_posix()

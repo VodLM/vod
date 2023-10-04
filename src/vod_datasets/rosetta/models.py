@@ -1,16 +1,16 @@
-from __future__ import annotations  # noqa: I001
+# noqa: I001
 
 import os
 import pathlib
-import typing
-
+import typing as typ
 import uuid
+
 import pydantic
 
 VOD_CACHE_DIR = str(pathlib.Path(os.environ.get("VOD_CACHE_DIR", "~/.cache/vod")).expanduser())
 DATASETS_CACHE_PATH = str(pathlib.Path(VOD_CACHE_DIR, "datasets"))
 
-DatasetType = typing.Literal["queries_with_context", "queries", "sections"]
+DatasetType = typ.Literal["queries_with_context", "queries", "sections"]
 
 
 class QueryModel(pydantic.BaseModel):
@@ -31,26 +31,26 @@ class QueryModel(pydantic.BaseModel):
             "This can be used to encoded aliases for generative tasks or answer choices for multiple choice tasks."
         ),
     )
-    answer_scores: list[float] = pydantic.Field(
-        default=[],
+    answer_scores: None | list[float] = pydantic.Field(
+        default=None,
         description=(
             "Unnormalized scores for each answer. "
             "This can encode a multiple-choice problem or a ranking of preferences."
         ),
     )
-    retrieval_ids: list[str] = pydantic.Field(
-        default=[],
+    retrieval_ids: None | list[str] = pydantic.Field(
+        default=None,
         description="A list of target section IDs `section.id` for the given query.",
     )
-    subset_ids: list[str] = pydantic.Field(
-        default=[],
+    subset_ids: None | list[str] = pydantic.Field(
+        default=None,
         description="An optional ID representing a subset of data to search over.",
     )
 
     @pydantic.model_validator(mode="after")
     def _validate_answers_and_scores(self) -> "QueryModel":
         """Validate the answers and scores."""
-        if len(self.answers) != len(self.answer_scores):
+        if self.answer_scores is not None and len(self.answers) != len(self.answer_scores):
             raise ValueError("The number of answers must match the number of answer scores.")
         return self
 
@@ -66,11 +66,11 @@ class SectionModel(pydantic.BaseModel):
         ...,
         description="The main textual content of the section.",
     )
-    title: typing.Optional[str] = pydantic.Field(
+    title: None | str = pydantic.Field(
         default=None,
         description="The title of the section, if available.",
     )
-    subset_id: typing.Optional[str] = pydantic.Field(
+    subset_id: None | str = pydantic.Field(
         default=None,
         description="An optional ID representing a subset of knowledge.",
     )
@@ -83,7 +83,7 @@ class QueryWithContextsModel(QueryModel):
         ...,
         description="The main textual content of the section.",
     )
-    titles: typing.Optional[list[str]] = pydantic.Field(
+    titles: None | list[str] = pydantic.Field(
         default=None,
         description="The title of the section, if available.",
     )

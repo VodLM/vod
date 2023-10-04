@@ -1,15 +1,12 @@
-from __future__ import annotations
-
 import pathlib
 from typing import Any, Iterable, Optional
 
 import loguru
 import rich.console
 import transformers
-from lightning.fabric.loggers import Logger as FabricLogger
+from lightning.fabric.loggers.logger import Logger as FabricLogger
 from rich import terminal_theme
-from vod_tools import pipes
-from vod_tools.misc.pretty import print_metric_groups
+from vod_tools import pretty
 
 
 def log(
@@ -17,14 +14,14 @@ def log(
     loggers: Iterable[FabricLogger],
     step: Optional[int] = None,
     console: bool = False,
-    header: Optional[str] = None,
+    header: None | str = None,
 ) -> None:
     """Log metrics to the trainer loggers and optionally to the console."""
     for logger in loggers:
         logger.log_metrics(metrics, step=step)
 
     if console:
-        print_metric_groups(metrics, header=header)
+        pretty.pprint_metric_dict(metrics, header=header)
 
 
 def log_retrieval_batch(
@@ -37,7 +34,7 @@ def log_retrieval_batch(
     """Log a retrieval batch to wandb."""
     try:
         console = rich.console.Console(record=True)
-        pipes.pprint_retrieval_batch(
+        pretty.pprint_retrieval_batch(
             batch,
             header=f"{locator} retrieval batch",
             tokenizer=tokenizer,

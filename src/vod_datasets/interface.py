@@ -1,13 +1,9 @@
-from __future__ import annotations
-
 import typing
 
 import datasets
 import loguru
 import vod_configs
 from vod_datasets import rosetta
-
-from src import vod_configs as src_vod_configs
 
 from .postprocessing import (
     combine_datasets,
@@ -66,18 +62,12 @@ def load_dataset(config: vod_configs.DatasetConfig) -> datasets.Dataset:
     """Load a dataset."""
     if isinstance(
         config,
-        (
-            vod_configs.QueriesDatasetConfig,
-            src_vod_configs.QueriesDatasetConfig,
-        ),
+        (vod_configs.QueriesDatasetConfig),
     ):
         return load_queries(config)
     if isinstance(
         config,
-        (
-            vod_configs.SectionsDatasetConfig,
-            src_vod_configs.SectionsDatasetConfig,
-        ),
+        (vod_configs.SectionsDatasetConfig),
     ):
         return load_sections(config)
     raise TypeError(f"Unexpected config type `{type(config)}`")
