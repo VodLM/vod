@@ -25,5 +25,5 @@ def human_format_nb(num: int | float, precision: int = 2, base: float = 1000.0) 
         magnitude += 1
         num /= base
     # add more suffixes if you need them
-    q = ["", "K", "M", "G", "T", "P"][magnitude]
+    q = ["", "K", "M", "B", "T", "P"][magnitude]
     return f"{num:.{precision}f}{q}"

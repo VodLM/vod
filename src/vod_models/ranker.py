@@ -55,13 +55,13 @@ def _prepare_encoder(
         encoder = peft_mapping.get_peft_model(encoder, optim_config.peft_config)  # type: ignore
         logger.debug(f"PEFT enabled `{type(optim_config.peft_config).__name__}`.")
 
-    if optim_config.params_dtype is not None:
+    if optim_config.force_dtype is not None:
         # Cast the parameters to the specified dtype
         dtype = {
             "float16": torch.float16,
             "bfloat16": torch.bfloat16,
             "float32": torch.float32,
-        }[optim_config.params_dtype]
+        }[optim_config.force_dtype]
         for _, param in encoder.named_parameters():
             if param.dtype in [torch.float16, torch.bfloat16, torch.float32]:
                 param.data = param.data.to(dtype)
@@ -88,7 +88,7 @@ class Ranker(torch.nn.Module):
         optimizer: None | dict | omg.DictConfig | functools.partial = None,
         scheduler: None | dict | omg.DictConfig | functools.partial = None,
         monitor: None | RetrievalMonitor = None,
-        optim_config: None | vod_configs.models.ModelOptimConfig = None,
+        optim_config: None | dict | omg.DictConfig | vod_configs.ModelOptimConfig = None,
     ):
         super().__init__()
         if isinstance(optimizer, (dict, omg.DictConfig)):
@@ -106,7 +106,10 @@ class Ranker(torch.nn.Module):
         self.monitor = monitor
 
         # Prepare the encoder with optional optimizations
-        self.encoder = _prepare_encoder(encoder, optim_config)
+        if not isinstance(optim_config, vod_configs.ModelOptimConfig):
+            optim_config = vod_configs.ModelOptimConfig.parse(**optim_config)  # type: ignore
+
+        self.encoder = _prepare_encoder(encoder, optim_config)  # type: ignore
 
     def get_output_shape(self, model_output_key: None | str = None) -> tuple[int, ...]:  # noqa: ARG002
         """Dimension of the model output."""

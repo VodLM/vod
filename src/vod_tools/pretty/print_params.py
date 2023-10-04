@@ -1,12 +1,13 @@
 import rich
 import torch
+import transformers
 from rich import table as rich_table
 
 from .format import human_format_nb
 
 
-def pprint_params(
-    model: torch.nn.Module,
+def pprint_parameters_stats(
+    model: torch.nn.Module | transformers.PreTrainedModel,
     header: None | str = None,
     console: None | rich.console.Console = None,
 ) -> None:

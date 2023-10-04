@@ -10,11 +10,16 @@ defaults:
   # Fabric Strategy
   - override /fabric/strategy: single_device
 
-
 model:
+  encoder:
+    torch_dtype: ${fabric.precision}
   optim_config:
     compile: false
     gradient_checkpointing: true
+  optimizer:
+    lr: 1e-4
+    weight_decay: 1e-3
+    eps: 1e-8
 
 resources:
   num_workers: 2

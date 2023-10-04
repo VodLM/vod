@@ -67,7 +67,7 @@ def run(hydra_config: DictConfig) -> None:
     ranker: vod_models.Ranker = instantiate(hydra_config.model)
 
     if _is_gloabl_zero():
-        pretty.pprint_params(ranker, header="Model Parameters (init)")
+        pretty.pprint_parameters_stats(ranker, header="Model Parameters (init)")
 
     # Log config & setup logger
     _customize_logger(fabric=fabric)

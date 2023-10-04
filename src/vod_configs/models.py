@@ -33,7 +33,7 @@ class ModelOptimConfig(StrictModel):
     gradient_checkpointing: bool = False
     prepare_for_kbit_training: bool = False
     peft_config: None | peft.config.PeftConfig = None
-    params_dtype: None | str = None
+    force_dtype: None | str = None
 
     @classmethod
     def parse(cls: typ.Type[Self], **config: typ.Any) -> Self:
