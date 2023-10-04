@@ -8,7 +8,7 @@ import torch.nn
 from vod_gradients import base
 
 
-class SupervisedRetrievalGradients(base.Gradients):
+class RetrievalGradients(base.Gradients):
     """Compute the KL divergence between the model and the data."""
 
     def __init__(

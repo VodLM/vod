@@ -1,3 +1,7 @@
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
 [tool.commitizen]
 version = "0.1.0"
 version_files = [
@@ -26,10 +30,6 @@ packages = [
   { from = "src", include = "vod_workflows" },
   { from = "src", include = "vod_exps" },
 ]
-
-[build-system]
-build-backend = "poetry.core.masonry.api"
-
 
 [tool.poetry.scripts]
 train = 'vod_exps.train:run'

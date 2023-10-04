@@ -26,12 +26,6 @@ def my_loader(
 
 
 DATASET_CONFIGS = {
-    "msmarco": {
-        "identifier": "msmarco",
-        "name_or_path": "ms_marco",
-        "subsets": ["v2.1"],
-        "split": "test",
-    },
     "mmlu": {
         "identifier": "mmlu",
         "name_or_path": "cais/mmlu",
@@ -79,20 +73,6 @@ DATASET_CONFIGS = {
         "identifier": "my_data",
         "name_or_path": my_loader,
     },
-    "frank": {
-        "identifier": "frank",
-        "name_or_path": [
-            vod_datasets.FrankDatasetLoader(frank_split="A", language="en", what="queries"),
-            vod_datasets.FrankDatasetLoader(frank_split="A", language="en", what="sections"),
-        ],
-    },
-    "raffle_squad": {
-        "identifier": "raffle_squad",
-        "name_or_path": [
-            vod_datasets.RaffleSquadDatasetLoader(language="da", what="queries"),
-            vod_datasets.RaffleSquadDatasetLoader(language="da", what="sections"),
-        ],
-    },
     "beir-scifact": {
         "identifier": "beir-scifact",
         "name_or_path": [
@@ -111,6 +91,15 @@ DATASET_CONFIGS = {
         "subsets": "mmarco/french",
         "split": "train",
     },
+    "msmarco": {
+        "identifier": "beir-msmarco",
+        "name_or_path": [
+            vod_datasets.BeirDatasetLoader(what="queries"),
+            vod_datasets.BeirDatasetLoader(what="sections"),
+        ],
+        "subsets": "hf://BeIR/msmarco",
+        "split": "train",
+    },
 }
 
 
@@ -121,7 +110,7 @@ class Args(arguantic.Arguantic):
 
 
 def run(args: Args) -> None:
-    """Showcase the `load_frank` function."""
+    """Showcase the `load_dataset` function."""
     try:
         config = DATASET_CONFIGS[args.name]
     except KeyError as exc:

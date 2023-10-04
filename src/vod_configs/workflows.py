@@ -16,25 +16,6 @@ from .dataloaders import BaseCollateConfig, DataLoaderConfig, RetrievalCollateCo
 from .datasets import DatasetsConfig
 
 
-class TuningConfig(StrictModel):
-    """Configures the batch size for the train, eval, and predict stages."""
-
-    steps: int = 1000
-    batch_size: int = 100
-    learning_rate: float = 1e-3
-    collate_overrides: dict[str, typ.Any] = {}
-
-    @pydantic.field_validator("collate_overrides", mode="before")
-    def _validate_collate_overrides(cls, v: None | dict[str, typ.Any]) -> dict[str, typ.Any]:
-        if v is None:
-            return {}
-
-        if isinstance(v, omegaconf.DictConfig):
-            return omegaconf.OmegaConf.to_container(v, resolve=True)  # type: ignore
-
-        return v
-
-
 class BenchmarkConfig(StrictModel):
     """Configures the batch size for the train, eval, and predict stages."""
 
@@ -46,7 +27,6 @@ class BenchmarkConfig(StrictModel):
 
     on_init: bool = False
     n_max_eval: None | int = None
-    tuning: None | TuningConfig = None
     parameters: dict[str, float] = {}
     metrics: list[str] = ["ndcg", "mrr", "hitrate@01", "hitrate@03", "hitrate@10", "hitrate@30"]
     search: dict[str, typ.Any] = {}
@@ -177,7 +157,6 @@ class CollateConfigs:
 class SysConfig:
     """Configures the system directories."""
 
-    raffle_path: pathlib.Path
     work_dir: pathlib.Path
     cache_dir: pathlib.Path
 
@@ -185,14 +164,13 @@ class SysConfig:
     def parse(cls: Type[Self], config: DictConfig) -> Self:
         """Parse an omegaconf config into a CollateConfigs instance."""
         return cls(
-            raffle_path=pathlib.Path(config.raffle_path),
             work_dir=pathlib.Path(config.work_dir),
             cache_dir=pathlib.Path(config.cache_dir),
         )
 
 
 @dataclasses.dataclass
-class PeriodicTrainingConfig:
+class RunConfig:
     """Models the configuration for a workflow that trains a model and periodically indexes the data."""
 
     dataset: DatasetsConfig

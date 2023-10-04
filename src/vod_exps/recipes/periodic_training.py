@@ -24,7 +24,7 @@ def periodic_training(  # noqa: C901, PLR0915
     *,
     fabric: L.Fabric,
     ranker: vod_models.Ranker,
-    config: vod_configs.PeriodicTrainingConfig,
+    config: vod_configs.RunConfig,
     resume_from_checkpoint: None | str = None,
 ) -> vod_models.Ranker:
     """Train a ranking model while periodically updating the index."""
@@ -165,7 +165,7 @@ def _compute_all_vectors(
     dset_configs: list[vod_configs.DatasetConfig],
     fabric: L.Fabric,
     ranker: vod_models.Ranker,
-    config: vod_configs.PeriodicTrainingConfig,
+    config: vod_configs.RunConfig,
     tokenizer: transformers.PreTrainedTokenizer | transformers.PreTrainedTokenizerFast,
     cache_dir: pathlib.Path,
 ) -> dict[vod_configs.DatasetConfig, vt.Array]:
@@ -209,7 +209,7 @@ def _on_first_batch_fn(
 def _run_benchmarks(
     *,
     fabric: L.Fabric,
-    config: vod_configs.PeriodicTrainingConfig,
+    config: vod_configs.RunConfig,
     vectors: None | dict[vod_configs.DatasetConfig, vt.Array],
     state: helpers.TrainerState,
     parameters: dict[str, float],

@@ -33,7 +33,7 @@ def _is_gloabl_zero() -> bool:
     return os.environ.get("LOCAL_RANK", "0") == "0" and os.environ.get("NODE_RANK", "0") == "0"
 
 
-@hydra.main(config_path=hyra_conf_path(), config_name="main", version_base="1.3")
+@hydra.main(config_path=hyra_conf_path(), config_name="train", version_base="1.3")
 def run(hydra_config: DictConfig) -> None:
     """Train a ranker for a retrieval task."""
     if hydra_config.load_from is not None:
@@ -80,7 +80,7 @@ def run(hydra_config: DictConfig) -> None:
         )
 
     # Parse the configuration
-    config = vod_configs.PeriodicTrainingConfig.parse(hydra_config)
+    config = vod_configs.RunConfig.parse(hydra_config)
 
     # Train the model
     logger.info(f"Training the ranker with seed={hydra_config.seed}")

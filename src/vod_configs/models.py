@@ -25,7 +25,7 @@ class TokenizerConfig(StrictModel):
         return transformers.AutoTokenizer.from_pretrained(self.name_or_path, **kws)
 
 
-class ModelOptimConfig(StrictModel):
+class TweaksConfig(StrictModel):
     """Configure the model optimizations."""
 
     compile: bool = False

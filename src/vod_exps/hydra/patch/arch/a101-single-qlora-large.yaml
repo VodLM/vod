@@ -16,8 +16,8 @@ model:
       bnb_4bit_compute_dtype: ${normalize_dtype:${fabric.precision}}
       bnb_4bit_use_double_quant: true
       bnb_4bit_quant_type: nf4
-  optim_config:
-    _target_: vod_configs.ModelOptimConfig.parse
+  tweaks:
+    _target_: vod_configs.TweaksConfig.parse
     compile: false
     gradient_checkpointing: true
     prepare_for_kbit_training: true

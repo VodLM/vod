@@ -86,7 +86,7 @@ class TrainerState:
     @classmethod
     def from_config(
         cls: Type[Self],
-        config: vod_configs.PeriodicTrainingConfig,
+        config: vod_configs.RunConfig,
         fabric: L.Fabric,
     ) -> Self:
         """Instantiate the training state from the configuration and Lightning environment."""

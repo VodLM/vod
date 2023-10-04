@@ -8,10 +8,8 @@ import torch
 from loguru import logger
 from typing_extensions import Self, Type
 from vod_configs.utils import StrictModel
-from vod_tools import pretty
+from vod_tools import fingerprint, pretty
 from vod_tools.misc.config import as_pyobj_validator
-
-from src.vod_tools import fingerprint
 
 try:
     from faiss import GpuMultipleClonerOptions, GpuResources, StandardGpuResources  # type: ignore

@@ -1,5 +1,0 @@
-_target_: vod_gradients.SupervisedRetrievalGradients
-anchor_weight: 0
-self_supervision_weight: false
-guidance_weight: 0
-guidance: sparse

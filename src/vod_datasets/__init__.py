@@ -8,6 +8,4 @@ from .interface import (
 )
 from .loaders import (
     BeirDatasetLoader,
-    FrankDatasetLoader,
-    RaffleSquadDatasetLoader,
 )

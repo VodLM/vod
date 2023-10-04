@@ -12,16 +12,16 @@ import stackprinter  # noqa: E402
 import uvicorn  # noqa: E402
 from fastapi import FastAPI, HTTPException  # noqa: E402
 from loguru import logger  # noqa: E402
-
-from src import vod_configs  # noqa: E402
-from src.vod_search import io  # noqa: E402
-from src.vod_search.faiss_search import SearchFaissQuery  # noqa: E402
-from src.vod_search.faiss_search.models import (  # noqa: E402
+from vod_search import io  # noqa: E402
+from vod_search.faiss_search import SearchFaissQuery  # noqa: E402
+from vod_search.faiss_search.models import (  # noqa: E402
     FaissSearchResponse,
     FastFaissSearchResponse,
     FastSearchFaissQuery,
 )
-from src.vod_tools.misc.exceptions import dump_exceptions_to_file  # noqa: E402
+from vod_tools.misc.exceptions import dump_exceptions_to_file  # noqa: E402
+
+from src import vod_configs  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:

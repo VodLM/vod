@@ -13,7 +13,7 @@ defaults:
 model:
   encoder:
     torch_dtype: ${fabric.precision}
-  optim_config:
+  tweaks:
     compile: false
     gradient_checkpointing: true
   optimizer:

@@ -5,8 +5,7 @@ import typing as typ
 import datasets
 import torch
 import transformers
-
-from src.vod_tools.misc.tensor_tools import serialize_tensor
+from vod_tools.misc.tensor_tools import serialize_tensor
 
 _TOKENIZERS_CLASSES = [
     transformers.PreTrainedTokenizer,

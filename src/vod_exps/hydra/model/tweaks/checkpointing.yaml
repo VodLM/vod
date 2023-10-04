@@ -1,0 +1,7 @@
+defaults:
+  - default
+
+compile: false
+gradient_checkpointing: true
+prepare_for_kbit_training: false
+peft_config: null

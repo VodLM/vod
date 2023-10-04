@@ -110,17 +110,9 @@ def build_elasticsearch_index(
     if config.section_id_key is not None and config.section_id_key not in row:
         raise ValueError(f"Could not find `{config.section_id_key}` in `{row.keys()}`")
     sections_ids = (row[config.section_id_key] for row in iter(sections)) if config.section_id_key else None
-    if config.subset_id_key is not None and config.subset_id_key not in row:
-        logger.warning(
-            f"Could not find subset ID key `{config.subset_id_key}` in row `{row.keys()}`. "
-            "Filtering by subset ID will be disabled. This may be intentional."
-        )
-        subset_ids = None
-    else:
-        subset_ids = (row[config.subset_id_key] for row in iter(sections)) if config.subset_id_key else None
     return es_search.ElasticSearchMaster(
         texts=texts,
-        subset_ids=subset_ids,
+        subset_ids=_fetch_subset_ids(sections, config.subset_id_key),
         section_ids=sections_ids,
         host=config.host,
         port=config.port,
@@ -213,10 +205,10 @@ def build_qdrant_index(
         f"vector: `{[len(vectors), *vectors[0].shape]}`, "
         f"subset_id_key: `{config.subset_id_key}`"
     )
-    subset_ids = (row[config.subset_id_key] for row in iter(sections)) if config.subset_id_key else None
+
     return qdrant_search.QdrantSearchMaster(
         vectors=vectors,
-        subset_ids=subset_ids,
+        subset_ids=_fetch_subset_ids(sections, config.subset_id_key),
         host=config.host,
         port=config.port,
         grpc_port=config.grpc_port,
@@ -229,6 +221,19 @@ def build_qdrant_index(
         force_single_collection=config.force_single_collection,
         free_resources=free_resources,
     )
+
+
+def _fetch_subset_ids(sections: vt.DictsSequence, subset_id_key: None | str) -> None | typ.Generator[str, None, None]:
+    if subset_id_key and subset_id_key in sections[0]:
+        subset_ids = (row[subset_id_key] for row in iter(sections))
+    else:
+        if subset_id_key and subset_id_key not in sections[0]:
+            logger.info(
+                f"Could not find subset ID key `{subset_id_key}` in row `{sections[0].keys()}`. "
+                "Filtering by subset ID will be disabled. This may be intentional."
+            )
+        subset_ids = None
+    return subset_ids
 
 
 def _init_dense_search_engine(

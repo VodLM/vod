@@ -1,14 +1,10 @@
 defaults:
   - encoder: bert-tiny
-  - gradients: supervised_retrieval
-  - optimizer: adamw # todo: lion
+  - gradients: retrieval
+  - optimizer: adamw
   - scheduler: linear
   - monitor: retrieval
+  - tweaks: default
   - _self_
 
 _target_: vod_models.Ranker
-optim_config:
-  compile: false
-  gradient_checkpointing: false
-  prepare_for_kbit_training: false
-  peft_config: null

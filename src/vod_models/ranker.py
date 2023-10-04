@@ -28,21 +28,21 @@ def _maybe_instantiate(conf_or_obj: typ.Any | omg.DictConfig, **kws: typ.Any) ->
 FIELD_MAPPING: dict[vod_encoder.VodEncoderInputType, str] = {"query": "hq", "section": "hd"}
 
 
-def _prepare_encoder(
+def _apply_tweaks(
     encoder: vod_encoder.VodEncoder,
-    optim_config: None | vod_configs.models.ModelOptimConfig,
+    tweaks: None | vod_configs.models.TweaksConfig,
 ) -> vod_encoder.VodEncoder:
-    if optim_config is None:
+    if tweaks is None:
         return encoder
-    if optim_config.prepare_for_kbit_training:
+    if tweaks.prepare_for_kbit_training:
         # Cast parameters and register hooks to enable checkpointing
         encoder = peft_utils.other.prepare_model_for_kbit_training(
             encoder,
-            use_gradient_checkpointing=optim_config.gradient_checkpointing,
+            use_gradient_checkpointing=tweaks.gradient_checkpointing,
         )
         logger.debug("Prepared for kbit training.")
 
-    if optim_config.gradient_checkpointing:
+    if tweaks.gradient_checkpointing:
         # Enable gradient checkpointing
         try:
             encoder.gradient_checkpointing_enable()
@@ -50,26 +50,26 @@ def _prepare_encoder(
         except Exception as exc:
             logger.warning(f"Failed to enable gradient checkpointing: {exc}")
 
-    if optim_config.peft_config is not None:
+    if tweaks.peft_config is not None:
         # Apply PEFT optimizations
-        encoder = peft_mapping.get_peft_model(encoder, optim_config.peft_config)  # type: ignore
-        logger.debug(f"PEFT enabled `{type(optim_config.peft_config).__name__}`.")
+        encoder = peft_mapping.get_peft_model(encoder, tweaks.peft_config)  # type: ignore
+        logger.debug(f"PEFT enabled `{type(tweaks.peft_config).__name__}`.")
 
-    if optim_config.force_dtype is not None:
+    if tweaks.force_dtype is not None:
         # Cast the parameters to the specified dtype
         dtype = {
             "float16": torch.float16,
             "bfloat16": torch.bfloat16,
             "float32": torch.float32,
-        }[optim_config.force_dtype]
+        }[tweaks.force_dtype]
         for _, param in encoder.named_parameters():
             if param.dtype in [torch.float16, torch.bfloat16, torch.float32]:
                 param.data = param.data.to(dtype)
         logger.debug(f"PEFT dtype `{dtype}` applied to float parameters.")
 
-    if optim_config.compile:
+    if tweaks.compile:
         # Compile the model
-        encoder = torch.compile(encoder, **optim_config.compile_kwargs)  # type: ignore
+        encoder = torch.compile(encoder, **tweaks.compile_kwargs)  # type: ignore
         logger.debug("`torch.compile` enabled (encoder)")
 
     return encoder
@@ -88,7 +88,7 @@ class Ranker(torch.nn.Module):
         optimizer: None | dict | omg.DictConfig | functools.partial = None,
         scheduler: None | dict | omg.DictConfig | functools.partial = None,
         monitor: None | RetrievalMonitor = None,
-        optim_config: None | dict | omg.DictConfig | vod_configs.ModelOptimConfig = None,
+        tweaks: None | dict | omg.DictConfig | vod_configs.TweaksConfig = None,
     ):
         super().__init__()
         if isinstance(optimizer, (dict, omg.DictConfig)):
@@ -106,10 +106,10 @@ class Ranker(torch.nn.Module):
         self.monitor = monitor
 
         # Prepare the encoder with optional optimizations
-        if not isinstance(optim_config, vod_configs.ModelOptimConfig):
-            optim_config = vod_configs.ModelOptimConfig.parse(**optim_config)  # type: ignore
+        if not isinstance(tweaks, vod_configs.TweaksConfig):
+            tweaks = vod_configs.TweaksConfig.parse(**tweaks)  # type: ignore
 
-        self.encoder = _prepare_encoder(encoder, optim_config)  # type: ignore
+        self.encoder = _apply_tweaks(encoder, tweaks)  # type: ignore
 
     def get_output_shape(self, model_output_key: None | str = None) -> tuple[int, ...]:  # noqa: ARG002
         """Dimension of the model output."""

@@ -2,10 +2,9 @@ import functools
 import typing
 
 import datasets
+from vod_datasets.rosetta.adapters import SquadQueryWithContextsAdapter
+from vod_datasets.rosetta.preprocessing import isolate_qa_and_sections
 from vod_tools import fingerprint
-
-from src.vod_datasets.rosetta.adapters import SquadQueryWithContextsAdapter
-from src.vod_datasets.rosetta.preprocessing import isolate_qa_and_sections
 
 
 def _re_inject_content(

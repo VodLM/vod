@@ -44,13 +44,6 @@ def register_omgeaconf_resolvers() -> None:  # noqa: C901, PLR0915
         *_, model_name = model_name.split("/")
         return model_name
 
-    def _reverse_frank_split(x: str) -> str:
-        if x.startswith("frank.A"):
-            return x.replace("frank.A", "frank.B.")
-        if x.startswith("frank.B"):
-            return x.replace("frank.B", "frank.A.")
-        return x
-
     def _join_path(*args: typ.Any) -> str:
         return pathlib.Path(*args).as_posix()
 
@@ -139,7 +132,6 @@ def register_omgeaconf_resolvers() -> None:  # noqa: C901, PLR0915
     OmegaConf.register_new_resolver("randint", randint)
     OmegaConf.register_new_resolver("global_seed", lambda *_: SEED)
     OmegaConf.register_new_resolver("fmt_mn", _format_model_name)
-    OmegaConf.register_new_resolver("reverse_frank_split", _reverse_frank_split)
     OmegaConf.register_new_resolver("is_cuda_available", torch.cuda.is_available)
     OmegaConf.register_new_resolver("null_cls", lambda *_: None)
     OmegaConf.register_new_resolver("join_path", _join_path)

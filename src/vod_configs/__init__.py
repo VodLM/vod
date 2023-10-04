@@ -17,8 +17,8 @@ from .datasets import (
     TrainDatasetsConfig,
 )
 from .models import (
-    ModelOptimConfig,
     TokenizerConfig,
+    TweaksConfig,
 )
 from .search import (
     FAISS_METRICS_INV,
@@ -44,7 +44,7 @@ from .workflows import (
     BenchmarkConfig,
     CollateConfigs,
     DataLoaderConfigs,
-    PeriodicTrainingConfig,
+    RunConfig,
     SysConfig,
     TrainerConfig,
 )

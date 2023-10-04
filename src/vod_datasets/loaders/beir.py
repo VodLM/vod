@@ -134,7 +134,7 @@ class BeirDatasetLoader(DatasetLoader):
     """
 
     BASE_URL = "https://public.ukp.informatik.tu-darmstadt.de/thakur/BEIR/datasets/{}.zip"
-    DATASETS = [
+    SUBSETS = [
         "msmarco",
         "mmarco",
         "trec-covid",
@@ -168,28 +168,17 @@ class BeirDatasetLoader(DatasetLoader):
         """Load the dataset."""
         if subset is None:
             raise ValueError("Please specify a subset.")
-        name, *subpath = subset.split("/")
-        if name not in self.DATASETS:
-            raise ValueError(f"susbet `{name}` not available. Please choose from `{self.DATASETS}`.")
-
-        # Download the dataset
-        dataset_dir = _download_and_unzip(
-            self.BASE_URL.format(name),
-            self.cache_dir,
-        )
-
-        # Load the data
-        data = QrelsDataset.from_files(
-            queries=pathlib.Path(dataset_dir, *subpath, "queries.jsonl"),
-            qrels=pathlib.Path(dataset_dir, *subpath, "qrels", f"{split or '*'}.tsv"),
-            corpus=pathlib.Path(dataset_dir, *subpath, "corpus.jsonl"),
-        )
+        if subset.startswith("hf://"):
+            data = self._download_from_hf(subset.replace("hf://", ""), split)
+        else:
+            data = self._download_from_tu_darmstadt(subset, split)
 
         if self.what == "sections":
             return RenameSectionAdapter.translate_dset(data.corpus)
         if self.what == "queries":
+            data.queries.cleanup_cache_files()
             output = data.queries.map(
-                _FormatAndFilterQueries(data.qrels),
+                _FilterAndAssignRetrievalIds(data.qrels),
                 num_proc=self.num_proc,
                 remove_columns=data.queries.column_names,
                 batched=True,
@@ -201,8 +190,37 @@ class BeirDatasetLoader(DatasetLoader):
 
         raise ValueError(f"Unknown dataset type `{self.what}`.")
 
+    def _download_from_hf(self, path_or_name: str, split: str | None = None) -> QrelsDataset:
+        qrels = datasets.load_dataset(f"{path_or_name}-qrels", split=split)
+        if isinstance(qrels, datasets.DatasetDict):
+            qrels = datasets.concatenate_datasets([qrels[k] for k in sorted(qrels)])
 
-class _FormatAndFilterQueries:
+        return QrelsDataset(
+            qrels=qrels,  # type: ignore
+            queries=datasets.load_dataset(path_or_name, "queries", split="queries"),  # type: ignore
+            corpus=datasets.load_dataset(path_or_name, "corpus", split="corpus"),  # type: ignore
+        )
+
+    def _download_from_tu_darmstadt(self, subset: str, split: str | None = None) -> QrelsDataset:
+        name, *subpath = str(subset).split("/")
+        if name not in self.SUBSETS:
+            raise ValueError(f"susbet `{name}` not available. Please choose from `{self.SUBSETS}`.")
+
+        # Download the dataset
+        dataset_dir = _download_and_unzip(
+            self.BASE_URL.format(name),
+            self.cache_dir,
+        )
+
+        # Load the data
+        return QrelsDataset.from_files(
+            queries=pathlib.Path(dataset_dir, *subpath, "queries.jsonl"),
+            qrels=pathlib.Path(dataset_dir, *subpath, "qrels", f"{split or '*'}.tsv"),
+            corpus=pathlib.Path(dataset_dir, *subpath, "corpus.jsonl"),
+        )
+
+
+class _FilterAndAssignRetrievalIds:
     output_model = models.QueryModel
     _lookup: dict[int, list[int]]
 
@@ -225,7 +243,7 @@ class _FormatAndFilterQueries:
                     continue
                 if qid not in self._lookup:
                     self._lookup[qid] = [cid]
-                else:
+                elif cid not in self._lookup[qid]:
                     self._lookup[qid].append(cid)
 
         return self._lookup
@@ -264,8 +282,8 @@ class _FormatAndFilterQueries:
         return output
 
 
-@fingerprint.hashregister(_FormatAndFilterQueries)
-def _hash_format_queries(hasher: datasets.fingerprint.Hasher, obj: _FormatAndFilterQueries) -> str:
+@fingerprint.hashregister(_FilterAndAssignRetrievalIds)
+def _hash_filter_and_format_retrieval_ids(hasher: datasets.fingerprint.Hasher, obj: _FilterAndAssignRetrievalIds) -> str:
     """Register the `_FormatQueries` class to work with `datasets.map()`."""
     return hasher.hash(
         {
