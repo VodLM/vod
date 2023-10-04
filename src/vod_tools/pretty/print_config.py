@@ -1,8 +1,8 @@
-import contextlib
 from copy import copy
 from numbers import Number
 
 import rich
+import yaml
 from omegaconf import DictConfig, OmegaConf, open_dict
 from rich.syntax import Syntax
 from rich.tree import Tree
@@ -45,11 +45,10 @@ def pprint_config(
 
     for field in fields_list:
         branch = tree.add(field, style=style, guide_style=style)
-
         config_section = config.get(field)
         if isinstance(config_section, DictConfig):
-            with contextlib.suppress(Exception):
-                branch_content = OmegaConf.to_yaml(config_section, resolve=resolve)
+            pyobj = OmegaConf.to_container(config_section, resolve=resolve)
+            branch_content = yaml.dump(pyobj)
         else:
             branch_content = str(config_section)
 

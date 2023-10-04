@@ -3,7 +3,7 @@
 # This config is for >=4xA100 GPUs (40GB)
 
 defaults:
-  - ddp-base
+  - a100-ddp-base
   # HF transformer model name
   - override /model/encoder: mt5-large
 

@@ -48,7 +48,7 @@ def _merge_n_search_results(
             queries=output.indices, indices=value.indices, values=value.scores
         )
 
-    # lookup labels
+    # lookup labels - all labels are None, except for the `lookup` client
     output.labels = None
     for r in search_results.values():
         if r.labels is not None:
@@ -68,7 +68,7 @@ def _merge_two_search_results(a: vt.RetrievalBatch, b: vt.RetrievalBatch) -> vt.
     return vt.RetrievalBatch(scores=scores, indices=indices)
 
 
-@numba.njit(fastmath=True, cache=npo.CACHE_NUMBA_JIT)
+@numba.njit(fastmath=True, cache=npo.CACHE_NUMBA_JIT, nogil=True)
 def _search_1d_arr(arr: npt.NDArray, x: int | float) -> int:
     """Search for values in a sorted array."""
     if arr.ndim != 1:
@@ -81,7 +81,7 @@ def _search_1d_arr(arr: npt.NDArray, x: int | float) -> int:
     return -1
 
 
-@numba.njit(fastmath=True, cache=npo.CACHE_NUMBA_JIT)
+@numba.njit(fastmath=True, cache=npo.CACHE_NUMBA_JIT, nogil=True)
 def _write_1d_arr(
     indices: npt.NDArray[npo.Int],
     scores: npt.NDArray[npo.Dtyp],
@@ -105,7 +105,7 @@ def _write_1d_arr(
     return cursor
 
 
-@numba.njit(parallel=True, fastmath=True, cache=npo.CACHE_NUMBA_JIT)
+@numba.njit(parallel=True, fastmath=True, cache=npo.CACHE_NUMBA_JIT, nogil=True)
 def _nopy_merge_two_search_results(
     a_scores: npt.NDArray[npo.Dtyp],
     a_indices: npt.NDArray[npo.Int],

@@ -75,7 +75,7 @@ def test_merge_search_results(search_results: dict[str, vt.RetrievalBatch], weig
     # Test the value of the merged scores, it should be equal to the weighted sum of the input scores
     for i, merged_s in zip(indices, merged.scores[0]):
         if i < 0:
-            assert np.isnan(merged_s)
+            assert merged_s == -np.inf
             continue
         expected_value = sum(input_scores_lookups[key].get(i, 0.0) * weight for key, weight in weights.items())
         assert merged_s == expected_value

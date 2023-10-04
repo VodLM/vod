@@ -66,6 +66,9 @@ def run(hydra_config: DictConfig) -> None:
         fabric.seed_everything(hydra_config.seed)
     ranker: vod_models.Ranker = instantiate(hydra_config.model)
 
+    if _is_gloabl_zero():
+        pretty.pprint_parameters_stats(ranker, header="Model Parameters (init)")
+
     # Log config & setup logger
     _customize_logger(fabric=fabric)
     if fabric.is_global_zero:

@@ -29,8 +29,7 @@ class DataLoaderConfig(StrictModel):
 class BaseCollateConfig(StrictModel):
     """Defines a base configuration for the collate function."""
 
-    query_max_length: int = 512
-    section_max_length: int = 512
+    encoder_max_length: int = 200
     templates: TemplatesConfig = pydantic.Field(default_factory=TemplatesConfig)
 
 

@@ -1,0 +1,42 @@
+# @package _global_
+
+# This config is for ==1xA100 GPUs (80GB)
+
+defaults:
+  # HF transformer model name
+  - override /model/encoder: mt5-large
+  # LR scheduler
+  - override /model/scheduler: linear
+  # Fabric Strategy
+  - override /fabric/strategy: single_device
+
+model:
+  encoder:
+    torch_dtype: ${fabric.precision}
+  optim_config:
+    compile: false
+    gradient_checkpointing: true
+  optimizer:
+    lr: 1e-4
+    weight_decay: 1e-3
+    eps: 1e-8
+
+resources:
+  num_workers: 2
+  num_proc: 16
+  omp_threads: ${int_div:${n_cpus:},2}
+
+batch_size:
+  effective: 32
+  per_device: 32
+  per_device_eval: 32
+  per_device_predict: 1024
+
+collates:
+  train:
+    n_sections: 32 # sample `x` sections from the candidate `z` sections
+    max_pos_sections: 8 # include at max `y` positive sections
+
+fabric:
+  precision: bf16-mixed
+  accelerator: gpu

@@ -301,9 +301,15 @@ class ElasticSearchMaster(base.SearchMaster[ElasticsearchClient]):
     def _on_exit(self) -> None:
         client = es.Elasticsearch(self.url)
         if not self._persistent:
-            client.indices.delete(index=self._index_name)
+            try:
+                client.indices.delete(index=self._index_name)
+            except Exception as exc:
+                logger.warning(f"Could not delete index `{self._index_name}`: {exc}")
         else:
-            client.indices.close(index=self._index_name)
+            try:
+                client.indices.close(index=self._index_name)
+            except Exception as exc:
+                logger.warning(f"Could not close index `{self._index_name}`: {exc}")
 
     def _make_cmd(self) -> list[str]:
         return ["elasticsearch"]

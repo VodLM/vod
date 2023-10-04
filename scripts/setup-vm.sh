@@ -6,7 +6,7 @@ if [ -f /etc/debian_version ]; then
     echo "Debian based"
     PKGMD="apt-get"
     sudo $PKGMD update
-    sudo $PKGMD install -y zsh git htop util-linux gcc make
+    sudo $PKGMD install -y zsh git htop util-linux gcc make libaio-dev
 elif [ -f /etc/redhat-release ]; then
     echo "CentOS based"
     PKGMD="yum"

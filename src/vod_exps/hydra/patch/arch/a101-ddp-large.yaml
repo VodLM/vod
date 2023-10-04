@@ -1,0 +1,19 @@
+# @package _global_
+
+# This config is for >=4xA100 GPUs (80GB)
+
+defaults:
+  - a100-ddp-large
+
+resources:
+  num_workers: 3
+
+batch_size:
+  per_device: 16
+  per_device_eval: 32
+  per_device_predict: 1024
+
+collates:
+  train:
+    n_sections: 8 # sample `x` sections from the candidate `z` sections
+    max_pos_sections: 2 # include at max `y` positive sections

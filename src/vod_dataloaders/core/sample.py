@@ -13,6 +13,7 @@ class PrioritySampledSections:
 
     samples: vt.RetrievalBatch
     log_weights: np.ndarray
+    rel_ids: np.ndarray
     raw_scores: dict[str, np.ndarray]
 
 
@@ -66,6 +67,7 @@ def sample_search_results(
             scores=scores,
             labels=labels,
         ),
+        rel_ids=local_ids,
         log_weights=log_weights,
         raw_scores=sampled_raw_scores,
     )
@@ -89,7 +91,7 @@ def labeled_priority_sampling(
         s_1, ..., s_k <- z_1, ..., z_k
 
     Using the weights, we can estimate an unbiased estimate of an expectation F = E_p[f(z)] using
-        F = sum_i s_i f(z_i)               # <- unbiased estimate of E_p[f(z)] if temperature=1.0
+        F = sum_i s_i f(z_i)               # <- unbiased estimate of E_p[f(z)] if temperature=1.0 and normalized=False
 
     Args:
         scores: The unformalized log p(z) scores.
@@ -107,7 +109,8 @@ def labeled_priority_sampling(
     NOTE: Labels: a sample is `positive` if its label is `>0`, `negative` otherwise.
           we run priority sampling for each sets {i | l_i = 0} and {i | l_i = 1}
     NOTE: Normalization: if `normalize==True`, the weights are normalized to sum to 1, for each label.
-          This is an instance of self-normalized importance sampling.
+          This is an instance of self-normalized importance sampling. This leads a slight bias in the estimate
+          of the expectation, but it is negligible in practice.
     NOTE: References:
           Original paper: https://arxiv.org/abs/cs/0509026
           Tim Vieira's review: https://timvieira.github.io/blog/post/2017/07/03/estimating-means-in-a-finite-universe/
@@ -143,7 +146,7 @@ def labeled_priority_sampling(
         raise ValueError(f"Expected a 1D or 2D array. Got {scores.ndim}D.")
 
 
-@numba.njit(fastmath=True, cache=npo.CACHE_NUMBA_JIT)
+@numba.njit(fastmath=True, cache=npo.CACHE_NUMBA_JIT, nogil=True)
 def _priority_sampling_1d(
     scores: npt.NDArray[npo.Float],
     exponential_noise_: npt.NDArray[npo.Float],
@@ -224,7 +227,7 @@ def priority_sampling_1d(
     )
 
 
-@numba.njit(fastmath=True, cache=npo.CACHE_NUMBA_JIT)
+@numba.njit(fastmath=True, cache=npo.CACHE_NUMBA_JIT, nogil=True)
 def _labeled_priority_sampling_1d_(  # noqa: PLR0913
     scores: npt.NDArray[npo.Float],
     labels: npt.NDArray[npo.Bool],
@@ -296,7 +299,7 @@ def _labeled_priority_sampling_1d_(  # noqa: PLR0913
         j += 1
 
 
-@numba.njit(fastmath=True, cache=npo.CACHE_NUMBA_JIT)
+@numba.njit(parallel=True, fastmath=True, cache=npo.CACHE_NUMBA_JIT, nogil=True)
 def _labeled_priority_sampling_2d_(  # noqa: PLR0913
     scores: npt.NDArray[npo.Float],
     labels: npt.NDArray[npo.Bool],

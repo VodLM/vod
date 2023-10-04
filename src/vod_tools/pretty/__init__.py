@@ -12,3 +12,6 @@ from .print_config import (
 from .print_metrics import (
     pprint_metric_dict,
 )
+from .print_params import (
+    pprint_parameters_stats,
+)

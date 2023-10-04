@@ -43,10 +43,6 @@ class TokenizerCollate(vt.Collate[typ.Any, torch.Tensor]):
         tokenizer: transformers.PreTrainedTokenizerBase,
     ) -> Self:
         """Initialize the collate function for the `predict` function."""
-        max_length = {
-            "query": config.query_max_length,
-            "section": config.section_max_length,
-        }[field]
         template = getattr(config.templates, field, None)
         if template is None:
             raise ValueError(f"Missing template for field `{field}`. Found: `{config.templates}`")
@@ -57,7 +53,7 @@ class TokenizerCollate(vt.Collate[typ.Any, torch.Tensor]):
             prefix_key=f"{field}.",
             tokenizer=tokenizer,
             tokenizer_kws={
-                "max_length": max_length,
+                "max_length": config.encoder_max_length,
                 "truncation": True,
                 "padding": "max_length",
             },

@@ -2,6 +2,7 @@ import abc
 import functools
 import io
 import json
+import os
 import typing as typ
 
 import numpy as np
@@ -10,7 +11,8 @@ import transformers
 import xxhash
 from torch import nn
 from transformers import modeling_outputs
-from typing_extensions import Type, TypeVar
+from transformers.configuration_utils import PretrainedConfig
+from typing_extensions import Self
 
 from .configuration import (
     AggMethod,
@@ -65,7 +67,7 @@ class Aggregator(abc.ABC, nn.Module):
 
     def __init__(self) -> None:
         super().__init__()
-        self._dtype_marker = torch.nn.Parameter(torch.tensor(0.0), requires_grad=False)
+        self._dtype_marker = torch.nn.Parameter(torch.zeros(1), requires_grad=False)
 
     @abc.abstractmethod
     def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
@@ -104,7 +106,7 @@ class IdentityAgg(Aggregator):
         return x
 
 
-AGGREGATORS: dict[AggMethod, Type[Aggregator]] = {
+AGGREGATORS: dict[AggMethod, typ.Type[Aggregator]] = {
     "mean": MeanAgg,
     "max": MaxAgg,
     "cls": ClsAgg,
@@ -176,16 +178,16 @@ class VodPooler(torch.nn.Module):
         return (self.output_vector_size,)
 
 
-Cfg = TypeVar("Cfg", bound=VodEncoderConfig)
+Cfg = typ.TypeVar("Cfg", bound=VodEncoderConfig)
 
 
 class VodEncoderBase(typ.Generic[Cfg], transformers.PreTrainedModel, abc.ABC):
     """A VOD transformer encoder."""
 
-    config_class: Type[Cfg]
+    config_class: typ.Type[Cfg]
     vod_pooler: VodPooler
 
-    def __init__(self, config: Cfg, **kwargs: typ.Any) -> None:
+    def __init__(self, config: Cfg, *args: typ.Any, **kwargs: typ.Any) -> None:
         super().__init__(config, **kwargs)
         self.vod_pooler = VodPooler(config.pooler, self.config.hidden_size)
 
@@ -249,6 +251,48 @@ class VodEncoderBase(typ.Generic[Cfg], transformers.PreTrainedModel, abc.ABC):
     def base_name_or_path(self) -> str:
         """The name of the base model."""
         return self.config.name_or_path
+
+    @classmethod
+    def from_pretrained(
+        cls: typ.Type[Self],
+        pretrained_model_name_or_path: str | os.PathLike | None,
+        *model_args: typ.Any,
+        config: PretrainedConfig | str | os.PathLike | None = None,
+        cache_dir: str | os.PathLike | None = None,
+        ignore_mismatched_sizes: bool = False,
+        force_download: bool = False,
+        local_files_only: bool = False,
+        token: str | bool | None = None,
+        revision: str = "main",
+        use_safetensors: None | bool = None,
+        torch_dtype: None | str | int | torch.dtype = None,
+        **kws: typ.Any,
+    ) -> Self:
+        """Load a pretrained model."""
+        if isinstance(torch_dtype, (str, int)):
+            torch_dtype = {
+                "float16": torch.float16,
+                "bfloat16": torch.bfloat16,
+                "bf16": torch.bfloat16,
+                "bf16-mixed": torch.bfloat16,
+                "float32": torch.float32,
+                "16": torch.float16,
+                "32": torch.float32,
+            }[str(torch_dtype)]
+        return super().from_pretrained(
+            pretrained_model_name_or_path,
+            *model_args,
+            config=config,
+            cache_dir=cache_dir,
+            ignore_mismatched_sizes=ignore_mismatched_sizes,
+            force_download=force_download,
+            local_files_only=local_files_only,
+            token=token,
+            revision=revision,
+            use_safetensors=use_safetensors,  # type: ignore
+            torch_dtype=torch_dtype,
+            **kws,
+        )
 
 
 class VodBertEncoder(VodEncoderBase[VodBertEncoderConfig], transformers.BertModel):

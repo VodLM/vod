@@ -16,6 +16,11 @@ SubsetId: typ.TypeAlias = str
 SectionId: typ.TypeAlias = str
 
 
+def _camel_to_snake(name: str) -> str:
+    """Convert a camel case name to snake case."""
+    return "".join(["_" + c.lower() if c.isupper() else c for c in name]).lstrip("_")
+
+
 class DoNotPickleError(Exception):
     """An exception to raise when an object cannot be pickled."""
 
@@ -173,7 +178,7 @@ class SearchMaster(typ.Generic[Sc], abc.ABC):
     @property
     def service_name(self) -> str:
         """Return the name of the service."""
-        return self.__class__.__name__.lower()
+        return _camel_to_snake(self.__class__.__name__)
 
     @property
     def service_info(self) -> str:

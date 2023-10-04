@@ -9,6 +9,7 @@ import vod_configs
 import vod_search
 import vod_types as vt
 from loguru import logger
+from vod_tools.misc.exceptions import dump_exceptions_to_file
 
 from .core import (
     in_batch_negatives,
@@ -37,7 +38,7 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
         2. sample the sections
         3. (optional) flatten sections (in-batch negative)
         4. fetch the content of each section from the huggingface `datasets.Dataset`
-        5. tokenize the sections & querys
+        5. tokenize the sections & queries
         6. cast & return the batch (`torch.Tensor`)
     """
 
@@ -73,6 +74,7 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
         """Get all indexed sections."""
         return self.search_client.sections
 
+    @dump_exceptions_to_file
     def __call__(
         self,
         inputs: list[dict[str, typ.Any]],
@@ -113,7 +115,7 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
         # Fetch the content of each section from the huggingface `datasets.Dataset`
         sections_shape = sections.indices.shape
         flat_ids = sections.indices.flatten().tolist()
-        flat_sections_content: dict[str, typ.Any] = self.sections[flat_ids]
+        flat_sections_content: dict[str, list[typ.Any]] = self.sections[flat_ids]
 
         # Tokenize the sections and add them to the output
         with utils.BlockTimer(name="diagnostics.tokenize_time", output=diagnostics):

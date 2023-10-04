@@ -34,12 +34,12 @@ def format_pbar_info(
         if train_metrics is not None:
             for k in keys:
                 if k in train_metrics:
-                    suppl.append(f"train/{k}={train_metrics[k]:.3f}")
+                    suppl.append(f"train/{k}={train_metrics[k]:.2f}")
 
         if eval_metrics is not None:
             for k in keys:
                 if k in eval_metrics:
-                    suppl.append(f"val/{k}={eval_metrics[k]:.3f}")
+                    suppl.append(f"val/{k}={eval_metrics[k]:.2f}")
 
         desc = f"[yellow]{' '.join(suppl)}[/yellow] • {desc}"
 

@@ -26,10 +26,6 @@ model:
     self_supervision_weight: 0
     guidance_weight: 1e-2
     guidance: zero
-  compile_encoder: true
-  compile_kwargs:
-    dynamic: false
-    fullgraph: false
 
 resources:
   num_workers: 2 # <--- 2 workers per GPU
@@ -47,7 +43,7 @@ trainer:
   val_check_interval: 500
   log_interval: 20
   n_max_eval: 5_000
-  pbar_keys: ["kl_data", "hitrate_3", "mrr_10"]
+  pbar_keys: ["kl_data", "hitrate_03"]
   parameters:
     sparse: 0.5
     dense:
