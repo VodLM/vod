@@ -7,18 +7,12 @@ from .dataloaders import (
 )
 from .datasets import (
     BaseDatasetConfig,
-    BenchmarkDatasetConfig,
     DatasetConfig,
     DatasetLoader,
     DatasetOptions,
-    DatasetsConfig,
+    DatasetOptionsDiff,
     QueriesDatasetConfig,
     SectionsDatasetConfig,
-    TrainDatasetsConfig,
-)
-from .models import (
-    TokenizerConfig,
-    TweaksConfig,
 )
 from .search import (
     FAISS_METRICS_INV,
@@ -26,27 +20,32 @@ from .search import (
     FaissFactoryConfig,
     FaissGpuConfig,
     HybridSearchFactoryConfig,
+    HybridSearchFactoryDiff,
     QdrantFactoryConfig,
     SearchBackend,
     SearchFactoryDefaults,
     SingleSearchFactoryConfig,
+    _FactoryConfigsByBackend,
+    _FactoryDiffByBackend,
 )
-from .sectioning import (
+from .static import (
+    TARGET_SHARD_KEY,
+)
+from .support import (
     FixedLengthSectioningConfig,
     SectioningConfig,
     SentenceSectioningConfig,
-)
-from .templates import (
     TemplatesConfig,
+    TokenizerConfig,
+    TweaksConfig,
 )
-from .workflows import (
+from .trainer import (
     BatchSizeConfig,
     BenchmarkConfig,
-    CollateConfigs,
-    DataLoaderConfigs,
-    RunConfig,
     SysConfig,
     TrainerConfig,
 )
-
-TARGET_SHARD_KEY = "__LINKED_SHARD__"
+from .utils.base import (
+    AllowMutations,
+    StrictModel,
+)

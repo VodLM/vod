@@ -7,7 +7,7 @@ work_dir: ${hydra:runtime.cwd}
 cache_dir: ${os_expanduser:"~/.cache/vod/"}
 
 # cache to local nvme
-nvme: ${os_expanduser:"~/nvme/"}
+nvme: ${os_expanduser:"/mnt/scratch/"}
 
 # info
 hostname: ${hostname:}

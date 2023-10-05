@@ -3,7 +3,12 @@ from numbers import Number
 
 import rich
 import yaml
-from omegaconf import DictConfig, OmegaConf, open_dict
+from omegaconf import (
+    DictConfig,
+    ListConfig,
+    OmegaConf,
+    open_dict,
+)
 from rich.syntax import Syntax
 from rich.tree import Tree
 
@@ -37,7 +42,7 @@ def pprint_config(
         base_config = {}
         for field in copy(fields_list):
             field_value = config.get(field)
-            if field_value is None or isinstance(field_value, (bool, str, Number)):
+            if field_value is None or isinstance(field_value, (bool, str, Number, list, ListConfig)):
                 base_config[field] = copy(field_value)
                 fields_list.remove(field)
         config["__root__"] = base_config

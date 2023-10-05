@@ -17,13 +17,13 @@ try:
 except RuntimeError:
     loguru.logger.debug("Could not set multiprocessing start method to `forkserver`")
 
-import vod_configs
 import vod_models
 from vod_exps import recipes
 from vod_exps import utils as exp_utils
 from vod_tools import pretty
 
 from .hydra import hyra_conf_path, register_omgeaconf_resolvers
+from .structconf import Experiment
 
 register_omgeaconf_resolvers()
 
@@ -85,7 +85,7 @@ def run_exp(hydra_config: DictConfig) -> None:
         )
 
     # Parse the configuration
-    config = vod_configs.RunConfig.parse(hydra_config)
+    config = Experiment.parse(hydra_config)
 
     # Train the model
     logger.info(f"Training the ranker with seed={hydra_config.seed}")

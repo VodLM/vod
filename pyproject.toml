@@ -139,7 +139,6 @@ ignore = [
   "PLC1901", # compare-to-empty-string
   "PTH123",  # builtin-open
   "RET504",  # unnecessary-assign
-  "N805",    # invalid-first-argument-name-for-method
   "N812",    # lowercase-underscore
 ]
 

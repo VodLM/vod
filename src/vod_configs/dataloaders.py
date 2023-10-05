@@ -2,8 +2,8 @@ import typing as typ
 
 import pydantic
 
-from .templates import TemplatesConfig
-from .utils import StrictModel
+from .support import TemplatesConfig
+from .utils.base import StrictModel
 
 
 class KeyMap(StrictModel):

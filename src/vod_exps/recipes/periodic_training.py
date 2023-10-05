@@ -11,7 +11,7 @@ import vod_datasets
 import vod_models
 import vod_types as vt
 from loguru import logger
-from vod_dataloaders.dl_sampler import dl_sampler_factory
+from vod_exps.structconf import Experiment
 from vod_tools import cache_manager, pretty
 from vod_tools.pretty.print_metrics import pprint_metric_dict
 from vod_workflows.evaluation.retrieval import ToDiskConfig, benchmark_retrieval
@@ -24,7 +24,7 @@ def periodic_training(  # noqa: C901, PLR0915
     *,
     fabric: L.Fabric,
     ranker: vod_models.Ranker,
-    config: vod_configs.RunConfig,
+    config: Experiment,
     resume_from_checkpoint: None | str = None,
 ) -> vod_models.Ranker:
     """Train a ranking model while periodically updating the index."""
@@ -124,22 +124,21 @@ def periodic_training(  # noqa: C901, PLR0915
                 scheduler=scheduler,
                 fabric=fabric,
                 train_queries=schemas.QueriesWithVectors.from_configs(
-                    queries=config.dataset.training.queries.train,
+                    queries=config.datasets.training.queries.train,
                     vectors=vectors,
                 ),
                 val_queries=schemas.QueriesWithVectors.from_configs(
-                    queries=config.dataset.training.queries.val,
+                    queries=config.datasets.training.queries.val,
                     vectors=vectors,
                 ),
                 sections=schemas.SectionsWithVectors.from_configs(
-                    sections=config.dataset.training.sections.sections,
+                    sections=config.datasets.training.sections.sections,
                     vectors=vectors,
                 ),
                 tokenizer=tokenizer,
                 collate_config=config.collates.train,
                 train_dataloader_config=config.dataloaders.train,
                 eval_dataloader_config=config.dataloaders.eval,
-                dl_sampler=dl_sampler_factory(config.dl_sampler) if config.dl_sampler is not None else None,
                 cache_dir=cache_dir,
                 serve_on_gpu=False,
                 trainer_state=state,
@@ -165,7 +164,7 @@ def _compute_all_vectors(
     dset_configs: list[vod_configs.DatasetConfig],
     fabric: L.Fabric,
     ranker: vod_models.Ranker,
-    config: vod_configs.RunConfig,
+    config: Experiment,
     tokenizer: transformers.PreTrainedTokenizer | transformers.PreTrainedTokenizerFast,
     cache_dir: pathlib.Path,
 ) -> dict[vod_configs.DatasetConfig, vt.Array]:
@@ -209,7 +208,7 @@ def _on_first_batch_fn(
 def _run_benchmarks(
     *,
     fabric: L.Fabric,
-    config: vod_configs.RunConfig,
+    config: Experiment,
     vectors: None | dict[vod_configs.DatasetConfig, vt.Array],
     state: helpers.TrainerState,
     parameters: dict[str, float],
@@ -220,9 +219,9 @@ def _run_benchmarks(
     # ranker.to("cpu")  # <-- free GPU memory # see: https://github.com/Lightning-AI/lightning/issues/17937
     if fabric.is_global_zero:
         logger.info(f"Running benchmarks ... (period={1+state.pidx})")
-        for j, task in enumerate(config.dataset.benchmark):
+        for j, task in enumerate(config.datasets.benchmark):
             bench_loc = f"{task.queries.identifier} <- {task.queries.identifier}"
-            logger.info(f"{1+j}/{len(config.dataset.benchmark)} - Benchmarking `{bench_loc}` ...")
+            logger.info(f"{1+j}/{len(config.datasets.benchmark)} - Benchmarking `{bench_loc}` ...")
             logdir = pathlib.Path("benchmarks", f"{bench_loc}-{state.pidx}-{state.step}")
             logdir.mkdir(parents=True, exist_ok=True)
 
@@ -257,7 +256,7 @@ def _run_benchmarks(
                 _log_print_metrics(
                     fabric=fabric, state=state, locator=task.queries.identifier, metrics=metrics, header=header
                 )
-            logger.info(f"{1+j}/{len(config.dataset.benchmark)} - saved to `{logdir.absolute()}`")
+            logger.info(f"{1+j}/{len(config.datasets.benchmark)} - saved to `{logdir.absolute()}`")
 
 
 def _patch_mum_worker(

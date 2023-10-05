@@ -30,7 +30,7 @@ FIELD_MAPPING: dict[vod_encoder.VodEncoderInputType, str] = {"query": "hq", "sec
 
 def _apply_tweaks(
     encoder: vod_encoder.VodEncoder,
-    tweaks: None | vod_configs.models.TweaksConfig,
+    tweaks: None | vod_configs.support.TweaksConfig,
 ) -> vod_encoder.VodEncoder:
     if tweaks is None:
         return encoder

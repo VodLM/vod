@@ -11,7 +11,7 @@ import torch
 import vod_configs
 import vod_types as vt
 from loguru import logger
-from vod_configs.es_body import validate_es_body
+from vod_configs.utils.es_body import validate_es_body
 from vod_search import base, es_search, faiss_search, qdrant_search
 from vod_search.socket import find_available_port
 from vod_tools import fingerprint

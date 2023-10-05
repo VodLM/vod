@@ -9,7 +9,6 @@ import vod_configs
 import vod_types as vt
 from lightning.fabric import wrappers as fabric_wrappers
 from loguru import logger
-from typing_extensions import Self, Type
 from vod_tools.misc.schedule import BaseSchedule, schedule_factory
 
 T = typ.TypeVar("T")
@@ -82,28 +81,6 @@ class TrainerState:
         """Set the state of the object."""
         state["parameters"] = {k: schedule_factory(**v) for k, v in state["parameters"].items()}
         self.__dict__.update(state)
-
-    @classmethod
-    def from_config(
-        cls: Type[Self],
-        config: vod_configs.RunConfig,
-        fabric: L.Fabric,
-    ) -> Self:
-        """Instantiate the training state from the configuration and Lightning environment."""
-        return cls(
-            step=0,
-            pidx=0,
-            epoch=0,
-            period=config.trainer.period,
-            period_max_steps=None,
-            max_steps=config.trainer.max_steps,
-            log_interval=config.trainer.log_interval,
-            val_check_interval=config.trainer.val_check_interval,
-            n_max_eval=config.trainer.n_max_eval,
-            accumulate_grad_batches=_infer_accumulate_grad_batches(fabric, config.batch_size),
-            gradient_clip_val=config.trainer.gradient_clip_val,
-            parameters=config.trainer.parameters,
-        )
 
 
 class _OptimizerWrapper(typ.Protocol):
