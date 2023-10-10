@@ -93,3 +93,8 @@ docker run -p 6333:6333 -p 6334:6334 \
     --restart always \
     -v $(pwd)/qdrant_storage:/qdrant/storage \
     qdrant/qdrant:latest
+
+
+# Fix GLIBCXX_3.4.30 linking error
+# strings /home/vlievin/mambaforge/envs/vod/lib/libstdc++.so.6 | grep GLIBCXX_3.4.30
+# export LD_LIBRARY_PATH=/home/vlievin/mambaforge/envs/vod/lib:$LD_LIBRARY_PATH
