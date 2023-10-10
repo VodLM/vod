@@ -222,22 +222,34 @@ def parse_experiment_datasets(
     base_options = _parse_base_options(config, base_options=base_options)
     base_search = _parse_base_search(config, base_search=search_defaults)
 
-    # Resolve dynamic configurations (i.e. `__vars__`)
-    benchmark_configs = to_dicts_list(config["benchmark"])
-    benchmark_configs = resolve_configs_list(benchmark_configs)
+    # Parse the train/val datasets
+    train_val_datasets = _parse_train_datasets(
+        config["training"],
+        base_options=base_options,
+        base_search=base_search,
+    )
 
-    return ExperimentDatasets(
-        training=_parse_train_datasets(
-            config["training"],
+    # Parse the benchmark datasets
+    benchmark_configs = config.get("benchmark", None)
+    if benchmark_configs is None or len(benchmark_configs) == 0:
+        return ExperimentDatasets(
+            training=train_val_datasets,
+            benchmark=[],
+        )
+
+    # Parse the benchmark configurations
+    benchmark_configs = to_dicts_list(benchmark_configs)
+    benchmark_configs = resolve_configs_list(benchmark_configs)
+    benchmarks = [
+        _parse_benchmark_dataset(
+            cfg,
             base_options=base_options,
             base_search=base_search,
-        ),
-        benchmark=[
-            _parse_benchmark_dataset(
-                cfg,
-                base_options=base_options,
-                base_search=base_search,
-            )
-            for cfg in benchmark_configs
-        ],
+        )
+        for cfg in benchmark_configs
+    ]
+
+    return ExperimentDatasets(
+        training=train_val_datasets,
+        benchmark=benchmarks,
     )

@@ -18,12 +18,15 @@ defaults:
   - env: default
   - hydra: default
 
+# Shorthands
 seed: ${global_seed:}
 model_name: ${parse_model_name:${model}}
 encoder_name: ${parse_encoder_name:${model}}
 lm_name: ${parse_lm_name:${model}}
+run_name: ${fmt_mn:${model_name}}--${rdn_name:}-${exp_version}${exp_suffix}
+
+# Exposed variables -- set this to control your app
 exp_version: "v3.0"
 exp_suffix: ""
-exp_name: retrieval
-run_name: ${fmt_mn:${model_name}}--${rdn_name:}-${exp_version}${exp_suffix}
+exp_name: vod
 load_from: null

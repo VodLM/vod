@@ -20,10 +20,10 @@ def compute_vectors(
     fabric: L.Fabric,
     collate_config: vod_configs.TokenizerCollateConfig,
     dataloader_config: vod_configs.DataLoaderConfig,
-    cache_dir: pathlib.Path,
+    save_dir: pathlib.Path,
     field: str,
     validate_store: int = 1_000,
-    locator: None | str = None,
+    locator: str = "embedding",
 ) -> TensorStoreFactory:
     """Compute the vectors for a given dataset and field. Hanldes distributed execution on a single node."""
     collate_fn = TokenizerCollate.instantiate(collate_config, field=field)
@@ -32,7 +32,7 @@ def compute_vectors(
     # construct the `predict` function
     predict_fn = Predict(
         dataset=dataset,  # type: ignore
-        cache_dir=cache_dir,
+        save_dir=save_dir,
         model=module,
         collate_fn=collate_fn,
         model_output_key={"query": "hq", "section": "hd"}[field],

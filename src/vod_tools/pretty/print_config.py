@@ -1,3 +1,4 @@
+import typing as typ
 from copy import copy
 from numbers import Number
 
@@ -53,6 +54,8 @@ def pprint_config(
         config_section = config.get(field)
         if isinstance(config_section, DictConfig):
             pyobj = OmegaConf.to_container(config_section, resolve=resolve)
+            if exclude:
+                _prune_keys(pyobj, exclude)
             branch_content = yaml.dump(pyobj)
         else:
             branch_content = str(config_section)
@@ -60,3 +63,16 @@ def pprint_config(
         branch.add(Syntax(branch_content, "yaml", indent_guides=True, word_wrap=True))
 
     rich.print(tree)
+
+
+def _prune_keys(x: typ.Any | dict | list, exclude: list[str]) -> None:
+    """Prune keys from a dict or list."""
+    if isinstance(x, dict):
+        for key in list(x.keys()):
+            if key in exclude:
+                x.pop(key)
+            else:
+                _prune_keys(x[key], exclude)
+    elif isinstance(x, list):
+        for item in x:
+            _prune_keys(item, exclude)

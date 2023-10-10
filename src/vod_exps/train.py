@@ -27,7 +27,7 @@ from .structconf import Experiment
 register_omgeaconf_resolvers()
 
 
-@hydra.main(config_path=hyra_conf_path(), config_name="train", version_base="1.3")
+@hydra.main(config_path=hyra_conf_path(), config_name="main", version_base="1.3")
 def cli(hydra_config: DictConfig) -> None:
     """Training CLI.."""
     run_exp(hydra_config)
@@ -44,7 +44,7 @@ def run_exp(hydra_config: DictConfig) -> torch.nn.Module:
         checkpoint_dir = None
 
     if is_gloabl_zero():
-        pretty.pprint_config(hydra_config)
+        pretty.pprint_config(hydra_config, exclude=["search_defaults"])
 
     # Set training context (env variables, muliprocessing, omp_threads, etc.)
     logger.debug(f"Setting environment variables from config: {hydra_config.env}")

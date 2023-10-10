@@ -62,10 +62,14 @@ def set_training_context() -> None:
 
 def get_model_stats(ranker: vod_models.Ranker) -> dict[str, typ.Any]:
     """Get some stats about the model."""
+    try:
+        output_shape = list(ranker.encoder.get_encoding_shape())
+    except Exception as exc:
+        output_shape = str(exc)
     return {
         "n_trainable_params": sum(p.numel() for p in ranker.parameters() if p.requires_grad),
         "n_total_params": sum(p.numel() for p in ranker.parameters()),
-        "output_shape": list(ranker.encoder.get_encoding_shape()),
+        "output_shape": output_shape,
         "flash_sdp_enabled": torch.backends.cuda.flash_sdp_enabled(),  # type: ignore
         "mem_efficient_sdp_enabled": torch.backends.cuda.mem_efficient_sdp_enabled(),  # type: ignore
         "math_sdp_enabled": torch.backends.cuda.math_sdp_enabled(),  # type: ignore

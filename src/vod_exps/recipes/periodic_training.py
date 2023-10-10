@@ -111,7 +111,7 @@ def _compute_all_vectors(
             dataset=vod_datasets.load_dataset(cfg),  # type: ignore
             module=module,
             fabric=fabric,
-            cache_dir=cache_dir,
+            save_dir=cache_dir,
             collate_config=config.collates.predict,
             dataloader_config=config.dataloaders.predict,
             field=cfg.field,
@@ -179,6 +179,9 @@ def _run_benchmarks(
     cache_dir: pathlib.Path,
     barrier: typ.Callable[[str], None],
 ) -> None:
+    if len(config.datasets.benchmark) == 0:
+        return
+
     barrier("Running benchmarks..")
     if helpers.is_engine_enabled(config.benchmark.parameters, "dense"):
         vectors = _compute_all_vectors(
