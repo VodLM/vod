@@ -8,6 +8,19 @@ from typing_extensions import Self, Type
 from vod_tools.misc.template import Template
 
 
+def render_template_and_tokenize(
+    inputs: typ.Iterable[dict[str, typ.Any]] | dict[str, list[typ.Any]],
+    template: Template,
+    tokenizer: transformers.PreTrainedTokenizerBase,
+    prefix_key: str = "",
+    **tokenizer_kws: typ.Any,
+) -> dict[str, torch.Tensor]:
+    """Render a template, tokenize the resulting text and append the `prefix_key`."""
+    texts = template(inputs)
+    outputs = tokenizer(texts, **tokenizer_kws, return_tensors="pt")
+    return {f"{prefix_key}{k}": v for k, v in outputs.items()}
+
+
 class TokenizerCollate(vt.Collate[typ.Any, torch.Tensor]):
     """Collate function to format text and tokenize into `field.input_ids and `field.attention_mask` tensors."""
 
@@ -30,18 +43,16 @@ class TokenizerCollate(vt.Collate[typ.Any, torch.Tensor]):
         **kws: typ.Any,
     ) -> dict[str, torch.Tensor]:
         """Render a template, tokenize the resulting text and append the `prefix_key`."""
-        texts = self.template(inputs)
-        outputs = self.tokenizer(texts, **self.tokenizer_kws, return_tensors="pt")  # <- hard code return_tensors="pt"
-        return {f"{self.prefix_key}{k}": v for k, v in outputs.items()}
+        return render_template_and_tokenize(
+            inputs=inputs,
+            template=self.template,
+            tokenizer=self.tokenizer,
+            prefix_key=self.prefix_key,
+            **self.tokenizer_kws,
+        )
 
     @classmethod
-    def from_config(
-        cls: Type[Self],
-        config: vod_configs.BaseCollateConfig,
-        *,
-        field: str,
-        tokenizer: transformers.PreTrainedTokenizerBase,
-    ) -> Self:
+    def instantiate(cls: Type[Self], config: vod_configs.TokenizerCollateConfig, *, field: str) -> Self:
         """Initialize the collate function for the `predict` function."""
         template = getattr(config.templates, field, None)
         if template is None:
@@ -51,10 +62,6 @@ class TokenizerCollate(vt.Collate[typ.Any, torch.Tensor]):
         return cls(
             template=template,
             prefix_key=f"{field}.",
-            tokenizer=tokenizer,
-            tokenizer_kws={
-                "max_length": config.encoder_max_length,
-                "truncation": True,
-                "padding": "max_length",
-            },
+            tokenizer=config.tokenizer.instantiate(),
+            tokenizer_kws=config.tokenizer.kwargs(),
         )

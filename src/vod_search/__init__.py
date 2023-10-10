@@ -1,5 +1,6 @@
 """Tools for indexing and searching knowledge bases."""
 
+__version__ = "0.1.0"
 
 from vod_types.retrieval import RetrievalBatch, RetrievalData, RetrievalSample
 

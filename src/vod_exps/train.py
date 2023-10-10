@@ -2,21 +2,20 @@ import multiprocessing
 import os
 import pathlib
 import sys
-from pathlib import Path
 
 import hydra
 import lightning as L
-import loguru
 import omegaconf
 from hydra.utils import instantiate
 from loguru import logger
 from omegaconf import DictConfig
+from vod_workflows.utils.distributed import is_gloabl_zero
 
 try:
     multiprocessing.set_start_method("forkserver", force=True)
 except RuntimeError:
-    loguru.logger.debug("Could not set multiprocessing start method to `forkserver`")
-
+    logger.debug("Could not set multiprocessing start method to `forkserver`")
+import torch
 import vod_models
 from vod_exps import recipes
 from vod_exps import utils as exp_utils
@@ -28,71 +27,65 @@ from .structconf import Experiment
 register_omgeaconf_resolvers()
 
 
-def _is_gloabl_zero() -> bool:
-    """Check if the current process is the global zero."""
-    return os.environ.get("LOCAL_RANK", "0") == "0" and os.environ.get("NODE_RANK", "0") == "0"
-
-
 @hydra.main(config_path=hyra_conf_path(), config_name="train", version_base="1.3")
 def cli(hydra_config: DictConfig) -> None:
     """Training CLI.."""
     run_exp(hydra_config)
 
 
-def run_exp(hydra_config: DictConfig) -> None:
+def run_exp(hydra_config: DictConfig) -> torch.nn.Module:
     """Train a ranker for a retrieval task."""
     if hydra_config.load_from is not None:
         logger.info(f"Loading checkpoint from `{hydra_config.load_from}`")
         checkpoint_dir = hydra_config.load_from
         cfg_path = pathlib.Path(hydra_config.load_from, "config.yaml")
         hydra_config = omegaconf.OmegaConf.load(cfg_path)  # type: ignore
-
     else:
         checkpoint_dir = None
 
-    if _is_gloabl_zero():
+    if is_gloabl_zero():
         pretty.pprint_config(hydra_config)
 
+    # Set training context (env variables, muliprocessing, omp_threads, etc.)
     logger.debug(f"Setting environment variables from config: {hydra_config.env}")
     os.environ.update({k: str(v) for k, v in hydra_config.env.items()})
     exp_utils.set_training_context()
-    exp_dir = Path()
-    logger.info(f"Experiment directory: {exp_dir.absolute()}")
+    logger.info(f"Experiment directory: {pathlib.Path().absolute()}")
 
     # Init the Fabric, log the hyperparameters
-    logger.info(f"Instantiating Lighning's Fabric <{hydra_config.fabric._target_}>")
-    omegaconf.OmegaConf.to_container(hydra_config, resolve=True)
+    logger.debug(f"Instantiating Lighning's Fabric <{hydra_config.fabric._target_}>")
     fabric: L.Fabric = instantiate(hydra_config.fabric)
     fabric.launch()
 
-    # Init the model
-    logger.info(f"Instantiating model <{hydra_config.model._target_}>")
+    # Init the model, optimizer and scheduler
+    logger.debug(f"Instantiating model <{hydra_config.model._target_}> (seed={hydra_config.seed})")
     if hydra_config.seed is not None:
         fabric.seed_everything(hydra_config.seed)
-    ranker: vod_models.Ranker = instantiate(hydra_config.model)
-
-    if _is_gloabl_zero():
-        pretty.pprint_parameters_stats(ranker, header="Model Parameters (init)")
+    module: vod_models.Ranker = instantiate(hydra_config.model)
+    optimizer = module.get_optimizer()
+    scheduler = module.get_scheduler(optimizer)
 
     # Log config & setup logger
     _customize_logger(fabric=fabric)
     if fabric.is_global_zero:
         exp_utils.log_config(
             config=hydra_config,
-            exp_dir=exp_dir,
-            extras={"meta": exp_utils._get_ranker_meta_data(ranker)},
+            exp_dir=pathlib.Path(),
+            extras={"model_stats": exp_utils.get_model_stats(module)},
             fabric=fabric,
         )
 
-    # Parse the configuration
-    config = Experiment.parse(hydra_config)
+    # Setup the optimizer and fabric
+    logger.debug("Setting up model and optimizer using `lightning.Fabric`")
+    fabric_module, fabric_optimizer = fabric.setup(module, optimizer)
 
     # Train the model
-    logger.info(f"Training the ranker with seed={hydra_config.seed}")
-    recipes.periodic_training(
+    return recipes.periodic_training(
+        module=fabric_module,
+        optimizer=fabric_optimizer,
+        scheduler=scheduler,
         fabric=fabric,
-        ranker=ranker,
-        config=config,
+        config=Experiment.parse(hydra_config),
         resume_from_checkpoint=checkpoint_dir,
     )
 
@@ -100,18 +93,10 @@ def run_exp(hydra_config: DictConfig) -> None:
 if __name__ == "__main__":
     try:
         cli()
-        logger.info(f"Success. Experiment logged to {Path().absolute()}")
+        logger.info(f"Success. Experiment logged to {pathlib.Path().absolute()}")
     except Exception as exc:
-        loguru.logger.warning(f"Failure. Experiment logged to {Path().absolute()}")
+        logger.warning(f"Failure. Experiment logged to {pathlib.Path().absolute()}")
         raise exc
-
-    # make sure to close the wandb run
-    try:
-        import wandb
-
-        wandb.finish()
-    except ImportError:
-        ...
 
 
 def _customize_logger(fabric: L.Fabric) -> None:

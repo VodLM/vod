@@ -8,80 +8,22 @@ import torch
 import vod_configs
 import vod_gradients
 from datasets.fingerprint import Hasher, hashregister
-from hydra.utils import instantiate
-from loguru import logger
-from peft import mapping as peft_mapping
-from peft import utils as peft_utils
-from transformers import modeling_outputs, pytorch_utils, trainer_pt_utils
+from transformers import modeling_outputs
 from vod_models import vod_encoder  # type: ignore
 from vod_models.monitor import RetrievalMonitor
+from vod_models.support import FIELD_MAPPING, apply_tweaks
 from vod_tools import fingerprint
 
-
-def _maybe_instantiate(conf_or_obj: typ.Any | omg.DictConfig, **kws: typ.Any) -> object:
-    """Instantiate a config if needed."""
-    if isinstance(conf_or_obj, (omg.DictConfig, dict)):
-        return instantiate(conf_or_obj, **kws)
-    return None
+from .base import VodSystem
 
 
-FIELD_MAPPING: dict[vod_encoder.VodEncoderInputType, str] = {"query": "hq", "section": "hd"}
-
-
-def _apply_tweaks(
-    encoder: vod_encoder.VodEncoder,
-    tweaks: None | vod_configs.support.TweaksConfig,
-) -> vod_encoder.VodEncoder:
-    if tweaks is None:
-        return encoder
-    if tweaks.prepare_for_kbit_training:
-        # Cast parameters and register hooks to enable checkpointing
-        encoder = peft_utils.other.prepare_model_for_kbit_training(
-            encoder,
-            use_gradient_checkpointing=tweaks.gradient_checkpointing,
-        )
-        logger.debug("Prepared for kbit training.")
-
-    if tweaks.gradient_checkpointing:
-        # Enable gradient checkpointing
-        try:
-            encoder.gradient_checkpointing_enable()
-            logger.debug("Gradient checkpointing Enabled.")
-        except Exception as exc:
-            logger.warning(f"Failed to enable gradient checkpointing: {exc}")
-
-    if tweaks.peft_config is not None:
-        # Apply PEFT optimizations
-        encoder = peft_mapping.get_peft_model(encoder, tweaks.peft_config)  # type: ignore
-        logger.debug(f"PEFT enabled `{type(tweaks.peft_config).__name__}`.")
-
-    if tweaks.force_dtype is not None:
-        # Cast the parameters to the specified dtype
-        dtype = {
-            "float16": torch.float16,
-            "bfloat16": torch.bfloat16,
-            "float32": torch.float32,
-        }[tweaks.force_dtype]
-        for _, param in encoder.named_parameters():
-            if param.dtype in [torch.float16, torch.bfloat16, torch.float32]:
-                param.data = param.data.to(dtype)
-        logger.debug(f"PEFT dtype `{dtype}` applied to float parameters.")
-
-    if tweaks.compile:
-        # Compile the model
-        encoder = torch.compile(encoder, **tweaks.compile_kwargs)  # type: ignore
-        logger.debug("`torch.compile` enabled (encoder)")
-
-    return encoder
-
-
-class Ranker(torch.nn.Module):
+class Ranker(VodSystem):
     """Deep ranking model using a Transformer encoder as a backbone."""
 
     _output_size: int
     encoder: vod_encoder.VodEncoder
 
-    def __init__(  # noqa: PLR0913
+    def __init__(
         self,
         encoder: vod_encoder.VodEncoder,
         gradients: vod_gradients.Gradients,
@@ -90,18 +32,7 @@ class Ranker(torch.nn.Module):
         monitor: None | RetrievalMonitor = None,
         tweaks: None | dict | omg.DictConfig | vod_configs.TweaksConfig = None,
     ):
-        super().__init__()
-        if isinstance(optimizer, (dict, omg.DictConfig)):
-            optimizer = _maybe_instantiate(optimizer)  # type: ignore
-            if not isinstance(optimizer, functools.partial):
-                raise TypeError(f"Expected a partial function, got {type(optimizer)}")
-        if isinstance(scheduler, (dict, omg.DictConfig)):
-            scheduler = _maybe_instantiate(scheduler)  # type: ignore
-            if not isinstance(scheduler, functools.partial):
-                raise TypeError(f"Expected a partial function, got {type(scheduler)}")
-
-        self.optimizer_cls: functools.partial = optimizer  # type: ignore
-        self.scheduler_cls: functools.partial = scheduler  # type: ignore
+        super().__init__(optimizer=optimizer, scheduler=scheduler)
         self.gradients = gradients
         self.monitor = monitor
 
@@ -109,11 +40,11 @@ class Ranker(torch.nn.Module):
         if not isinstance(tweaks, vod_configs.TweaksConfig):
             tweaks = vod_configs.TweaksConfig.parse(**tweaks)  # type: ignore
 
-        self.encoder = _apply_tweaks(encoder, tweaks)  # type: ignore
+        self.encoder = apply_tweaks(encoder, tweaks)  # type: ignore
 
-    def get_output_shape(self, model_output_key: None | str = None) -> tuple[int, ...]:  # noqa: ARG002
+    def get_encoding_shape(self) -> tuple[int, ...]:
         """Dimension of the model output."""
-        return self.encoder.get_output_shape()
+        return self.encoder.get_encoding_shape()
 
     def get_fingerprint(self) -> str:
         """Return a fingerprint of the model."""
@@ -121,45 +52,6 @@ class Ranker(torch.nn.Module):
             return self.encoder.get_fingerprint()
         except AttributeError:
             return fingerprint.fingerprint_torch_module(self)
-
-    def get_optimizer(self, module: None | torch.nn.Module = None) -> torch.optim.Optimizer:
-        """Configure the optimizer and the learning rate scheduler."""
-        opt_model = module or self
-
-        # Fetch the weight decay from the optimizer
-        if isinstance(self.optimizer_cls, functools.partial):
-            weight_decay = self.optimizer_cls.keywords.get("weight_decay", None)
-        else:
-            weight_decay = None
-
-        # If no weight_decay is provided, instantiate the optimizer directly
-        if weight_decay is None:
-            return self.optimizer_cls(opt_model.parameters())
-
-        # Instantiate the optimizer à la HuggingFace
-        # https://github.com/huggingface/transformers/blob/fe861e578f50dc9c06de33cd361d2f625017e624/src/transformers/trainer.py#L1075C15-L1075C15
-        decay_parameters = trainer_pt_utils.get_parameter_names(opt_model, pytorch_utils.ALL_LAYERNORM_LAYERS)
-        decay_parameters = [name for name in decay_parameters if "bias" not in name]
-        optimizer_grouped_parameters = [
-            {
-                "params": [p for n, p in opt_model.named_parameters() if (n in decay_parameters and p.requires_grad)],
-                "weight_decay": weight_decay,
-            },
-            {
-                "params": [
-                    p for n, p in opt_model.named_parameters() if (n not in decay_parameters and p.requires_grad)
-                ],
-                "weight_decay": 0.0,
-            },
-        ]
-        return self.optimizer_cls(optimizer_grouped_parameters)
-
-    def get_scheduler(self, optimizer: torch.optim.Optimizer) -> None | torch.optim.lr_scheduler._LRScheduler:
-        """Init the learning rate scheduler."""
-        if self.scheduler_cls is None:
-            return None
-
-        return self.scheduler_cls(optimizer)
 
     def _forward_encoder(self, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
         original_shape = input_ids.shape
@@ -223,15 +115,6 @@ class Ranker(torch.nn.Module):
 
         return outputs
 
-    def forward(self, batch: dict, *, mode: str = "encode", **kws: typ.Any) -> dict[str, torch.Tensor]:
-        """Forward pass."""
-        if mode == "encode":
-            return self.encode(batch, **kws)
-        if mode == "evaluate":
-            return self.evaluate(batch, **kws)
-
-        raise ValueError(f"Unknown mode {mode}.")
-
     def evaluate(
         self,
         batch: dict[str, typ.Any],
@@ -263,6 +146,10 @@ class Ranker(torch.nn.Module):
             output = _filter_model_output(output)  # type: ignore
         output.update({k: v for k, v in batch.items() if k.startswith("diagnostics.")})
         return output
+
+    def generate(self, batch: dict[str, typ.Any], **kws: typ.Any) -> dict[str, typ.Any]:
+        """Generation is not supported."""
+        raise NotImplementedError(f"{self.__class__.__name__} does not support generation.")
 
 
 def _filter_model_output(output: dict[str, typ.Any]) -> dict[str, typ.Any]:

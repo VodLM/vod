@@ -5,7 +5,8 @@ import pydantic
 from typing_extensions import Self, Type
 from vod_configs.utils.base import StrictModel
 from vod_tools.misc.config import as_pyobj_validator
-from vod_tools.misc.schedule import BaseSchedule, schedule_factory
+
+from .utils.schedule import ParameterSchedule
 
 
 class TrainerConfig(StrictModel):
@@ -16,7 +17,8 @@ class TrainerConfig(StrictModel):
     log_interval: int = 100
     gradient_clip_val: None | float = None
     period: int | list[int]
-    parameters: dict[str, BaseSchedule] = {}
+    accumulate_grad_batches: int = 1
+    parameters: dict[str, ParameterSchedule] = {}
     n_max_eval: None | int = None
     checkpoint_path: None | str = None
     pbar_keys: list[str] = ["loss", "hitrate_3"]
@@ -27,20 +29,10 @@ class TrainerConfig(StrictModel):
 
     @pydantic.field_validator("parameters", mode="before")
     @classmethod
-    def _validate_parameters(cls: Type[Self], x: None | dict[str, typ.Any]) -> dict[str, typ.Any]:
+    def _validate_parameters(cls: Type[Self], x: None | typ.Mapping[str, typ.Any]) -> dict[str, ParameterSchedule]:
         if x is None:
             return {}
-
-        params = {}
-        for k, v in x.items():
-            if isinstance(v, (float, int)):
-                params[k] = schedule_factory(mode="constant", value=v)
-            elif isinstance(v, BaseSchedule):
-                params[k] = v
-            else:
-                params[k] = schedule_factory(**v)
-
-        return params
+        return {k: ParameterSchedule.parse(v) for k, v in x.items()}
 
 
 class BenchmarkConfig(StrictModel):
@@ -59,7 +51,7 @@ class BenchmarkConfig(StrictModel):
 
     @pydantic.field_validator("metrics", mode="before")
     @classmethod
-    def _validate_list(cls: Type[Self], v: None | list[str]) -> list[str]:
+    def _validate_list(cls: Type[Self], v: None | typ.Iterable[str]) -> list[str]:
         if v is None:
             return []
         return [str(x) for x in v]

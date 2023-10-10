@@ -1,57 +1,10 @@
 import copy
-import re
 import typing as typ
 
 import peft
-import pydantic
-import transformers
-from typing_extensions import Self, Type
+from typing_extensions import Self
 
 from .utils.base import StrictModel
-
-
-class TemplatesConfig(StrictModel):
-    """Prompt templates."""
-
-    query: str = pydantic.Field(
-        default=r"query: {{ query }}",
-        description="Template for formatting a query",
-    )
-    answer: str = pydantic.Field(
-        default=r"answer: {{ answer }}",
-        description="Template formatting answers before encoding for retrieval.",
-    )
-    section: str = pydantic.Field(
-        default=r"passage: {{ content }}",
-        description="Template formatting documents before encoding for retrieval.",
-    )
-
-    @property
-    @classmethod
-    def input_variables(cls: Type[Self]) -> set[str]:
-        """Return the input variables."""
-        variables = set()
-        for attribute_value in cls.__dict__.values():
-            matches = re.findall(r"{{\s*(.*?)\s*}}", attribute_value)
-            variables.update(matches)
-        return variables
-
-
-class TokenizerConfig(StrictModel):
-    """Configuration for a tokenizer."""
-
-    name_or_path: str
-    use_fast: None | bool = True
-
-    def instantiate(
-        self,
-        **kws: dict[str, typ.Any],
-    ) -> transformers.PreTrainedTokenizer | transformers.PreTrainedTokenizerFast:
-        """Instantiate the tokenizer."""
-        if self.use_fast is not None:
-            kws["use_fast"] = self.use_fast  # type: ignore
-
-        return transformers.AutoTokenizer.from_pretrained(self.name_or_path, **kws)
 
 
 class TweaksConfig(StrictModel):

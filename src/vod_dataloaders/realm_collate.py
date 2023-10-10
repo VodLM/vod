@@ -1,3 +1,4 @@
+import dataclasses
 import time
 import typing as typ
 import warnings
@@ -10,6 +11,7 @@ import vod_search
 import vod_types as vt
 from loguru import logger
 from vod_tools.misc.exceptions import dump_exceptions_to_file
+from vod_tools.misc.template import Template
 
 from .core import (
     in_batch_negatives,
@@ -18,13 +20,26 @@ from .core import (
     search,
     utils,
 )
-from .tokenizer_collate import TokenizerCollate
+from .tokenizer_collate import render_template_and_tokenize
 
 T = typ.TypeVar("T")
 P = typ.ParamSpec("P")
 
 
 ROW_IDX_COL_NAME: str = "__row_idx__"
+SECTION_IDS = "retrieval_ids"
+SECTION_ID = "id"
+SUBSET_ID = "subset_id"
+SUBSET_IDS = "subset_ids"
+
+
+@dataclasses.dataclass
+class RealmTemplates:
+    """Templates for the retrieval-augmented language modeling tasks."""
+
+    query: Template
+    section: Template
+    lm: Template
 
 
 class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
@@ -42,26 +57,29 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
         6. cast & return the batch (`torch.Tensor`)
     """
 
-    tokenizer: transformers.PreTrainedTokenizerBase
+    templates: RealmTemplates
+    tokenizer_encoder: transformers.PreTrainedTokenizerBase
+    tokenizer_lm: None | transformers.PreTrainedTokenizerBase
     search_client: vod_search.HybridSearchClient
     config: vod_configs.RetrievalCollateConfig
-    query_collate_fn: TokenizerCollate
-    section_collate_fn: TokenizerCollate
 
     def __init__(
         self,
         *,
-        tokenizer: transformers.PreTrainedTokenizerBase,
         search_client: vod_search.HybridSearchClient,
         config: vod_configs.RetrievalCollateConfig,
         parameters: None | typ.MutableMapping = None,
     ):
-        self.tokenizer = tokenizer
         self.search_client = search_client
         self.config = config
         self.parameters = _validate_parameters(parameters or {}, search_client)
-        self.query_collate_fn = TokenizerCollate.from_config(self.config, tokenizer=self.tokenizer, field="query")
-        self.section_collate_fn = TokenizerCollate.from_config(self.config, tokenizer=self.tokenizer, field="section")
+        self.tokenizer_encoder = config.tokenizer_encoder.instantiate()
+        self.tokenizer_encoder = config.tokenizer_encoder.instantiate()
+        self.templates = RealmTemplates(
+            query=Template(config.templates.query),
+            section=Template(config.templates.section),
+            lm=Template(config.templates.lm),
+        )
 
         if config.lookup_engine not in search_client.clients:
             raise ValueError(
@@ -119,12 +137,20 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
 
         # Tokenize the sections and add them to the output
         with utils.BlockTimer(name="diagnostics.tokenize_time", output=diagnostics):
-            tokenized_querys, tokenized_sections = _tokenize_fields(
+            tokenized_querys = _tokenize(
                 batch,
+                tokenizer=self.tokenizer_encoder,
+                template=self.templates.query,
+                prefix="query.",
+                **self.config.tokenizer_encoder.kwargs(),
+            )
+            tokenized_sections = _tokenize(
                 flat_sections_content,
-                sections=sections,
-                query_collate_fn=self.query_collate_fn,
-                section_collate_fn=self.section_collate_fn,
+                tokenizer=self.tokenizer_encoder,
+                template=self.templates.section,
+                prefix="section.",
+                output_shape=sections.indices.shape,
+                **self.config.tokenizer_encoder.kwargs(),
             )
 
         # Get query/section attributes (e.g., subset_id, retrieval_ids, etc.)
@@ -132,7 +158,6 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
             batch,
             flat_sections_content,
             sections_shape=sections_shape,  # type: ignore
-            config=self.config,
         )
 
         # Make the final batch and potentially cast attributes to `torch.Tensor``
@@ -160,9 +185,9 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
     ) -> tuple[vod_search.RetrievalBatch, dict[str, np.ndarray]]:
         """Search the batch of queries and return the top `top_k` results."""
         # Get the query ids
-        query_subset_ids = batch[self.config.subset_id_keys.query]
+        query_subset_ids = batch[SUBSET_IDS]
         # Get the query text
-        query_text: list[str] = self.query_collate_fn.template.render_batch(batch)
+        query_text: list[str] = self.templates.query.render_batch(batch)
         # Get the query vectors
         if self.search_client.requires_vectors:
             try:
@@ -185,7 +210,7 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
             shards=batch[vod_configs.TARGET_SHARD_KEY],
             vector=query_vectors,
             subset_ids=query_subset_ids,
-            section_ids=batch[self.config.section_id_keys.query],
+            section_ids=batch[SECTION_IDS],
             top_k=top_k,
             clients=self.search_client.clients,
             weights=dict(self.parameters),
@@ -227,20 +252,28 @@ def _sections_to_dict(
     return output  # type: ignore
 
 
-def _tokenize_fields(
+def _tokenize(
     batch: dict[str, typ.Any],
-    flat_sections_content: dict[str, typ.Any],
+    # flat_sections_content: dict[str, typ.Any],
     *,
-    sections: vod_search.RetrievalBatch,
-    query_collate_fn: TokenizerCollate,
-    section_collate_fn: TokenizerCollate,
-) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
-    # Tokenize the sections
-    tokenized_sections = section_collate_fn(flat_sections_content)
-    tokenized_sections = {k: v.view(*sections.indices.shape, -1) for k, v in tokenized_sections.items()}
+    # sections: vod_search.RetrievalBatch,
+    tokenizer: transformers.PreTrainedTokenizerBase,
+    template: Template,
+    prefix: str,
+    output_shape: None | tuple[int, ...] = None,
+    **tokenize_kws: typ.Any,
+) -> dict[str, torch.Tensor]:
     # Tokenize the queries
-    tokenized_query = query_collate_fn(batch)
-    return tokenized_query, tokenized_sections
+    tokenized = render_template_and_tokenize(
+        batch,
+        template=template,
+        prefix_key=prefix,
+        tokenizer=tokenizer,
+        **tokenize_kws,
+    )
+    if output_shape is not None:
+        tokenized = {k: v.view(*output_shape, -1) for k, v in tokenized.items()}
+    return tokenized
 
 
 def _get_extra_attributes(
@@ -248,7 +281,6 @@ def _get_extra_attributes(
     flat_sections_content: dict[str, typ.Any],
     *,
     sections_shape: tuple[int, int] | tuple[int],
-    config: vod_configs.RetrievalCollateConfig,
 ) -> dict[str, None | dict[str, typ.Any]]:
     if len(sections_shape) > 2:  # noqa: PLR2004
         raise ValueError(f"Expected a 1D or 2D shape. Found {sections_shape}")
@@ -265,7 +297,7 @@ def _get_extra_attributes(
 
     # Handle query attributes
     query_extras = {}
-    query_extras["query.section_ids"] = batch[config.section_id_keys.query]
+    query_extras["query.section_ids"] = batch[SECTION_IDS]
     for k, fn in extras_keys_ops.items():
         if k not in batch:
             continue

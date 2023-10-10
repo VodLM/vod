@@ -6,47 +6,48 @@ import typing as typ
 import lightning as L
 import rich
 import torch
-import transformers
 import vod_configs
 import vod_dataloaders
 import vod_models
 import vod_search
 from loguru import logger
 from vod_workflows.utils import helpers, schemas
+from vod_workflows.utils.trainer_state import TrainerState
 
-from .callbacks import OnFirstBatchCallback
 from .train_loop import training_loop
 
 K = typ.TypeVar("K")
 
 
 def spawn_search_and_train(
+    state: TrainerState,
     *,
-    ranker: vod_models.Ranker,
+    # ML module & optimizer
+    module: vod_models.VodSystem,
     optimizer: torch.optim.Optimizer,
-    scheduler: None | torch.optim.lr_scheduler._LRScheduler = None,
+    scheduler: None | torch.optim.lr_scheduler.LRScheduler = None,
+    # Data
     train_queries: schemas.QueriesWithVectors,
     val_queries: schemas.QueriesWithVectors,
     sections: schemas.SectionsWithVectors,
-    trainer_state: helpers.TrainerState,
-    fabric: L.Fabric,
-    tokenizer: transformers.PreTrainedTokenizer | transformers.PreTrainedTokenizerFast,
+    # Configs
     collate_config: vod_configs.RetrievalCollateConfig,
     train_dataloader_config: vod_configs.DataLoaderConfig,
     eval_dataloader_config: vod_configs.DataLoaderConfig,
     dl_sampler: None | vod_dataloaders.DlSamplerFactory = None,
+    # Utils
+    fabric: L.Fabric,
     cache_dir: pathlib.Path,
     serve_on_gpu: bool = False,
     checkpoint_path: None | str = None,
-    on_first_batch_fn: None | OnFirstBatchCallback = None,
     pbar_keys: None | list[str] = None,
-) -> helpers.TrainerState:
+) -> TrainerState:
     """Index the sections and train the ranker."""
     barrier_fn = functools.partial(helpers.barrier_fn, fabric=fabric)
 
     # Make the parameters available between multiple processes using `mp.Manager`
     parameters: typ.MutableMapping = mp.Manager().dict()
-    parameters.update(trainer_state.get_parameters())
+    parameters.update(state.get_parameters())
 
     if fabric.is_global_zero:
         rich.print(
@@ -79,7 +80,6 @@ def spawn_search_and_train(
 
         # List of arguments for each dataloader
         shared_args = {
-            "tokenizer": tokenizer,
             "search_client": search_client,
             "collate_config": collate_config,
             "parameters": parameters,
@@ -107,17 +107,16 @@ def spawn_search_and_train(
         )
 
         # Train the ranker
-        barrier_fn(f"Starting training period {1+trainer_state.pidx}")
+        barrier_fn(f"Starting training period {1+state.pidx}")
         trainer_state = training_loop(
-            ranker=ranker,
+            module=module,
             optimizer=optimizer,
             scheduler=scheduler,
-            trainer_state=trainer_state,
+            state=state,
             fabric=fabric,
             train_dl=train_dl,
             val_dl=val_dl,
             checkpoint_path=checkpoint_path,
-            on_first_batch_fn=on_first_batch_fn,
             pbar_keys=pbar_keys,
             parameters=parameters,
         )

@@ -1,7 +1,6 @@
-from multiprocessing.managers import DictProxy
+import typing as typ
 
 import lightning as L
-import rich
 import torch
 import vod_models
 from lightning.fabric import wrappers as fabric_wrappers
@@ -9,189 +8,260 @@ from loguru import logger
 from torch.utils import data as torch_data
 from vod_tools import fingerprint
 from vod_tools.misc.progress import IterProgressBar
-from vod_workflows.utils import helpers, io
+from vod_workflows.utils import io
 from vod_workflows.utils.chrono import Chrono
+from vod_workflows.utils.trainer_state import TrainerState
 
-from .callbacks import OnFirstBatchCallback
-from .utils import format_pbar_info
+from .utils import RunningAverage, format_pbar_info
 from .val_loop import validation_loop
 
 
 def training_loop(  # noqa: C901, PLR0915
+    state: TrainerState,
     *,
-    ranker: vod_models.Ranker,
+    module: vod_models.VodSystem,
     optimizer: torch.optim.Optimizer,
-    trainer_state: helpers.TrainerState,
     fabric: L.Fabric,
     train_dl: torch_data.DataLoader,
     val_dl: torch_data.DataLoader,
-    scheduler: None | torch.optim.lr_scheduler._LRScheduler = None,
+    scheduler: None | torch.optim.lr_scheduler.LRScheduler = None,
+    parameters: None | typ.MutableMapping[str, typ.Any] = None,
     checkpoint_path: None | str = None,
-    on_first_batch_fn: None | OnFirstBatchCallback = None,
     pbar_keys: None | list[str] = None,
-    parameters: None | DictProxy = None,
-) -> helpers.TrainerState:
+) -> TrainerState:
     """Train a ranker."""
-    _check_ranker_and_optimizer(ranker, optimizer)
+    _check_frabric_wrapping(module, optimizer)
     optimizer.zero_grad()
-    ranker.train()
-
-    if fabric.is_global_zero:
-        rich.print(trainer_state)
-
+    module.train()
+    fabric.call("on_train_start", fabric=fabric, module=module)
     try:
         # infer the number of training and valid steps
-        n_train_steps, n_val_steps = _infer_num_steps(state=trainer_state, fabric=fabric, val_dl=val_dl)
-        with IterProgressBar(disable=not fabric.is_global_zero) as pbar:
+        n_train_steps, n_val_steps = _infer_train_val_steps(state=state, fabric=fabric, val_dl=val_dl)
+        with IterProgressBar(disable=not fabric.is_global_zero, redirect_stderr=False) as pbar:
             train_pbar = pbar.add_task(
-                f"Period {1+trainer_state.pidx}",
+                f"Period {1+state.pidx}",
                 total=n_train_steps,
-                info=format_pbar_info(trainer_state, keys=pbar_keys),
+                auto_refresh=False,
+                info=format_pbar_info(state, keys=pbar_keys),
             )
             eval_metrics = None
             chrono = None
-            local_step = 0
-            max_steps = trainer_state.period_max_steps or trainer_state.max_steps
-            while trainer_state.step < max_steps:
+            loop_step = 0
+            pidx = state.pidx
+            period_last_step = state.next_period_start_step
+            state.must_stop = False
+            optim_steps_counter = 0
+            agg_metrics = RunningAverage()
+            while not state.must_stop:
                 for batch in train_dl:
-                    if trainer_state.step >= max_steps:
+                    if state.step >= state.next_period_start_step or state.must_stop:
                         break
 
-                    if on_first_batch_fn is not None and local_step == 0:
-                        on_first_batch_fn(fabric, batch, ranker)
-
-                    # Forward pass
-                    is_accumulating = (1 + local_step) % trainer_state.accumulate_grad_batches != 0
-                    step_metrics = ranker.gradients.forward_backward(
-                        batch=batch,
-                        fwd_fn=ranker,
+                    # Callback - start of batch
+                    fabric.call(
+                        "on_train_batch_start",
                         fabric=fabric,
-                        loss_scaler=1 / trainer_state.accumulate_grad_batches,
-                        no_backward_sync=is_accumulating,
+                        module=module,
+                        batch=batch,
+                        batch_idx=loop_step,
                     )
 
-                    # Log the training metrics
-                    if trainer_state.step % trainer_state.log_interval == 0:
-                        fabric.log_dict(
-                            metrics={
-                                "trainer/epoch": float(trainer_state.epoch),
-                                **{f"train/{k.replace('.', '/')}": v for k, v in step_metrics.items()},
-                                **{f"parameter/{k}": v for k, v in _extract_learning_rates(optimizer).items()},
-                            },
-                            step=trainer_state.step,
-                        )
+                    # Forward/backward pass
+                    is_accumulating = (1 + loop_step) % state.config.accumulate_grad_batches != 0
+                    step_metrics = _forward_backward(
+                        batch=batch,
+                        fwd_fn=module,
+                        fabric=fabric,
+                        loss_scaler=1 / state.config.accumulate_grad_batches,
+                        no_backward_sync=is_accumulating,
+                        fwd_kws={"mode": "evaluate", "compute_metrics": True},
+                    )
 
-                    # Optimization & eval step
+                    # Callback - start of batch
+                    fabric.call(
+                        "on_train_batch_end",
+                        fabric=fabric,
+                        module=module,
+                        batch=batch,
+                        output=step_metrics,
+                        batch_idx=loop_step,
+                    )
+
+                    # Update the training metrics
+                    agg_metrics.update(step_metrics)  # type: ignore
+
+                    # Optimization, logging, eval, and checkpointing
                     if not is_accumulating:
                         # Clip the gradients
-                        if trainer_state.gradient_clip_val is not None:
-                            fabric.clip_gradients(ranker, optimizer, max_norm=trainer_state.gradient_clip_val)
+                        if state.config.gradient_clip_val is not None:
+                            fabric.clip_gradients(module, optimizer, max_norm=state.config.gradient_clip_val)
 
                         # Run an optimization step, reset the gradients and update the learning rate
                         optimizer.step()
+                        optim_steps_counter += 1
                         optimizer.zero_grad()
                         if scheduler is not None:
                             scheduler.step()
 
-                        # Update the chrono, the trainer state and the progress bar
+                        # Update the chrono
                         if chrono is not None:
                             chrono.stop()
-                        trainer_state.step += 1
 
-                        # Update the parameters
+                        # Log the training metrics
+                        if state.step % state.config.log_interval == 0:
+                            fabric.log_dict(
+                                metrics={
+                                    "trainer/epoch": float(state.epoch),
+                                    "trainer/period": float(pidx),
+                                    **{f"train/{k.replace('.', '/')}": v for k, v in agg_metrics.get().items()},
+                                    **{f"optimizer/{k}": v for k, v in _extract_learning_rates(optimizer).items()},
+                                    **{f"parameter/{k}": v for k, v in (parameters or {}).items()},
+                                },
+                                step=state.step,
+                            )
+                            agg_metrics.reset()
+
+                        # Increment the global step
+                        state.step += 1
+                        if state.step >= period_last_step:
+                            state.must_stop = True
+
+                        # Validation and checkpointing
+                        if state.must_stop or state.step % min(n_train_steps, state.config.val_check_interval) == 0:
+                            module.eval()
+                            eval_metrics = validation_loop(
+                                module=module,
+                                fabric=fabric,
+                                state=state,
+                                val_dl=val_dl,
+                                n_steps=n_val_steps,
+                                pbar=pbar,
+                            )
+                            module.train()
+
+                            # Log the valuation metrics
+                            fabric.log_dict(
+                                metrics={f"val/{k.replace('.', '/')}": v for k, v in eval_metrics.items()},
+                                step=state.step,
+                            )
+
+                            # Save the model and training state
+                            if checkpoint_path is not None:
+                                io.save_training_state(
+                                    checkpoint_path=checkpoint_path,
+                                    fabric=fabric,
+                                    model=module,
+                                    optimizer=optimizer,
+                                    scheduler=scheduler,
+                                    trainer_state=state,
+                                )
+
+                        # Update the parameters given the state
                         if parameters is not None:
-                            parameters.update(trainer_state.get_parameters())
+                            parameters.update(state.get_parameters())
 
                         # Update the progress bar
                         pbar.update(
                             train_pbar,
-                            advance=1,
+                            refresh=True,
+                            completed=optim_steps_counter,
                             speed=chrono.get_avg_laps_per_second() if chrono is not None else None,
                             info=format_pbar_info(
-                                trainer_state,
+                                state,
                                 train_metrics=step_metrics,
                                 eval_metrics=eval_metrics,
                                 keys=pbar_keys,
                             ),
                         )
 
-                        # Validation
-                        if (1 + trainer_state.step) % trainer_state.val_check_interval == 0:
-                            optimizer.zero_grad()
-                            eval_metrics = validation_loop(
-                                ranker=ranker,
-                                fabric=fabric,
-                                trainer_state=trainer_state,
-                                val_dl=val_dl,
-                                n_steps=n_val_steps,
-                                pbar=pbar,
-                            )
-                            if checkpoint_path is not None:
-                                logger.debug("Saving checkpoint to `{}`", checkpoint_path)
-                                io.save_training_state(
-                                    checkpoint_path=checkpoint_path,
-                                    fabric=fabric,
-                                    model=ranker,
-                                    optimizer=optimizer,
-                                    scheduler=scheduler,
-                                    trainer_state=trainer_state,
-                                )
-
                         # Start the chono
                         if chrono is None:
                             chrono = Chrono()
                         chrono.start()
 
-                    local_step += 1
-                trainer_state.epoch += 1
+                    loop_step += 1
+
+                # Update the Epoch counter
+                state.epoch += 1
     except KeyboardInterrupt:
         logger.warning(
-            f"Training period {1+trainer_state.pidx} (step={trainer_state.step}) "
-            f"interrupted by user (KeyboardInterrupt)."
+            f"Training period {1+state.pidx} (step={state.step}) " f"interrupted by user (KeyboardInterrupt)."
         )
 
     optimizer.zero_grad()
 
     # Save and Synch the model parameters
+    # TODO: remove this
     if checkpoint_path is not None:
-        logger.info("End of period. Saving and re-loading model from checkpoint (parameter sync).")
+        logger.info("End of period. Syncing parameters.")
         io.save_training_state(
             checkpoint_path=checkpoint_path,
             fabric=fabric,
-            model=ranker,
+            model=module,
             optimizer=optimizer,
             scheduler=scheduler,
-            trainer_state=trainer_state,
+            trainer_state=state,
         )
         io.load_training_state(
             checkpoint_path=checkpoint_path,
             fabric=fabric,
-            model=ranker,
+            module=module,
         )
-    logger.info(f"End of period. Model hash: `{fingerprint.fingerprint_torch_module(ranker)}`")
-    return trainer_state
+
+    fabric.call("on_train_end", fabric=fabric, module=module)
+    logger.info(f"End of period. Model hash: `{fingerprint.fingerprint_torch_module(module)}`")
+    return state
 
 
-def _check_ranker_and_optimizer(ranker: vod_models.Ranker, optimizer: torch.optim.Optimizer) -> None:
-    if not fabric_wrappers.is_wrapped(ranker):
+def _check_frabric_wrapping(model: torch.nn.Module, optimizer: torch.optim.Optimizer) -> None:
+    if not fabric_wrappers.is_wrapped(model):
         raise RuntimeError("Ranker must be wrapped by lightning `Fabric`.")
     if not fabric_wrappers.is_wrapped(optimizer):
         raise RuntimeError("Optimizer must be wrapped by lightning `Fabric`.")
 
 
-def _infer_num_steps(
+def _forward_backward(
+    batch: dict[str, torch.Tensor],
     *,
-    state: helpers.TrainerState,
+    fwd_fn: typ.Callable[[dict[str, torch.Tensor]], dict[str, torch.Tensor]],
+    fabric: L.Fabric,
+    loss_scaler: None | float = None,
+    backward_kws: None | dict[str, typ.Any] = None,
+    no_backward_sync: bool = False,
+    fwd_kws: None | dict = None,
+    loss_key: str = "loss",
+    **kws: typ.Any,
+) -> dict[str, torch.Tensor]:
+    """Run a forward pass followed by a backward pass."""
+    fwd_kws = fwd_kws or {}
+    fwd_out = fwd_fn(batch, **fwd_kws)
+
+    # Compute the loss
+    loss = fwd_out[loss_key]
+    if loss_scaler is not None:
+        loss *= loss_scaler
+
+    # backward pass
+    backward_kws = backward_kws or {}
+    with fabric.no_backward_sync(fwd_fn, enabled=no_backward_sync):  # type: ignore
+        fabric.backward(loss, **backward_kws)
+
+    return fwd_out
+
+
+def _infer_train_val_steps(
+    *,
+    state: TrainerState,
     fabric: L.Fabric,
     val_dl: torch_data.DataLoader,
 ) -> tuple[int, int]:
-    max_steps = state.period_max_steps or state.max_steps
+    max_steps = state.next_period_start_step or state.config.max_steps
     n_train_steps = max_steps - state.step
-    if state.n_max_eval is None:
+    if state.config.n_max_eval is None:
         n_val_steps = len(val_dl)
     else:
         eff_eval_bs = fabric.world_size * val_dl.batch_size  # type: ignore
-        n_val_steps = min(len(val_dl), max(1, -(-state.n_max_eval // eff_eval_bs)))
+        n_val_steps = min(len(val_dl), max(1, -(-state.config.n_max_eval // eff_eval_bs)))
     return n_train_steps, n_val_steps
 
 

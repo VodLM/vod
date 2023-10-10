@@ -140,7 +140,7 @@ class SearchMaster(typ.Generic[Sc], abc.ABC):
         _client = self.get_client()
         if _client.ping():
             if self._allow_existing_server:
-                loguru.logger.info(f"Connecting to existing {self.service_info}")
+                loguru.logger.debug(f"Connecting to existing {self.service_info}")
                 return None
             raise RuntimeError(f"Server {self.service_name} is already running.")
 
@@ -172,7 +172,7 @@ class SearchMaster(typ.Generic[Sc], abc.ABC):
             if time.time() - t0 > self._timeout:
                 server_proc.terminate()
                 raise TimeoutError(f"Couldn't ping the server after {self._timeout:.0f}s.")
-        loguru.logger.info(f"Spawned {self.service_info} in {time.time() - t0:.1f}s.")
+        loguru.logger.debug(f"Spawned {self.service_info} in {time.time() - t0:.1f}s.")
         return server_proc
 
     @property

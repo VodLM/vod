@@ -262,12 +262,12 @@ def _infer_vector_shape(
     collate_fn: vt.Collate,
 ) -> tuple[int, ...]:
     try:
-        vector_shape = model.get_output_shape(model_output_key)  # type: ignore
+        vector_shape = model.get_encoding_shape()  # type: ignore
     except AttributeError as exc:
         logger.debug(
             f"{exc}. "
             f"Inferring the vector size by running one example through the model. "
-            f"Implement `model.get_output_shape(output_key: str) -> tuple[int,...]` to skip this step."
+            f"Implement `model.get_encoding_shape(output_key: str) -> tuple[int,...]` to skip this step."
         )
         batch = collate_fn([dataset[0]])
         one_vec = model(batch)  # type: ignore

@@ -2,7 +2,6 @@ import math
 import typing as typ
 import warnings
 
-import lightning as L
 import torch
 import torch.nn
 from vod_gradients import base
@@ -116,25 +115,6 @@ class RetrievalGradients(base.Gradients):
             **{f"kl_{k}": kl.mean().detach() for k, kl in kls.items()},
             **aux_losses,
         }
-
-    def forward_backward(
-        self,
-        batch: dict[str, torch.Tensor],
-        fwd_fn: typ.Callable[[dict], dict],
-        fabric: None | L.Fabric = None,
-        loss_scaler: float | None = None,
-        no_backward_sync: bool = False,
-        **kws: typ.Any,
-    ) -> dict[str, torch.Tensor]:
-        """Forward and backward pass with gradient accumulation."""
-        return super().forward_backward(
-            batch,
-            fwd_fn=fwd_fn,
-            fabric=fabric,
-            loss_scaler=loss_scaler,
-            no_backward_sync=no_backward_sync,
-            fwd_kws={**kws, "compute_metrics": True, "mode": "evaluate"},
-        )
 
 
 @torch.jit.script  # type: ignore

@@ -7,4 +7,4 @@ pretrained_model_name_or_path: sentence-transformers/all-MiniLM-L6-v2
 pooler:
   agg_method: mean
   projection_size: null
-  output_norm: null
+  output_norm: l2

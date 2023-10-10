@@ -1,16 +1,11 @@
+import re
 import typing as typ
 
 import pydantic
+import transformers
+from typing_extensions import Self, Type
 
-from .support import TemplatesConfig
 from .utils.base import StrictModel
-
-
-class KeyMap(StrictModel):
-    """Defines the name of the keys used on the query side and on the section side."""
-
-    query: str
-    section: str
 
 
 class DataLoaderConfig(StrictModel):
@@ -26,17 +21,93 @@ class DataLoaderConfig(StrictModel):
     persistent_workers: bool = False
 
 
-class BaseCollateConfig(StrictModel):
+class TemplatesConfig(StrictModel):
+    """Prompt templates."""
+
+    query: str = pydantic.Field(
+        default=r"query: {{ query }}",
+        description="Template for formatting a query",
+    )
+    section: str = pydantic.Field(
+        default=r"passage: {{ content }}",
+        description="Template formatting documents before encoding for retrieval.",
+    )
+    lm: str = pydantic.Field(
+        default=r"passage: {{ content }}\ninstructions: {{ query }}\nanswer: {{ answer }}",
+        description="Template formatting inputs to the language model.",
+    )
+
+    @property
+    @classmethod
+    def input_variables(cls: Type[Self]) -> set[str]:
+        """Return the input variables."""
+        variables = set()
+        for attribute_value in cls.__dict__.values():
+            matches = re.findall(r"{{\s*(.*?)\s*}}", attribute_value)
+            variables.update(matches)
+        return variables
+
+
+class TokenizerConfig(StrictModel):
+    """Configuration for a tokenizer."""
+
+    name_or_path: str
+    use_fast: None | bool = True
+    max_length: None | int = None
+    truncation_side: None | typ.Literal["left", "right"] = None
+    padding_side: None | typ.Literal["left", "right"] = None
+    # keyword arguments for `tokenizer(..., **kwargs)`
+    add_special_tokens: bool = True
+    padding: typ.Literal["longest", "max_length", "do_not_pad"] = "longest"
+    truncation: None | bool | typ.Literal[
+        "longest_first", "only_first", "only_second", "do_not_truncate"
+    ] = "longest_first"
+
+    def instantiate(
+        self,
+        **kws: dict[str, typ.Any],
+    ) -> transformers.PreTrainedTokenizer | transformers.PreTrainedTokenizerFast:
+        """Instantiate the tokenizer."""
+        if self.use_fast is not None:
+            kws["use_fast"] = self.use_fast  # type: ignore
+        tokenizer = transformers.AutoTokenizer.from_pretrained(self.name_or_path, **kws)
+
+        # Set configuration
+        if self.max_length is not None:
+            tokenizer.model_max_length = self.max_length
+        if self.truncation_side is not None:
+            tokenizer.truncation_side = self.truncation_side
+        if self.padding_side is not None:
+            tokenizer.padding_side = self.padding_side
+        return tokenizer
+
+    def kwargs(self) -> dict[str, typ.Any]:
+        """Return the base kewword args."""
+        return {
+            "add_special_tokens": self.add_special_tokens,
+            "padding": self.padding,
+            "truncation": self.truncation,
+        }
+
+
+class _BaseCollateConfig(StrictModel):
     """Defines a base configuration for the collate function."""
 
-    encoder_max_length: int = 200
     templates: TemplatesConfig = pydantic.Field(default_factory=TemplatesConfig)
 
 
-class RetrievalCollateConfig(BaseCollateConfig):
+class TokenizerCollateConfig(_BaseCollateConfig):
+    """Defines a base configuration for the collate function."""
+
+    tokenizer: TokenizerConfig
+
+
+class RetrievalCollateConfig(_BaseCollateConfig):
     """Defines a configuration for the retrieval collate function."""
 
-    # base config
+    tokenizer_encoder: TokenizerConfig
+    tokenizer_lm: None | TokenizerConfig
+    # Realm specifics
     prefetch_n_sections: int = 100
     n_sections: None | int = 10
     max_pos_sections: None | int = 3
@@ -47,9 +118,20 @@ class RetrievalCollateConfig(BaseCollateConfig):
     prep_num_proc: int = 4
     lookup_engine: str = "sparse"  # Name of the search engine to use to lookup gold sections
 
-    # name of the keys to use on the query side and on the section side
-    section_id_keys: KeyMap = KeyMap(query="retrieval_ids", section="id")  #  label field (section ids)
-    subset_id_keys: KeyMap = KeyMap(query="subset_ids", section="subset_id")  #  group hash (kb_id, lang, etc.)
+    @pydantic.field_validator("tokenizer_lm", mode="before")
+    @classmethod
+    def _validate_tokenizer_config(
+        cls: Type[Self], x: None | typ.Mapping[str, typ.Any]
+    ) -> None | typ.Mapping[str, typ.Any]:
+        if x is None:
+            return None
+        try:
+            name_or_path = x.get("name_or_path", None)
+            if name_or_path is None:
+                return None
+            return x
+        except Exception:
+            return x
 
 
 class SamplerFactoryConfig(StrictModel):

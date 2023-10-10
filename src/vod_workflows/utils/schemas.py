@@ -28,7 +28,7 @@ class QueriesWithVectors:
     ) -> Self:
         """Load a list of datasets from their respective configs."""
         descriptor = "+".join(sorted(cfg.identifier for cfg in queries))
-        key_map = {cfg.hexdigest(): cfg for cfg in queries}
+        key_map = {cfg.fingerprint(): cfg for cfg in queries}
         queries_by_key = {key: (cfg.link, vod_datasets.load_queries(cfg)) for key, cfg in key_map.items()}
         vectors_by_key = (
             {key: vt.as_lazy_array(vectors[cfg]) for key, cfg in key_map.items()} if vectors is not None else None

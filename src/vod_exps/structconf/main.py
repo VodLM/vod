@@ -30,7 +30,7 @@ class CollateConfigs(vcfg.StrictModel):
 
     train: vcfg.RetrievalCollateConfig
     benchmark: vcfg.RetrievalCollateConfig
-    predict: vcfg.BaseCollateConfig
+    predict: vcfg.TokenizerCollateConfig
 
     @pydantic.field_validator("train", "benchmark", "predict", mode="before")
     @classmethod
@@ -44,7 +44,6 @@ class Experiment(vcfg.StrictModel):
     """Configures an experiment."""
 
     datasets: ExperimentDatasets
-    tokenizer: vcfg.TokenizerConfig
     dataloaders: DataLoaderConfigs
     collates: CollateConfigs
     trainer: vcfg.TrainerConfig
@@ -67,5 +66,31 @@ class Experiment(vcfg.StrictModel):
             dataloaders=DataLoaderConfigs(**config["dataloaders"]),
             collates=CollateConfigs(**config["collates"]),
             sys=vcfg.SysConfig(**config["sys"]),
-            tokenizer=vcfg.TokenizerConfig(**config["tokenizer"]),
         )
+
+    def get_dataset_configs(  # noqa: C901
+        self,
+        what: None | typ.Literal["all", "queries", "sections"] = None,
+        split: None | typ.Literal["all", "train", "val", "train+val", "benchmark"] = None,
+    ) -> typ.Iterable[vcfg.DatasetConfig]:
+        """Iterate over the dataset configs."""
+        what = what or "all"
+        split = split or "all"
+        if split in ["train", "train+val", "all"]:
+            if what in ["all", "queries"]:
+                yield from self.datasets.training.queries.train
+            if what in ["all", "sections"]:
+                yield from self.datasets.training.sections.sections
+
+        if split in ["val", "train+val", "all"]:
+            if what in ["all", "queries"]:
+                yield from self.datasets.training.queries.val
+            if what in ["all", "sections"]:
+                yield from self.datasets.training.sections.sections
+
+        if split in ["benchmark", "all"]:
+            for benchmark in self.datasets.benchmark:
+                if what in ["all", "queries"]:
+                    yield benchmark.queries
+                if what in ["all", "sections"]:
+                    yield benchmark.sections

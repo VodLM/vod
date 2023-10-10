@@ -6,6 +6,16 @@ build-backend = "poetry.core.masonry.api"
 version = "0.1.0"
 version_files = [
   "src/__init__.py:__version__",
+  "src/vod_configs/__init__.py:__version__",
+  "src/vod_dataloaders/__init__.py:__version__",
+  "src/vod_datasets/__init__.py:__version__",
+  "src/vod_exps/__init__.py:__version__",
+  "src/vod_gradients/__init__.py:__version__",
+  "src/vod_models/__init__.py:__version__",
+  "src/vod_search/__init__.py:__version__",
+  "src/vod_tools/__init__.py:__version__",
+  "src/vod_types/__init__.py:__version__",
+  "src/vod_workflows/__init__.py:__version__",
   "pyproject.toml:version",
   "VERSION",
 ]

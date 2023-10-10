@@ -5,10 +5,10 @@ import lightning as L
 import torch
 from lightning.fabric import wrappers as fabric_wrappers
 
-from .helpers import TrainerState
+from .trainer_state import TrainerState
 
-REL_MODEL_STATE_PATH = "model-state.ckpt"
-REL_TRAINER_STATE_PATH = "trainer-state.json"
+MODEL_STATE_FNAME = "model-state.ckpt"
+TRAINER_STATE_PATH_FNAME = "trainer-state.json"
 
 
 def save_training_state(
@@ -16,11 +16,11 @@ def save_training_state(
     checkpoint_path: str,
     optimizer: None | torch.optim.Optimizer = None,
     model: None | torch.nn.Module = None,
-    scheduler: None | torch.optim.lr_scheduler._LRScheduler = None,
+    scheduler: None | torch.optim.lr_scheduler.LRScheduler = None,
     trainer_state: None | TrainerState = None,
 ) -> None:
     """Save the training state."""
-    model_path = pathlib.Path(checkpoint_path) / REL_MODEL_STATE_PATH
+    model_path = pathlib.Path(checkpoint_path) / MODEL_STATE_FNAME
     state = {
         "model": model,
         "optimizer": optimizer,
@@ -33,22 +33,22 @@ def save_training_state(
 
     # Save the Trainer state
     if trainer_state is not None:
-        with open(pathlib.Path(checkpoint_path) / REL_TRAINER_STATE_PATH, "w") as f:
-            json.dump(trainer_state.__getstate__(), f, indent=2)
+        with open(pathlib.Path(checkpoint_path) / TRAINER_STATE_PATH_FNAME, "w") as f:
+            f.write(trainer_state.model_dump_json(indent=2))
 
 
 def load_training_state(
     fabric: L.Fabric,
     checkpoint_path: str,
     optimizer: None | torch.optim.Optimizer = None,
-    model: None | torch.nn.Module = None,
-    scheduler: None | torch.optim.lr_scheduler._LRScheduler = None,
+    module: None | torch.nn.Module = None,
+    scheduler: None | torch.optim.lr_scheduler.LRScheduler = None,
     trainer_state: None | TrainerState = None,
 ) -> None:
     """Load the training state."""
-    model_path = pathlib.Path(checkpoint_path) / REL_MODEL_STATE_PATH
+    model_path = pathlib.Path(checkpoint_path) / MODEL_STATE_FNAME
     state = {
-        "model": model,
+        "model": module,
         "optimizer": optimizer,
         "scheduler": scheduler,
     }
@@ -59,8 +59,8 @@ def load_training_state(
 
     # Load the Trainer state
     if trainer_state is not None:
-        with open(pathlib.Path(checkpoint_path) / REL_TRAINER_STATE_PATH, "r") as f:
-            trainer_state.__setstate__(json.load(f))
+        with open(pathlib.Path(checkpoint_path) / TRAINER_STATE_PATH_FNAME, "r") as f:
+            trainer_state = TrainerState.model_validate_json(json.load(f))
 
 
 def _unwrap_model(model: None | fabric_wrappers._FabricModule | torch.nn.Module) -> None | torch.nn.Module:

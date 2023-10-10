@@ -1,8 +1,8 @@
 import typing
 
 import datasets
-import loguru
 import vod_configs
+from loguru import logger
 from vod_datasets import rosetta
 
 from .postprocessing import (
@@ -36,7 +36,7 @@ def _load_one_dataset(
 
 def _load_dataset_from_config(config: vod_configs.BaseDatasetConfig, **kws: typing.Any) -> datasets.Dataset:
     """Load the dataset, process it according to the prompt template and return a HF dataset."""
-    loguru.logger.info("Loading dataset `{descriptor}`", descriptor=config.identifier)
+    logger.debug("Loading dataset `{descriptor}`", descriptor=config.identifier)
     subsets = config.subsets or [None]
     loaded_subsets = [_load_one_dataset(config.name_or_path, subset, split=config.split) for subset in subsets]
     return combine_datasets(loaded_subsets)

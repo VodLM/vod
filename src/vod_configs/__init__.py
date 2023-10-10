@@ -1,9 +1,12 @@
+__version__ = "0.1.0"
+
 from .dataloaders import (
-    BaseCollateConfig,
     DataLoaderConfig,
-    KeyMap,
     RetrievalCollateConfig,
     SamplerFactoryConfig,
+    TemplatesConfig,
+    TokenizerCollateConfig,
+    TokenizerConfig,
 )
 from .datasets import (
     BaseDatasetConfig,
@@ -35,8 +38,6 @@ from .support import (
     FixedLengthSectioningConfig,
     SectioningConfig,
     SentenceSectioningConfig,
-    TemplatesConfig,
-    TokenizerConfig,
     TweaksConfig,
 )
 from .trainer import (
@@ -48,4 +49,7 @@ from .trainer import (
 from .utils.base import (
     AllowMutations,
     StrictModel,
+)
+from .utils.schedule import (
+    ParameterSchedule,
 )
