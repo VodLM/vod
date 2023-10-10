@@ -39,7 +39,7 @@ class TrainerState(pydantic.BaseModel):
             if self.step < x:
                 return i - 1
 
-        raise RuntimeError(f"Invalid state: {self.step} not in {self.update_steps}")
+        return len(self.update_steps) - 2
 
     @property
     def completed(self) -> bool:

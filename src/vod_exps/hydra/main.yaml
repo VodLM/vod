@@ -30,3 +30,4 @@ exp_version: "v3.0"
 exp_suffix: ""
 exp_name: vod
 load_from: null
+export_path: "trained_model"

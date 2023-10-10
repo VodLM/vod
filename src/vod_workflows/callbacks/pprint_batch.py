@@ -10,7 +10,6 @@ import transformers
 import vod_configs
 from loguru import logger
 from vod_tools import pretty
-from vod_workflows.utils.trainer_state import TrainerState
 
 from .base import Callback
 
@@ -73,7 +72,7 @@ class PprintBatch(Callback):
         fabric: L.Fabric,
         module: torch.nn.Module,  # noqa:
         batch: dict[str, typ.Any],
-        batch_idx: TrainerState,
+        batch_idx: int,
     ) -> None:
         if batch_idx == 0 and fabric.is_global_zero:
             console = rich.console.Console(record=True)

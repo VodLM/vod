@@ -1,0 +1,8 @@
+export_module:
+  _target_: vod_workflows.callbacks.ExportModule
+  output_dir: ${export_path}
+  templates: ${templates}
+  only_submodule: null
+  submodules:
+    - encoder
+    - lm
