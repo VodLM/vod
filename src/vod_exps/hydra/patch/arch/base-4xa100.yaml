@@ -3,8 +3,8 @@
 # This config is for 4xA100 GPUs (80GB)
 
 defaults:
-  - override /fabric/strategy: ddp
   - _self_
+  - override /fabric/strategy: ddp
 
 resources:
   num_workers: 2

@@ -1,7 +1,7 @@
 export_module:
   _target_: vod_workflows.callbacks.ExportModule
   output_dir: ${export_path}
-  templates: ${templates}
+  include_files: [config.yaml]
   only_submodule: null
   submodules:
     - encoder

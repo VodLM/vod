@@ -8,6 +8,7 @@ from random import randint
 import omegaconf as omg
 import randomname
 import torch
+from vod_configs import __version__ as VERSION
 
 SEED = randint(0, 100_000)  # noqa: N806, S311
 
@@ -164,3 +165,4 @@ def register_omgeaconf_resolvers() -> None:  # noqa: C901, PLR0915
     omg.OmegaConf.register_new_resolver("parse_encoder_name", _parse_encoder_name)
     omg.OmegaConf.register_new_resolver("parse_lm_name", _parse_lm_name)
     omg.OmegaConf.register_new_resolver("parse_model_name", _parse_model_name)
+    omg.OmegaConf.register_new_resolver("code_version", lambda *_: VERSION)

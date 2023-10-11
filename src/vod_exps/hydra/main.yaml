@@ -23,11 +23,12 @@ seed: ${global_seed:}
 model_name: ${parse_model_name:${model}}
 encoder_name: ${parse_encoder_name:${model}}
 lm_name: ${parse_lm_name:${model}}
-run_name: ${fmt_mn:${model_name}}--${rdn_name:}-${exp_version}${exp_suffix}
+run_name: ${exp_version}-${fmt_mn:${model_name}}--${rdn_name:}${exp_suffix}
 
 # Exposed variables -- set this to control your app
-exp_version: "v3.0"
+exp_version: v1.0
+code_version: ${code_version:}
 exp_suffix: ""
 exp_name: vod
 load_from: null
-export_path: "trained_model"
+export_path: trained_model

@@ -1,10 +1,10 @@
 # @package _global_
 
-# This config is for ==1xA100 GPUs (80GB)
+# This config is for ==1xA100 GPU (80GB)
 
 defaults:
-  - override /fabric/strategy: single_device
   - _self_
+  - override /fabric/strategy: single_device
 
 model:
   tweaks:

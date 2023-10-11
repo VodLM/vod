@@ -1,10 +1,10 @@
 # @package _global_
 
-# This config is for 4xA100 GPUs (40GB)
+# This config is for CPU only
 
 defaults:
-  - override /fabric/strategy: single_device
   - _self_
+  - override /fabric/strategy: single_device
 
 resources:
   num_workers: 2
