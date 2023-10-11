@@ -3,8 +3,8 @@
 # This config is for CPU only
 
 defaults:
-  - _self_
   - override /fabric/strategy: single_device
+  - _self_
 
 resources:
   num_workers: 2

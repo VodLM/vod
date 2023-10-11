@@ -3,8 +3,8 @@
 # This config is for ==1xA100 GPU (80GB)
 
 defaults:
-  - _self_
   - override /fabric/strategy: single_device
+  - _self_
 
 model:
   tweaks:
