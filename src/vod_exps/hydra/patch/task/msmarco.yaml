@@ -1,0 +1,8 @@
+# @package _global_
+
+defaults:
+  - override /datasets: msmarco
+
+trainer:
+  max_steps: 100_000
+  period: 10_000

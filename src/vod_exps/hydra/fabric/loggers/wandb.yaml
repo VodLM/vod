@@ -9,5 +9,5 @@ wandb:
   entity: null
   log_model: False
   prefix: ""
-  job_type: "train"
+  job_type: train
   tags: [ ]

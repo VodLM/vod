@@ -1,14 +1,10 @@
 # @package _global_
 
-# This config is for 4xA100 GPUs (40GB)
+# This config is for 4xA100 GPUs (80GB)
 
 defaults:
-  # HF transformer model name
-  - override /model/encoder: mt5-base
-  # LR scheduler
-  - override /model/scheduler: linear
-  # Fabric Strategy
   - override /fabric/strategy: ddp
+  - _self_
 
 resources:
   num_workers: 2
@@ -18,8 +14,8 @@ resources:
 batch_size:
   effective: 32
   per_device: 8
-  per_device_eval: 16
-  per_device_predict: 1024
+  per_device_eval: 32
+  per_device_predict: 2048
 
 fabric:
   precision: bf16-mixed

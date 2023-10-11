@@ -1,0 +1,23 @@
+# @package _global_
+
+# This config is for 4xA100 GPUs (40GB)
+
+defaults:
+  - override /fabric/strategy: single_device
+  - _self_
+
+resources:
+  num_workers: 2
+  num_proc: 4
+  omp_threads: ${int_div:${n_cpus:},2}
+
+batch_size:
+  effective: 8
+  per_device: 4
+  per_device_eval: 4
+  per_device_predict: 64
+
+fabric:
+  accelerator: cpu
+  strategy:
+    device: cpu
