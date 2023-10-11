@@ -104,7 +104,7 @@ class RealmDataloader(torch_data.DataLoader[dict[str, typ.Any]]):
             batch_size=batch_size,
             shuffle=shuffle,
             sampler=sampler,
-            batch_sampler=batch_sampler,
+            batch_sampler=batch_sampler,  # type: ignore
             num_workers=num_workers,
             collate_fn=collate_fn,
             pin_memory=pin_memory,
