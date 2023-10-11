@@ -29,7 +29,7 @@ cmake \
 -DFAISS_ENABLE_GPU=ON \
 -DFAISS_ENABLE_PYTHON=ON \
 -DCMAKE_BUILD_TYPE=Release \
--DCMAKE_CUDA_ARCHITECTURES="60;80;86;87;90" \
+-DCMAKE_CUDA_ARCHITECTURES="80;86;87" \
 -DPython_EXECUTABLE=$PYPATH \
 -DCMAKE_INSTALL_PREFIX=$PYPATH \
 -B build .
@@ -45,7 +45,7 @@ cd $CURR_DIR
 
 # Install faiss-gpu in your poetry env:
 # > export PYPATH=`poetry run which python`
-# > (cd build/faiss/python && $PYPATH setup.py install)
+# > (cd libs/faiss/build/faiss/python && $PYPATH setup.py install)
 
 # Re-install torch on top:
 # > poetry run pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
