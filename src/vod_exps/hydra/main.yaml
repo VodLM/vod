@@ -1,78 +1,34 @@
 defaults:
-  - dataset: retrieval
+  # Model and tokenizers
+  - model: ranker
+  - tokenizers: default
+  # Dataset and dataloaders
+  - datasets: fiqa
+  - dataloaders: default
+  - collates: default
   - templates: default
-  - dl_sampler: none
-  - model: default
-  - tokenizer: default
+  # Training/eval logic
+  - fabric: default
   - trainer: default
   - benchmark: default
+  # System & resources
   - resources: default
   - batch_size: default
-  - fabric: default
   - sys: default
-  - hydra: default
   - env: default
-  # enable color logging
-  - override hydra/hydra_logging: colorlog
-  - override hydra/job_logging: colorlog
+  - hydra: default
 
+# Shorthands
 seed: ${global_seed:}
-model_name: ${model.encoder.pretrained_model_name_or_path}
-exp_version: "v3.0"
+model_name: ${parse_model_name:${model}}
+encoder_name: ${parse_encoder_name:${model}}
+lm_name: ${parse_lm_name:${model}}
+run_name: ${exp_version}-${fmt_mn:${model_name}}--${rdn_name:}${exp_suffix}
+
+# Exposed variables -- set this to control your app
+exp_version: v1.0
+code_version: ${code_version:}
 exp_suffix: ""
-exp_name: retrieval
-run_name: ${fmt_mn:${model_name}}--${rdn_name:}-${exp_version}${exp_suffix}
-languages: [en, da, de, nl, fr, is]
+exp_name: vod
 load_from: null
-
-dataloaders:
-  # Defines the configurations for `torch.utils.data.Dataloader`
-  train:
-    batch_size: ${batch_size.per_device}
-    num_workers: ${resources.num_workers}
-    pin_memory: True
-    shuffle: True
-  eval:
-    batch_size: ${batch_size.per_device_eval}
-    num_workers: ${resources.num_workers}
-    pin_memory: True
-    shuffle: True
-  benchmark:
-    batch_size: ${batch_size.per_device_eval}
-    num_workers: ${resources.num_workers}
-    pin_memory: True
-    shuffle: True
-  predict:
-    batch_size: ${batch_size.per_device_predict}
-    num_workers: ${resources.num_workers}
-    pin_memory: True
-    shuffle: False
-
-collates:
-  # Defines the configurations for `dataset_builder.HfBuilder._collate_config`
-  predict:
-    # TODO: encoder_max_length
-    encoder_max_length: 200
-    templates: ${templates}
-  train:
-    # Configuration for the training/evaluation `Collate`
-    n_sections: 16
-    max_pos_sections: 4
-    support_size: 100
-    prefetch_n_sections: 300
-    do_sample: true
-    in_batch_negatives: false
-    prep_num_proc: ${resources.num_proc}
-    encoder_max_length: ${collates.predict.encoder_max_length}
-    templates: ${templates}
-  benchmark:
-    # Configuration for the benchmark eval. `Collate`
-    n_sections: null
-    max_pos_sections: null
-    support_size: null
-    prefetch_n_sections: 1000
-    do_sample: false
-    in_batch_negatives: false
-    prep_num_proc: ${resources.num_proc}
-    encoder_max_length: ${collates.predict.encoder_max_length}
-    templates: ${templates}
+export_path: trained_model

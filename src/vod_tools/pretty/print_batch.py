@@ -17,6 +17,7 @@ import rich.tree
 import torch
 import transformers
 import yaml
+from typing_extensions import Self, Type
 
 _PPRINT_PREC = 2
 
@@ -45,7 +46,8 @@ class Properties(pydantic.BaseModel):
     n_nans: None | int = None
 
     @pydantic.field_validator("py_type", mode="before")
-    def _cast_py_type(cls, value: typ.Any) -> str:  # noqa: ANN401
+    @classmethod
+    def _cast_py_type(cls: Type[Self], value: typ.Any) -> str:  # noqa: ANN401
         if value is None:
             return "None"
         if isinstance(value, type):

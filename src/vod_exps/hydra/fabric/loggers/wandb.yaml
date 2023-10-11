@@ -1,6 +1,6 @@
 wandb:
   _target_: lightning.pytorch.loggers.wandb.WandbLogger
-  project: ds-research
+  project: vod
   group: ${exp_name}
   name: ${run_name}
   save_dir: "."
@@ -9,5 +9,5 @@ wandb:
   entity: null
   log_model: False
   prefix: ""
-  job_type: "train"
+  job_type: train
   tags: [ ]

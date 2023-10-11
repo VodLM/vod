@@ -1,12 +1,12 @@
-_target_: vod_configs.TrainerConfig
 max_steps: 1_000_000
 val_check_interval: 500
 log_interval: 10
-period: 3000
+period: 5000
+accumulate_grad_batches: ${infer_accumulate_grad_batches:${batch_size.effective},${batch_size.per_device}}
 gradient_clip_val: 1.0
 n_max_eval: null
 checkpoint_path: ${abs_path:checkpoint}
-pbar_keys: ['loss']
+pbar_keys: ["loss"]
 parameters:
   dense: 1.0
   sparse: 1.0

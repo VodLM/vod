@@ -1,0 +1,6 @@
+_target_: vod_configs.TweaksConfig
+compile: false
+gradient_checkpointing: false
+prepare_for_kbit_training: false
+peft_config: null
+force_dtype: null

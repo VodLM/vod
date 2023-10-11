@@ -1,7 +1,21 @@
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
 [tool.commitizen]
-version = "0.1.0"
+version = "0.2.0"
 version_files = [
   "src/__init__.py:__version__",
+  "src/vod_configs/__init__.py:__version__",
+  "src/vod_dataloaders/__init__.py:__version__",
+  "src/vod_datasets/__init__.py:__version__",
+  "src/vod_exps/__init__.py:__version__",
+  "src/vod_gradients/__init__.py:__version__",
+  "src/vod_models/__init__.py:__version__",
+  "src/vod_search/__init__.py:__version__",
+  "src/vod_tools/__init__.py:__version__",
+  "src/vod_types/__init__.py:__version__",
+  "src/vod_workflows/__init__.py:__version__",
   "pyproject.toml:version",
   "VERSION",
 ]
@@ -27,12 +41,8 @@ packages = [
   { from = "src", include = "vod_exps" },
 ]
 
-[build-system]
-build-backend = "poetry.core.masonry.api"
-
-
 [tool.poetry.scripts]
-train = 'vod_exps.train:run'
+train = 'vod_exps.train:cli'
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.12"
@@ -68,6 +78,7 @@ peft = "^0.5.0"
 bitsandbytes = "^0.41.1"
 scipy = "^1.11.2"
 accelerate = "^0.23.0"
+gpustat = "^1.1.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.1"
@@ -138,7 +149,6 @@ ignore = [
   "PLC1901", # compare-to-empty-string
   "PTH123",  # builtin-open
   "RET504",  # unnecessary-assign
-  "N805",    # invalid-first-argument-name-for-method
   "N812",    # lowercase-underscore
 ]
 

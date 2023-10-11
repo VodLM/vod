@@ -1,0 +1,5 @@
+_target_: vod_gradients.RetrievalGradients
+anchor_weight: 1e-3
+self_supervision_weight: 0
+guidance_weight: 0
+guidance: zero

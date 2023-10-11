@@ -1,10 +1,5 @@
 on_init: false
-n_max_eval: 1_000
-tuning:
-  steps: 1000
-  batch_size: 100
-  learning_rate: 1e-3
-  collate_overrides: null
+n_max_eval: null
 parameters:
   dense: 1.0
   sparse: 1.0

@@ -1,3 +1,0 @@
-_target_: vod_configs.TokenizerConfig
-name_or_path: ${model_name}
-use_fast: true

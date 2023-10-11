@@ -1,7 +1,0 @@
-defaults:
-  - default
-  - _self_
-
-effective: 32
-per_device: 16
-per_device_eval: 128

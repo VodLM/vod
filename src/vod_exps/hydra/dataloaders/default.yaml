@@ -1,0 +1,24 @@
+train:
+  # Configures the training `torch.utils.data.Dataloader`
+  batch_size: ${batch_size.per_device}
+  num_workers: ${resources.num_workers}
+  pin_memory: True
+  shuffle: True
+eval:
+  # Configures the evaluation `torch.utils.data.Dataloader`
+  batch_size: ${batch_size.per_device_eval}
+  num_workers: ${resources.num_workers}
+  pin_memory: True
+  shuffle: True
+benchmark:
+  # Configures the test `torch.utils.data.Dataloader`
+  batch_size: ${batch_size.per_device_eval}
+  num_workers: ${resources.num_workers}
+  pin_memory: True
+  shuffle: True
+predict:
+  # Configures the evaluation `torch.utils.data.Dataloader`
+  batch_size: ${batch_size.per_device_predict}
+  num_workers: ${resources.num_workers}
+  pin_memory: True
+  shuffle: False

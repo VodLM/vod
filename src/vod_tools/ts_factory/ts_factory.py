@@ -22,7 +22,8 @@ class TensorStoreKvStoreConfig(BaseModel):
     path: str
 
     @pydantic.field_validator("path", mode="before")
-    def _validate_path(cls, value: str | Path) -> str:
+    @classmethod
+    def _validate_path(cls: Type[Self], value: str | Path) -> str:
         return str(Path(value).expanduser().absolute())
 
 

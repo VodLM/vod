@@ -2,6 +2,10 @@ defaults:
   - strategy: single_device
   - loggers:
       - csv
+  - callbacks:
+      - pprint_batch
+      - pprint_model_stats
+      - export_module
   - _self_
 
 _target_: vod_exps.utils.init_fabric

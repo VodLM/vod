@@ -1,5 +1,5 @@
-num_proc: 4
-num_workers: 4
+num_workers: 2 # <--- 2 workers per GPU
+num_proc: 8 # <--- 8 workers to preprocess data on global rank zero
 n_gpus: ${n_gpus:}
 n_devices: ${n_devices:}
-omp_threads: 16
+omp_threads: ${int_div:${n_cpus:},2}

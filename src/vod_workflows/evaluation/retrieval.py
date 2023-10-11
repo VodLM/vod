@@ -38,7 +38,6 @@ def benchmark_retrieval(
     metrics: list[str],
     collate_config: vod_configs.RetrievalCollateConfig,
     dataloader_config: vod_configs.DataLoaderConfig,
-    tokenizer: transformers.PreTrainedTokenizer | transformers.PreTrainedTokenizerFast,
     cache_dir: pathlib.Path,
     parameters: None | dict[str, float] = None,
     output_keys: None | list[str] = None,
@@ -64,7 +63,6 @@ def benchmark_retrieval(
             vectors=queries.vectors,
             search_client=search_client,
             collate_config=collate_config,
-            tokenizer=tokenizer,
             parameters=parameters,
             **dataloader_config.model_dump(),
         )

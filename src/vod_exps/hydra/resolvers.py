@@ -5,15 +5,16 @@ import subprocess
 import typing as typ
 from random import randint
 
+import omegaconf as omg
 import randomname
 import torch
-from omegaconf import OmegaConf
+from vod_configs import __version__ as VERSION
 
 SEED = randint(0, 100_000)  # noqa: N806, S311
 
 
 def register_omgeaconf_resolvers() -> None:  # noqa: C901, PLR0915
-    """Register OmegaConf resolvers. Resolvers a dynamically computed values that can be used in the config."""
+    """Register omg.OmegaConf resolvers. Resolvers a dynamically computed values that can be used in the config."""
     n_gpus = torch.cuda.device_count()  # noqa: N806
     n_cpus = os.cpu_count()  # noqa: N806
 
@@ -43,13 +44,6 @@ def register_omgeaconf_resolvers() -> None:  # noqa: C901, PLR0915
     def _format_model_name(model_name: str) -> str:
         *_, model_name = model_name.split("/")
         return model_name
-
-    def _reverse_frank_split(x: str) -> str:
-        if x.startswith("frank.A"):
-            return x.replace("frank.A", "frank.B.")
-        if x.startswith("frank.B"):
-            return x.replace("frank.B", "frank.A.")
-        return x
 
     def _join_path(*args: typ.Any) -> str:
         return pathlib.Path(*args).as_posix()
@@ -116,33 +110,59 @@ def register_omgeaconf_resolvers() -> None:  # noqa: C901, PLR0915
             "32": "float32",
         }[str(x)]
 
+    def _infer_accumulate_grad_batches(batch_size: int, per_device: int) -> int:
+        """Infer the accumulate_grad_batches parameter for the Trainer assuming a single node distributed setting."""
+        effective_batch_size = int(os.environ.get("WORLD_SIZE", "1")) * per_device
+        if effective_batch_size > batch_size:
+            return 1
+        return -(-batch_size // effective_batch_size)
+
+    def _parse_encoder_name(model_config: omg.DictConfig) -> str:
+        return model_config.encoder.pretrained_model_name_or_path
+
+    def _parse_lm_name(model_config: omg.DictConfig) -> None | str:
+        if "lm" not in model_config:
+            return None
+        return model_config.lm.pretrained_model_name_or_path
+
+    def _parse_model_name(model_config: omg.DictConfig) -> str:
+        encoder_name = _parse_encoder_name(model_config)
+        lm_name = _parse_lm_name(model_config)
+        if lm_name is None:
+            return f"ranker-{encoder_name}"
+        return f"realm-{lm_name}-{encoder_name}"
+
     # Register resolvers
-    OmegaConf.register_new_resolver("whoami", lambda: os.environ.get("USER"))
-    OmegaConf.register_new_resolver("hostname", socket.gethostname)
-    OmegaConf.register_new_resolver("getcwd", os.getcwd)
-    OmegaConf.register_new_resolver("int", lambda x: int(x))
-    OmegaConf.register_new_resolver("int_mul", _int_mul)
-    OmegaConf.register_new_resolver("int_add", _add_int)
-    OmegaConf.register_new_resolver("int_div", _int_div)
-    OmegaConf.register_new_resolver("int_max", _int_max)
-    OmegaConf.register_new_resolver("n_gpus", lambda *_: n_gpus)
-    OmegaConf.register_new_resolver("n_devices", lambda: max(1, n_gpus))
-    OmegaConf.register_new_resolver("git_hash", _git_revision_hash)
-    OmegaConf.register_new_resolver("git_hash_short", _git_revision_short_hash)
-    OmegaConf.register_new_resolver("git_branch_name", _git_branch_name)
-    OmegaConf.register_new_resolver("eval", lambda x: eval(x))
-    OmegaConf.register_new_resolver("os_expanduser", os.path.expanduser)
-    OmegaConf.register_new_resolver("rdn_name", randomname.get_name)
-    OmegaConf.register_new_resolver("default_trainer_accelerator", _default_trainer_accelerator)
-    OmegaConf.register_new_resolver("default_trainer_single_device", _default_trainer_single_device)
-    OmegaConf.register_new_resolver("infer_model_type", _infer_model_type)
-    OmegaConf.register_new_resolver("randint", randint)
-    OmegaConf.register_new_resolver("global_seed", lambda *_: SEED)
-    OmegaConf.register_new_resolver("fmt_mn", _format_model_name)
-    OmegaConf.register_new_resolver("reverse_frank_split", _reverse_frank_split)
-    OmegaConf.register_new_resolver("is_cuda_available", torch.cuda.is_available)
-    OmegaConf.register_new_resolver("null_cls", lambda *_: None)
-    OmegaConf.register_new_resolver("join_path", _join_path)
-    OmegaConf.register_new_resolver("abs_path", lambda x: pathlib.Path(x).absolute().as_posix())
-    OmegaConf.register_new_resolver("n_cpus", lambda *_: n_cpus)
-    OmegaConf.register_new_resolver("normalize_dtype", _normalize_dtype)
+    omg.OmegaConf.register_new_resolver("whoami", lambda: os.environ.get("USER"))
+    omg.OmegaConf.register_new_resolver("hostname", socket.gethostname)
+    omg.OmegaConf.register_new_resolver("getcwd", os.getcwd)
+    omg.OmegaConf.register_new_resolver("int", lambda x: int(x))
+    omg.OmegaConf.register_new_resolver("int_mul", _int_mul)
+    omg.OmegaConf.register_new_resolver("int_add", _add_int)
+    omg.OmegaConf.register_new_resolver("int_div", _int_div)
+    omg.OmegaConf.register_new_resolver("int_max", _int_max)
+    omg.OmegaConf.register_new_resolver("n_gpus", lambda *_: n_gpus)
+    omg.OmegaConf.register_new_resolver("n_devices", lambda: max(1, n_gpus))
+    omg.OmegaConf.register_new_resolver("git_hash", _git_revision_hash)
+    omg.OmegaConf.register_new_resolver("git_hash_short", _git_revision_short_hash)
+    omg.OmegaConf.register_new_resolver("git_branch_name", _git_branch_name)
+    omg.OmegaConf.register_new_resolver("eval", lambda x: eval(x))
+    omg.OmegaConf.register_new_resolver("os_expanduser", os.path.expanduser)
+    omg.OmegaConf.register_new_resolver("rdn_name", randomname.get_name)
+    omg.OmegaConf.register_new_resolver("default_trainer_accelerator", _default_trainer_accelerator)
+    omg.OmegaConf.register_new_resolver("default_trainer_single_device", _default_trainer_single_device)
+    omg.OmegaConf.register_new_resolver("infer_model_type", _infer_model_type)
+    omg.OmegaConf.register_new_resolver("randint", randint)
+    omg.OmegaConf.register_new_resolver("global_seed", lambda *_: SEED)
+    omg.OmegaConf.register_new_resolver("fmt_mn", _format_model_name)
+    omg.OmegaConf.register_new_resolver("is_cuda_available", torch.cuda.is_available)
+    omg.OmegaConf.register_new_resolver("null_cls", lambda *_: None)
+    omg.OmegaConf.register_new_resolver("join_path", _join_path)
+    omg.OmegaConf.register_new_resolver("abs_path", lambda x: pathlib.Path(x).absolute().as_posix())
+    omg.OmegaConf.register_new_resolver("n_cpus", lambda *_: n_cpus)
+    omg.OmegaConf.register_new_resolver("normalize_dtype", _normalize_dtype)
+    omg.OmegaConf.register_new_resolver("infer_accumulate_grad_batches", _infer_accumulate_grad_batches)
+    omg.OmegaConf.register_new_resolver("parse_encoder_name", _parse_encoder_name)
+    omg.OmegaConf.register_new_resolver("parse_lm_name", _parse_lm_name)
+    omg.OmegaConf.register_new_resolver("parse_model_name", _parse_model_name)
+    omg.OmegaConf.register_new_resolver("code_version", lambda *_: VERSION)

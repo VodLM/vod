@@ -25,7 +25,8 @@ class DataLoaderForPredictKwargs(vod_configs.DataLoaderConfig):
     """Confiuguration for `torch.utils.data.Dataloader` for predictions."""
 
     @pydantic.field_validator("shuffle", mode="before")
-    def _force_shuffle(cls, value: bool) -> bool:
+    @classmethod
+    def _force_shuffle(cls: Type[Self], value: bool) -> bool:
         if value:
             logger.debug("Shuffle is set to True. This is unnecessary for predictions. Forcing `shuffle` to False.")
         return False
@@ -49,7 +50,7 @@ class DataLoaderForPredictKwargs(vod_configs.DataLoaderConfig):
 
 def compute_and_store_predictions(
     fabric: L.Fabric,
-    dataset: vt.Sequence,
+    dataset: vt.DictsSequence,
     model: torch.nn.Module,
     collate_fn: vt.Collate,
     store: ts.TensorStore,

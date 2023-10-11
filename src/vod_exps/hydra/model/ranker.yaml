@@ -1,0 +1,10 @@
+defaults:
+  - encoder: bert-tiny
+  - gradients: retrieval
+  - optimizer: adamw
+  - scheduler: linear
+  - monitor: retrieval
+  - tweaks: default
+  - _self_
+
+_target_: vod_models.Ranker

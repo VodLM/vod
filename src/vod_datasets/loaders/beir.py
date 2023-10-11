@@ -10,7 +10,6 @@ import requests
 from datasets import fingerprint
 from loguru import logger
 from tqdm import tqdm
-from typing_extensions import Self, Type
 from vod_configs.datasets import DatasetLoader
 from vod_datasets.rosetta import models
 from vod_datasets.rosetta.adapters.rename_fields import RenameSectionAdapter
@@ -99,33 +98,6 @@ class QrelsDataset:
         if self._corpus_columns > set(self.corpus.column_names):
             raise ValueError(f"Corpus columns `{self._corpus_columns}` not present in `{self.corpus.column_names}`.")
 
-    @classmethod
-    def from_files(
-        cls: Type[Self],
-        queries: str | pathlib.Path,
-        qrels: str | pathlib.Path,
-        corpus: str | pathlib.Path,
-    ) -> Self:
-        """Load the dataset from files."""
-        qrelss = sorted(pathlib.Path(qrels).parent.glob(pathlib.Path(qrels).name)) if "*" in str(qrels) else [qrels]
-        _validate_file(queries, ext=".jsonl")
-        for qrels in qrelss:
-            _validate_file(qrels, ext=".tsv")
-        _validate_file(corpus, ext=".jsonl")
-
-        # Load the `qrels` parts
-        qrels_parts = [
-            datasets.load_dataset("csv", data_files=str(qrels), delimiter="\t")["train"]  # type: ignore
-            for qrels in qrelss
-        ]
-
-        # Load the full dataset
-        return cls(
-            queries=datasets.load_dataset("json", data_files=str(queries))["train"],  # type: ignore
-            qrels=datasets.concatenate_datasets(qrels_parts),  # type: ignore
-            corpus=datasets.load_dataset("json", data_files=str(corpus))["train"],  # type: ignore
-        )
-
 
 class BeirDatasetLoader(DatasetLoader):
     """This class is an adaptation from `beir-cellar/beir`.
@@ -134,7 +106,7 @@ class BeirDatasetLoader(DatasetLoader):
     """
 
     BASE_URL = "https://public.ukp.informatik.tu-darmstadt.de/thakur/BEIR/datasets/{}.zip"
-    DATASETS = [
+    SUBSETS = [
         "msmarco",
         "mmarco",
         "trec-covid",
@@ -153,6 +125,10 @@ class BeirDatasetLoader(DatasetLoader):
         "scifact",
         "germanquad",
     ]
+    SPECIAL_CASES = {
+        "msmarco": "hf://BeIR/msmarco",
+        "mmarco/english": "hf://BeIR/msmarco",
+    }
 
     def __init__(
         self,
@@ -168,28 +144,17 @@ class BeirDatasetLoader(DatasetLoader):
         """Load the dataset."""
         if subset is None:
             raise ValueError("Please specify a subset.")
-        name, *subpath = subset.split("/")
-        if name not in self.DATASETS:
-            raise ValueError(f"susbet `{name}` not available. Please choose from `{self.DATASETS}`.")
-
-        # Download the dataset
-        dataset_dir = _download_and_unzip(
-            self.BASE_URL.format(name),
-            self.cache_dir,
-        )
-
-        # Load the data
-        data = QrelsDataset.from_files(
-            queries=pathlib.Path(dataset_dir, *subpath, "queries.jsonl"),
-            qrels=pathlib.Path(dataset_dir, *subpath, "qrels", f"{split or '*'}.tsv"),
-            corpus=pathlib.Path(dataset_dir, *subpath, "corpus.jsonl"),
-        )
+        subset = self.SPECIAL_CASES.get(subset, subset)
+        if subset.startswith("hf://"):
+            data = self._download_from_hf(subset.replace("hf://", ""), split)
+        else:
+            data = self._download_from_tu_darmstadt(subset, split)
 
         if self.what == "sections":
             return RenameSectionAdapter.translate_dset(data.corpus)
         if self.what == "queries":
             output = data.queries.map(
-                _FormatAndFilterQueries(data.qrels),
+                _FilterAndAssignRetrievalIds(data.qrels),
                 num_proc=self.num_proc,
                 remove_columns=data.queries.column_names,
                 batched=True,
@@ -201,8 +166,64 @@ class BeirDatasetLoader(DatasetLoader):
 
         raise ValueError(f"Unknown dataset type `{self.what}`.")
 
+    def _download_from_hf(self, path_or_name: str, split: str | None = None) -> QrelsDataset:
+        qrels = datasets.load_dataset(f"{path_or_name}-qrels", split=split)
+        if isinstance(qrels, datasets.DatasetDict):
+            qrels = datasets.concatenate_datasets([qrels[k] for k in sorted(qrels)])
 
-class _FormatAndFilterQueries:
+        return QrelsDataset(
+            qrels=qrels,  # type: ignore
+            queries=datasets.load_dataset(path_or_name, "queries", split="queries"),  # type: ignore
+            corpus=datasets.load_dataset(path_or_name, "corpus", split="corpus"),  # type: ignore
+        )
+
+    def _download_from_tu_darmstadt(self, subset: str, split: str | None = None) -> QrelsDataset:
+        name, *subpath = str(subset).split("/")
+        if name not in self.SUBSETS:
+            raise ValueError(f"susbet `{name}` not available. Please choose from `{self.SUBSETS}`.")
+
+        # Download the dataset
+        dataset_dir = _download_and_unzip(
+            self.BASE_URL.format(name),
+            self.cache_dir,
+        )
+
+        def load_as_hf_arrow(source_path: pathlib.Path) -> datasets.Dataset:
+            """Force loading the data as `arrow` file (huggingface)."""
+            hf_path = source_path.parent / f"{source_path.stem}.hf"
+            if not hf_path.exists():
+                if source_path.suffix == ".jsonl":
+                    raw_data: datasets.Dataset = datasets.load_dataset(  # type: ignore
+                        "json",
+                        data_files=source_path.as_posix(),
+                    )["train"]
+                elif source_path.suffix == ".tsv":
+                    raw_data: datasets.Dataset = datasets.load_dataset(  # type: ignore
+                        "csv",
+                        data_files=source_path.as_posix(),
+                        delimiter="\t",
+                    )["train"]
+                else:
+                    raise ValueError(f"Can't handle format: `{source_path.suffixes}`")
+                raw_data.save_to_disk(str(hf_path))
+
+            return datasets.Dataset.load_from_disk(str(hf_path))
+
+        queries = load_as_hf_arrow(pathlib.Path(dataset_dir, *subpath, "queries.jsonl"))
+        corpus = load_as_hf_arrow(pathlib.Path(dataset_dir, *subpath, "corpus.jsonl"))
+        qrels_parts: dict[str, datasets.Dataset] = {}
+        for part_path in pathlib.Path(dataset_dir, *subpath, "qrels").glob("*.tsv"):
+            qrels_parts[part_path.stem] = load_as_hf_arrow(part_path)
+
+        if split is None:
+            qrels = datasets.concatenate_datasets([qrels_parts[s] for s in sorted(qrels_parts)])
+        else:
+            qrels = qrels_parts[split]
+
+        return QrelsDataset(qrels=qrels, queries=queries, corpus=corpus)
+
+
+class _FilterAndAssignRetrievalIds:
     output_model = models.QueryModel
     _lookup: dict[int, list[int]]
 
@@ -225,7 +246,7 @@ class _FormatAndFilterQueries:
                     continue
                 if qid not in self._lookup:
                     self._lookup[qid] = [cid]
-                else:
+                elif cid not in self._lookup[qid]:
                     self._lookup[qid].append(cid)
 
         return self._lookup
@@ -264,13 +285,26 @@ class _FormatAndFilterQueries:
         return output
 
 
-@fingerprint.hashregister(_FormatAndFilterQueries)
-def _hash_format_queries(hasher: datasets.fingerprint.Hasher, obj: _FormatAndFilterQueries) -> str:
+@fingerprint.hashregister(_FilterAndAssignRetrievalIds)
+def _hash_filter_and_format_retrieval_ids(
+    hasher: datasets.fingerprint.Hasher, obj: _FilterAndAssignRetrievalIds
+) -> str:
     """Register the `_FormatQueries` class to work with `datasets.map()`."""
     return hasher.hash(
         {
             "cls": obj.__class__,
             "qrels": obj.qrels._fingerprint,
             "output_model": obj.output_model,
+        }
+    )
+
+
+@fingerprint.hashregister(BeirDatasetLoader)
+def _hash_beir_dataset_loader(hasher: datasets.fingerprint.Hasher, obj: BeirDatasetLoader) -> str:
+    """Register the `_FormatQueries` class to work with `datasets.map()`."""
+    return hasher.hash(
+        {
+            "cls": obj.__class__,
+            "what": obj.what,
         }
     )

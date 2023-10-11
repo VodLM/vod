@@ -1,46 +1,39 @@
-import collections
-
 import lightning as L
-import numpy as np
 import torch
 import vod_models
 from rich import progress
 from torch.utils import data as torch_data
-from vod_workflows.utils import helpers
+from vod_workflows.utils.trainer_state import TrainerState
 
-from .utils import format_metric_value, format_pbar_info
+from .utils import RunningAverage, format_pbar_info
 
 
 @torch.no_grad()
 def validation_loop(
-    ranker: vod_models.Ranker,
+    module: vod_models.VodSystem,
     fabric: L.Fabric,
-    trainer_state: helpers.TrainerState,
+    state: TrainerState,
     val_dl: torch_data.DataLoader,
     n_steps: int,
     pbar: progress.Progress,
 ) -> dict[str, float | torch.Tensor]:
     """Run a validation loop."""
-    ranker.eval()
+    fabric.call("on_validation_start", fabric=fabric, module=module)
     val_pbar = pbar.add_task("Validation", total=n_steps, info=f"{n_steps} steps")
-    metrics = collections.defaultdict(list)
+    agg_metrics = RunningAverage()
     for i, batch in enumerate(val_dl):
-        output = ranker(batch, mode="evaluate")
-        pbar.update(val_pbar, advance=1, taskinfo=format_pbar_info(trainer_state, output))
-        for k, v in output.items():
-            metrics[k].append(format_metric_value(v))
+        # Evaluate the module
+        fabric.call("on_validation_batch_start", fabric=fabric, module=module, batch=batch, batch_idx=i)
+        output = module(batch, mode="evaluate")
+        fabric.call("on_validation_batch_end", fabric=fabric, module=module, batch=batch, output=output, batch_idx=i)
+
+        # Update progress bar and store metrics
+        pbar.update(val_pbar, refresh=True, advance=1, taskinfo=format_pbar_info(state, output))
+        agg_metrics.update(output)
         if i >= n_steps:
             break
 
-    # aggregate metrics
-    metrics = {k: np.mean(v) for k, v in metrics.items()}
-
-    # log metrics
-    fabric.log_dict(
-        metrics={f"val/{k.replace('.', '/')}": v for k, v in metrics.items()},
-        step=trainer_state.step,
-    )
-
+    # Cleanup and return
     pbar.remove_task(val_pbar)
-    ranker.train()
-    return dict(metrics)
+    fabric.call("on_validation_end", fabric=fabric, module=module)
+    return agg_metrics.get()

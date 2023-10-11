@@ -28,7 +28,7 @@ class Predict:
     """Compute vectors for a dataset and store them in a tensorstore."""
 
     __slots__ = (
-        "cache_dir",
+        "save_dir",
         "_dataset",
         "_model",
         "_collate_fn",
@@ -40,7 +40,7 @@ class Predict:
         self,
         *,
         dataset: vt.Sequence,
-        cache_dir: str | pathlib.Path,
+        save_dir: str | pathlib.Path,
         model: torch.nn.Module | vt.EncoderLike,
         collate_fn: vt.Collate = default_collate,  # type: ignore
         model_output_key: None | str = None,
@@ -49,7 +49,7 @@ class Predict:
         self._model = model
         self._collate_fn = collate_fn
         self._model_output_key = model_output_key
-        self.cache_dir = pathlib.Path(cache_dir).expanduser()
+        self.save_dir = pathlib.Path(save_dir).expanduser()
 
         # compute the fingerprint of the resulting function
         self._fingerprint = make_predict_fingerprint(
@@ -67,7 +67,7 @@ class Predict:
             f"model={type(self._model).__name__}, "
             f"collate_fn={type(self._collate_fn).__name__}, "
             f"model_output_key={self._model_output_key}, "
-            f"cache_dir={self.cache_dir})"
+            f"cache_dir={self.save_dir})"
         )
 
     def __call__(
@@ -186,7 +186,7 @@ class Predict:
     @property
     def store_path(self) -> pathlib.Path:
         """Returns the path to the store."""
-        return _predict_store_path(cache_dir=self.cache_dir, op_fingerprint=self.fingerprint)
+        return _predict_store_path(cache_dir=self.save_dir, op_fingerprint=self.fingerprint)
 
     def validate_store(
         self,
@@ -243,7 +243,7 @@ def predict(
         model=model,
         collate_fn=collate_fn,
         model_output_key=model_output_key,
-        cache_dir=cache_dir,
+        save_dir=cache_dir,
     )
     return predict_fn(
         fabric=fabric,
@@ -262,12 +262,12 @@ def _infer_vector_shape(
     collate_fn: vt.Collate,
 ) -> tuple[int, ...]:
     try:
-        vector_shape = model.get_output_shape(model_output_key)  # type: ignore
+        vector_shape = model.get_encoding_shape()  # type: ignore
     except AttributeError as exc:
         logger.debug(
             f"{exc}. "
             f"Inferring the vector size by running one example through the model. "
-            f"Implement `model.get_output_shape(output_key: str) -> tuple[int,...]` to skip this step."
+            f"Implement `model.get_encoding_shape(output_key: str) -> tuple[int,...]` to skip this step."
         )
         batch = collate_fn([dataset[0]])
         one_vec = model(batch)  # type: ignore

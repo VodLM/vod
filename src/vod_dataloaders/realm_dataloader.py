@@ -2,7 +2,6 @@ import typing as typ
 
 import datasets
 import numpy as np
-import transformers
 import vod_configs
 import vod_search
 import vod_types as vt
@@ -31,7 +30,6 @@ class RealmDataloader(torch_data.DataLoader[dict[str, typ.Any]]):
         vectors: None | dict[K, vt.Sequence[np.ndarray]] = None,
         # Parameters for the Collate function
         search_client: vod_search.HybridSearchClient,
-        tokenizer: transformers.PreTrainedTokenizer | transformers.PreTrainedTokenizerFast,
         collate_config: vod_configs.RetrievalCollateConfig,
         parameters: None | typ.MutableMapping = None,
         # Base `torch.utils.data.Dataloader` arguments
@@ -92,7 +90,6 @@ class RealmDataloader(torch_data.DataLoader[dict[str, typ.Any]]):
 
         # Instantiate the Collate function
         collate_fn = RealmCollate(
-            tokenizer=tokenizer,
             search_client=search_client,
             config=collate_config,
             parameters=parameters,
@@ -107,7 +104,7 @@ class RealmDataloader(torch_data.DataLoader[dict[str, typ.Any]]):
             batch_size=batch_size,
             shuffle=shuffle,
             sampler=sampler,
-            batch_sampler=batch_sampler,
+            batch_sampler=batch_sampler,  # type: ignore
             num_workers=num_workers,
             collate_fn=collate_fn,
             pin_memory=pin_memory,

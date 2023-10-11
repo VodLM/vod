@@ -170,7 +170,7 @@ class VodPooler(torch.nn.Module):
             pooled_output = self.norm_fn(pooled_output)
         return pooled_output
 
-    def get_output_shape(self) -> tuple[int, ...]:
+    def get_encoding_shape(self) -> tuple[int, ...]:
         """The output dimension of the encoder."""
         if isinstance(self.aggregator, IdentityAgg):
             return (-1, self.output_vector_size)
@@ -243,9 +243,9 @@ class VodEncoderBase(typ.Generic[Cfg], transformers.PreTrainedModel, abc.ABC):
         """Get a fingerprint of the encoder."""
         return _compute_fingerprint(self)
 
-    def get_output_shape(self) -> tuple[int, ...]:
+    def get_encoding_shape(self) -> tuple[int, ...]:
         """Get the output shape of the encoder. Set `-1` for unknown dimensions."""
-        return self.vod_pooler.get_output_shape()
+        return self.vod_pooler.get_encoding_shape()
 
     @property
     def base_name_or_path(self) -> str:

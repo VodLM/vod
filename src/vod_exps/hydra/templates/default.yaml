@@ -1,3 +1,3 @@
 query: "query: {{ query }}"
-answer: "answer: {{ answer }}"
 section: "passage: {% if title %}{{ title }}. {% endif %}{{ content }}"
+lm: "passage: {% if title %}{{ title }}. {% endif %}{{ content }}\ninstructions: {{ query }}\nanswer: {{ answer }}"

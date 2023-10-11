@@ -3,9 +3,8 @@ import pathlib
 
 import lightning as L
 import loguru
-import transformers
+import torch
 import vod_configs
-import vod_models
 import vod_types as vt
 from vod_dataloaders.tokenizer_collate import TokenizerCollate
 from vod_tools.ts_factory.ts_factory import TensorStoreFactory
@@ -17,25 +16,24 @@ from .predict import Predict
 def compute_vectors(
     dataset: vt.DictsSequence,
     *,
-    ranker: vod_models.Ranker,
+    module: torch.nn.Module,
     fabric: L.Fabric,
-    tokenizer: transformers.PreTrainedTokenizerBase,
-    collate_config: vod_configs.BaseCollateConfig,
+    collate_config: vod_configs.TokenizerCollateConfig,
     dataloader_config: vod_configs.DataLoaderConfig,
-    cache_dir: pathlib.Path,
+    save_dir: pathlib.Path,
     field: str,
     validate_store: int = 1_000,
-    locator: None | str = None,
+    locator: str = "embedding",
 ) -> TensorStoreFactory:
     """Compute the vectors for a given dataset and field. Hanldes distributed execution on a single node."""
-    collate_fn = TokenizerCollate.from_config(collate_config, field=field, tokenizer=tokenizer)
+    collate_fn = TokenizerCollate.instantiate(collate_config, field=field)
     barrier_fn = functools.partial(helpers.barrier_fn, fabric=fabric)
 
     # construct the `predict` function
     predict_fn = Predict(
         dataset=dataset,  # type: ignore
-        cache_dir=cache_dir,
-        model=ranker,
+        save_dir=save_dir,
+        model=module,
         collate_fn=collate_fn,
         model_output_key={"query": "hq", "section": "hd"}[field],
     )

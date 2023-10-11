@@ -1,7 +1,8 @@
-job:
-  chdir: true
 run:
   dir: ${sys.work_dir}/runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
 sweep:
   dir: ${sys.work_dir}/multiruns/${now:%Y-%m-%d}/${now:%H-%M-%S}
   subdir: ${hydra.job.num}-${base.exp_id}
+job:
+  chdir: true
+

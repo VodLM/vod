@@ -1,0 +1,64 @@
+defaults:
+  - search_defaults: default
+  - options: default
+  - _self_
+
+# Base search
+search:
+  dense:
+    backend: qdrant
+  sparse:
+    backend: elasticsearch
+
+# Train/val splits
+training:
+  queries:
+    train:
+      - identifier: fiqa_train
+        name_or_path:
+          _target_: vod_datasets.BeirDatasetLoader
+          what: queries
+        subsets: fiqa
+        split: train
+        link: fiqa_sections
+    val:
+      - identifier: fiqa_dev
+        name_or_path:
+          _target_: vod_datasets.BeirDatasetLoader
+          what: queries
+        subsets: fiqa
+        split: dev
+        link: fiqa_sections
+
+  sections:
+    - identifier: fiqa_sections
+      name_or_path:
+        _target_: vod_datasets.BeirDatasetLoader
+        what: sections
+      subsets: fiqa
+
+# Benchmarks
+benchmark:
+  - queries:
+      identifier: fiqa_test
+      name_or_path:
+        _target_: vod_datasets.BeirDatasetLoader
+        what: queries
+      subsets: fiqa
+      split: test
+      link: fiqa_sections
+
+    sections:
+      identifier: fiqa_sections
+      name_or_path:
+        _target_: vod_datasets.BeirDatasetLoader
+        what: sections
+      subsets: fiqa
+
+      # # Note -- you can override the default search backend for a specific dataset/benchmark
+      # search:
+      #   dense:
+      #     backend: faiss
+      #     factory: IVFauto,Flat
+      #     gpu:
+      #       use:_float16: true

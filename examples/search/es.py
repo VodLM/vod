@@ -28,13 +28,6 @@ DATASET_CONFIGS = {
         "subset": "high",
         "split": "test",
     },
-    "frank": {
-        "identifier": "frank",
-        "name_or_path": [
-            vod_datasets.FrankDatasetLoader(frank_split="A", language="en", what="queries"),
-            vod_datasets.FrankDatasetLoader(frank_split="A", language="en", what="sections"),
-        ],
-    },
     "mmarco-french": {
         "identifier": "mmarco-french",
         "name_or_path": [

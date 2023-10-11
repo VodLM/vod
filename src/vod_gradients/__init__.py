@@ -1,2 +1,4 @@
+__version__ = "0.2.0"
+
 from .base import GradientInputs, Gradients
-from .supervised_retrieval import SupervisedRetrievalGradients
+from .retrieval import RetrievalGradients

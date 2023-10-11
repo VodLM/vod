@@ -1,8 +1,8 @@
 import numbers
 import os
+import typing as typ
 import warnings
 from pathlib import Path
-from typing import Any, TypeVar
 
 import datasets
 import faiss
@@ -16,11 +16,12 @@ import yaml
 from lightning.fabric.loggers.logger import Logger as FabricLogger
 from lightning.pytorch.loggers.wandb import WandbLogger
 from vod_tools.misc.config import config_to_flat_dict
+from vod_workflows.callbacks import Callback
 
-T = TypeVar("T")
+T = typ.TypeVar("T")
 
 
-def _do_nothing(*args: Any, **kwargs: Any) -> None:
+def _do_nothing(*args: typ.Any, **kwargs: typ.Any) -> None:
     """Do nothing."""
 
 
@@ -29,7 +30,7 @@ def _identity(value: T) -> T:
     return value
 
 
-def _cast_hps(value: object) -> str:
+def _cast_hps(value: typ.Any) -> str:  # noqa: ANN401
     """Cast a value to a string."""
     formatter = {
         numbers.Number: _identity,
@@ -59,11 +60,16 @@ def set_training_context() -> None:
     # torch.multiprocessing.set_sharing_strategy("file_system")
 
 
-def _get_ranker_meta_data(ranker: vod_models.Ranker) -> dict[str, Any]:
+def get_model_stats(ranker: vod_models.Ranker) -> dict[str, typ.Any]:
+    """Get some stats about the model."""
+    try:
+        output_shape = list(ranker.encoder.get_encoding_shape())
+    except Exception as exc:
+        output_shape = str(exc)
     return {
         "n_trainable_params": sum(p.numel() for p in ranker.parameters() if p.requires_grad),
         "n_total_params": sum(p.numel() for p in ranker.parameters()),
-        "output_shape": list(ranker.encoder.get_output_shape()),
+        "output_shape": output_shape,
         "flash_sdp_enabled": torch.backends.cuda.flash_sdp_enabled(),  # type: ignore
         "mem_efficient_sdp_enabled": torch.backends.cuda.mem_efficient_sdp_enabled(),  # type: ignore
         "math_sdp_enabled": torch.backends.cuda.math_sdp_enabled(),  # type: ignore
@@ -71,14 +77,14 @@ def _get_ranker_meta_data(ranker: vod_models.Ranker) -> dict[str, Any]:
 
 
 def log_config(
-    config: dict[str, Any] | omegaconf.DictConfig,
+    config: dict[str, typ.Any] | omegaconf.DictConfig,
     exp_dir: Path,
-    extras: dict[str, Any],
+    extras: dict[str, typ.Any],
     fabric: L.Fabric,
 ) -> None:
     """Log the config as hyperparameters and save it locally."""
     config_path = Path(exp_dir, "config.yaml")
-    all_data: dict[str, Any] = omegaconf.OmegaConf.to_container(config, resolve=True)  # type: ignore
+    all_data: dict[str, typ.Any] = omegaconf.OmegaConf.to_container(config, resolve=True)  # type: ignore
     all_data.update(extras)
     with config_path.open("w") as f:
         yaml.dump(all_data, f)
@@ -92,14 +98,24 @@ def log_config(
 
 def init_fabric(
     *args,  # noqa: ANN002
-    loggers: omegaconf.DictConfig | list[FabricLogger] | dict[str, FabricLogger],
+    loggers: None | typ.Iterable[FabricLogger] | typ.Mapping[str, FabricLogger] = None,
+    callbacks: None | typ.Iterable[Callback] | typ.Mapping[str, Callback] = None,
     **kwargs,  # noqa: ANN003
 ) -> L.Fabric:
     """Initialize a fabric with the given `omegaconf`-defined loggers."""
-    if isinstance(loggers, omegaconf.DictConfig):
-        loggers = omegaconf.OmegaConf.to_container(loggers, resolve=True)  # type: ignore
 
-    if isinstance(loggers, dict):
-        loggers = list(loggers.values())
+    def _cast_to_list(x: None | typ.Iterable[T] | typ.Mapping[str, T]) -> list[T]:
+        if x is None:
+            return []
+        if isinstance(x, omegaconf.DictConfig):
+            x = omegaconf.OmegaConf.to_container(x, resolve=True)  # type: ignore
+        if isinstance(x, dict):
+            x = x.values()
+        return list(x)  # type: ignore
 
-    return L.Fabric(*args, loggers=loggers, **kwargs)  # type: ignore
+    return L.Fabric(
+        *args,
+        loggers=_cast_to_list(loggers),
+        callbacks=_cast_to_list(callbacks),
+        **kwargs,
+    )

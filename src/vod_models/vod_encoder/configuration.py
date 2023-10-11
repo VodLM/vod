@@ -4,6 +4,8 @@ import transformers
 from typing_extensions import Literal, TypeAlias
 
 AggMethod: TypeAlias = Literal["mean", "max", "cls", "none"]
+NormMethod: TypeAlias = Literal["l1", "l2", "none"]
+ActivationMethod: TypeAlias = Literal["tanh", "relu", "sigmoid", "relu"]
 VodEncoderInputType: TypeAlias = Literal["query", "section"]
 
 
@@ -11,15 +13,15 @@ class VodPoolerConfig:
     """Configuration for a VOD head."""
 
     projection_size: Optional[int] = None
-    output_activation: None | str = None
-    output_norm: None | str = None
+    output_activation: None | ActivationMethod = None
+    output_norm: None | NormMethod = None
     agg_method: AggMethod = "mean"
 
     def __init__(
         self,
         projection_size: Optional[int] = None,
-        output_activation: None | str = None,
-        output_norm: None | str = None,
+        output_activation: None | ActivationMethod = None,
+        output_norm: None | NormMethod = None,
         agg_method: AggMethod = "mean",
         **kwargs: Any,
     ) -> None:

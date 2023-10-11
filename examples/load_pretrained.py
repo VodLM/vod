@@ -45,7 +45,8 @@ class Args(pydantic.BaseModel):
         return cls(**vars(args))
 
     @pydantic.field_validator("cache_dir", mode="before")
-    def _validate_cache_dir(cls, v: str) -> str:
+    @classmethod
+    def _validate_cache_dir(cls: Type[Self], v: str) -> str:
         """Validate the cache directory."""
         return pathlib.Path(v).expanduser().resolve().as_posix()
 

@@ -7,11 +7,9 @@ import pydantic
 import torch
 from loguru import logger
 from typing_extensions import Self, Type
-from vod_configs.utils import StrictModel
-from vod_tools import pretty
+from vod_configs.utils.base import StrictModel
+from vod_tools import fingerprint, pretty
 from vod_tools.misc.config import as_pyobj_validator
-
-from src.vod_tools import fingerprint
 
 try:
     from faiss import GpuMultipleClonerOptions, GpuResources, StandardGpuResources  # type: ignore
@@ -144,7 +142,8 @@ class FaissFactoryConfig(BaseSearchFactoryConfig):
         return self.model_copy(update=diffs)
 
     @pydantic.field_validator("metric", mode="before")
-    def _validate_metric(cls, v: str | int) -> int:
+    @classmethod
+    def _validate_metric(cls: Type[Self], v: str | int) -> int:
         if isinstance(v, int):
             return v
 
@@ -231,16 +230,18 @@ class QdrantFactoryConfig(BaseSearchFactoryConfig):
         if diff is None:
             return self
         diffs = {k: v for k, v in diff if v is not None}
-        return self.copy(update=diffs)
+        return self.model_copy(update=diffs)
 
     @pydantic.field_validator("qdrant_body", mode="before")
-    def _validate_qdrant_body(cls, v: dict | None) -> dict | None:
+    @classmethod
+    def _validate_qdrant_body(cls: Type[Self], v: dict | None) -> dict | None:
         if isinstance(v, omegaconf.DictConfig):
             v = omegaconf.OmegaConf.to_container(v, resolve=True)  # type: ignore
         return v
 
     @pydantic.field_validator("search_params", mode="before")
-    def _validate_search_params(cls, v: dict | None) -> dict | None:
+    @classmethod
+    def _validate_search_params(cls: Type[Self], v: dict | None) -> dict | None:
         if isinstance(v, omegaconf.DictConfig):
             v = omegaconf.OmegaConf.to_container(v, resolve=True)  # type: ignore
         return v
@@ -261,36 +262,24 @@ class QdrantFactoryConfig(BaseSearchFactoryConfig):
 SingleSearchFactoryConfig = ElasticsearchFactoryConfig | FaissFactoryConfig | QdrantFactoryConfig
 SingleSearchFactoryDiff = ElasticsearchFactoryDiff | FaissFactoryDiff | QdrantFactoryDiff
 
-FactoryConfigsByBackend: dict[SearchBackend, Type[BaseSearchFactoryConfig]] = {
+_FactoryConfigsByBackend: dict[SearchBackend, Type[BaseSearchFactoryConfig]] = {
     "elasticsearch": ElasticsearchFactoryConfig,
     "faiss": FaissFactoryConfig,
     "qdrant": QdrantFactoryConfig,
 }
 
-FactoryDiffByBackend: dict[SearchBackend, Type[BaseSearchFactoryDiff]] = {
+_FactoryDiffByBackend: dict[SearchBackend, Type[BaseSearchFactoryDiff]] = {
     "elasticsearch": ElasticsearchFactoryDiff,
     "faiss": FaissFactoryDiff,
     "qdrant": QdrantFactoryDiff,
 }
 
 
-class MutliSearchFactoryDiff(BaseSearchFactoryDiff):
+class HybridSearchFactoryDiff(BaseSearchFactoryDiff):
     """Configures a hybrid search engine."""
 
-    backend: typ.Literal["multi"] = "multi"
+    backend: typ.Literal["hybrid"] = "hybrid"
     engines: dict[str, SingleSearchFactoryDiff]
-
-    @classmethod
-    def parse(cls: Type[Self], config: dict | omegaconf.DictConfig) -> Self:  # type: ignore
-        """Parse a dictionary / omegaconf configuration into a structured dict."""
-        if "engines" in config:
-            config = config["engines"]
-        config = _parse_multi_search(config, FactoryDiffByBackend)
-
-        if len(config) == 0:
-            raise ValueError(f"Attempting to initialize a `{cls.__name__}` without engines.")
-
-        return cls(engines=config)  # type: ignore
 
 
 class HybridSearchFactoryConfig(BaseSearchFactoryConfig):
@@ -298,22 +287,10 @@ class HybridSearchFactoryConfig(BaseSearchFactoryConfig):
 
     _defaults = pydantic.PrivateAttr(None)
 
-    backend: typ.Literal["multi"] = "multi"
+    backend: typ.Literal["hybrid"] = "hybrid"
     engines: dict[str, SingleSearchFactoryConfig]
 
-    @classmethod
-    def parse(cls: Type[Self], config: dict | omegaconf.DictConfig) -> Self:  # type: ignore
-        """Parse a dictionary / omegaconf configuration into a structured dict."""
-        if "engines" in config:
-            config = config["engines"]
-        config = _parse_multi_search(config, FactoryConfigsByBackend)
-
-        if len(config) == 0:
-            raise ValueError(f"Attempting to initialize a `{cls.__name__}` without engines.")
-
-        return cls(engines=config)  # type: ignore
-
-    def __add__(self, diff: None | MutliSearchFactoryDiff) -> Self:
+    def __add__(self, diff: None | HybridSearchFactoryDiff) -> Self:
         if diff is None:
             return self
         new_engines = copy.copy(self.engines)
@@ -326,7 +303,7 @@ class HybridSearchFactoryConfig(BaseSearchFactoryConfig):
             else:
                 raise ValueError("`_defaults` was never set.")
 
-        return self.copy(update={"engines": new_engines})
+        return self.model_copy(update={"engines": new_engines})
 
 
 class SearchFactoryDefaults(StrictModel):
@@ -347,13 +324,8 @@ class SearchFactoryDefaults(StrictModel):
     _validate_faiss = pydantic.field_validator("faiss", mode="before")(as_pyobj_validator)
     _validate_qdrant = pydantic.field_validator("qdrant", mode="before")(as_pyobj_validator)
 
-    @classmethod
-    def parse(cls: Type[Self], config: typ.Mapping) -> Self:  # type: ignore
-        """Parse a dictionary / omegaconf configuration into a structured dict."""
-        return cls(**config)
-
     # methods
-    def __add__(self, diff: MutliSearchFactoryDiff) -> HybridSearchFactoryConfig:
+    def __add__(self, diff: HybridSearchFactoryDiff) -> HybridSearchFactoryConfig:
         engine_factories = {}
         for key, cfg_diff in diff.engines.items():
             default_config = getattr(self, cfg_diff.backend)
@@ -362,34 +334,3 @@ class SearchFactoryDefaults(StrictModel):
         cfg = HybridSearchFactoryConfig(engines=engine_factories)
         cfg._defaults = self  # <- save the defaults for better resolution of diffs
         return cfg
-
-
-T = typ.TypeVar("T")
-K = typ.TypeVar("K")
-
-
-def _parse_multi_search(
-    config: typ.Mapping,  # type: ignore
-    sub_cls_by_backend: dict[K, Type[T]],
-) -> dict[K, T]:  # type: ignore
-    """Parse a dictionary / omegaconf configuration into a structured dict."""
-    if isinstance(config, omegaconf.DictConfig):
-        config: dict = omegaconf.OmegaConf.to_container(config, resolve=True)  # type: ignore
-
-    formatted_config = {}
-    for engine_name, cfg in config.items():
-        try:
-            backend = cfg["backend"]
-        except KeyError as exc:
-            raise KeyError(
-                f"Backend must be configured. Found configuration keys `{list(cfg.keys())}`. Missing=`backend`"
-            ) from exc
-        try:
-            sub_cls = sub_cls_by_backend[backend]
-        except KeyError as exc:
-            raise KeyError(f"Unknown backend `{backend}`. Known backends: {list(sub_cls_by_backend.keys())}") from exc
-
-        # Instantiate the specific engine
-        formatted_config[engine_name] = sub_cls(**cfg)
-
-    return formatted_config

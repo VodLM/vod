@@ -1,4 +1,4 @@
-import typing
+import typing as typ
 
 import datasets
 from rich.console import Console
@@ -9,10 +9,10 @@ from .adapters import ROSETTA_ADAPTERS
 from .preprocessing import isolate_qa_and_sections
 from .utils import dict_to_rich_table, get_first_row
 
-T = typing.TypeVar("T")
+T = typ.TypeVar("T")
 
 
-def find_adapter(row: dict[str, typing.Any], output: DatasetType, verbose: bool = False) -> None | typing.Type[Adapter]:
+def find_adapter(row: dict[str, typ.Any], output: DatasetType, verbose: bool = False) -> None | typ.Type[Adapter]:
     """Find an adapter for a row."""
     console = Console()
     for v in ROSETTA_ADAPTERS[output]:
@@ -31,7 +31,7 @@ class CantHandleError(ValueError):
 
     def __init__(
         self,
-        row: dict[str, typing.Any],
+        row: dict[str, typ.Any],
         output: DatasetType,
         reason: str = "",
         **kwargs,  # noqa: ANN003
@@ -43,7 +43,7 @@ class CantHandleError(ValueError):
         super().__init__(message, **kwargs)
 
 
-D = typing.TypeVar("D", bound=typing.Union[datasets.Dataset, datasets.DatasetDict])
+D = typ.TypeVar("D", bound=typ.Union[datasets.Dataset, datasets.DatasetDict])
 
 
 def transform(
@@ -54,7 +54,7 @@ def transform(
 ) -> D:
     """Translate a Huggingface daatset."""
     row = get_first_row(data)
-    adapter: None | typing.Type[Adapter] = find_adapter(row, output="queries_with_context", verbose=verbose)
+    adapter: None | typ.Type[Adapter] = find_adapter(row, output="queries_with_context", verbose=verbose)
 
     # Process `QueriesWithContext` datasets
     if adapter is not None:

@@ -1,0 +1,18 @@
+encoder:
+  name_or_path: ${encoder_name}
+  max_length: 200
+  use_fast: true
+  padding_side: right
+  truncation_side: right
+  # Kwargs
+  padding: max_length
+  truncation: true
+lm:
+  name_or_path: ${lm_name}
+  max_length: 512
+  use_fast: true
+  padding_side: left
+  truncation_side: left
+  # Kwargs
+  padding: max_length
+  truncation: true
