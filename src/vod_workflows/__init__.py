@@ -1,6 +1,6 @@
 """Collection of workflows such as training, processing, and benchmarking."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 from .evaluation.retrieval import benchmark_retrieval
 from .processing.vectors import compute_vectors

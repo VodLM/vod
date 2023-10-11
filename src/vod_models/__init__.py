@@ -1,6 +1,6 @@
 """Defines the ML models used in the project."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 from .monitor import RetrievalMetricCollection, RetrievalMonitor, retrieval_metric_factory
 from .vod_encoder import (
