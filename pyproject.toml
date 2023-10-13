@@ -15,7 +15,7 @@ version_files = [
   "src/vod_search/__init__.py:__version__",
   "src/vod_tools/__init__.py:__version__",
   "src/vod_types/__init__.py:__version__",
-  "src/vod_workflows/__init__.py:__version__",
+  "src/vod_ops/__init__.py:__version__",
   "pyproject.toml:version",
   "VERSION",
 ]
@@ -37,7 +37,7 @@ packages = [
   { from = "src", include = "vod_search" },
   { from = "src", include = "vod_tools" },
   { from = "src", include = "vod_types" },
-  { from = "src", include = "vod_workflows" },
+  { from = "src", include = "vod_ops" },
   { from = "src", include = "vod_exps" },
 ]
 

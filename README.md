@@ -67,7 +67,7 @@ If you also see great potential in combining LLMs with search components, join t
 | vod_models      | A collection of REALMs                                |   ❌     |
 | vod_search      | Hybrid search using elasticsearch, faiss and Qdrant   |     ✅   |
 | vod_tools       | A collection of easy-to-use tools                     |    ✅    |
-| vod_workflows   | Main recipes (training, benchmarking, indexing, etc.) |   ⚠️     |
+| vod_ops   | Main recipes (training, benchmarking, indexing, etc.) |   ⚠️     |
 
 > **Note** The code for VOD gradient and sampling methods currently lives at [VodLM/vod-gradients](https://github.com/VodLM/vod-gradients). The project is still under development and will be integrated into this repo in the next month.
 

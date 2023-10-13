@@ -32,7 +32,7 @@ def validation_loop(
 
         # Update progress bar and store metrics
         pbar.update(val_pbar, refresh=True, advance=1, taskinfo=format_pbar_info(state, output))
-        monitor.update(batch=output, model_output=output)
+        monitor.update(batch=batch, model_output=output)
         if i >= n_steps:
             break
 

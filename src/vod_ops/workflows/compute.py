@@ -7,8 +7,8 @@ import torch
 import vod_configs
 import vod_types as vt
 from vod_dataloaders.tokenizer_collate import TokenizerCollate
+from vod_ops.utils import helpers
 from vod_tools.ts_factory.ts_factory import TensorStoreFactory
-from vod_workflows.utils import helpers
 
 from .predict import Predict
 

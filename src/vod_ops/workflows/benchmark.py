@@ -10,9 +10,9 @@ import vod_search
 import vod_types as vt
 from loguru import logger
 from vod_models.monitoring import RetrievalMonitor
+from vod_ops.utils import helpers, schemas
 from vod_tools.misc.config import flatten_dict
 from vod_tools.misc.progress import IterProgressBar
-from vod_workflows.utils import helpers, schemas
 
 DEFAULT_RETRIEVAL_SCORE_KEYS = ["sparse", "dense", "score"]
 
