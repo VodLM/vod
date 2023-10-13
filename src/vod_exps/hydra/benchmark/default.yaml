@@ -4,11 +4,12 @@ parameters:
   dense: 1.0
   sparse: 1.0
 metrics:
-  - "ndcg_10"
-  - "mrr_10"
-  - "mrr_100"
-  - "hitrate_01"
-  - "hitrate_03"
-  - "hitrate_10"
-  - "hitrate_100"
-  - "recall_50"
+  - kldiv
+  - ndcg_10
+  - mrr_10
+  - mrr_100
+  - hitrate_01
+  - hitrate_03
+  - hitrate_10
+  - hitrate_100
+  - recall_50

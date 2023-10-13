@@ -11,10 +11,9 @@ import vod_dataloaders
 import vod_models
 import vod_search
 from loguru import logger
+from vod_workflows.loops.train import training_loop
 from vod_workflows.utils import helpers, schemas
 from vod_workflows.utils.trainer_state import TrainerState
-
-from .train_loop import training_loop
 
 K = typ.TypeVar("K")
 

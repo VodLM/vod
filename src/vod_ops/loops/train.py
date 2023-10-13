@@ -7,14 +7,14 @@ from lightning.fabric import wrappers as fabric_wrappers
 from loguru import logger
 from torch.utils import data as torch_data
 from vod_models.monitoring import RetrievalMonitor
+from vod_ops.utils import io
+from vod_ops.utils.chrono import Chrono
+from vod_ops.utils.format import format_pbar_info
+from vod_ops.utils.trainer_state import TrainerState
 from vod_tools import fingerprint
 from vod_tools.misc.progress import IterProgressBar
-from vod_workflows.utils import io
-from vod_workflows.utils.chrono import Chrono
-from vod_workflows.utils.trainer_state import TrainerState
 
-from .utils import format_pbar_info
-from .val_loop import validation_loop
+from .val import validation_loop
 
 
 def training_loop(  # noqa: C901, PLR0915

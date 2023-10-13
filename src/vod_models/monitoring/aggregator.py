@@ -33,6 +33,7 @@ class MeanAggregator(Agregator):
         super().__init__()
         self._total = torch.nn.Parameter(torch.empty(1), requires_grad=False)
         self._count = torch.nn.Parameter(torch.empty(1), requires_grad=False)
+        self.reset()
 
     def reset(self) -> None:
         """Reset the metric stats."""

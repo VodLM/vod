@@ -113,6 +113,7 @@ def _compute_ndcg(
     n_positives: torch.Tensor,  # noqa: ARG001
 ) -> torch.Tensor:
     # Compute DCG (Discounted Cumulative Gain)
+    ranked_relevances = ranked_relevances.to(ranked_scores)  # Cast
     log2_ranks = torch.arange(
         2,
         ranked_relevances.shape[-1] + 2,

@@ -6,9 +6,8 @@ import vod_models
 from rich import progress
 from torch.utils import data as torch_data
 from vod_models.monitoring import RetrievalMonitor
-from vod_workflows.utils.trainer_state import TrainerState
-
-from .utils import format_pbar_info
+from vod_ops.utils.format import format_pbar_info
+from vod_ops.utils.trainer_state import TrainerState
 
 
 @torch.no_grad()

@@ -9,7 +9,7 @@ import omegaconf
 from hydra.utils import instantiate
 from loguru import logger
 from omegaconf import DictConfig
-from vod_workflows.utils.distributed import is_gloabl_zero
+from vod_ops.utils.distributed import is_gloabl_zero
 
 try:
     multiprocessing.set_start_method("forkserver", force=True)

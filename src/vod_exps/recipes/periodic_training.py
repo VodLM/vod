@@ -11,11 +11,11 @@ import vod_types as vt
 from lightning.fabric.wrappers import is_wrapped
 from loguru import logger
 from vod_exps.structconf import Experiment
+from vod_ops.utils import TrainerState, helpers, io, logging, schemas
+from vod_ops.workflows.benchmark import benchmark_retrieval
+from vod_ops.workflows.compute import compute_vectors
+from vod_ops.workflows.train import spawn_search_and_train
 from vod_tools import cache_manager
-from vod_workflows.evaluation.retrieval import benchmark_retrieval
-from vod_workflows.processing.vectors import compute_vectors
-from vod_workflows.training.train import spawn_search_and_train
-from vod_workflows.utils import TrainerState, helpers, io, logging, schemas
 
 
 def periodic_training(

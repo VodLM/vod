@@ -6,7 +6,16 @@ accumulate_grad_batches: ${infer_accumulate_grad_batches:${batch_size.effective}
 gradient_clip_val: 1.0
 n_max_eval: null
 checkpoint_path: ${abs_path:checkpoint}
-pbar_keys: ["loss"]
+metrics:
+  - kldiv
+  - ndcg_10
+  - mrr_10
+  - hitrate_01
+  - hitrate_03
+  - hitrate_10
+pbar_keys:
+  - kldiv
+  - hitrate_03
 parameters:
   dense: 1.0
   sparse: 1.0

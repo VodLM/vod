@@ -67,7 +67,8 @@ def benchmark_retrieval(
         if config.n_max_eval is None:
             num_steps = len(dataloader)
         else:
-            num_steps = max(1, -(-config.n_max_eval // dataloader.batch_size))  # type: ignore
+            eff_batch_size: int = fabric.world_size * dataloader.batch_size  # type: ignore
+            num_steps = max(1, -(-config.n_max_eval // eff_batch_size))
 
         # Callback - test starts
         fabric.call("on_test_start", fabric=fabric, module=None)
