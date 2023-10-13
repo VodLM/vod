@@ -125,6 +125,7 @@ class VodPooler(torch.nn.Module):
     activation: None | nn.Module
     norm_fn: None | typ.Callable[[torch.Tensor], torch.Tensor]
     output_vector_size: int
+    scaler: nn.Parameter
 
     def __init__(self, config: dict | VodPoolerConfig, backbone_output_size: int):
         super().__init__()
@@ -159,6 +160,9 @@ class VodPooler(torch.nn.Module):
                 "l1": functools.partial(torch.nn.functional.normalize, p=1),
             }[config.output_norm]
 
+        # Temperature
+        self.scaler = nn.Parameter(torch.tensor(config.scaler or 1.0), requires_grad=False)
+
     def forward(self, hidden_states: torch.Tensor, *, attention_mask: torch.Tensor) -> torch.Tensor:
         """Pools the model output and project. Note that the activation is applied last."""
         pooled_output = self.aggregator(hidden_states, attention_mask)
@@ -168,7 +172,7 @@ class VodPooler(torch.nn.Module):
             pooled_output = self.activation(pooled_output)
         if self.norm_fn:
             pooled_output = self.norm_fn(pooled_output)
-        return pooled_output
+        return pooled_output / self.scaler
 
     def get_encoding_shape(self) -> tuple[int, ...]:
         """The output dimension of the encoder."""

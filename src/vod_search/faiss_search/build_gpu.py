@@ -305,7 +305,7 @@ def _populate_index_multigpu(  # noqa: PLR0912, PLR0915
     max_add = gpu_config.max_add * max(1, ngpu) if gpu_config.max_add is not None else len(vectors)
 
     # move the cpu index to GPU
-    with WithTimer(f"Moving full index to GPU shars ({ngpu} GPUs).", logger.debug):
+    with WithTimer(f"Moving full index to GPU shards ({ngpu} GPUs).", logger.debug):
         gpu_index: faiss.IndexShards = faiss.index_cpu_to_gpu_multiple_py(gpu_resources, index, co)  # type: ignore
 
     # create an iterator over the vectors
@@ -372,6 +372,7 @@ def _populate_index_multigpu(  # noqa: PLR0912, PLR0915
             index_src.copy_subset_to(index, 0, 0, nb)
     else:
         # simple index
+        # TODO(faiss): this breaks when using an IVFFlat index (segmentation fault)
         index_src = faiss.index_gpu_to_cpu(gpu_index)  # type: ignore
         index_src.copy_subset_to(index, 0, 0, nb)
 

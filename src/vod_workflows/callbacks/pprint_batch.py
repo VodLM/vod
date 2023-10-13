@@ -83,6 +83,8 @@ class PprintBatch(Callback):
                     tokenizer=self.tokenizer_encoder,
                     skip_special_tokens=True,
                     console=console,
+                    max_questions=1,
+                    max_sections=5,
                 )
                 with tempfile.TemporaryDirectory() as tmpdir:
                     logfile = self.output_file or pathlib.Path(tmpdir) / "output.html"

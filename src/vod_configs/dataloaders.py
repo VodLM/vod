@@ -62,6 +62,7 @@ class TokenizerConfig(StrictModel):
     truncation: None | bool | typ.Literal[
         "longest_first", "only_first", "only_second", "do_not_truncate"
     ] = "longest_first"
+    return_token_type_ids: bool = False
 
     def instantiate(
         self,
@@ -87,6 +88,7 @@ class TokenizerConfig(StrictModel):
             "add_special_tokens": self.add_special_tokens,
             "padding": self.padding,
             "truncation": self.truncation,
+            "return_token_type_ids": self.return_token_type_ids,
         }
 
 

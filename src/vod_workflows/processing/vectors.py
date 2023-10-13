@@ -35,7 +35,7 @@ def compute_vectors(
         save_dir=save_dir,
         model=module,
         collate_fn=collate_fn,
-        model_output_key={"query": "hq", "section": "hd"}[field],
+        model_output_key={"query": "query_encoding", "section": "section_encoding"}[field],
     )
 
     # check if the store already exists, validate and read it if it does.

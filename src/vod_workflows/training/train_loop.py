@@ -6,13 +6,14 @@ import vod_models
 from lightning.fabric import wrappers as fabric_wrappers
 from loguru import logger
 from torch.utils import data as torch_data
+from vod_models.monitoring import RetrievalMonitor
 from vod_tools import fingerprint
 from vod_tools.misc.progress import IterProgressBar
 from vod_workflows.utils import io
 from vod_workflows.utils.chrono import Chrono
 from vod_workflows.utils.trainer_state import TrainerState
 
-from .utils import RunningAverage, format_pbar_info
+from .utils import format_pbar_info
 from .val_loop import validation_loop
 
 
@@ -26,8 +27,6 @@ def training_loop(  # noqa: C901, PLR0915
     val_dl: torch_data.DataLoader,
     scheduler: None | torch.optim.lr_scheduler.LRScheduler = None,
     parameters: None | typ.MutableMapping[str, typ.Any] = None,
-    checkpoint_path: None | str = None,
-    pbar_keys: None | list[str] = None,
 ) -> TrainerState:
     """Train a ranker."""
     _check_frabric_wrapping(module, optimizer)
@@ -42,16 +41,18 @@ def training_loop(  # noqa: C901, PLR0915
                 f"Period {1+state.pidx}",
                 total=n_train_steps,
                 auto_refresh=False,
-                info=format_pbar_info(state, keys=pbar_keys),
+                info=format_pbar_info(state, keys=state.config.pbar_keys),
             )
-            eval_metrics = None
+            train_metrics = None
+            val_metrics = None
             chrono = None
             loop_step = 0
             pidx = state.pidx
             period_last_step = state.next_period_start_step
             state.must_stop = False
             optim_steps_counter = 0
-            agg_metrics = RunningAverage()
+            monitor = RetrievalMonitor(state.config.metrics)
+            monitor.to(dtype=torch.float64, device=fabric.device)
             while not state.must_stop:
                 for batch in train_dl:
                     if state.step >= state.next_period_start_step or state.must_stop:
@@ -68,7 +69,7 @@ def training_loop(  # noqa: C901, PLR0915
 
                     # Forward/backward pass
                     is_accumulating = (1 + loop_step) % state.config.accumulate_grad_batches != 0
-                    step_metrics = _forward_backward(
+                    model_output = _forward_backward(
                         batch=batch,
                         fwd_fn=module,
                         fabric=fabric,
@@ -83,12 +84,12 @@ def training_loop(  # noqa: C901, PLR0915
                         fabric=fabric,
                         module=module,
                         batch=batch,
-                        output=step_metrics,
+                        output=model_output,
                         batch_idx=loop_step,
                     )
 
                     # Update the training metrics
-                    agg_metrics.update(step_metrics)  # type: ignore
+                    monitor.update(batch=batch, model_output=model_output)
 
                     # Optimization, logging, eval, and checkpointing
                     if not is_accumulating:
@@ -109,17 +110,25 @@ def training_loop(  # noqa: C901, PLR0915
 
                         # Log the training metrics
                         if state.step % state.config.log_interval == 0:
+                            train_metrics = monitor.compute()  # Synchronize aggregators and compute metrics
                             fabric.log_dict(
                                 metrics={
+                                    # Log Trainer info
                                     "trainer/epoch": float(state.epoch),
                                     "trainer/period": float(pidx),
-                                    **{f"train/{k.replace('.', '/')}": v for k, v in agg_metrics.get().items()},
+                                    **{f"trainer/diagnostics/{k}": v for k, v in batch.get("diagnostics", {}).items()},
+                                    **{f"trainer/parameters/{k}": v for k, v in (parameters or {}).items()},
+                                    # Log Model/Optimizer info
+                                    "train/loss": model_output["loss"].detach(),
+                                    **{f"train/{k}": v for k, v in train_metrics.items()},
+                                    **{
+                                        "train/model/diagnostics/{k}": v
+                                        for k, v in model_output.get("diagnostics", {}).items()  # type: ignore
+                                    },
                                     **{f"optimizer/{k}": v for k, v in _extract_learning_rates(optimizer).items()},
-                                    **{f"parameter/{k}": v for k, v in (parameters or {}).items()},
                                 },
                                 step=state.step,
                             )
-                            agg_metrics.reset()
 
                         # Increment the global step
                         state.step += 1
@@ -129,7 +138,7 @@ def training_loop(  # noqa: C901, PLR0915
                         # Validation and checkpointing
                         if state.must_stop or state.step % min(n_train_steps, state.config.val_check_interval) == 0:
                             module.eval()
-                            eval_metrics = validation_loop(
+                            val_metrics = validation_loop(
                                 module=module,
                                 fabric=fabric,
                                 state=state,
@@ -141,14 +150,14 @@ def training_loop(  # noqa: C901, PLR0915
 
                             # Log the valuation metrics
                             fabric.log_dict(
-                                metrics={f"val/{k.replace('.', '/')}": v for k, v in eval_metrics.items()},
+                                metrics={f"val/{k.replace('.', '/')}": v for k, v in val_metrics.items()},
                                 step=state.step,
                             )
 
                             # Save the model and training state
-                            if checkpoint_path is not None:
+                            if state.config.checkpoint_path is not None:
                                 io.save_training_state(
-                                    checkpoint_path=checkpoint_path,
+                                    checkpoint_path=state.config.checkpoint_path,
                                     fabric=fabric,
                                     model=module,
                                     optimizer=optimizer,
@@ -168,9 +177,9 @@ def training_loop(  # noqa: C901, PLR0915
                             speed=chrono.get_avg_laps_per_second() if chrono is not None else None,
                             info=format_pbar_info(
                                 state,
-                                train_metrics=step_metrics,
-                                eval_metrics=eval_metrics,
-                                keys=pbar_keys,
+                                train_metrics=train_metrics,
+                                val_metrics=val_metrics,
+                                keys=state.config.pbar_keys,
                             ),
                         )
 
@@ -192,10 +201,10 @@ def training_loop(  # noqa: C901, PLR0915
 
     # Save and Synch the model parameters
     # TODO: remove this
-    if checkpoint_path is not None:
+    if state.config.checkpoint_path is not None:
         logger.info("End of period. Syncing parameters.")
         io.save_training_state(
-            checkpoint_path=checkpoint_path,
+            checkpoint_path=state.config.checkpoint_path,
             fabric=fabric,
             model=module,
             optimizer=optimizer,
@@ -203,7 +212,7 @@ def training_loop(  # noqa: C901, PLR0915
             trainer_state=state,
         )
         io.load_training_state(
-            checkpoint_path=checkpoint_path,
+            checkpoint_path=state.config.checkpoint_path,
             fabric=fabric,
             module=module,
         )
@@ -221,17 +230,16 @@ def _check_frabric_wrapping(model: torch.nn.Module, optimizer: torch.optim.Optim
 
 
 def _forward_backward(
-    batch: dict[str, torch.Tensor],
+    batch: typ.Mapping[str, torch.Tensor],
     *,
-    fwd_fn: typ.Callable[[dict[str, torch.Tensor]], dict[str, torch.Tensor]],
+    fwd_fn: typ.Callable[[typ.Mapping[str, torch.Tensor]], typ.Mapping[str, torch.Tensor]],
     fabric: L.Fabric,
     loss_scaler: None | float = None,
-    backward_kws: None | dict[str, typ.Any] = None,
     no_backward_sync: bool = False,
     fwd_kws: None | dict = None,
+    backward_kws: None | dict[str, typ.Any] = None,
     loss_key: str = "loss",
-    **kws: typ.Any,
-) -> dict[str, torch.Tensor]:
+) -> typ.Mapping[str, torch.Tensor]:
     """Run a forward pass followed by a backward pass."""
     fwd_kws = fwd_kws or {}
     fwd_out = fwd_fn(batch, **fwd_kws)

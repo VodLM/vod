@@ -10,7 +10,7 @@ class Pipe(typ.Protocol[I, O]):
 
     def __call__(
         self,
-        batch: dict[str, I],
+        batch: typ.Mapping[str, I],
         idx: None | list[int] = None,
         **kws: typ.Any,
     ) -> dict[str, O]:
@@ -24,7 +24,7 @@ class Collate(typ.Protocol[I, O]):
 
     def __call__(
         self,
-        inputs: typ.Iterable[dict[str, I]],
+        inputs: typ.Iterable[typ.Mapping[str, I]],
         **kws: typ.Any,
     ) -> dict[str, O]:
         """Apply the collate function to a list of examples, transforming it into a batch."""

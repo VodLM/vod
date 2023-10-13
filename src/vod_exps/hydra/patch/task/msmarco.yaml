@@ -4,14 +4,27 @@ defaults:
   - override /datasets: msmarco
   - _self_
 
+exp_suffix: -msmarco
+
+# TODO binary metric: sigmoid + Gumbel-softax
+benchmark:
+  on_init: true
+
 trainer:
   gradient_clip_val: 1.0
   max_steps: 100_000
   period: 10_000
+  n_max_eval: 1_000
   val_check_interval: 500
   log_interval: 50
+  pbar_keys: [loss, mrr_10]
   parameters:
-    sparse: 0.5
+    sparse:
+      mode: linear
+      start: 1
+      value: 0
+      offset: ${trainer.period}
+      period: ${trainer.max_steps}
     dense:
       mode: linear
       start: 0

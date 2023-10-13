@@ -21,10 +21,12 @@ class TrainerConfig(StrictModel):
     parameters: dict[str, ParameterSchedule] = {}
     n_max_eval: None | int = None
     checkpoint_path: None | str = None
-    pbar_keys: list[str] = ["loss", "hitrate_3"]
+    metrics: list[str] = ["kldiv", "ndcg_10", "mrr_10", "hitrate_01", "hitrate_03"]
+    pbar_keys: list[str] = ["kldiv", "ndcg_10"]
 
     # validators
     _validate_update_freq = pydantic.field_validator("period", mode="before")(as_pyobj_validator)
+    _validate_metrics = pydantic.field_validator("metrics", mode="before")(as_pyobj_validator)
     _validate_pbark_keys = pydantic.field_validator("pbar_keys", mode="before")(as_pyobj_validator)
 
     @pydantic.field_validator("parameters", mode="before")
@@ -47,7 +49,8 @@ class BenchmarkConfig(StrictModel):
     on_init: bool = False
     n_max_eval: None | int = None
     parameters: dict[str, float] = {}
-    metrics: list[str] = ["ndcg", "mrr", "hitrate@01", "hitrate@03", "hitrate@10", "hitrate@30"]
+    metrics: list[str] = ["ndcg_10", "mrr_10", "hitrate_01", "hitrate_03", "kldiv"]
+    serve_search_on_gpu: bool = False
 
     @pydantic.field_validator("metrics", mode="before")
     @classmethod

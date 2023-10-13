@@ -2,7 +2,9 @@
 
 __version__ = "0.2.0"
 
-from .monitor import RetrievalMetricCollection, RetrievalMonitor, retrieval_metric_factory
+from .monitoring import (
+    RetrievalMonitor,
+)
 from .vod_encoder import (
     VodBertEncoder,
     VodBertEncoderConfig,

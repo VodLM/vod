@@ -282,7 +282,8 @@ def pprint_retrieval_batch(  # noqa: C901, PLR0915, PLR0912
     *,
     tokenizer: transformers.PreTrainedTokenizerBase,
     header: str = "Supervised retrieval batch",
-    max_sections: None | int = 10,
+    max_questions: None | int = None,
+    max_sections: None | int = None,
     console: None | rich.console.Console = None,
     output_file: None | str | pathlib.Path = None,
     footer: str | bool = True,
@@ -304,26 +305,26 @@ def pprint_retrieval_batch(  # noqa: C901, PLR0915, PLR0912
 
     tree = rich.tree.Tree(header, guide_style="dim")
     query_keys = ["id", "retrieval_ids", "subset_ids", "language"]
-    query_keys = [f"query.{key}" for key in query_keys]
+    query_keys = [f"query__{key}" for key in query_keys]
     section_keys = ["id", "subset_id", "score", "log_weight", "label", "language"]
     section_keys = [f"section.{key}" for key in section_keys]
     need_expansion = [
-        "section.input_ids",
-        "section.attention_mask",
-        "section.token_type_ids",
-        "section.idx",
-        "section.id",
-        "section.language",
-        "section.subset_id",
+        "section__input_ids",
+        "section__attention_mask",
+        "section__token_type_ids",
+        "section__idx",
+        "section__id",
+        "section__language",
+        "section__subset_id",
     ]
 
     # Fetch the querys
     batch = copy.deepcopy(batch)  # noqa: F821
-    query_input_ids = batch["query.input_ids"]
+    query_input_ids = batch["query__input_ids"]
     batch_size = len(query_input_ids)
 
     # Fetch and expand section attributes if needed
-    if batch["section.input_ids"].ndim == 2:  # noqa: PLR2004
+    if batch["section__input_ids"].ndim == 2:  # noqa: PLR2004
         # Sections are flatten, expand them
         for k, v in batch.items():
             if k in need_expansion:
@@ -335,29 +336,31 @@ def pprint_retrieval_batch(  # noqa: C901, PLR0915, PLR0912
                     batch[k] = [v for _ in range(batch_size)]
                 else:
                     raise TypeError(f"Cannot expand {k} of type {type(v)}")
-    elif batch["section.input_ids"].ndim == 3:  # noqa: PLR2004
+    elif batch["section__input_ids"].ndim == 3:  # noqa: PLR2004
         # We have K sections per queries, that's the default case
         pass
     else:
         raise ValueError(
-            f"Section input ids should be a 2D or 3D tensor. Found shape: `{batch['section.input_ids'].shape}`"
+            f"Section input ids should be a 2D or 3D tensor. Found shape: `{batch['section__input_ids'].shape}`"
         )
 
-    section_input_ids = batch["section.input_ids"]
+    section_input_ids = batch["section__input_ids"]
     for i, q_ids in enumerate(query_input_ids):
+        if max_questions is not None and i >= max_questions:
+            break
         query = tokenizer.decode(q_ids, **kwargs)
         query_data = {
             **{key: str(_format(batch[key][i])) for key in query_keys if key in batch},
-            "query.content": _safe_yaml(query),
+            "query__content": _safe_yaml(query),
         }
         query_data_str = yaml.dump(query_data, sort_keys=False)
         query_node = rich.syntax.Syntax(query_data_str, "yaml", indent_guides=False, word_wrap=True)
         query_tree = rich.tree.Tree(query_node, guide_style="dim")
 
         # sort the querys by positive label (first), then higher score (second)
-        _indices_i = range(len(batch["section.label"][i]))
-        _labels_i = [float(x > 0) for x in batch["section.label"][i]]
-        sort_scores = _cleanup_scores(batch["section.score"][i])
+        _indices_i = range(len(batch["section__label"][i]))
+        _labels_i = [float(x > 0) for x in batch["section__label"][i]]
+        sort_scores = _cleanup_scores(batch["section__score"][i])
         section_sort_ids = [
             i for i, _, _ in sorted(zip(_indices_i, _labels_i, sort_scores), key=lambda x: (x[1], x[2]), reverse=True)
         ]
@@ -366,11 +369,11 @@ def pprint_retrieval_batch(  # noqa: C901, PLR0915, PLR0912
             section = tokenizer.decode(section_input_ids[i][j], **kwargs)
             section_data = {
                 **{str(key): _format(batch[key][i][j]) for key in section_keys if key in batch},  # type: ignore
-                "section.content": _safe_yaml(section),
+                "section__content": _safe_yaml(section),
             }
             section_data_str = yaml.dump(section_data, sort_keys=False)
             section_node = rich.syntax.Syntax(section_data_str, "yaml", indent_guides=False, word_wrap=True)
-            node_style = "bold cyan" if section_data.get("section.label", False) else "white"
+            node_style = "bold cyan" if section_data.get("section__label", False) else "white"
 
             query_tree.add(section_node, style=node_style)
             if max_sections is not None and count >= max_sections:

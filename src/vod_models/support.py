@@ -10,7 +10,7 @@ from peft import mapping as peft_mapping
 from peft import utils as peft_utils
 from vod_models import vod_encoder
 
-FIELD_MAPPING: dict[vod_encoder.VodEncoderInputType, str] = {"query": "hq", "section": "hd"}
+FIELD_MAPPING: dict[vod_encoder.VodEncoderInputType, str] = {"query": "query_encoding", "section": "section_encoding"}
 
 
 def maybe_instantiate(conf_or_obj: typ.Any | omg.DictConfig, **kws: typ.Any) -> object:

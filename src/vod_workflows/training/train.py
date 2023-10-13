@@ -39,8 +39,6 @@ def spawn_search_and_train(
     fabric: L.Fabric,
     cache_dir: pathlib.Path,
     serve_on_gpu: bool = False,
-    checkpoint_path: None | str = None,
-    pbar_keys: None | list[str] = None,
 ) -> TrainerState:
     """Index the sections and train the ranker."""
     barrier_fn = functools.partial(helpers.barrier_fn, fabric=fabric)
@@ -116,8 +114,6 @@ def spawn_search_and_train(
             fabric=fabric,
             train_dl=train_dl,
             val_dl=val_dl,
-            checkpoint_path=checkpoint_path,
-            pbar_keys=pbar_keys,
             parameters=parameters,
         )
         barrier_fn(f"Completed period {1+trainer_state.pidx}")

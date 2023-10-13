@@ -3,7 +3,6 @@ defaults:
   - gradients: retrieval
   - optimizer: adamw
   - scheduler: linear
-  - monitor: retrieval
   - tweaks: default
   - _self_
 

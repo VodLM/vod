@@ -4,11 +4,11 @@ parameters:
   dense: 1.0
   sparse: 1.0
 metrics:
-  - "ndcg"
-  - "mrr@10"
-  - "mrr@100"
-  - "hitrate@01"
-  - "hitrate@03"
-  - "hitrate@10"
-  - "hitrate@100"
-  - "recall@50"
+  - "ndcg_10"
+  - "mrr_10"
+  - "mrr_100"
+  - "hitrate_01"
+  - "hitrate_03"
+  - "hitrate_10"
+  - "hitrate_100"
+  - "recall_50"

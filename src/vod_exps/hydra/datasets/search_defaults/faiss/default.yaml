@@ -6,7 +6,7 @@ port: -1
 nprobe: 16
 train_size: null
 gpu:
-  use_float16: true
+  use_float16: false
   use_precomputed_tables: false
   keep_indices_on_cpu: false
   verbose: true

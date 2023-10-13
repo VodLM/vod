@@ -1,4 +1,5 @@
 import pathlib
+import re
 from typing import Any, Iterable, Optional
 
 import loguru
@@ -14,14 +15,17 @@ def log(
     loggers: Iterable[FabricLogger],
     step: Optional[int] = None,
     console: bool = False,
-    header: None | str = None,
+    console_exclude: None | str = None,
+    console_header: None | str = None,
 ) -> None:
     """Log metrics to the trainer loggers and optionally to the console."""
     for logger in loggers:
         logger.log_metrics(metrics, step=step)
 
     if console:
-        pretty.pprint_metric_dict(metrics, header=header)
+        rpattern = re.compile(console_exclude) if console_exclude is not None else None
+        metrics_ = {k: v for k, v in metrics.items() if rpattern is None or rpattern.match(k)}
+        pretty.pprint_metric_dict(metrics_, header=console_header)
 
 
 def log_retrieval_batch(
@@ -42,9 +46,6 @@ def log_retrieval_batch(
             skip_special_tokens=True,
             max_sections=max_sections,
         )
-        # console.print(
-        #     "." * os.get_terminal_size().columns + "\n"
-        # )  # <- this is a hack to make sure the console is flushed
         html_path = pathlib.Path("retrieval-batch.html")
         console.save_html(str(html_path), theme=terminal_theme.MONOKAI)
 
