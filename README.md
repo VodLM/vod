@@ -115,10 +115,10 @@ poetry run train
 <summary>🔧 Arguments & config files</summary>
 
 The `train` endpoint uses `hydra` to parse arguments and configure the run.
-See `vod_exps/hydra/main.yaml` for the default configuration. You can override any of the default values by passing them as arguments to the `train` endpoint. For example, to train a T5-base encoder on MSMarco:
+See `vod_exps/hydra/main.yaml` for the default configuration. You can override any of the default values by passing them as arguments to the `train` endpoint. For example, to train a T5-base encoder on MSMarco using FSDP:
 
 ```shell
-poetry run train model/encoder=t5-base batch_size.per_device=4 datasets=msmarco
+poetry run train model/encoder=t5-base batch_size.per_device=4 datasets=msmarco fabric/strategy=fsdp
 ```
 
 
@@ -129,64 +129,7 @@ poetry run train model/encoder=t5-base batch_size.per_device=4 datasets=msmarco
 <details>
 <summary>🐙 Multiple datasets & Sharded search</summary>
 
-VOD is built for multi-dataset training. Youn can multiple training/validation/test datasets, each poiting to a different corpus. Each corpus can be augmented with a specific search backend. For instance this config allows using `Qdrant` as a backend for the `squad` sections and `QuALITY` contexts while using `faiss` to index Wikipedia.
-
-```yaml
-# Base search backends
-search:
-  engines:
-    dense:
-      backend: qdrant
-    sparse:
-      backend: elasticsearch
-
-# Training loop
-training:
-  queries:
-    train:
-      # SQuAD questions <- SQuAD contexts
-      - name: squad.en:train
-        link: squad.en
-      # QuALITY questions <- QuALITY long contexts split into sections
-      - name: quality.en:train
-        link: quality.en
-      # MMLU questions <- Wikipedia
-      - name: mmlu.en:train
-        lint: wiki.en
-      # NaturalQuestions <- Wikipedia
-      - name: nq.en:train
-        link: wiki.en
-    val:
-      - name: squad.en:val
-        link: squad.en
-      - name: quality.en:val
-        link: quality.en
-      - name: mmlu.en:val
-        lint: wiki.en
-      - name: nq.en:val
-        link: wiki.en
-
-  sections:
-    sections:
-      - name: squad.en
-      - name: quality.en
-      - name: wiki.en
-        search:
-          dense:
-            backend: faiss
-            factory: IVF1024,Flat
-
-# Benchmark - list of evaluation tasks
-benchmark:
-  - queries: squad.en:test
-    sections: squad.en
-  - queries: quality.en:test
-    sections: quality.en
-  - queries: mmlu.en:test
-    sections: mmlu.en
-  - queries: nq.en:test
-    sections: wiki.en
-```
+VOD is built for multi-dataset training. Youn can multiple training/validation/test datasets, each pointing to a different corpus. Each corpus can be augmented with a specific search backend. For instance this config allows using `Qdrant` as a backend for the `squad` sections and `QuALITY` contexts while using `faiss` to index Wikipedia.
 
 VOD implement a hybrid sharded search engine. This means that for each indexed corpus, VOD fits multiple search engines (e.g., Elasticsearch + Qdrant). At query time, data points are dispatched to each shard (corpus) based on the `dataset.link` attribute.
 
