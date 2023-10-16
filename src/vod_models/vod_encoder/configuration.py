@@ -87,15 +87,23 @@ class VodT5EncoderConfig(VodEncoderConfigExtension, transformers.T5Config):
     ...
 
 
-class VodRobertaEncoderconfig(VodEncoderConfigExtension, transformers.RobertaConfig):
+class VodRobertaEncoderConfig(VodEncoderConfigExtension, transformers.RobertaConfig):
     """Configuration for a VOD encoder."""
 
     model_type = "vod_roberta_encoder"
     ...
 
 
+class VodXLMRobertaEncoderConfig(VodEncoderConfigExtension, transformers.RobertaConfig):
+    """Configuration for a VOD encoder."""
+
+    model_type = "vod_xlm_roberta_encoder"
+    ...
+
+
 VodEncoderConfig = Union[
     VodBertEncoderConfig,
     VodT5EncoderConfig,
-    VodRobertaEncoderconfig,
+    VodRobertaEncoderConfig,
+    VodXLMRobertaEncoderConfig,
 ]

@@ -17,8 +17,9 @@ from .configuration import (
     VodEncoderConfig,
     VodEncoderInputType,
     VodPoolerConfig,
-    VodRobertaEncoderconfig,
+    VodRobertaEncoderConfig,
     VodT5EncoderConfig,
+    VodXLMRobertaEncoderConfig,
 )
 
 
@@ -278,16 +279,28 @@ transformers.AutoConfig.register("vod_t5_encoder", VodT5EncoderConfig)
 transformers.AutoModel.register(VodT5EncoderConfig, VodT5Encoder)
 
 
-class VodRobertaEncoder(VodEncoderBase[VodRobertaEncoderconfig], transformers.RobertaModel):
+class VodRobertaEncoder(VodEncoderBase[VodRobertaEncoderConfig], transformers.RobertaModel):
     """A Roberta encoder."""
 
-    config_class = VodRobertaEncoderconfig
+    config_class = VodRobertaEncoderConfig
 
 
-VodRobertaEncoderconfig.register_for_auto_class()
+VodRobertaEncoderConfig.register_for_auto_class()
 VodRobertaEncoder.register_for_auto_class("AutoModel")
-transformers.AutoConfig.register("vod_roberta_encoder", VodRobertaEncoderconfig)
-transformers.AutoModel.register(VodRobertaEncoderconfig, VodRobertaEncoder)
+transformers.AutoConfig.register("vod_roberta_encoder", VodRobertaEncoderConfig)
+transformers.AutoModel.register(VodRobertaEncoderConfig, VodRobertaEncoder)
+
+
+class VodXLMRobertaEncoder(VodEncoderBase[VodXLMRobertaEncoderConfig], transformers.RobertaModel):
+    """A XLM Roberta encoder."""
+
+    config_class = VodXLMRobertaEncoderConfig
+
+
+VodXLMRobertaEncoderConfig.register_for_auto_class()
+VodXLMRobertaEncoder.register_for_auto_class("AutoModel")
+transformers.AutoConfig.register("vod_xlm_roberta_encoder", VodXLMRobertaEncoderConfig)
+transformers.AutoModel.register(VodXLMRobertaEncoderConfig, VodXLMRobertaEncoder)
 
 
 class EmbeddingOnlyOverride(VodEncoderBase):
@@ -341,4 +354,13 @@ class VodRobertaEncoderDebug(EmbeddingOnlyOverride, VodRobertaEncoder):
 VodRobertaEncoderDebug.register_for_auto_class()
 
 
-VodEncoder = VodBertEncoder | VodT5Encoder | VodRobertaEncoder
+class VodXLMRobertaEncoderDebug(EmbeddingOnlyOverride, VodXLMRobertaEncoder):
+    """A XLM Roberta encoder for debugging."""
+
+    ...
+
+
+VodXLMRobertaEncoderDebug.register_for_auto_class()
+
+
+VodEncoder = VodBertEncoder | VodT5Encoder | VodRobertaEncoder | VodXLMRobertaEncoder

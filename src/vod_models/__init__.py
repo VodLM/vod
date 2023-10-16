@@ -10,11 +10,14 @@ from .vod_encoder import (
     VodBertEncoderConfig,
     VodBertEncoderDebug,
     VodRobertaEncoder,
-    VodRobertaEncoderconfig,
+    VodRobertaEncoderConfig,
     VodRobertaEncoderDebug,
     VodT5Encoder,
     VodT5EncoderConfig,
     VodT5EncoderDebug,
+    VodXLMRobertaEncoder,
+    VodXLMRobertaEncoderConfig,
+    VodXLMRobertaEncoderDebug,
 )
 from .vod_gradients import (
     Gradients,
