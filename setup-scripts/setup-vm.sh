@@ -38,7 +38,7 @@ bash Mambaforge-$(uname)-$(uname -m).sh
 mamba init
 
 # Setup mamba env
-mamba create --name vod python=3.10
+mamba create --name vod python=3.11
 echo 'mamba activate vod' >>~/.zshrc
 source ~/.zshrc
 mamba install -y -c nvidia cuda
