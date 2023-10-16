@@ -1,6 +1,7 @@
 import typing as typ
 
 import lightning as L
+import rich
 import torch
 import vod_models
 from lightning.fabric import wrappers as fabric_wrappers
@@ -105,6 +106,13 @@ def training_loop(  # noqa: C901, PLR0915
                         if scheduler is not None:
                             scheduler.step()
 
+                        rich.print(
+                            {
+                                "step": state.step,
+                                "optimizer": _extract_learning_rates(optimizer),
+                            }
+                        )
+
                         # Update the chrono
                         if chrono is not None:
                             chrono.stop()
@@ -199,26 +207,7 @@ def training_loop(  # noqa: C901, PLR0915
         logger.warning(
             f"Training period {1+state.pidx} (step={state.step}) " f"interrupted by user (KeyboardInterrupt)."
         )
-
     optimizer.zero_grad()
-
-    # Save and Synch the model parameters
-    # TODO: remove this
-    if state.config.checkpoint_path is not None:
-        logger.info("End of period. Syncing parameters.")
-        io.save_training_state(
-            checkpoint_path=state.config.checkpoint_path,
-            fabric=fabric,
-            model=module,
-            optimizer=optimizer,
-            scheduler=scheduler,
-            trainer_state=state,
-        )
-        io.load_training_state(
-            checkpoint_path=state.config.checkpoint_path,
-            fabric=fabric,
-            module=module,
-        )
 
     fabric.call("on_train_end", fabric=fabric, module=module)
     logger.info(f"End of period. Model hash: `{fingerprint.fingerprint_torch_module(module)}`")

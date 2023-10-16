@@ -35,11 +35,16 @@ def cli(hydra_config: DictConfig) -> None:
 
 def run_exp(hydra_config: DictConfig) -> torch.nn.Module:
     """Train a ranker for a retrieval task."""
-    if hydra_config.load_from is not None:
-        logger.info(f"Loading checkpoint from `{hydra_config.load_from}`")
-        checkpoint_dir = hydra_config.load_from
-        cfg_path = pathlib.Path(hydra_config.load_from, "config.yaml")
+    if hydra_config.resume_from is not None:
+        resume_from = pathlib.Path(hydra_config.resume_from)
+        if not resume_from.exists():
+            raise ValueError(f"Run directory `{resume_from}` does not exist.")
+        logger.info(f"Loading previous run from `{resume_from}`")
+        cfg_path = pathlib.Path(resume_from, "config.yaml")
         hydra_config = omegaconf.OmegaConf.load(cfg_path)  # type: ignore
+        checkpoint_dir = hydra_config.trainer.checkpoint_path
+        # Move to that directory
+        os.chdir(resume_from)
     else:
         checkpoint_dir = None
 

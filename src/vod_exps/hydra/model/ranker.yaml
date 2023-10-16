@@ -1,5 +1,5 @@
 defaults:
-  - encoder: bert-tiny
+  - encoder: mini-lm
   - gradients: retrieval
   - optimizer: adamw
   - scheduler: linear
