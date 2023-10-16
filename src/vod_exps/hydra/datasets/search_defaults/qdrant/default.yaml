@@ -27,6 +27,7 @@ qdrant_body:
       # https://qdrant.tech/documentation/tutorials/optimize/
       # Scalar Quantization is faster than Product Quantization
       type: int8
+      quantile: 0.99
       always_ram: true
   optimizers_config:
     # https://qdrant.tech/documentation/tutorials/optimize/

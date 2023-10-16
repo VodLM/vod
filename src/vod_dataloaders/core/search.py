@@ -104,10 +104,7 @@ def _merge_search_results(
 
     # Normalize the scores (make sure to substract the minimum score from all scores)
     # this is required for the scores to be in comparable ranges before applying the merge function.
-    # NOTE: Here we apply an offset of `1.0`, so all defined scores are at minimum `1.0`.
-    #       The idea is to make defined scores more important than the scores that don't
-    #       appear in the search results. This is not properly tested, but the intuition checks out.
-    normalize.normalize_search_scores_(search_results, offset=1.0)
+    normalize.normalize_search_scores_(search_results, offset=0.0)
 
     # Combine the results using the weights. The combined scores
     # are a weighted sum of the input scores.

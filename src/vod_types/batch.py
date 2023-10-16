@@ -79,14 +79,17 @@ class RealmBatch(Batch):
     # Section extras
     section__id: str
     section__subset_id: None | str = None
-    section__language: str
+    section__language: None | str = None
     # Retrieval label & scores
     section__label: torch.Tensor
     section__idx: torch.Tensor
     section__score: torch.Tensor
-    section__log_weight: torch.Tensor
     section__sparse: torch.Tensor
     section__dense: None | torch.Tensor = None
+    # Priority sampling
+    section__log_weight: torch.Tensor
+    section__lse_pos: torch.Tensor
+    section__lse_neg: torch.Tensor
     # Diagnostics
     diagnostics: dict[str, typ.Any] = {}
 

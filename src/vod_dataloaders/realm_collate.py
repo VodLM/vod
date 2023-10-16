@@ -163,6 +163,8 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
             **_sections_to_dict(
                 sections,
                 sampling_log_weights=samples.log_weights,
+                sampling_lse_pos=samples.lse_pos,
+                sampling_lse_neg=samples.lse_neg,
                 raw_scores=samples.raw_scores,
                 prefix="section__",
                 as_torch=True,
@@ -170,7 +172,11 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
             **attributes,
             diagnostics=diagnostics,
         )
+        # Append the total time for the collate function
         batch.diagnostics["collate_time"] = time.perf_counter() - start_time
+        # Append the mean maximum index of the sampled sections
+        #  This is used to monitor the sampling efficiency
+        batch.diagnostics["max_sampling_id"] = np.mean(samples.rel_ids.max(axis=-1))
         return batch
 
     def search(
@@ -215,6 +221,8 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
 def _sections_to_dict(
     sections: vod_search.RetrievalBatch,
     sampling_log_weights: None | np.ndarray = None,
+    sampling_lse_pos: None | np.ndarray = None,
+    sampling_lse_neg: None | np.ndarray = None,
     raw_scores: None | dict[str, np.ndarray] = None,
     prefix: str = "",
     as_torch: bool = False,
@@ -234,6 +242,12 @@ def _sections_to_dict(
 
     if sampling_log_weights is not None:
         output[f"{prefix}log_weight"] = sampling_log_weights
+
+    if sampling_lse_pos is not None:
+        output[f"{prefix}lse_pos"] = sampling_lse_pos
+
+    if sampling_lse_neg is not None:
+        output[f"{prefix}lse_neg"] = sampling_lse_neg
 
     if as_torch:
         with warnings.catch_warnings():
