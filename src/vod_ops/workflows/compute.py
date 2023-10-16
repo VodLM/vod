@@ -41,11 +41,11 @@ def compute_vectors(
     # check if the store already exists, validate and read it if it does.
     # if the validation fails, delete the store and recompute the vectors.
     if predict_fn.exists():
-        loguru.logger.info(f"{locator} - Found pre-computed vectors.")
+        loguru.logger.info(f"{locator} - Found pre-computed vectors at `{predict_fn.store_path}`")
         is_valid = predict_fn.validate_store(validate_store, raise_exc=False)
         barrier_fn(f"{locator} - Validated existing vector store.")
         if is_valid:
-            loguru.logger.debug(f"{locator} - loading `{predict_fn.store_path}`")
+            loguru.logger.debug(f"{locator} - Loading `{predict_fn.store_path}`")
             return predict_fn.read()
         if fabric.is_global_zero:
             loguru.logger.warning(f"{locator} - Invalid store. Deleting it..")

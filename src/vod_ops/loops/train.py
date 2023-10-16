@@ -12,6 +12,7 @@ from vod_ops.utils.chrono import Chrono
 from vod_ops.utils.format import format_pbar_info
 from vod_ops.utils.trainer_state import TrainerState
 from vod_tools import fingerprint
+from vod_tools.misc.config import flatten_dict
 from vod_tools.misc.progress import IterProgressBar
 
 from .val import validation_loop
@@ -75,7 +76,7 @@ def training_loop(  # noqa: C901, PLR0915
                         fabric=fabric,
                         loss_scaler=1 / state.config.accumulate_grad_batches,
                         no_backward_sync=is_accumulating,
-                        fwd_kws={"mode": "evaluate", "compute_metrics": True},
+                        fwd_kws={"mode": "evaluate"},
                     )
 
                     # Callback - start of batch
@@ -112,21 +113,22 @@ def training_loop(  # noqa: C901, PLR0915
                         if state.step % state.config.log_interval == 0:
                             train_metrics = monitor.compute()  # Synchronize aggregators and compute metrics
                             fabric.log_dict(
-                                metrics={
-                                    # Log Trainer info
-                                    "trainer/epoch": float(state.epoch),
-                                    "trainer/period": float(pidx),
-                                    **{f"trainer/diagnostics/{k}": v for k, v in batch.get("diagnostics", {}).items()},
-                                    **{f"trainer/parameters/{k}": v for k, v in (parameters or {}).items()},
-                                    # Log Model/Optimizer info
-                                    "train/loss": model_output["loss"].detach(),
-                                    **{f"train/{k}": v for k, v in train_metrics.items()},
-                                    **{
-                                        "train/model/diagnostics/{k}": v
-                                        for k, v in model_output.get("diagnostics", {}).items()  # type: ignore
+                                metrics=flatten_dict(
+                                    {
+                                        # Log Trainer data
+                                        "trainer/epoch": float(state.epoch),
+                                        "trainer/period": float(pidx),
+                                        "trainer/diagnostics": batch.get("diagnostics", {}),
+                                        "trainer/parameters": dict(**parameters) if parameters is not None else {},
+                                        # Log loss & metrics data
+                                        "train/loss": model_output["loss"].detach(),
+                                        "train": train_metrics,
+                                        "train/diagnostics": model_output.get("diagnostics", {}),  # type: ignore
+                                        # Log the learning rates
+                                        "optimizer": _extract_learning_rates(optimizer),
                                     },
-                                    **{f"optimizer/{k}": v for k, v in _extract_learning_rates(optimizer).items()},
-                                },
+                                    sep="/",
+                                ),
                                 step=state.step,
                             )
 
@@ -149,10 +151,11 @@ def training_loop(  # noqa: C901, PLR0915
                             module.train()
 
                             # Log the valuation metrics
-                            fabric.log_dict(
-                                metrics={f"val/{k.replace('.', '/')}": v for k, v in val_metrics.items()},
-                                step=state.step,
-                            )
+                            if val_metrics is not None:
+                                fabric.log_dict(
+                                    metrics=flatten_dict({"val": val_metrics}, sep="/"),
+                                    step=state.step,
+                                )
 
                             # Save the model and training state
                             if state.config.checkpoint_path is not None:

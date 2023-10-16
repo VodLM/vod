@@ -8,8 +8,8 @@ defaults:
 
 model:
   tweaks:
-    compile: true
-    gradient_checkpointing: false
+    compile: false
+    gradient_checkpointing: true
 
 resources:
   num_workers: 2
@@ -18,7 +18,7 @@ resources:
 
 batch_size:
   effective: 32
-  per_device: 8
+  per_device: 32
   per_device_eval: 32
   per_device_predict: 2048
 

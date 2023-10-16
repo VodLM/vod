@@ -1,0 +1,52 @@
+# @package _global_
+
+# This config is for ==1xA100 GPUs (80GB)
+
+defaults:
+  - override /fabric/strategy: single_device
+  - _self_
+
+model:
+  encoder:
+    torch_dtype: ${fabric.precision}
+    quantization_config:
+      _target_: transformers.BitsAndBytesConfig
+      load_in_4bit: true
+      llm_int8_threshold: 6.0
+      llm_int8_has_fp16_weight: false
+      bnb_4bit_compute_dtype: ${normalize_dtype:${fabric.precision}}
+      bnb_4bit_use_double_quant: true
+      bnb_4bit_quant_type: nf4
+  tweaks:
+    compile: false
+    gradient_checkpointing: true
+    prepare_for_kbit_training: true
+    force_dtype: ${normalize_dtype:${fabric.precision}}
+    peft_config:
+      peft_type: LORA
+      target_modules:
+        - "*.attention.self.(query|key|value)$"
+        - "*.dense$"
+        - "*.SelfAttention.(q|k|v)$"
+        - "*.DenseReluDense.(wi_0|wi_1|wo)$"
+        - "*.projection$"
+      r: 16
+      lora_alpha: 16
+      lora_dropout: 0.01
+      bias: none
+
+resources:
+  num_workers: 2
+  num_proc: 16
+  omp_threads: ${int_div:${n_cpus:},2}
+
+batch_size:
+  effective: 32
+  per_device: 32
+  per_device_eval: 32
+  per_device_predict: 2048
+
+
+fabric:
+  precision: bf16-mixed
+  accelerator: gpu

@@ -201,7 +201,7 @@ class Predict:
             return False
         store = self.read().open()
         n_samples = len(self._dataset) if isinstance(n_samples, bool) else n_samples
-        logger.info(f"Validating store at `{self.store_path}` with {n_samples} samples.")
+        logger.debug(f"Validating store at `{self.store_path}` with {n_samples} samples.")
         zero_ids = list(_get_zero_vec_indices(store, n_samples=n_samples))
         if raise_exc and len(zero_ids) > 0:
             frac = len(zero_ids) / len(self._dataset)
