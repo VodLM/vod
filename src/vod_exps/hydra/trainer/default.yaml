@@ -8,6 +8,7 @@ n_max_eval: null
 checkpoint_path: ${abs_path:checkpoint}
 metrics:
   - kldiv
+  - entropy
   - ndcg_10
   - mrr_10
   - hitrate_01

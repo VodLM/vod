@@ -5,6 +5,7 @@ parameters:
   sparse: 1.0
 metrics:
   - kldiv
+  - entropy
   - ndcg_10
   - mrr_10
   - mrr_100

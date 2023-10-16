@@ -107,6 +107,36 @@ def _compute_kldiv(
 
 
 @torch.jit.script
+def _compute_min(
+    ranked_relevances: torch.Tensor,  # noqa: ARG001
+    ranked_scores: torch.Tensor,
+    n_positives: torch.Tensor,  # noqa: ARG001
+) -> torch.Tensor:
+    finite_scores = torch.where(torch.isfinite(ranked_scores), ranked_scores, torch.inf)
+    return finite_scores.min(dim=-1).values
+
+
+@torch.jit.script
+def _compute_max(
+    ranked_relevances: torch.Tensor,  # noqa: ARG001
+    ranked_scores: torch.Tensor,
+    n_positives: torch.Tensor,  # noqa: ARG001
+) -> torch.Tensor:
+    finite_scores = torch.where(torch.isfinite(ranked_scores), ranked_scores, -torch.inf)
+    return finite_scores.max(dim=-1).values
+
+
+@torch.jit.script
+def _compute_entropy(
+    ranked_relevances: torch.Tensor,  # noqa: ARG001
+    ranked_scores: torch.Tensor,
+    n_positives: torch.Tensor,  # noqa: ARG001
+) -> torch.Tensor:
+    log_probs = ranked_scores.log_softmax(dim=-1)
+    return -(ranked_scores.exp() * log_probs).sum(dim=-1)
+
+
+@torch.jit.script
 def _compute_ndcg(
     ranked_relevances: torch.Tensor,
     ranked_scores: torch.Tensor,
@@ -201,3 +231,21 @@ class compute_kldiv(ComputeMetric):  # noqa: N801
     """Computes the Kullback-Leibler divergence (KLD)."""
 
     _compute_from_ranked = staticmethod(_compute_kldiv)
+
+
+class compute_min(ComputeMetric):  # noqa: N801
+    """Computes the minimum score."""
+
+    _compute_from_ranked = staticmethod(_compute_min)
+
+
+class compute_max(ComputeMetric):  # noqa: N801
+    """Computes the maximum score."""
+
+    _compute_from_ranked = staticmethod(_compute_max)
+
+
+class compute_entropy(ComputeMetric):  # noqa: N801
+    """Computes the entropy."""
+
+    _compute_from_ranked = staticmethod(_compute_entropy)

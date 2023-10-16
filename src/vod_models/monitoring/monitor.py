@@ -6,8 +6,11 @@ import vod_types as vt
 
 from .aggregator import Agregator, MeanAggregator
 from .functional import (
+    _compute_entropy,
     _compute_hitrate,
     _compute_kldiv,
+    _compute_max,
+    _compute_min,
     _compute_mrr,
     _compute_ndcg,
     _compute_precision,
@@ -23,6 +26,9 @@ RETRIEVAL_METRICS = {
     "recall": _compute_recall,
     "precision": _compute_precision,
     "kldiv": _compute_kldiv,
+    "min": _compute_min,
+    "max": _compute_max,
+    "entropy": _compute_entropy,
 }
 
 
