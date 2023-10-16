@@ -16,6 +16,10 @@ from .vod_encoder import (
     VodT5EncoderConfig,
     VodT5EncoderDebug,
 )
+from .vod_gradients import (
+    Gradients,
+    RetrievalGradients,
+)
 from .vod_systems import (
     Ranker,
     VodSystem,

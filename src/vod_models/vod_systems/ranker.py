@@ -5,12 +5,12 @@ import typing as typ
 import omegaconf as omg
 import torch
 import vod_configs
-import vod_gradients
 import vod_types as vt
 from datasets.fingerprint import Hasher, hashregister
 from transformers import modeling_outputs
 from vod_models import vod_encoder  # type: ignore
 from vod_models.support import FIELD_MAPPING, apply_tweaks
+from vod_models.vod_gradients import Gradients
 from vod_tools import fingerprint
 
 from .base import VodSystem
@@ -25,7 +25,7 @@ class Ranker(VodSystem):
     def __init__(
         self,
         encoder: vod_encoder.VodEncoder,
-        gradients: vod_gradients.Gradients,
+        gradients: Gradients,
         optimizer: None | dict | omg.DictConfig | functools.partial = None,
         scheduler: None | dict | omg.DictConfig | functools.partial = None,
         tweaks: None | dict | omg.DictConfig | vod_configs.TweaksConfig = None,
@@ -128,11 +128,7 @@ class Ranker(VodSystem):
         fwd_output = self.forward(batch)
         return self.gradients(batch=batch, **fwd_output)
 
-    def generate(
-        self,
-        batch: typ.Mapping[str, torch.Tensor],
-        **kws: typ.Any,
-    ) -> typ.Mapping[str, torch.Tensor]:
+    def generate(self, batch: typ.Mapping[str, torch.Tensor], **kws: typ.Any) -> typ.Mapping[str, torch.Tensor]:
         """Generation is not supported."""
         raise NotImplementedError(f"{self.__class__.__name__} does not support generation.")
 
