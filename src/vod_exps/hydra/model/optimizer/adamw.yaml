@@ -3,3 +3,7 @@ defaults:
 
 _target_: torch.optim.AdamW
 eps: 1e-8
+fused: null
+betas:
+  - 0.9
+  - 0.999

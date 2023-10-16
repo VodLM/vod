@@ -93,21 +93,17 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
         return self.search_client.sections
 
     @dump_exceptions_to_file
-    def __call__(
-        self,
-        inputs: list[dict[str, typ.Any]],
-        **kws: typ.Any,
-    ) -> dict[str, torch.Tensor | list[int | float | str]]:
+    def __call__(self, inputs: list[dict[str, typ.Any]], **kws: typ.Any) -> vt.RealmBatch:
         """Collate function for retrieval tasks. This function is used to convert a list of examples into a batch."""
         start_time = time.perf_counter()
         batch = utils.pack_examples(inputs)  # list[dict] -> dict[list]
 
         # Search within each client
         search_results, raw_scores = self.search(batch, top_k=self.config.prefetch_n_sections)
-        diagnostics = {f"diagnostics.{key}": s for key, s in search_results.meta.items()}
+        diagnostics = {f"{key}": s for key, s in search_results.meta.items()}
 
         # Sample the sections given the positive ones and the pool of candidates
-        with utils.BlockTimer(name="diagnostics.sample_sections_time", output=diagnostics):
+        with utils.BlockTimer(name="sample_sections_time", output=diagnostics):
             samples = sample.sample_search_results(
                 search_results=search_results,
                 raw_scores=raw_scores,
@@ -136,19 +132,19 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
         flat_sections_content: dict[str, list[typ.Any]] = self.sections[flat_ids]
 
         # Tokenize the sections and add them to the output
-        with utils.BlockTimer(name="diagnostics.tokenize_time", output=diagnostics):
-            tokenized_querys = _tokenize(
+        with utils.BlockTimer(name="tokenize_time", output=diagnostics):
+            tokenized_queries = _tokenize(
                 batch,
                 tokenizer=self.tokenizer_encoder,
                 template=self.templates.query,
-                prefix="query.",
+                prefix="query__",
                 **self.config.tokenizer_encoder.kwargs(),
             )
             tokenized_sections = _tokenize(
                 flat_sections_content,
                 tokenizer=self.tokenizer_encoder,
                 template=self.templates.section,
-                prefix="section.",
+                prefix="section__",
                 output_shape=sections.indices.shape,
                 **self.config.tokenizer_encoder.kwargs(),
             )
@@ -161,21 +157,26 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
         )
 
         # Make the final batch and potentially cast attributes to `torch.Tensor``
-        batch = {
-            **tokenized_querys,
+        batch = vt.RealmBatch(
+            **tokenized_queries,
             **tokenized_sections,
             **_sections_to_dict(
                 sections,
                 sampling_log_weights=samples.log_weights,
+                sampling_lse_pos=samples.lse_pos,
+                sampling_lse_neg=samples.lse_neg,
                 raw_scores=samples.raw_scores,
-                prefix="section.",
+                prefix="section__",
                 as_torch=True,
             ),
             **attributes,
-            **diagnostics,
-            **{f"diagnostics.parameters.{k}": v for k, v in self.parameters.items()},
-        }
-        batch["diagnostics.collate_time"] = time.perf_counter() - start_time
+            diagnostics=diagnostics,
+        )
+        # Append the total time for the collate function
+        batch.diagnostics["collate_time"] = time.perf_counter() - start_time
+        # Append the mean maximum index of the sampled sections
+        #  This is used to monitor the sampling efficiency
+        batch.diagnostics["max_sampling_id"] = np.mean(samples.rel_ids.max(axis=-1))
         return batch
 
     def search(
@@ -220,6 +221,8 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
 def _sections_to_dict(
     sections: vod_search.RetrievalBatch,
     sampling_log_weights: None | np.ndarray = None,
+    sampling_lse_pos: None | np.ndarray = None,
+    sampling_lse_neg: None | np.ndarray = None,
     raw_scores: None | dict[str, np.ndarray] = None,
     prefix: str = "",
     as_torch: bool = False,
@@ -239,6 +242,12 @@ def _sections_to_dict(
 
     if sampling_log_weights is not None:
         output[f"{prefix}log_weight"] = sampling_log_weights
+
+    if sampling_lse_pos is not None:
+        output[f"{prefix}lse_pos"] = sampling_lse_pos
+
+    if sampling_lse_neg is not None:
+        output[f"{prefix}lse_neg"] = sampling_lse_neg
 
     if as_torch:
         with warnings.catch_warnings():
@@ -291,18 +300,16 @@ def _get_extra_attributes(
         "language": None,
         "subset_id": None,
         "subset_ids": None,
-        "link": None,
-        "dset_uid": None,
     }
 
     # Handle query attributes
     query_extras = {}
-    query_extras["query.section_ids"] = batch[SECTION_IDS]
+    query_extras["query__section_ids"] = batch[SECTION_IDS]
     for k, fn in extras_keys_ops.items():
         if k not in batch:
             continue
         v = batch[k]
-        query_extras[f"query.{k}"] = fn(v) if fn is not None else v
+        query_extras[f"query__{k}"] = fn(v) if fn is not None else v
 
     # Handle section attributes
     sections_extras = {}
@@ -318,7 +325,7 @@ def _get_extra_attributes(
                 v = v.reshape(sections_shape)
             elif isinstance(v, list):
                 v = utils.reshape_flat_list(v, sections_shape)
-        sections_extras[f"section.{k}"] = v
+        sections_extras[f"section__{k}"] = v
 
     return {**query_extras, **sections_extras}
 

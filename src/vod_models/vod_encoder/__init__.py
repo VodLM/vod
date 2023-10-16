@@ -2,8 +2,9 @@ from .configuration import (
     VodBertEncoderConfig,
     VodEncoderInputType,
     VodPoolerConfig,
-    VodRobertaEncoderconfig,
+    VodRobertaEncoderConfig,
     VodT5EncoderConfig,
+    VodXLMRobertaEncoderConfig,
 )
 from .modeling import (
     VodBertEncoder,
@@ -14,4 +15,6 @@ from .modeling import (
     VodRobertaEncoderDebug,
     VodT5Encoder,
     VodT5EncoderDebug,
+    VodXLMRobertaEncoder,
+    VodXLMRobertaEncoderDebug,
 )

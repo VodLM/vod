@@ -16,6 +16,7 @@ class VodPoolerConfig:
     output_activation: None | ActivationMethod = None
     output_norm: None | NormMethod = None
     agg_method: AggMethod = "mean"
+    scaler: None | float = None
 
     def __init__(
         self,
@@ -23,6 +24,7 @@ class VodPoolerConfig:
         output_activation: None | ActivationMethod = None,
         output_norm: None | NormMethod = None,
         agg_method: AggMethod = "mean",
+        scaler: None | float = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
@@ -30,6 +32,7 @@ class VodPoolerConfig:
         self.output_activation = output_activation
         self.output_norm = output_norm
         self.agg_method = agg_method
+        self.scaler = scaler
 
     def to_dict(self) -> dict[str, Any]:
         """Convert config to dict."""
@@ -38,6 +41,7 @@ class VodPoolerConfig:
             "output_activation": self.output_activation,
             "output_norm": self.output_norm,
             "agg_method": self.agg_method,
+            "scaler": self.scaler,
         }
 
 
@@ -83,15 +87,23 @@ class VodT5EncoderConfig(VodEncoderConfigExtension, transformers.T5Config):
     ...
 
 
-class VodRobertaEncoderconfig(VodEncoderConfigExtension, transformers.RobertaConfig):
+class VodRobertaEncoderConfig(VodEncoderConfigExtension, transformers.RobertaConfig):
     """Configuration for a VOD encoder."""
 
     model_type = "vod_roberta_encoder"
     ...
 
 
+class VodXLMRobertaEncoderConfig(VodEncoderConfigExtension, transformers.RobertaConfig):
+    """Configuration for a VOD encoder."""
+
+    model_type = "vod_xlm_roberta_encoder"
+    ...
+
+
 VodEncoderConfig = Union[
     VodBertEncoderConfig,
     VodT5EncoderConfig,
-    VodRobertaEncoderconfig,
+    VodRobertaEncoderConfig,
+    VodXLMRobertaEncoderConfig,
 ]

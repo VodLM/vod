@@ -7,7 +7,8 @@ defaults:
 search:
   dense:
     backend: faiss
-    factory: IVFauto,Flat
+    factory: IVFauto,PQ32x8
+    train_size: 1_000_000
     nprobe: 32
   sparse:
     backend: elasticsearch

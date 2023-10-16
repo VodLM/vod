@@ -79,7 +79,7 @@ def test_labeled_priority_sampling(
     mu_b = np.sum(numpy_ops.softmax_1d(unorm_log_p[labels == 0]) * f[labels == 0]) if np.sum(labels == 0) > 0 else None
 
     mu_a_hats, mu_b_hats = [], []
-    z_, log_w_, ls_ = sample.labeled_priority_sampling(
+    z_, log_w_, ls_, _ = sample.labeled_priority_sampling(
         unorm_log_p[None].repeat(n_trials, axis=0),
         labels[None].repeat(n_trials, axis=0),
         k_positive=k_positive,

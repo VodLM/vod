@@ -1,4 +1,3 @@
-import copy
 import functools
 import math
 import typing as typ
@@ -6,12 +5,12 @@ import typing as typ
 import omegaconf as omg
 import torch
 import vod_configs
-import vod_gradients
+import vod_types as vt
 from datasets.fingerprint import Hasher, hashregister
 from transformers import modeling_outputs
 from vod_models import vod_encoder  # type: ignore
-from vod_models.monitor import RetrievalMonitor
 from vod_models.support import FIELD_MAPPING, apply_tweaks
+from vod_models.vod_gradients import Gradients
 from vod_tools import fingerprint
 
 from .base import VodSystem
@@ -26,15 +25,13 @@ class Ranker(VodSystem):
     def __init__(
         self,
         encoder: vod_encoder.VodEncoder,
-        gradients: vod_gradients.Gradients,
+        gradients: Gradients,
         optimizer: None | dict | omg.DictConfig | functools.partial = None,
         scheduler: None | dict | omg.DictConfig | functools.partial = None,
-        monitor: None | RetrievalMonitor = None,
         tweaks: None | dict | omg.DictConfig | vod_configs.TweaksConfig = None,
     ):
         super().__init__(optimizer=optimizer, scheduler=scheduler)
         self.gradients = gradients
-        self.monitor = monitor
 
         # Prepare the encoder with optional optimizations
         if not isinstance(tweaks, vod_configs.TweaksConfig):
@@ -63,13 +60,20 @@ class Ranker(VodSystem):
         return embedding
 
     @staticmethod
-    def _fetch_field_inputs(batch: dict, field: str) -> None | tuple[torch.Tensor, torch.Tensor]:
-        keys = [f"{field}.{key}" for key in ["input_ids", "attention_mask"]]
+    def _fetch_field_inputs(
+        batch: typ.Mapping[str, torch.Tensor],
+        field: str,
+    ) -> None | tuple[torch.Tensor, torch.Tensor]:
+        keys = [f"{field}__{key}" for key in ["input_ids", "attention_mask"]]
         if not all(key in batch for key in keys):
             return None
         return (batch[keys[0]], batch[keys[1]])
 
-    def encode(self, batch: dict, **kws: typ.Any) -> dict[str, torch.Tensor]:
+    def encode(
+        self,
+        batch: typ.Mapping[str, torch.Tensor],
+        **kws: typ.Any,
+    ) -> typ.Mapping[str, torch.Tensor]:
         """Computes the embeddings for the query and the document.
 
         NOTE: queries and documents are concatenated so representations can be obainted with a single encoder pass.
@@ -117,46 +121,16 @@ class Ranker(VodSystem):
 
     def evaluate(
         self,
-        batch: dict[str, typ.Any],
-        *,
-        filter_output: bool = True,
-        compute_metrics: bool = True,
+        batch: vt.RealmBatch,
         **kws: typ.Any,
-    ) -> dict[str, typ.Any]:  # noqa: ARG002
-        """Run a forward pass, compute the gradients, compute & return the metrics."""
+    ) -> vt.ModelOutput:  # noqa: ARG002
+        """Run a forward pass and compute the gradients."""
         fwd_output = self.forward(batch)
-        grad_output = self.gradients({**batch, **fwd_output})
-        if compute_metrics:
-            return self._compute_metrics(batch, grad_output, filter_output=filter_output)
-        return grad_output
+        return self.gradients(batch=batch, **fwd_output)
 
-    def _compute_metrics(
-        self,
-        batch: dict[str, torch.Tensor],
-        grad_output: dict[str, torch.Tensor],
-        filter_output: bool = True,
-    ) -> dict[str, torch.Tensor]:
-        output = copy.copy(grad_output)
-        if self.monitor is not None:
-            with torch.no_grad():
-                output.update(self.monitor(output))
-
-        # filter the output and append diagnostics
-        if filter_output:
-            output = _filter_model_output(output)  # type: ignore
-        output.update({k: v for k, v in batch.items() if k.startswith("diagnostics.")})
-        return output
-
-    def generate(self, batch: dict[str, typ.Any], **kws: typ.Any) -> dict[str, typ.Any]:
+    def generate(self, batch: typ.Mapping[str, torch.Tensor], **kws: typ.Any) -> typ.Mapping[str, torch.Tensor]:
         """Generation is not supported."""
         raise NotImplementedError(f"{self.__class__.__name__} does not support generation.")
-
-
-def _filter_model_output(output: dict[str, typ.Any]) -> dict[str, typ.Any]:
-    def _filter_fn(key: str, _: torch.Tensor) -> bool:
-        return not str(key).startswith("_")
-
-    return {key: value for key, value in output.items() if _filter_fn(key, value)}
 
 
 @hashregister(Ranker)

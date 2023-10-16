@@ -15,7 +15,7 @@ version_files = [
   "src/vod_search/__init__.py:__version__",
   "src/vod_tools/__init__.py:__version__",
   "src/vod_types/__init__.py:__version__",
-  "src/vod_workflows/__init__.py:__version__",
+  "src/vod_ops/__init__.py:__version__",
   "pyproject.toml:version",
   "VERSION",
 ]
@@ -37,7 +37,7 @@ packages = [
   { from = "src", include = "vod_search" },
   { from = "src", include = "vod_tools" },
   { from = "src", include = "vod_types" },
-  { from = "src", include = "vod_workflows" },
+  { from = "src", include = "vod_ops" },
   { from = "src", include = "vod_exps" },
 ]
 
@@ -47,10 +47,10 @@ train = 'vod_exps.train:cli'
 [tool.poetry.dependencies]
 python = ">=3.10,<3.12"
 hydra-core = "^1.3.1"
-loguru = "^0.6.0"
+loguru = "^0.7.0"
 datasets = "^2.10.0"
-torch = { version = "^2", allow-prereleases = true }
-lightning = ">=2.0.8"
+torch = { version = ">=2", allow-prereleases = true }
+lightning = ">=2.1.0"
 wandb = "^0.14.0"
 transformers = "^4.26.1"
 jinja2 = ">=2.0"

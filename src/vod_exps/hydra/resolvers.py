@@ -105,6 +105,7 @@ def register_omgeaconf_resolvers() -> None:  # noqa: C901, PLR0915
             "bfloat16": "bfloat16",
             "bf16": "bfloat16",
             "bf16-mixed": "bfloat16",
+            "bf16-true": "bfloat16",
             "float32": "float32",
             "16": "float16",
             "32": "float32",
@@ -136,7 +137,6 @@ def register_omgeaconf_resolvers() -> None:  # noqa: C901, PLR0915
     omg.OmegaConf.register_new_resolver("whoami", lambda: os.environ.get("USER"))
     omg.OmegaConf.register_new_resolver("hostname", socket.gethostname)
     omg.OmegaConf.register_new_resolver("getcwd", os.getcwd)
-    omg.OmegaConf.register_new_resolver("int", lambda x: int(x))
     omg.OmegaConf.register_new_resolver("int_mul", _int_mul)
     omg.OmegaConf.register_new_resolver("int_add", _add_int)
     omg.OmegaConf.register_new_resolver("int_div", _int_div)
@@ -146,7 +146,10 @@ def register_omgeaconf_resolvers() -> None:  # noqa: C901, PLR0915
     omg.OmegaConf.register_new_resolver("git_hash", _git_revision_hash)
     omg.OmegaConf.register_new_resolver("git_hash_short", _git_revision_short_hash)
     omg.OmegaConf.register_new_resolver("git_branch_name", _git_branch_name)
-    omg.OmegaConf.register_new_resolver("eval", lambda x: eval(x))
+    omg.OmegaConf.register_new_resolver("eval", eval)
+    omg.OmegaConf.register_new_resolver("bool", bool)
+    omg.OmegaConf.register_new_resolver("int", int)
+    omg.OmegaConf.register_new_resolver("float", float)
     omg.OmegaConf.register_new_resolver("os_expanduser", os.path.expanduser)
     omg.OmegaConf.register_new_resolver("rdn_name", randomname.get_name)
     omg.OmegaConf.register_new_resolver("default_trainer_accelerator", _default_trainer_accelerator)

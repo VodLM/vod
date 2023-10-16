@@ -411,7 +411,7 @@ def _make_qdrant_body(dim: int, body: Optional[dict[str, Any]]) -> dict[str, Any
             **body.get("vectors_config", {}),
         }
     )
-    if "quantization_config" in body:
+    if "quantization_config" in body and body["quantization_config"] is not None:
         quant_conf = body.pop("quantization_config")
         keys = set(quant_conf.keys())
         if len(keys) > 1:

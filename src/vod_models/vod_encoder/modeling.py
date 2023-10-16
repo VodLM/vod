@@ -2,7 +2,6 @@ import abc
 import functools
 import io
 import json
-import os
 import typing as typ
 
 import numpy as np
@@ -11,8 +10,6 @@ import transformers
 import xxhash
 from torch import nn
 from transformers import modeling_outputs
-from transformers.configuration_utils import PretrainedConfig
-from typing_extensions import Self
 
 from .configuration import (
     AggMethod,
@@ -20,8 +17,9 @@ from .configuration import (
     VodEncoderConfig,
     VodEncoderInputType,
     VodPoolerConfig,
-    VodRobertaEncoderconfig,
+    VodRobertaEncoderConfig,
     VodT5EncoderConfig,
+    VodXLMRobertaEncoderConfig,
 )
 
 
@@ -125,6 +123,7 @@ class VodPooler(torch.nn.Module):
     activation: None | nn.Module
     norm_fn: None | typ.Callable[[torch.Tensor], torch.Tensor]
     output_vector_size: int
+    scaler: nn.Parameter
 
     def __init__(self, config: dict | VodPoolerConfig, backbone_output_size: int):
         super().__init__()
@@ -159,6 +158,9 @@ class VodPooler(torch.nn.Module):
                 "l1": functools.partial(torch.nn.functional.normalize, p=1),
             }[config.output_norm]
 
+        # Temperature
+        self.scaler = nn.Parameter(torch.tensor(config.scaler or 1.0), requires_grad=False)
+
     def forward(self, hidden_states: torch.Tensor, *, attention_mask: torch.Tensor) -> torch.Tensor:
         """Pools the model output and project. Note that the activation is applied last."""
         pooled_output = self.aggregator(hidden_states, attention_mask)
@@ -168,7 +170,7 @@ class VodPooler(torch.nn.Module):
             pooled_output = self.activation(pooled_output)
         if self.norm_fn:
             pooled_output = self.norm_fn(pooled_output)
-        return pooled_output
+        return pooled_output / self.scaler
 
     def get_encoding_shape(self) -> tuple[int, ...]:
         """The output dimension of the encoder."""
@@ -252,48 +254,6 @@ class VodEncoderBase(typ.Generic[Cfg], transformers.PreTrainedModel, abc.ABC):
         """The name of the base model."""
         return self.config.name_or_path
 
-    @classmethod
-    def from_pretrained(
-        cls: typ.Type[Self],
-        pretrained_model_name_or_path: str | os.PathLike | None,
-        *model_args: typ.Any,
-        config: PretrainedConfig | str | os.PathLike | None = None,
-        cache_dir: str | os.PathLike | None = None,
-        ignore_mismatched_sizes: bool = False,
-        force_download: bool = False,
-        local_files_only: bool = False,
-        token: str | bool | None = None,
-        revision: str = "main",
-        use_safetensors: None | bool = None,
-        torch_dtype: None | str | int | torch.dtype = None,
-        **kws: typ.Any,
-    ) -> Self:
-        """Load a pretrained model."""
-        if isinstance(torch_dtype, (str, int)):
-            torch_dtype = {
-                "float16": torch.float16,
-                "bfloat16": torch.bfloat16,
-                "bf16": torch.bfloat16,
-                "bf16-mixed": torch.bfloat16,
-                "float32": torch.float32,
-                "16": torch.float16,
-                "32": torch.float32,
-            }[str(torch_dtype)]
-        return super().from_pretrained(
-            pretrained_model_name_or_path,
-            *model_args,
-            config=config,
-            cache_dir=cache_dir,
-            ignore_mismatched_sizes=ignore_mismatched_sizes,
-            force_download=force_download,
-            local_files_only=local_files_only,
-            token=token,
-            revision=revision,
-            use_safetensors=use_safetensors,  # type: ignore
-            torch_dtype=torch_dtype,
-            **kws,
-        )
-
 
 class VodBertEncoder(VodEncoderBase[VodBertEncoderConfig], transformers.BertModel):
     """A BERT encoder."""
@@ -319,16 +279,28 @@ transformers.AutoConfig.register("vod_t5_encoder", VodT5EncoderConfig)
 transformers.AutoModel.register(VodT5EncoderConfig, VodT5Encoder)
 
 
-class VodRobertaEncoder(VodEncoderBase[VodRobertaEncoderconfig], transformers.RobertaModel):
+class VodRobertaEncoder(VodEncoderBase[VodRobertaEncoderConfig], transformers.RobertaModel):
     """A Roberta encoder."""
 
-    config_class = VodRobertaEncoderconfig
+    config_class = VodRobertaEncoderConfig
 
 
-VodRobertaEncoderconfig.register_for_auto_class()
+VodRobertaEncoderConfig.register_for_auto_class()
 VodRobertaEncoder.register_for_auto_class("AutoModel")
-transformers.AutoConfig.register("vod_roberta_encoder", VodRobertaEncoderconfig)
-transformers.AutoModel.register(VodRobertaEncoderconfig, VodRobertaEncoder)
+transformers.AutoConfig.register("vod_roberta_encoder", VodRobertaEncoderConfig)
+transformers.AutoModel.register(VodRobertaEncoderConfig, VodRobertaEncoder)
+
+
+class VodXLMRobertaEncoder(VodEncoderBase[VodXLMRobertaEncoderConfig], transformers.RobertaModel):
+    """A XLM Roberta encoder."""
+
+    config_class = VodXLMRobertaEncoderConfig
+
+
+VodXLMRobertaEncoderConfig.register_for_auto_class()
+VodXLMRobertaEncoder.register_for_auto_class("AutoModel")
+transformers.AutoConfig.register("vod_xlm_roberta_encoder", VodXLMRobertaEncoderConfig)
+transformers.AutoModel.register(VodXLMRobertaEncoderConfig, VodXLMRobertaEncoder)
 
 
 class EmbeddingOnlyOverride(VodEncoderBase):
@@ -382,4 +354,13 @@ class VodRobertaEncoderDebug(EmbeddingOnlyOverride, VodRobertaEncoder):
 VodRobertaEncoderDebug.register_for_auto_class()
 
 
-VodEncoder = VodBertEncoder | VodT5Encoder | VodRobertaEncoder
+class VodXLMRobertaEncoderDebug(EmbeddingOnlyOverride, VodXLMRobertaEncoder):
+    """A XLM Roberta encoder for debugging."""
+
+    ...
+
+
+VodXLMRobertaEncoderDebug.register_for_auto_class()
+
+
+VodEncoder = VodBertEncoder | VodT5Encoder | VodRobertaEncoder | VodXLMRobertaEncoder

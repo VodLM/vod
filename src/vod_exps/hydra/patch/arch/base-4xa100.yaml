@@ -3,8 +3,8 @@
 # This config is for 4xA100 GPUs (80GB)
 
 defaults:
-  - _self_
   - override /fabric/strategy: ddp
+  - _self_
 
 resources:
   num_workers: 2
@@ -18,5 +18,5 @@ batch_size:
   per_device_predict: 2048
 
 fabric:
-  precision: bf16-mixed
+  precision: bf16-true
   accelerator: gpu

@@ -1,2 +1,0 @@
-_target_: vod_models.RetrievalMonitor
-metrics: [ "ndcg", "mrr@10", "hitrate@01", "hitrate@03" ]

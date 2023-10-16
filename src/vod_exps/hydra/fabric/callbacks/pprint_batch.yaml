@@ -1,5 +1,5 @@
 pprint_batch:
-  _target_: vod_workflows.callbacks.PprintBatch
+  _target_: vod_ops.callbacks.PprintBatch
   training: true
   validation: false
   testing: false

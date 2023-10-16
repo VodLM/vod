@@ -1,4 +1,0 @@
-_target_: lightning.fabric.strategies.DeepSpeedStrategy
-stage: 2
-offload_optimizer: true
-offload_parameters: true

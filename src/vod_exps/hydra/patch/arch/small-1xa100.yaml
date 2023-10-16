@@ -3,8 +3,8 @@
 # This config is for ==1xA100 GPU (80GB)
 
 defaults:
-  - _self_
   - override /fabric/strategy: single_device
+  - _self_
 
 model:
   tweaks:
@@ -23,5 +23,5 @@ batch_size:
   per_device_predict: 4096
 
 fabric:
-  precision: bf16-mixed
+  precision: bf16-true
   accelerator: gpu

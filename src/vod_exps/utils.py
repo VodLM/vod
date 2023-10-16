@@ -15,8 +15,8 @@ import vod_models
 import yaml
 from lightning.fabric.loggers.logger import Logger as FabricLogger
 from lightning.pytorch.loggers.wandb import WandbLogger
+from vod_ops.callbacks import Callback
 from vod_tools.misc.config import config_to_flat_dict
-from vod_workflows.callbacks import Callback
 
 T = typ.TypeVar("T")
 

@@ -30,5 +30,5 @@ exp_version: v1.0
 code_version: ${code_version:}
 exp_suffix: ""
 exp_name: vod
-load_from: null
 export_path: trained_model
+resume_from: null # resume training -- path to a previous run

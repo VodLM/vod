@@ -1,4 +1,4 @@
-mamba create -y --name vod python=3.10
+mamba create -y --name vod python=3.11
 mamba activate vod
 mamba install -y -c nvidia cuda cudnn cudatoolkit
 mamba install -y -c conda-forge cmake==3.23.1 libblas liblapack mkl mkl-include swig==4.1.1 numpy openblas libgcc

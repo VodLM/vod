@@ -1,9 +1,10 @@
+import math
 import typing as typ
 
 from typing_extensions import Self, Type
 from vod_configs.utils.base import StrictModel
 
-ParameterScheduleModes = typ.Literal["constant", "linear", "step"]
+ParameterScheduleModes = typ.Literal["constant", "linear", "step", "exponential"]
 
 
 class ParameterSchedule(StrictModel):
@@ -15,7 +16,7 @@ class ParameterSchedule(StrictModel):
     period: int = int(1e9)
     offset: int = 0
 
-    def __call__(self, step: float) -> float:
+    def __call__(self, step: float) -> float:  # noqa: PLR0911
         """Return the value of the parameter at the given step."""
         if self.mode == "constant":
             return self.value
@@ -31,6 +32,11 @@ class ParameterSchedule(StrictModel):
             if step < self.period:
                 return self.start
             return self.value
+
+        if self.mode == "exponential":
+            if step < self.offset:
+                return self.start
+            return self.start + (self.value - self.start) * (1 - math.exp(-1.0 * (step - self.offset) / self.period))
 
         raise ValueError(f"Unknown mode: {self.mode}")
 
