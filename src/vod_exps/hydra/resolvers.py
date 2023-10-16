@@ -105,6 +105,7 @@ def register_omgeaconf_resolvers() -> None:  # noqa: C901, PLR0915
             "bfloat16": "bfloat16",
             "bf16": "bfloat16",
             "bf16-mixed": "bfloat16",
+            "bf16-true": "bfloat16",
             "float32": "float32",
             "16": "float16",
             "32": "float32",

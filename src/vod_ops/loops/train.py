@@ -1,7 +1,6 @@
 import typing as typ
 
 import lightning as L
-import rich
 import torch
 import vod_models
 from lightning.fabric import wrappers as fabric_wrappers
@@ -105,13 +104,6 @@ def training_loop(  # noqa: C901, PLR0915
                         optimizer.zero_grad()
                         if scheduler is not None:
                             scheduler.step()
-
-                        rich.print(
-                            {
-                                "step": state.step,
-                                "optimizer": _extract_learning_rates(optimizer),
-                            }
-                        )
 
                         # Update the chrono
                         if chrono is not None:

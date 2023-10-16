@@ -48,5 +48,5 @@ batch_size:
 
 
 fabric:
-  precision: bf16-mixed
+  precision: bf16-true
   accelerator: gpu

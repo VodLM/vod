@@ -62,13 +62,23 @@ def run_exp(hydra_config: DictConfig) -> torch.nn.Module:
     fabric: L.Fabric = instantiate(hydra_config.fabric)
     fabric.launch()
 
-    # Init the model, optimizer and scheduler
-    logger.debug(f"Instantiating model <{hydra_config.model._target_}> (seed={hydra_config.seed})")
+    # Setup the random seeds
     if hydra_config.seed is not None:
+        logger.debug(f"Setting random seed to `{hydra_config.seed}`")
         fabric.seed_everything(hydra_config.seed)
-    module: vod_models.Ranker = instantiate(hydra_config.model)
+
+    # Init the model
+    logger.debug(f"Instantiating model <{hydra_config.model._target_}>")
+    with fabric.init_module():
+        module: vod_models.Ranker = instantiate(hydra_config.model)
+
+    # Setup the optimizer and scheduler
     optimizer = module.get_optimizer()
     scheduler = module.get_scheduler(optimizer)
+
+    # Setup the model and optimizer using the Fabric
+    logger.debug("Setting up model and optimizer using `lightning.Fabric`")
+    fabric_module, fabric_optimizer = fabric.setup(module, optimizer)
 
     # Log config & setup logger
     _customize_logger(fabric=fabric)
@@ -79,10 +89,6 @@ def run_exp(hydra_config: DictConfig) -> torch.nn.Module:
             extras={"model_stats": exp_utils.get_model_stats(module)},
             fabric=fabric,
         )
-
-    # Setup the optimizer and fabric
-    logger.debug("Setting up model and optimizer using `lightning.Fabric`")
-    fabric_module, fabric_optimizer = fabric.setup(module, optimizer)
 
     # Train the model
     return recipes.periodic_training(
