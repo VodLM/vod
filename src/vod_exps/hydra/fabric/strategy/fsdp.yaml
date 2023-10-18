@@ -3,4 +3,5 @@ cpu_offload: false
 mixed_precision: null
 auto_wrap_policy: null
 sharding_strategy: null
+activation_checkpointing: null
 state_dict_type: sharded

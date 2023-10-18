@@ -55,7 +55,7 @@ class VodSystem(torch.nn.Module):
         self,
         batch: typ.Mapping[str, torch.Tensor],
         **kws: typ.Any,
-    ) -> vt.ModelOutput:  # noqa: ARG002
+    ) -> vt.RealmOutput:  # noqa: ARG002
         """Run a forward pass and compute the gradients."""
         ...
 

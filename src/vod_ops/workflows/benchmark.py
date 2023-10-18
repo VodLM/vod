@@ -95,7 +95,7 @@ def benchmark_retrieval(
                             continue
                         monitor.update(
                             batch=batch,
-                            model_output=vt.ModelOutput(
+                            model_output=vt.RealmOutput(
                                 loss=None,
                                 retriever_scores=retriever_scores,
                             ),

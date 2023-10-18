@@ -1,9 +1,10 @@
 __version__ = "0.2.0"
 
+
 from .batch import (
     Batch,
-    ModelOutput,
     RealmBatch,
+    RealmOutput,
 )
 from .concatenated import (
     ConcatenatedSequences,

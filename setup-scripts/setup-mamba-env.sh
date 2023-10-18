@@ -9,9 +9,9 @@ pip3 install torch torchvision torchaudio --index-url https://download.pytorch.o
 bash scripts/build-faiss.sh
 
 
-# strings /home/vlievin/mambaforge/envs/vod/lib/libstdc++.so.6 | grep GLIBCXX_3.4.30
-# export LD_LIBRARY_PATH=/home/vlievin/mambaforge/envs/vod/lib:$LD_LIBRARY_PATH
+# strings /home/$USER/mambaforge/envs/vod/lib/libstdc++.so.6 | grep GLIBCXX_3.4.30
+# export LD_LIBRARY_PATH=/home/$USER/mambaforge/envs/vod/lib:$LD_LIBRARY_PATH
 
 # Fix GLIBCXX_3.4.30 linking error
-# strings /home/vlievin/mambaforge/envs/vod/lib/libstdc++.so.6 | grep GLIBCXX_3.4.30
-# export LD_LIBRARY_PATH=/home/vlievin/mambaforge/envs/vod/lib:$LD_LIBRARY_PATH
+# strings /home/$USER/mambaforge/envs/vod/lib/libstdc++.so.6 | grep GLIBCXX_3.4.30
+# export LD_LIBRARY_PATH=/home/$USER/mambaforge/envs/vod/lib:$LD_LIBRARY_PATH

@@ -33,7 +33,7 @@ class RetrievalGradients(Gradients):
         batch: vt.RealmBatch,
         query_encoding: torch.Tensor,  # the encoding of the queries
         section_encoding: torch.Tensor,  # the encoding of the documents/sections
-    ) -> vt.ModelOutput:
+    ) -> vt.RealmOutput:
         """Compute the KL divergence between the model and the data."""
         # 1. Determine the masked sections
         is_padding = batch.section__score.isinf() & (batch.section__score < 0)
@@ -85,7 +85,7 @@ class RetrievalGradients(Gradients):
                 continue
             diagnostics[key] = _compute_kld(retriever_logprobs, ref_scores).mean().detach()
 
-        return vt.ModelOutput(
+        return vt.RealmOutput(
             loss=loss,
             retriever_scores=retriever_scores,
             diagnostics=diagnostics,

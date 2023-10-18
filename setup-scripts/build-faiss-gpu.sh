@@ -51,6 +51,6 @@ cd $CURR_DIR
 # > poetry run pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 
 # Solve missing GLIBCXX_3.4.30 (append to your source file):
-# strings /home/vlievin/mambaforge/envs/vod/lib/libstdc++.so.6 | grep GLIBCXX_3.4.30
-# export LD_LIBRARY_PATH=/home/vlievin/mambaforge/envs/vod/lib:$LD_LIBRARY_PATH
+# strings /home/$USER/mambaforge/envs/vod/lib/libstdc++.so.6 | grep GLIBCXX_3.4.30
+# export LD_LIBRARY_PATH=/home/$USER/mambaforge/envs/vod/lib:$LD_LIBRARY_PATH
 

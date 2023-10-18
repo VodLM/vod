@@ -18,6 +18,7 @@ import torch
 import transformers
 import yaml
 from typing_extensions import Self, Type
+from vod_tools.misc.config import flatten_dict
 
 _PPRINT_PREC = 2
 
@@ -108,6 +109,20 @@ def _(x: Number) -> Properties:
     )
 
 
+@infer_properties.register(dict)
+def _(x: dict) -> Properties:
+    """Infer properties of a number."""
+    return Properties(
+        py_type=type(x),
+        dtype="-",
+        shape="-",
+        device="-",
+        min="-",
+        max="-",
+        mean="-",
+    )
+
+
 @infer_properties.register(list)
 @infer_properties.register(set)
 @infer_properties.register(tuple)
@@ -180,6 +195,7 @@ def _format_py_type(x: str) -> str:
         "list": BASE_STYLES["py"],
         "tuple": BASE_STYLES["py"],
         "set": BASE_STYLES["py"],
+        "dict": BASE_STYLES["py"],
         "None": "bold red",
         "Tensor": BASE_STYLES["torch"],
         "ndarray": BASE_STYLES["np"],
@@ -242,7 +258,9 @@ def pprint_batch(
     for key in fields:
         table.add_column(key, justify="center")
 
-    for key, value in batch.items():
+    # Convert dict to flat dict
+    flat_batch = flatten_dict(batch)
+    for key, value in flat_batch.items():
         try:
             props = infer_properties(value)
             attrs = {f: getattr(props, f) for f in fields}
@@ -250,7 +268,6 @@ def pprint_batch(
         except Exception as e:
             loguru.logger.warning(f"Error while inferring properties for `{key}={value}` : {e}")
             table.add_row(key, *["[red]ERROR[/red]"])
-            raise e
 
     if console is None:
         console = rich.console.Console()
@@ -307,7 +324,7 @@ def pprint_retrieval_batch(  # noqa: C901, PLR0915, PLR0912
     query_keys = ["id", "retrieval_ids", "subset_ids", "language"]
     query_keys = [f"query__{key}" for key in query_keys]
     section_keys = ["id", "subset_id", "score", "log_weight", "label", "language"]
-    section_keys = [f"section.{key}" for key in section_keys]
+    section_keys = [f"section__{key}" for key in section_keys]
     need_expansion = [
         "section__input_ids",
         "section__attention_mask",

@@ -45,6 +45,7 @@ class Monitor(abc.ABC, torch.nn.Module):
     def synchronize(self) -> None:
         """Synchronize aggregators between process."""
         if torch.distributed.is_initialized():
+            torch.distributed.barrier()
             for agg in self.aggregators.values():
                 agg.all_reduce()
 
@@ -83,11 +84,11 @@ class RetrievalMonitor(Monitor):
     def update(
         self,
         batch: vt.RealmBatch | typ.Mapping[str, typ.Any],
-        model_output: vt.ModelOutput | typ.Mapping[str, typ.Any],
+        model_output: vt.RealmOutput | typ.Mapping[str, typ.Any],
     ) -> None:
         """Compute metrics and update the aggregators."""
         batch = vt.RealmBatch.cast(batch)
-        model_output = vt.ModelOutput.cast(model_output)
+        model_output = vt.RealmOutput.cast(model_output)
 
         # Rank the relevances and scores by decreasing score value
         ranked_relevances, ranked_scores, n_positives = prepare_for_metric_computation(

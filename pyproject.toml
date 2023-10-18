@@ -10,7 +10,6 @@ version_files = [
   "src/vod_dataloaders/__init__.py:__version__",
   "src/vod_datasets/__init__.py:__version__",
   "src/vod_exps/__init__.py:__version__",
-  "src/vod_gradients/__init__.py:__version__",
   "src/vod_models/__init__.py:__version__",
   "src/vod_search/__init__.py:__version__",
   "src/vod_tools/__init__.py:__version__",
@@ -30,15 +29,16 @@ description = "Variational Open-Domain: A scalable experimentation framework for
 authors = ["Valentin Liévin <vl@raffle.ai>"]
 readme = "README.md"
 packages = [
+  { from = "src", include = "vod_configs" },
   { from = "src", include = "vod_dataloaders" },
   { from = "src", include = "vod_datasets" },
-  { from = "src", include = "vod_gradients" },
+  { from = "src", include = "vod_exps" },
   { from = "src", include = "vod_models" },
   { from = "src", include = "vod_search" },
   { from = "src", include = "vod_tools" },
   { from = "src", include = "vod_types" },
   { from = "src", include = "vod_ops" },
-  { from = "src", include = "vod_exps" },
+
 ]
 
 [tool.poetry.scripts]
