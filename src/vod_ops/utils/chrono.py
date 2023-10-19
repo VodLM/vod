@@ -1,4 +1,8 @@
+import functools
 import time
+import typing as typ
+
+from loguru import logger
 
 
 class Chrono:
@@ -45,3 +49,22 @@ class Chrono:
     def get_avg_laps_per_second(self) -> float:
         """Return the average number of laps per second."""
         return len(self._laps) / self.get_total_time()
+
+
+T = typ.TypeVar("T")
+P = typ.ParamSpec("P")
+
+
+def log_exec_time_decorator(fn: typ.Callable[P, T]) -> typ.Callable[P, T]:
+    """A wrapper to log the elapsed time of a function using loguru."""
+
+    @functools.wraps(fn)
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
+        chrono = Chrono()
+        chrono.start()
+        output = fn(*args, **kwargs)
+        chrono.stop()
+        logger.debug(f"{fn.__name__} - took {chrono.get_avg_time():.3f}s")
+        return output
+
+    return wrapper

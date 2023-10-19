@@ -66,7 +66,7 @@ def sample_search_results(
     # Compute the rank of the document sampled with the smaller score.
     # This is used to debug the sampling step.
     min_score = np.amin(np.where(np.isfinite(scores), scores, np.inf), axis=-1)
-    max_sampling_id = np.sum(scores_ref >= min_score[..., None], axis=-1)
+    max_sampling_id = np.sum((scores_ref >= min_score[..., None]).astype(np.float32), axis=-1)
 
     return PrioritySampledSections(
         samples=vt.RetrievalBatch(

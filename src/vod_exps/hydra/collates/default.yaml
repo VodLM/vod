@@ -7,7 +7,7 @@ train:
   max_pos_sections: 8 # Maximum number of positive sections for each query
   support_size: 100 # Maximum number of sections to sample from
   prefetch_n_sections: 128 # Number of sections to fetch from each search service
-  do_sample: false # Whether to sample or use the top-k sections
+  do_sample: true # Whether to sample or use the top-k sections
   in_batch_negatives: false # Whether to share sections across all queries in a batch
   # Base args
   templates: ${templates}

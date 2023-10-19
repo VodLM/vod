@@ -211,6 +211,7 @@ def _run_benchmarks(
             collate_config=config.collates.benchmark,
             dataloader_config=config.dataloaders.benchmark,
             cache_dir=cache_dir,
+            device=module.device,
         )
         if metrics is not None:
             metrics: typ.Mapping[str, float | torch.Tensor] = {
