@@ -3,5 +3,5 @@ _partial_: true
 max_lr: ${model.optimizer.lr}
 total_steps: ${trainer.max_steps} # <- add a buffer so we make sure we don't hit the limit
 pct_start: 0.3
-div_factor: 1e4
-final_div_factor: 1e1
+div_factor: 25
+final_div_factor: 1e4

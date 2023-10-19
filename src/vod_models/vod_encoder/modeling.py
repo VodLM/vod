@@ -192,6 +192,8 @@ class VodEncoderBase(typ.Generic[Cfg], transformers.PreTrainedModel, abc.ABC):
     def __init__(self, config: Cfg, *args: typ.Any, **kwargs: typ.Any) -> None:
         super().__init__(config, **kwargs)
         self.vod_pooler = VodPooler(config.pooler, self.config.hidden_size)
+        if hasattr(self, "pooler"):
+            self.pooler = None  # Make sure to get rid of the original pooler layer.
 
     def _backbone_forward(
         self,

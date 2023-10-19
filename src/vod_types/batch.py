@@ -1,6 +1,7 @@
 import typing as typ
 
 import torch
+from torch.utils import _pytree
 from typing_extensions import Self, Type
 
 from .mapping import MappingMixin
@@ -94,7 +95,7 @@ class RealmBatch(Batch):
     diagnostics: dict[str, typ.Any] = {}
 
 
-class ModelOutput(Batch):
+class RealmOutput(Batch):
     """Represents the output of a model."""
 
     loss: torch.Tensor
@@ -102,3 +103,18 @@ class ModelOutput(Batch):
     retriever_scores: torch.Tensor
     # Diagnostic information
     diagnostics: dict[str, typ.Any] = {}
+
+
+# NOTE: Register custom data structures in pytree nodes
+#       See: https://github.com/pytorch/pytorch/issues/106690#issuecomment-1667272494
+#       If not registered, you may get unexpected results when working with `torch.distributed` !
+_pytree._register_pytree_node(
+    RealmOutput,
+    _pytree._dict_flatten,
+    lambda values, context: RealmOutput(_pytree._dict_unflatten(values, context)),
+)
+_pytree._register_pytree_node(
+    RealmBatch,
+    _pytree._dict_flatten,
+    lambda values, context: RealmBatch(_pytree._dict_unflatten(values, context)),
+)

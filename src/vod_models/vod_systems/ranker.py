@@ -15,6 +15,8 @@ from vod_tools import fingerprint
 
 from .base import VodSystem
 
+_FIELD_MAPPING_KEYS = sorted(FIELD_MAPPING.keys())
+
 
 class Ranker(VodSystem):
     """Deep ranking model using a Transformer encoder as a backbone."""
@@ -37,6 +39,9 @@ class Ranker(VodSystem):
         if not isinstance(tweaks, vod_configs.TweaksConfig):
             tweaks = vod_configs.TweaksConfig.parse(**tweaks)  # type: ignore
 
+        # NOTE: when using torch's DDP, both checkpointing and torch.compile()
+        #       must be applied after the model is wrapped in DDP.
+        #       TODO: re-implement the handling of "tweaks" in a more elegant way.
         self.encoder = apply_tweaks(encoder, tweaks)  # type: ignore
 
     def get_encoding_shape(self) -> tuple[int, ...]:
@@ -83,7 +88,8 @@ class Ranker(VodSystem):
         attention_mask: None | torch.Tensor = None
 
         # Collect fields_data and concatenate `input_ids`/`attention_mask`.
-        for field, output_key in FIELD_MAPPING.items():
+        for field in _FIELD_MAPPING_KEYS:
+            output_key = FIELD_MAPPING[field]
             inputs = self._fetch_field_inputs(batch, field)
             if inputs is None:
                 continue
@@ -123,10 +129,10 @@ class Ranker(VodSystem):
         self,
         batch: vt.RealmBatch,
         **kws: typ.Any,
-    ) -> vt.ModelOutput:  # noqa: ARG002
+    ) -> vt.RealmOutput:  # noqa: ARG002
         """Run a forward pass and compute the gradients."""
-        fwd_output = self.forward(batch)
-        return self.gradients(batch=batch, **fwd_output)
+        encoded = self.encode(batch)
+        return self.gradients(batch=batch, **encoded)
 
     def generate(self, batch: typ.Mapping[str, torch.Tensor], **kws: typ.Any) -> typ.Mapping[str, torch.Tensor]:
         """Generation is not supported."""

@@ -13,7 +13,7 @@ class PrioritySampledSections:
 
     samples: vt.RetrievalBatch
     log_weights: np.ndarray
-    rel_ids: np.ndarray
+    max_sampling_id: np.ndarray
     lse_pos: np.ndarray
     lse_neg: np.ndarray
     raw_scores: dict[str, np.ndarray]
@@ -63,13 +63,18 @@ def sample_search_results(
     for key, scores_key in raw_scores.items():
         sampled_raw_scores[key] = np.take_along_axis(scores_key, local_ids, axis=-1)
 
+    # Compute the rank of the document sampled with the smaller score.
+    # This is used to debug the sampling step.
+    min_score = np.amin(np.where(np.isfinite(scores), scores, np.inf), axis=-1)
+    max_sampling_id = np.sum((scores_ref >= min_score[..., None]).astype(np.float32), axis=-1)
+
     return PrioritySampledSections(
         samples=vt.RetrievalBatch(
             indices=indices,
             scores=scores,
             labels=labels,
         ),
-        rel_ids=local_ids,
+        max_sampling_id=max_sampling_id,
         lse_pos=constants[..., 0],
         lse_neg=constants[..., 1],
         log_weights=log_weights,

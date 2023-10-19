@@ -8,6 +8,7 @@ import rich
 import torch
 import transformers
 import vod_configs
+from lightning_utilities.core.rank_zero import rank_zero_only
 from loguru import logger
 from vod_tools import pretty
 
@@ -65,6 +66,7 @@ class PprintBatch(Callback):
             tokenizer_encoder = tokenizer_encoder.instantiate()
         self.tokenizer_encoder = tokenizer_encoder
 
+    @rank_zero_only
     @safe_exec_decorator
     def _on_batch_start(
         self,

@@ -37,7 +37,7 @@ def training_loop(  # noqa: C901, PLR0915
     try:
         # infer the number of training and valid steps
         n_train_steps, n_val_steps = _infer_train_val_steps(state=state, fabric=fabric, val_dl=val_dl)
-        with IterProgressBar(disable=not fabric.is_global_zero, redirect_stderr=False) as pbar:
+        with IterProgressBar(disable=not fabric.is_global_zero) as pbar:
             train_pbar = pbar.add_task(
                 f"Period {1+state.pidx}",
                 total=n_train_steps,
@@ -54,9 +54,10 @@ def training_loop(  # noqa: C901, PLR0915
             optim_steps_counter = 0
             monitor = RetrievalMonitor(state.config.metrics)
             monitor.to(dtype=torch.float64, device=fabric.device)
+
             while not state.must_stop:
                 for batch in train_dl:
-                    if state.step >= state.next_period_start_step or state.must_stop:
+                    if state.step >= period_last_step or state.must_stop:
                         break
 
                     # Callback - start of batch
@@ -68,13 +69,15 @@ def training_loop(  # noqa: C901, PLR0915
                         batch_idx=loop_step,
                     )
 
-                    # Forward/backward pass
+                    # Determine whether gradients need to be synchronized on this step
                     is_accumulating = (1 + loop_step) % state.config.accumulate_grad_batches != 0
+
+                    # Forward/backward pass
                     model_output = _forward_backward(
                         batch=batch,
                         fwd_fn=module,
                         fabric=fabric,
-                        loss_scaler=1 / state.config.accumulate_grad_batches,
+                        loss_scaler=1.0 / state.config.accumulate_grad_batches,
                         no_backward_sync=is_accumulating,
                         fwd_kws={"mode": "evaluate"},
                     )
@@ -111,7 +114,8 @@ def training_loop(  # noqa: C901, PLR0915
 
                         # Log the training metrics
                         if state.step % state.config.log_interval == 0:
-                            train_metrics = monitor.compute()  # Synchronize aggregators and compute metrics
+                            # Synchronize aggregators and compute metrics
+                            train_metrics = monitor.compute(synchronize=True)
                             fabric.log_dict(
                                 metrics=flatten_dict(
                                     {
@@ -139,6 +143,7 @@ def training_loop(  # noqa: C901, PLR0915
 
                         # Validation and checkpointing
                         if state.must_stop or state.step % min(n_train_steps, state.config.val_check_interval) == 0:
+                            fabric.barrier("eval_start")
                             module.eval()
                             val_metrics = validation_loop(
                                 module=module,
@@ -159,6 +164,10 @@ def training_loop(  # noqa: C901, PLR0915
 
                             # Save the model and training state
                             if state.config.checkpoint_path is not None:
+                                logger.debug(
+                                    "Saving training state - model hash: {model_fingerprint}",
+                                    model_fingerprint=fingerprint.fingerprint_torch_module(module),
+                                )
                                 io.save_training_state(
                                     checkpoint_path=state.config.checkpoint_path,
                                     fabric=fabric,
@@ -173,18 +182,19 @@ def training_loop(  # noqa: C901, PLR0915
                             parameters.update(state.get_parameters())
 
                         # Update the progress bar
-                        pbar.update(
-                            train_pbar,
-                            refresh=True,
-                            completed=optim_steps_counter,
-                            speed=chrono.get_avg_laps_per_second() if chrono is not None else None,
-                            info=format_pbar_info(
-                                state,
-                                train_metrics=train_metrics,
-                                val_metrics=val_metrics,
-                                keys=state.config.pbar_keys,
-                            ),
-                        )
+                        if fabric.is_global_zero:
+                            pbar.update(
+                                train_pbar,
+                                refresh=True,
+                                completed=optim_steps_counter,
+                                speed=chrono.get_avg_laps_per_second() if chrono is not None else None,
+                                info=format_pbar_info(
+                                    state,
+                                    train_metrics=train_metrics,
+                                    val_metrics=val_metrics,
+                                    keys=state.config.pbar_keys,
+                                ),
+                            )
 
                         # Start the chono
                         if chrono is None:
@@ -200,7 +210,6 @@ def training_loop(  # noqa: C901, PLR0915
             f"Training period {1+state.pidx} (step={state.step}) " f"interrupted by user (KeyboardInterrupt)."
         )
     optimizer.zero_grad()
-
     fabric.call("on_train_end", fabric=fabric, module=module)
     logger.info(f"End of period. Model hash: `{fingerprint.fingerprint_torch_module(module)}`")
     return state

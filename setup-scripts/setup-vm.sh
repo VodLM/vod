@@ -26,7 +26,7 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/too
 
 # Enable scrolling
 echo "termcapinfo xterm* ti@:te@" >>~/.screenrc
-
+echo "set -g mouse on" >>~/.tmux.conf
 
 # Install CUDA | find your version at `https://developer.nvidia.com/cuda-downloads`
 wget https://developer.download.nvidia.com/compute/cuda/12.1.1/local_installers/cuda_12.1.1_530.30.02_linux.run
@@ -59,7 +59,7 @@ else
     sudo apt-get install elasticsearch
 
 # Instlall ICU plugins
-sudo bin/elasticsearch-plugin install analysis-icu
+sudo /usr/share/elasticsearch/bin/elasticsearch-plugin install analysis-icu
 
 # (Optional) Setup elasticsearch config: open file and comment out the security stuff
 sudo nano /etc/elasticsearch/elasticsearch.yml
@@ -96,5 +96,5 @@ docker run -p 6333:6333 -p 6334:6334 \
 
 
 # Fix GLIBCXX_3.4.30 linking error
-# strings /home/vlievin/mambaforge/envs/vod/lib/libstdc++.so.6 | grep GLIBCXX_3.4.30
-# export LD_LIBRARY_PATH=/home/vlievin/mambaforge/envs/vod/lib:$LD_LIBRARY_PATH
+# strings /home/$USER/mambaforge/envs/vod/lib/libstdc++.so.6 | grep GLIBCXX_3.4.30
+# export LD_LIBRARY_PATH=/home/$USER/mambaforge/envs/vod/lib:$LD_LIBRARY_PATH

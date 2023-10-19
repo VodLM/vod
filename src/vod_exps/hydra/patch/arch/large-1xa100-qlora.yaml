@@ -46,7 +46,6 @@ batch_size:
   per_device_eval: 32
   per_device_predict: 2048
 
-
 fabric:
-  precision: bf16-true
+  precision: bf16-mixed
   accelerator: gpu

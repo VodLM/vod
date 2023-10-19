@@ -176,7 +176,7 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
         batch.diagnostics["collate_time"] = time.perf_counter() - start_time
         # Append the mean maximum index of the sampled sections
         #  This is used to monitor the sampling efficiency
-        batch.diagnostics["max_sampling_id"] = np.mean(samples.rel_ids.max(axis=-1))
+        batch.diagnostics["max_sampling_id"] = np.mean(samples.max_sampling_id)
         return batch
 
     def search(

@@ -8,6 +8,7 @@ import lightning as L
 import torch
 import transformers
 from lightning.fabric import wrappers as fabric_wrappers
+from lightning_utilities.core.rank_zero import rank_zero_only
 from loguru import logger
 
 from .base import Callback
@@ -49,6 +50,7 @@ class ExportModule(Callback):
         if self._on_train_end:
             self._export_module(module=module)
 
+    @rank_zero_only
     def _export_module(self, *, module: torch.nn.Module) -> None:
         """Export the model.
 

@@ -28,6 +28,7 @@ def benchmark_retrieval(
     dataloader_config: vod_configs.DataLoaderConfig,
     cache_dir: pathlib.Path,
     score_keys: None | list[str] = None,
+    device: None | torch.device = None,
 ) -> dict[str, float]:
     """Evaluate the cached retriever by benchmarking the scores given by the Realm dataloader."""
     with vod_search.build_hybrid_search_engine(
@@ -37,8 +38,12 @@ def benchmark_retrieval(
         cache_dir=cache_dir,
         dense_enabled=helpers.is_engine_enabled(config.parameters, "dense"),
         sparse_enabled=True,
+        skip_setup=not fabric.is_global_zero,
+        barrier_fn=fabric.barrier,
+        fabric=fabric,
         serve_on_gpu=config.serve_search_on_gpu,
     ) as master:
+        fabric.barrier("Initiating dataloaders")
         search_client = master.get_client()
 
         # Instantiate the dataloader
@@ -60,7 +65,13 @@ def benchmark_retrieval(
 
         # Run the evaluation
         score_keys = score_keys or DEFAULT_RETRIEVAL_SCORE_KEYS
-        monitors = {key: RetrievalMonitor(metrics=config.metrics).to(dtype=torch.float64) for key in score_keys}
+        monitors = {
+            key: RetrievalMonitor(metrics=config.metrics).to(
+                dtype=torch.float64,
+                device=device,
+            )
+            for key in score_keys
+        }
         diagnostics = collections.defaultdict(list)
 
         # Infer the number of steps
@@ -71,6 +82,7 @@ def benchmark_retrieval(
             num_steps = max(1, -(-config.n_max_eval // eff_batch_size))
 
         # Callback - test starts
+        fabric.barrier("on_test_start")
         fabric.call("on_test_start", fabric=fabric, module=None)
         try:
             with IterProgressBar(disable=not fabric.is_global_zero, redirect_stderr=False) as pbar:
@@ -95,7 +107,7 @@ def benchmark_retrieval(
                             continue
                         monitor.update(
                             batch=batch,
-                            model_output=vt.ModelOutput(
+                            model_output=vt.RealmOutput(
                                 loss=None,
                                 retriever_scores=retriever_scores,
                             ),
@@ -119,6 +131,6 @@ def benchmark_retrieval(
         fabric.call("on_test_end", fabric=fabric, module=None)
 
         # aggregate the metrics and the diagnostics
-        metrics_dict = {key: monitor.compute() for key, monitor in monitors.items()}
+        metrics_dict = {key: monitor.compute(synchronize=True) for key, monitor in monitors.items()}
         metrics_dict["diagnostics"] = {k: np.mean(v) for k, v in diagnostics.items()}
         return flatten_dict(metrics_dict, sep="/")

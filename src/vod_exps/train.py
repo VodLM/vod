@@ -63,9 +63,9 @@ def run_exp(hydra_config: DictConfig) -> torch.nn.Module:
     fabric.launch()
 
     # Setup the random seeds
-    if hydra_config.seed is not None:
-        logger.debug(f"Setting random seed to `{hydra_config.seed}`")
-        fabric.seed_everything(hydra_config.seed)
+    seed = fabric.broadcast(hydra_config.seed)
+    logger.debug(f"Setting random seed to `{seed}`")
+    fabric.seed_everything(seed, workers=True)
 
     # Init the model
     logger.debug(f"Instantiating model <{hydra_config.model._target_}>")
