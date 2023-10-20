@@ -104,7 +104,7 @@ class TokenizerCollateConfig(_BaseCollateConfig):
     tokenizer: TokenizerConfig
 
 
-class RetrievalCollateConfig(_BaseCollateConfig):
+class RealmCollateConfig(_BaseCollateConfig):
     """Defines a configuration for the retrieval collate function."""
 
     tokenizer_encoder: TokenizerConfig

@@ -61,13 +61,13 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
     tokenizer_encoder: transformers.PreTrainedTokenizerBase
     tokenizer_lm: None | transformers.PreTrainedTokenizerBase
     search_client: vod_search.HybridSearchClient
-    config: vod_configs.RetrievalCollateConfig
+    config: vod_configs.RealmCollateConfig
 
     def __init__(
         self,
         *,
         search_client: vod_search.HybridSearchClient,
-        config: vod_configs.RetrievalCollateConfig,
+        config: vod_configs.RealmCollateConfig,
         parameters: None | typ.MutableMapping = None,
     ):
         self.search_client = search_client

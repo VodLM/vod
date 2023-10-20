@@ -30,7 +30,7 @@ def spawn_search_and_train(
     val_queries: schemas.QueriesWithVectors,
     sections: schemas.SectionsWithVectors,
     # Configs
-    collate_config: vod_configs.RetrievalCollateConfig,
+    collate_config: vod_configs.RealmCollateConfig,
     train_dataloader_config: vod_configs.DataLoaderConfig,
     eval_dataloader_config: vod_configs.DataLoaderConfig,
     dl_sampler: None | vod_dataloaders.DlSamplerFactory = None,

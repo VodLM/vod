@@ -213,19 +213,15 @@ def _run_benchmarks(
             cache_dir=cache_dir,
             device=module.device,
         )
-        if metrics is not None:
-            metrics: typ.Mapping[str, float | torch.Tensor] = {
-                k: fabric.all_reduce(v, reduce_op="mean") for k, v in metrics.items()  # type: ignore
-            }
-            if fabric.is_global_zero:
-                header = f"{bench_loc} - Period {state.pidx + 1}"
-                logging.log(
-                    {f"{task.queries.identifier}/{k}": v for k, v in metrics.items()},
-                    loggers=fabric.loggers,
-                    console_header=header,
-                    step=state.step,
-                    console=True,
-                    console_exclude="(?!diagnostics)",
-                )
+        if metrics is not None and fabric.is_global_zero:
+            header = f"{bench_loc} - Period {state.pidx + 1}"
+            logging.log(
+                {f"{task.queries.identifier}/{k}": v for k, v in metrics.items()},
+                loggers=fabric.loggers,
+                console_header=header,
+                step=state.step,
+                console=True,
+                console_exclude="(?!diagnostics)",
+            )
 
     barrier("Benchmarks completed.")

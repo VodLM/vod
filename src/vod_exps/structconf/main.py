@@ -28,8 +28,8 @@ class DataLoaderConfigs(vcfg.StrictModel):
 class CollateConfigs(vcfg.StrictModel):
     """Configures the collate functions for the train, eval, and static data loaders."""
 
-    train: vcfg.RetrievalCollateConfig
-    benchmark: vcfg.RetrievalCollateConfig
+    train: vcfg.RealmCollateConfig
+    benchmark: vcfg.RealmCollateConfig
     predict: vcfg.TokenizerCollateConfig
 
     @pydantic.field_validator("train", "benchmark", "predict", mode="before")

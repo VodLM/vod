@@ -43,8 +43,11 @@ class MeanAggregator(Agregator):
     def update(self, values: torch.Tensor) -> None:
         """Update the metrics stats."""
         values = values.detach()
-        self._total += values.sum()
-        self._count += values.numel()
+        values_no_nan = values[~torch.isnan(values)]
+        if values_no_nan.numel() == 0:
+            return
+        self._total += values_no_nan.sum()
+        self._count += values_no_nan.numel()
 
     def get(self) -> torch.Tensor:
         """Return the metric value averaged over all updates."""

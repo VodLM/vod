@@ -98,12 +98,13 @@ def _compute_kldiv(
     ranked_scores = ranked_scores.masked_fill(~is_finite, -torch.inf)
     model_logprobs = ranked_scores.log_softmax(dim=-1)
     # compute the KL divergence
-    kl_div_terms = torch.where(
+    kl = torch.where(
         data_logprobs.isfinite() & model_logprobs.isfinite(),
         data_logprobs.exp() * (data_logprobs - model_logprobs),
         0.0,
-    )
-    return kl_div_terms.sum(dim=-1)
+    ).sum(dim=-1)
+    # Set NaN when no positive is present
+    return torch.where(n_positives > 0, kl, torch.nan)
 
 
 @torch.jit.script
@@ -132,8 +133,10 @@ def _compute_entropy(
     ranked_scores: torch.Tensor,
     n_positives: torch.Tensor,  # noqa: ARG001
 ) -> torch.Tensor:
+    is_finite = torch.isfinite(ranked_scores)
     log_probs = ranked_scores.log_softmax(dim=-1)
-    return -(ranked_scores.exp() * log_probs).sum(dim=-1)
+    entropy_terms = -(ranked_scores.exp() * log_probs)
+    return torch.where(is_finite, entropy_terms, 0.0).sum(dim=-1)
 
 
 @torch.jit.script
@@ -181,7 +184,7 @@ class ComputeMetric(abc.ABC):
     _compute_from_ranked: _ComputeMetricFromRanked
 
     @classmethod
-    def __call__(
+    def compute(
         cls: Type[Self], *, relevances: torch.Tensor, scores: torch.Tensor, topk: None | int = None
     ) -> torch.Tensor:
         """Compute a retrieval metric."""

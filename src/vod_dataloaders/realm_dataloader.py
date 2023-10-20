@@ -30,7 +30,7 @@ class RealmDataloader(torch_data.DataLoader[dict[str, typ.Any]]):
         vectors: None | dict[K, vt.Sequence[np.ndarray]] = None,
         # Parameters for the Collate function
         search_client: vod_search.HybridSearchClient,
-        collate_config: vod_configs.RetrievalCollateConfig,
+        collate_config: vod_configs.RealmCollateConfig,
         parameters: None | typ.MutableMapping = None,
         # Base `torch.utils.data.Dataloader` arguments
         batch_size: int | None = 1,

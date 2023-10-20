@@ -1,4 +1,5 @@
 from .functional import (
+    ComputeMetric,
     compute_entropy,
     compute_hitrate,
     compute_kldiv,

@@ -24,7 +24,7 @@ def benchmark_retrieval(
     *,
     fabric: L.Fabric,
     config: vod_configs.BenchmarkConfig,
-    collate_config: vod_configs.RetrievalCollateConfig,
+    collate_config: vod_configs.RealmCollateConfig,
     dataloader_config: vod_configs.DataLoaderConfig,
     cache_dir: pathlib.Path,
     score_keys: None | list[str] = None,
