@@ -19,13 +19,13 @@ class RetrievalGradients(Gradients):
         guidance: GuidanceType = "zero",
         guidance_weight: float = 0.0,
         self_supervision_weight: float = 0.0,
-        anchor_weight: float = 0.0,
+        score_decay: float = 0.0,
     ):
         super().__init__()
         self.guidance = guidance
         self.guidance_weight = guidance_weight
         self.self_supervision_weight = self_supervision_weight
-        self.anchor_weight = anchor_weight
+        self.score_decay = score_decay
 
     def __call__(
         self,
@@ -110,10 +110,10 @@ class RetrievalGradients(Gradients):
             loss_self_supervision = _self_supervision_loss(data_targets, retriever_logprobs, n_positives)
             loss += self.self_supervision_weight * loss_self_supervision
             aux_losses["self_supervision"] = loss_self_supervision
-        if self.anchor_weight > 0:
-            anchor_loss = _anchor_loss(retriever_scores)
-            loss += self.anchor_weight * anchor_loss
-            aux_losses["anchor"] = anchor_loss
+        if self.score_decay > 0:
+            score_decay_loss = _score_decay_loss(retriever_scores)
+            loss += self.score_decay * score_decay_loss
+            aux_losses["score_decay"] = score_decay_loss
 
         return loss, aux_losses
 
@@ -145,7 +145,7 @@ def _self_supervision_loss(
     )
 
 
-def _anchor_loss(retriever_scores: torch.Tensor) -> torch.Tensor:
+def _score_decay_loss(retriever_scores: torch.Tensor) -> torch.Tensor:
     """Center the scores around 0, ensure better numerical stability for downstream vector search."""
     return retriever_scores[retriever_scores.isfinite()].pow(2).mean()
 
