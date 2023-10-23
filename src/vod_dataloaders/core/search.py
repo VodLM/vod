@@ -132,13 +132,13 @@ async def _execute_search(payloads: list[dict[str, typ.Any]]) -> list[vt.Retriev
     async def _async_search_one(args: dict[str, typ.Any]) -> vt.RetrievalBatch:
         """Execute a single search with retries.
 
-        NOTE: make sure to copy args before passing them to this function, so we don't modify the original dict.
-              and ensure safe retries.
+        NOTE: make sure to copy args before passing them to this function,
+              so we don't modify the original dict and ensure safe retries.
         """
         args = copy.copy(args)  # shallow copy to avoid modifying the original dict
         client = args.pop("client")
         start_time = time.perf_counter()
-        result = await client.async_search(**client)
+        result = await client.async_search(**args)
         result.meta["search_time"] = time.perf_counter() - start_time
         return result
 

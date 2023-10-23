@@ -47,7 +47,7 @@ class RetrievalGradients(Gradients):
         retriever_logprobs = retriever_scores.log_softmax(dim=-1)
 
         # 3. compute the reference probabilities for each pair of (question, section)
-        data_targets = _cast_data_targets(batch.section__label, is_padding)
+        data_targets = _cast_data_targets(batch.section__relevance, is_padding)
 
         # 4 compute the number of positives
         n_positives = data_targets.sum(dim=1)

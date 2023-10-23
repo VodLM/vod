@@ -11,6 +11,7 @@ import torch
 from vod_configs import __version__ as VERSION
 
 SEED = randint(0, 100_000)  # noqa: N806, S311
+RANDNAME = randomname.get_name()
 
 
 def register_omgeaconf_resolvers() -> None:  # noqa: C901, PLR0915
@@ -151,7 +152,7 @@ def register_omgeaconf_resolvers() -> None:  # noqa: C901, PLR0915
     omg.OmegaConf.register_new_resolver("int", int)
     omg.OmegaConf.register_new_resolver("float", float)
     omg.OmegaConf.register_new_resolver("os_expanduser", os.path.expanduser)
-    omg.OmegaConf.register_new_resolver("rdn_name", randomname.get_name)
+    omg.OmegaConf.register_new_resolver("rdn_name", lambda *_: RANDNAME)
     omg.OmegaConf.register_new_resolver("default_trainer_accelerator", _default_trainer_accelerator)
     omg.OmegaConf.register_new_resolver("default_trainer_single_device", _default_trainer_single_device)
     omg.OmegaConf.register_new_resolver("infer_model_type", _infer_model_type)

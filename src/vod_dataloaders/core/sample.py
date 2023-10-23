@@ -11,7 +11,7 @@ from vod_dataloaders.core import numpy_ops as npo
 class PrioritySampledSections:
     """A holder for the samples and the log-weights."""
 
-    samples: vt.RetrievalBatch
+    batch: vt.RetrievalBatch
     log_weights: np.ndarray
     max_sampling_id: np.ndarray
     lse_pos: np.ndarray
@@ -69,7 +69,7 @@ def sample_search_results(
     max_sampling_id = np.sum((scores_ref >= min_score[..., None]).astype(np.float32), axis=-1)
 
     return PrioritySampledSections(
-        samples=vt.RetrievalBatch(
+        batch=vt.RetrievalBatch(
             indices=indices,
             scores=scores,
             labels=labels,

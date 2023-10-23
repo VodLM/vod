@@ -3,7 +3,7 @@ defaults:
   - model: ranker
   - tokenizers: default
   # Dataset and dataloaders
-  - datasets: fiqa
+  - datasets: beir # A small dataset for testing purposes
   - dataloaders: default
   - collates: default
   - templates: default

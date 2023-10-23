@@ -49,7 +49,7 @@ def _download_and_unzip(url: str, out_dir: str | pathlib.Path, chunk_size: int =
     zip_file = out_dir / dataset_name
 
     if not zip_file.is_file():
-        logger.info("Downloading {dataset_name} ...", dataset_name=dataset_name)
+        logger.info("Downloading {dataset_name} from `{url}`...", dataset_name=dataset_name, url=url)
         _download_url(url, zip_file, chunk_size)
 
     if not (out_dir / dataset_name.replace(".zip", "")).is_dir():
@@ -218,52 +218,59 @@ class BeirDatasetLoader(DatasetLoader):
         if split is None:
             qrels = datasets.concatenate_datasets([qrels_parts[s] for s in sorted(qrels_parts)])
         else:
-            qrels = qrels_parts[split]
+            try:
+                qrels = qrels_parts[split]
+            except KeyError as exc:
+                raise ValueError(
+                    f"Split `{split}` not available for dataset `{name}`. Available splits: `{list(qrels_parts)}`"
+                ) from exc
 
         return QrelsDataset(qrels=qrels, queries=queries, corpus=corpus)
 
 
 class _FilterAndAssignRetrievalIds:
     output_model = models.QueryModel
-    _lookup: dict[int, list[int]]
+    _lookup: dict[str, dict[str, float]]  # qid: {cid: score}
 
     def __init__(self, qrels: datasets.Dataset) -> None:
         self.qrels = qrels
-        self._lookup: dict[int, list[int]] = {}
+        self._lookup = {}
 
     @property
-    def lookup(self) -> dict[int, list[int]]:
+    def lookup(self) -> dict[str, dict[str, float]]:
         """Build the lookup table lazily in each worker.
 
         This allows `datasets.map()` to cache this operation without building the lookup table.
         """
         if len(self._lookup) == 0:
             for row in self.qrels:
-                qid = int(row["query-id"])  # type: ignore
-                cid = int(row["corpus-id"])  # type: ignore
+                qid = str(row["query-id"])  # type: ignore
+                cid = str(row["corpus-id"])  # type: ignore
                 score = float(row["score"])  # type: ignore
                 if score <= 0:
                     continue
                 if qid not in self._lookup:
-                    self._lookup[qid] = [cid]
+                    self._lookup[qid] = {cid: score}
                 elif cid not in self._lookup[qid]:
-                    self._lookup[qid].append(cid)
+                    self._lookup[qid][cid] = score
 
         return self._lookup
 
     def __call__(self, batch: dict[str, list[Any]]) -> dict[str, list[Any]]:
         output = collections.defaultdict(list)
         for qid, txt in zip(batch["_id"], batch["text"]):
-            qid_int = int(qid)
-            retrieval_ids = self.lookup.get(qid_int, None)
+            qid_str = str(qid)
+            retrieval_ids = self.lookup.get(qid_str, None)
             if retrieval_ids is None:
                 continue
+            retrieval_ids_keys = list(retrieval_ids.keys())
             model = self.output_model(
-                id=str(qid_int),
+                id=qid_str,
                 query=txt,
                 answers=[],
                 answer_scores=[],
-                retrieval_ids=[str(i) for i in retrieval_ids],
+                retrieval_ids=retrieval_ids_keys,
+                retrieval_scores=[retrieval_ids[i] for i in retrieval_ids_keys],
                 subset_ids=[],
             )
             for k, v in model.model_dump().items():
