@@ -10,7 +10,7 @@ from peft import mapping as peft_mapping
 from peft import utils as peft_utils
 from vod_models import vod_encoder
 
-FIELD_MAPPING: dict[vod_encoder.VodEncoderInputType, str] = {"query": "hq", "section": "hd"}
+FIELD_MAPPING: dict[vod_encoder.VodEncoderInputType, str] = {"query": "query_encoding", "section": "section_encoding"}
 
 
 def maybe_instantiate(conf_or_obj: typ.Any | omg.DictConfig, **kws: typ.Any) -> object:
@@ -20,7 +20,7 @@ def maybe_instantiate(conf_or_obj: typ.Any | omg.DictConfig, **kws: typ.Any) -> 
     return None
 
 
-def apply_tweaks(
+def apply_tweaks(  # noqa: C901, PLR0912
     module: torch.nn.Module | transformers.PreTrainedModel,
     tweaks: None | vod_configs.support.TweaksConfig,
 ) -> torch.nn.Module:
@@ -62,7 +62,16 @@ def apply_tweaks(
 
     if tweaks.compile:
         # Compile the model
-        module = torch.compile(module, **tweaks.compile_kwargs)  # type: ignore
+        try:
+            module = torch.compile(module, **tweaks.compile_kwargs)  # type: ignore
+        except Exception as exc:
+            if "ldconfig" in str(exc):
+                raise RuntimeError(
+                    ""
+                    "Failed to compile the model. "
+                    "This might be useful: `https://discuss.pytorch.org/t/dynamo-exceptions-with-distributeddataprallel-compile/186768/5?u=vlievin`"
+                ) from exc
+            raise exc
         logger.debug("`torch.compile` enabled (encoder)")
 
     return module

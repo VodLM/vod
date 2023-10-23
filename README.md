@@ -6,7 +6,7 @@
 <br/>
 
 <p align="center">
-<a href="https://pytorch.org/get-started/locally/"><img alt="Python" src="https://img.shields.io/badge/-Python 3.10-blue?style=for-the-badge&logo=python&logoColor=white"></a>
+<a href="https://pytorch.org/get-started/locally/"><img alt="Python" src="https://img.shields.io/badge/-Python 3.11-blue?style=for-the-badge&logo=python&logoColor=white"></a>
 <a href="https://pytorch.org/get-started/locally/"><img alt="PyTorch" src="https://img.shields.io/badge/-PyTorch 2.0+-ee4c2c?style=for-the-badge&logo=pytorch&logoColor=white"></a>
 <a href="https://pytorchlightning.ai/"><img alt="Lightning" src="https://img.shields.io/badge/-Lightning-792ee5?style=for-the-badge&logo=pytorchlightning&logoColor=white"></a>
 <a href="https://hydra.cc/"><img alt="Config: hydra" src="https://img.shields.io/badge/config-hydra-89b8cd?style=for-the-badge&labelColor=gray"></a>
@@ -23,6 +23,8 @@ Research paper: <a href="https://arxiv.org/abs/2210.06345">Variational Open-Doma
 
 ## Latest News 🔥
 
+- October 16' 2023: We released the version 0.2.0 of `vod` - simpler & better code ✨
+- September 21' 2023: We integrated the [BeIR](https://github.com/beir-cellar/beir) datasets 🍻
 - July 19' 2023: We integrated [Qdrant](https://qdrant.tech/) as a search backend 📦
 - June 15' 2023: We adopted Ligthning's [Fabric](https://lightning.ai/docs/fabric/stable/) ⚡️
 - April 24' 2023: We will be presenting [Variational Open-Domain Question Answering](https://arxiv.org/abs/2210.06345) at [ICML2023 @ Hawaii](https://icml.cc/Conferences/2023/Dates) 🌊
@@ -33,11 +35,10 @@ VOD aims at building, training and evaluating next-generation retrieval-augmente
 
 The original paper only explored the application of the VOD objective to multiple-choice ODQA, this repo aims at exploring generative tasks (generative QA, language modelling and chat). We are building tools to make training of large generative search models possible and developper-friendly. The main modules are:
 
-- `vod_gradients`: computing the gradients for REALM and retrieval models
 - `vod_dataloaders`: efficient `torch.utils.DataLoader` with dynamic retrieval
 from multiple search engines
 - `vod_search`: a common interface to handle `sparse` and `dense` search engines ([elasticsearch](https://www.elastic.co/), [faiss](https://www.google.com/search?q=faiss&sourceid=chrome&ie=UTF-8), [Qdrant](https://qdrant.tech/))
-- `vod_models`: a collection of REALMs using large retrievers (T5s) and OS generative models (RWKV, LLAMA 2, etc.).
+- `vod_models`: a collection of REALMs using large retrievers (T5s, e5, etc.) and OS generative models (RWKV, LLAMA 2, etc.). We also include `vod_gradients`, a module to compute gradients of RAGs end-to-end.
 
 ## Roadmap Summer 2023 ☀️
 
@@ -46,10 +47,10 @@ Progress tracked in <https://github.com/VodLM/vod/issues/1>
 The repo is currently in **research preview**. This means we already have a few components in place, but we still have work to do before a wider adoption of VOD, and before training next-gen REALMS. Our objectives for this summer are:
 
 - [x] Search API: add Filtering Capabilities
-- [ ] Datasets: support more datasets for common IR & Gen AI
+- [x] Datasets: support more datasets for common IR & Gen AI
+- [x] UX: plug-and-play, extendable
 - [ ] Modelling: implement REALM for Generative Tasks
 - [ ] Gradients: VOD for Generative Tasks
-- [ ] UX: plug-and-play, extendable
 
 ## Join us 🤝
 
@@ -59,15 +60,15 @@ If you also see great potential in combining LLMs with search components, join t
 
 | Module          | Usage                                                 | Status |
 |-----------------|-------------------------------------------------------|--------|
-| vod_cli         | CLI to train REALMs                                   | ⚠️      |
+| vod_cli         | CLI to train REALMs                                   | ✅      |
 | vod_configs     | Hydra and Pydantic configs                            | ✅      |
 | vod_dataloaders | Dataloaders for retrieval-augmented tasks             | ✅      |
-| vod_datasets    | Dataset loaders (MSMarco, etc.)                       | ⚠️      |
+| vod_datasets    | Dataset loaders (MSMarco, etc.)                       | ✅      |
 | vod_gradients   | Computing gradients for end-to-end REALM training     |    ❌    |
 | vod_models      | A collection of REALMs                                |   ❌     |
 | vod_search      | Hybrid search using elasticsearch, faiss and Qdrant   |     ✅   |
 | vod_tools       | A collection of easy-to-use tools                     |    ✅    |
-| vod_workflows   | Main recipes (training, benchmarking, indexing, etc.) |   ⚠️     |
+| vod_ops   | Main recipes (training, benchmarking, indexing, etc.) |   ✅     |
 
 > **Note** The code for VOD gradient and sampling methods currently lives at [VodLM/vod-gradients](https://github.com/VodLM/vod-gradients). The project is still under development and will be integrated into this repo in the next month.
 
@@ -114,17 +115,12 @@ poetry run train
 <summary>🔧 Arguments & config files</summary>
 
 The `train` endpoint uses `hydra` to parse arguments and configure the run.
-See `configs/main.yaml` for the default configuration. You can override any of the default values by passing them as arguments to the `train` endpoint. For example, to train a model with a different encoder, use:
+See `vod_exps/hydra/main.yaml` for the default configuration. You can override any of the default values by passing them as arguments to the `train` endpoint. For example, to train a T5-base encoder on MSMarco using FSDP:
 
 ```shell
-poetry run train model/encoder=t5-base batch_size.per_device=4
+poetry run train model/encoder=t5-base batch_size.per_device=4 datasets=msmarco fabric/strategy=fsdp
 ```
 
-Configurations can be overriden using `patch` configurations (experiment, hardware, etc.). For instance, to train a retrieval model (base size) using torch DDP:
-
-```shell
-poetry run train +patch/task=retrieval +patch/arch=ddp-base
-```
 
 </details>
 
@@ -133,64 +129,7 @@ poetry run train +patch/task=retrieval +patch/arch=ddp-base
 <details>
 <summary>🐙 Multiple datasets & Sharded search</summary>
 
-VOD is built for multi-dataset training. Youn can multiple training/validation/test datasets, each poiting to a different corpus. Each corpus can be augmented with a specific search backend. For instance this config allows using `Qdrant` as a backend for the `squad` sections and `QuALITY` contexts while using `faiss` to index Wikipedia.
-
-```yaml
-# Base search backends
-search:
-  engines:
-    dense:
-      backend: qdrant
-    sparse:
-      backend: elasticsearch
-
-# Training loop
-training:
-  queries:
-    train:
-      # SQuAD questions <- SQuAD contexts
-      - name: squad.en:train
-        link: squad.en
-      # QuALITY questions <- QuALITY long contexts split into sections
-      - name: quality.en:train
-        link: quality.en
-      # MMLU questions <- Wikipedia
-      - name: mmlu.en:train
-        lint: wiki.en
-      # NaturalQuestions <- Wikipedia
-      - name: nq.en:train
-        link: wiki.en
-    val:
-      - name: squad.en:val
-        link: squad.en
-      - name: quality.en:val
-        link: quality.en
-      - name: mmlu.en:val
-        lint: wiki.en
-      - name: nq.en:val
-        link: wiki.en
-
-  sections:
-    sections:
-      - name: squad.en
-      - name: quality.en
-      - name: wiki.en
-        search:
-          dense:
-            backend: faiss
-            factory: IVF1024,Flat
-
-# Benchmark - list of evaluation tasks
-benchmark:
-  - queries: squad.en:test
-    sections: squad.en
-  - queries: quality.en:test
-    sections: quality.en
-  - queries: mmlu.en:test
-    sections: mmlu.en
-  - queries: nq.en:test
-    sections: wiki.en
-```
+VOD is built for multi-dataset training. Youn can multiple training/validation/test datasets, each pointing to a different corpus. Each corpus can be augmented with a specific search backend. For instance this config allows using `Qdrant` as a backend for the `squad` sections and `QuALITY` contexts while using `faiss` to index Wikipedia.
 
 VOD implement a hybrid sharded search engine. This means that for each indexed corpus, VOD fits multiple search engines (e.g., Elasticsearch + Qdrant). At query time, data points are dispatched to each shard (corpus) based on the `dataset.link` attribute.
 
@@ -203,7 +142,7 @@ VOD implement a hybrid sharded search engine. This means that for each indexed c
 ## Tips and Tricks 🦊
 
 <details>
-  <summary>🐍 Setup a Mamba environment and build faiss-gpu</summary>
+<summary>🐍 Setup a Mamba environment and build faiss-gpu</summary>
 
 ```bash
 # install mamba
@@ -217,36 +156,6 @@ bash build-faiss.sh
 
 </details>
 
-<details>
-  <summary>🧙‍♂️ Poetry install troubleshooting guide</summary>
-
-```shell
-# in case of `InitError` (on GCP): run the following
-# --> see `https://github.com/python-poetry/poetry/issues/1917#issuecomment-1251667047`
-export PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring
-poetry install
-```
-
-</details>
-
-<details>
-  <summary>💥 Handle faiss segmentation fault on cpu</summary>
-
-```shell
-# faiss segmentation fault
-# --> install faiss using conda first
-# --> see `https://github.com/facebookresearch/faiss/issues/2317`
-conda install -c pytorch faiss-cpu
-```
-
-</details>
-
-<details>
-  <summary>🐢 Slow faiss initialization on GPU</summary>
-
-Faiss can take up to 30min to compile CUDA kernels. See [this GitHub issue](https://github.com/facebookresearch/faiss/issues/1177).
-
-</details>
 
 ## Citation 📚
 

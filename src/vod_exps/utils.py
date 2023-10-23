@@ -1,13 +1,13 @@
 import numbers
 import os
 import typing as typ
-import warnings
 from pathlib import Path
 
 import datasets
 import faiss
 import lightning as L
 import loguru
+import numba
 import omegaconf
 import torch
 import transformers
@@ -15,14 +15,10 @@ import vod_models
 import yaml
 from lightning.fabric.loggers.logger import Logger as FabricLogger
 from lightning.pytorch.loggers.wandb import WandbLogger
+from vod_ops.callbacks import Callback
 from vod_tools.misc.config import config_to_flat_dict
-from vod_workflows.callbacks import Callback
 
 T = typ.TypeVar("T")
-
-
-def _do_nothing(*args: typ.Any, **kwargs: typ.Any) -> None:
-    """Do nothing."""
 
 
 def _identity(value: T) -> T:
@@ -45,19 +41,13 @@ def set_training_context() -> None:
     omp_num_threads = os.environ.get("OMP_NUM_THREADS", None)
     if omp_num_threads is not None:
         loguru.logger.warning(f"OMP_NUM_THREADS={omp_num_threads}")
-        torch.set_num_threads(int(omp_num_threads))
         faiss.omp_set_num_threads(int(omp_num_threads))
+        torch.set_num_threads(int(omp_num_threads))
+        numba.set_num_threads(int(omp_num_threads))
 
     datasets.utils.logging.set_verbosity_error()
     transformers.utils.logging.set_verbosity_error()  # type: ignore
     torch.set_float32_matmul_precision("medium")
-
-    try:
-        torch._dynamo.config.log_level = os.environ.get("DYNAMO_LOG_LEVEL", "INFO")  # type: ignore
-    except AttributeError:
-        warnings.warn("Could not set torch._dynamo.config.log_level", stacklevel=2)
-
-    # torch.multiprocessing.set_sharing_strategy("file_system")
 
 
 def get_model_stats(ranker: vod_models.Ranker) -> dict[str, typ.Any]:

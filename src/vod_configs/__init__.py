@@ -2,7 +2,7 @@ __version__ = "0.2.0"
 
 from .dataloaders import (
     DataLoaderConfig,
-    RetrievalCollateConfig,
+    RealmCollateConfig,
     SamplerFactoryConfig,
     TemplatesConfig,
     TokenizerCollateConfig,

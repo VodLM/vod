@@ -76,7 +76,7 @@ class BaseDatasetConfig(StrictModel):
 
     identifier: pydantic.constr(to_lower=True) = pydantic.Field(  # type: ignore | auto-lowercase
         ...,
-        description="Name of the dataset, or descriptor with pattern `name.subset:split`.",
+        description="Name of the dataset",
     )
     name_or_path: str | DatasetLoader = pydantic.Field(
         ...,

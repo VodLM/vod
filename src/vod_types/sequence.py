@@ -1,7 +1,7 @@
 import typing as typ
 from collections import abc
 
-import datasets
+from datasets import Dataset
 
 T = typ.TypeVar("T")
 T_co = typ.TypeVar("T_co", covariant=True)
@@ -26,5 +26,5 @@ class DictsSequence(Sequence[dict[str, T]]):
 
 
 # Register `datasets.Dataset` as a `SequenceDict`.
-DictsSequence.register(datasets.Dataset)  # type: ignore
+DictsSequence.register(Dataset)  # type: ignore
 DictsSequence.register(DictsSequence)  # type: ignore

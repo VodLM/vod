@@ -1,5 +1,5 @@
 export_module:
-  _target_: vod_workflows.callbacks.ExportModule
+  _target_: vod_ops.callbacks.ExportModule
   output_dir: ${export_path}
   include_files: [config.yaml]
   only_submodule: null

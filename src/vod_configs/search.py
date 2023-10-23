@@ -230,6 +230,8 @@ class QdrantFactoryConfig(BaseSearchFactoryConfig):
         if diff is None:
             return self
         diffs = {k: v for k, v in diff if v is not None}
+        if "qdrant_body" in diffs:
+            diffs["qdrant_body"] = self.model_dump()["qdrant_body"] | diffs["qdrant_body"]
         return self.model_copy(update=diffs)
 
     @pydantic.field_validator("qdrant_body", mode="before")

@@ -61,7 +61,7 @@ class TokenizerCollate(vt.Collate[typ.Any, torch.Tensor]):
         # init the collate_fn
         return cls(
             template=template,
-            prefix_key=f"{field}.",
+            prefix_key=f"{field}__",
             tokenizer=config.tokenizer.instantiate(),
             tokenizer_kws=config.tokenizer.kwargs(),
         )

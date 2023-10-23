@@ -42,6 +42,6 @@ def pprint_metric_dict(
             display_key = row.key
         else:
             display_key = ""
-        table.add_row(display_key, row.group, f"{row.value:.2%}")
+        table.add_row(display_key, row.group, f"{row.value:.3f}")
         prev_key = row.key
     console.print(table)

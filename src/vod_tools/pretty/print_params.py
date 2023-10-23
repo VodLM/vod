@@ -55,13 +55,14 @@ def pprint_parameters_stats(
         )
 
     # Add a row for total parameters
-    table.add_section()
-    table.add_row(
-        "Total",
-        human_format_nb(total_params),
-        f"{1.0:.2%}",
-        f"{total_trainable_params/total_params:.2%}",
-    )
+    if len(dtype_counts) > 1:
+        table.add_section()
+        table.add_row(
+            "Total",
+            human_format_nb(total_params),
+            f"{1.0:.2%}",
+            f"{total_trainable_params/total_params:.2%}",
+        )
 
     console = console or rich.console.Console()
     console.print(table)

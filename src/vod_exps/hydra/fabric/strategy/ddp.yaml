@@ -1,2 +1,3 @@
 _target_: lightning.fabric.strategies.DDPStrategy
-find_unused_parameters: true
+find_unused_parameters: false
+static_graph: true

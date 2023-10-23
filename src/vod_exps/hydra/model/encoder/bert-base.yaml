@@ -6,3 +6,4 @@ pooler:
   output_activation: null
   output_norm: null
   agg_method: cls
+  scaler: null

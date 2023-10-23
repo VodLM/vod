@@ -11,12 +11,11 @@ import vod_types as vt
 from lightning.fabric.wrappers import is_wrapped
 from loguru import logger
 from vod_exps.structconf import Experiment
+from vod_ops.utils import TrainerState, helpers, io, logging, schemas
+from vod_ops.workflows.benchmark import benchmark_retrieval
+from vod_ops.workflows.compute import compute_vectors
+from vod_ops.workflows.train import spawn_search_and_train
 from vod_tools import cache_manager
-from vod_tools.pretty.print_metrics import pprint_metric_dict
-from vod_workflows.evaluation.retrieval import ToDiskConfig, benchmark_retrieval
-from vod_workflows.processing.vectors import compute_vectors
-from vod_workflows.training.train import spawn_search_and_train
-from vod_workflows.utils import TrainerState, helpers, io, logging, schemas
 
 
 def periodic_training(
@@ -165,8 +164,6 @@ def _train_for_period(
         eval_dataloader_config=config.dataloaders.eval,
         cache_dir=cache_dir,
         serve_on_gpu=False,
-        checkpoint_path=config.trainer.checkpoint_path,
-        pbar_keys=config.trainer.pbar_keys,
     )
 
 
@@ -194,78 +191,37 @@ def _run_benchmarks(
     else:
         vectors = None
 
-    if fabric.is_global_zero:
-        logger.info(f"Running benchmarks ... (period={1+state.pidx})")
-        for j, task in enumerate(config.datasets.benchmark):
-            bench_loc = f"{task.queries.identifier} <- {task.queries.identifier}"
-            logger.info(f"{1+j}/{len(config.datasets.benchmark)} - Benchmarking `{bench_loc}` ...")
-            logdir = pathlib.Path("benchmarks", f"{bench_loc}-{state.pidx}-{state.step}")
-            logdir.mkdir(parents=True, exist_ok=True)
+    logger.info(f"Running benchmarks ... (period={1+state.pidx})")
+    for j, task in enumerate(config.datasets.benchmark):
+        bench_loc = f"{task.queries.identifier} <- {task.sections.identifier}"
+        logger.info(f"{1+j}/{len(config.datasets.benchmark)} - Benchmarking `{bench_loc}` ...")
 
-            # Run the benchmark and log the results
-            metrics = benchmark_retrieval(
-                queries=schemas.QueriesWithVectors.from_configs(
-                    queries=[task.queries],
-                    vectors=vectors,
-                ),
-                sections=schemas.SectionsWithVectors.from_configs(
-                    sections=[task.sections],
-                    vectors=vectors,
-                ),
-                metrics=config.benchmark.metrics,
-                collate_config=config.collates.benchmark,
-                dataloader_config=_patch_mum_worker(
-                    config.dataloaders.benchmark,
-                    fabric=fabric,
-                ),
-                cache_dir=cache_dir,
-                parameters=config.benchmark.parameters,
-                serve_search_on_gpu=True,
-                n_max=config.benchmark.n_max_eval,
-                to_disk_config=ToDiskConfig(
-                    logdir=logdir,
-                    tokenizer=config.collates.benchmark.tokenizer_encoder.instantiate(),
-                ),
+        # Run the benchmark and log the results
+        metrics = benchmark_retrieval(
+            queries=schemas.QueriesWithVectors.from_configs(
+                queries=[task.queries],
+                vectors=vectors,
+            ),
+            sections=schemas.SectionsWithVectors.from_configs(
+                sections=[task.sections],
+                vectors=vectors,
+            ),
+            fabric=fabric,
+            config=config.benchmark,
+            collate_config=config.collates.benchmark,
+            dataloader_config=config.dataloaders.benchmark,
+            cache_dir=cache_dir,
+            device=module.device,
+        )
+        if metrics is not None and fabric.is_global_zero:
+            header = f"{bench_loc} - Period {state.pidx + 1}"
+            logging.log(
+                {f"{task.queries.identifier}/{k}": v for k, v in metrics.items()},
+                loggers=fabric.loggers,
+                console_header=header,
+                step=state.step,
+                console=True,
+                console_exclude="(?!diagnostics)",
             )
-            if metrics is not None:
-                header = f"{bench_loc} - Period {state.pidx + 1}"
-                _log_print_metrics(
-                    fabric=fabric, state=state, locator=task.queries.identifier, metrics=metrics, header=header
-                )
-            logger.info(f"{1+j}/{len(config.datasets.benchmark)} - saved to `{logdir.absolute()}`")
 
     barrier("Benchmarks completed.")
-
-
-def _patch_mum_worker(
-    dl_config: vod_configs.DataLoaderConfig,
-    fabric: L.Fabric,
-    overrides: None | dict[str, typ.Any] = None,
-) -> vod_configs.DataLoaderConfig:
-    return dl_config.model_copy(
-        update={
-            "num_workers": fabric.world_size * dl_config.num_workers,
-            **(overrides or {}),
-        }
-    )
-
-
-def _log_print_metrics(
-    *,
-    fabric: L.Fabric,
-    state: TrainerState,
-    locator: str,
-    metrics: dict[str, float],
-    header: str,
-) -> None:
-    locator = locator.replace(":", "/")
-    logging.log(
-        {f"{locator}/{k}": v for k, v in metrics.items()},
-        loggers=fabric.loggers,
-        header=header,
-        step=state.step,
-    )
-    pprint_metric_dict(
-        {f"{locator}/{k}": v for k, v in metrics.items() if "diagnostics" not in k},
-        header=header,
-    )

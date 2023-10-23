@@ -9,7 +9,7 @@ import omegaconf
 from hydra.utils import instantiate
 from loguru import logger
 from omegaconf import DictConfig
-from vod_workflows.utils.distributed import is_gloabl_zero
+from vod_ops.utils.distributed import is_gloabl_zero
 
 try:
     multiprocessing.set_start_method("forkserver", force=True)
@@ -35,11 +35,16 @@ def cli(hydra_config: DictConfig) -> None:
 
 def run_exp(hydra_config: DictConfig) -> torch.nn.Module:
     """Train a ranker for a retrieval task."""
-    if hydra_config.load_from is not None:
-        logger.info(f"Loading checkpoint from `{hydra_config.load_from}`")
-        checkpoint_dir = hydra_config.load_from
-        cfg_path = pathlib.Path(hydra_config.load_from, "config.yaml")
+    if hydra_config.resume_from is not None:
+        resume_from = pathlib.Path(hydra_config.resume_from)
+        if not resume_from.exists():
+            raise ValueError(f"Run directory `{resume_from}` does not exist.")
+        logger.info(f"Loading previous run from `{resume_from}`")
+        cfg_path = pathlib.Path(resume_from, "config.yaml")
         hydra_config = omegaconf.OmegaConf.load(cfg_path)  # type: ignore
+        checkpoint_dir = hydra_config.trainer.checkpoint_path
+        # Move to that directory
+        os.chdir(resume_from)
     else:
         checkpoint_dir = None
 
@@ -57,13 +62,23 @@ def run_exp(hydra_config: DictConfig) -> torch.nn.Module:
     fabric: L.Fabric = instantiate(hydra_config.fabric)
     fabric.launch()
 
-    # Init the model, optimizer and scheduler
-    logger.debug(f"Instantiating model <{hydra_config.model._target_}> (seed={hydra_config.seed})")
-    if hydra_config.seed is not None:
-        fabric.seed_everything(hydra_config.seed)
-    module: vod_models.Ranker = instantiate(hydra_config.model)
+    # Setup the random seeds
+    seed = fabric.broadcast(hydra_config.seed)
+    logger.debug(f"Setting random seed to `{seed}`")
+    fabric.seed_everything(seed, workers=True)
+
+    # Init the model
+    logger.debug(f"Instantiating model <{hydra_config.model._target_}>")
+    with fabric.init_module():
+        module: vod_models.Ranker = instantiate(hydra_config.model)
+
+    # Setup the optimizer and scheduler
     optimizer = module.get_optimizer()
     scheduler = module.get_scheduler(optimizer)
+
+    # Setup the model and optimizer using the Fabric
+    logger.debug("Setting up model and optimizer using `lightning.Fabric`")
+    fabric_module, fabric_optimizer = fabric.setup(module, optimizer)
 
     # Log config & setup logger
     _customize_logger(fabric=fabric)
@@ -74,10 +89,6 @@ def run_exp(hydra_config: DictConfig) -> torch.nn.Module:
             extras={"model_stats": exp_utils.get_model_stats(module)},
             fabric=fabric,
         )
-
-    # Setup the optimizer and fabric
-    logger.debug("Setting up model and optimizer using `lightning.Fabric`")
-    fabric_module, fabric_optimizer = fabric.setup(module, optimizer)
 
     # Train the model
     return recipes.periodic_training(

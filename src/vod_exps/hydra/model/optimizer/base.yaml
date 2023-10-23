@@ -1,4 +1,4 @@
 _target_: ???
 _partial_: true
 lr: 3e-5
-weight_decay: 1e-3
+weight_decay: 1e-2

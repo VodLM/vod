@@ -13,7 +13,9 @@ class PrioritySampledSections:
 
     samples: vt.RetrievalBatch
     log_weights: np.ndarray
-    rel_ids: np.ndarray
+    max_sampling_id: np.ndarray
+    lse_pos: np.ndarray
+    lse_neg: np.ndarray
     raw_scores: dict[str, np.ndarray]
 
 
@@ -42,7 +44,7 @@ def sample_search_results(
         labels_ref: np.ndarray = search_results.labels > 0  # <- make sure to cast to bool
 
     # Sample section using priority sampling
-    local_ids, log_weights, labels = labeled_priority_sampling(
+    local_ids, log_weights, labels, constants = labeled_priority_sampling(
         scores=scores_ref,
         labels=labels_ref,
         k_positive=max_pos_sections,
@@ -61,13 +63,20 @@ def sample_search_results(
     for key, scores_key in raw_scores.items():
         sampled_raw_scores[key] = np.take_along_axis(scores_key, local_ids, axis=-1)
 
+    # Compute the rank of the document sampled with the smaller score.
+    # This is used to debug the sampling step.
+    min_score = np.amin(np.where(np.isfinite(scores), scores, np.inf), axis=-1)
+    max_sampling_id = np.sum((scores_ref >= min_score[..., None]).astype(np.float32), axis=-1)
+
     return PrioritySampledSections(
         samples=vt.RetrievalBatch(
             indices=indices,
             scores=scores,
             labels=labels,
         ),
-        rel_ids=local_ids,
+        max_sampling_id=max_sampling_id,
+        lse_pos=constants[..., 0],
+        lse_neg=constants[..., 1],
         log_weights=log_weights,
         raw_scores=sampled_raw_scores,
     )
@@ -81,7 +90,7 @@ def labeled_priority_sampling(
     normalized: bool = True,
     temperature: float = 1.0,
     max_support_size: None | int = None,
-) -> tuple[npt.NDArray[np.int64], npt.NDArray[npo.Float], npt.NDArray[npo.Bool]]:
+) -> tuple[npt.NDArray[np.int64], npt.NDArray[npo.Float], npt.NDArray[npo.Bool], npt.NDArray[npo.Float]]:
     """Sample search results using Priority Sampling for each label value {0, 1}.
 
     Priority sampling allows sampling from a Categorical distribution without replacement:
@@ -104,7 +113,7 @@ def labeled_priority_sampling(
         max_support_size: The maximum number of samples to consider (truncated sampling). Default: None (no truncation)
 
     Returns:
-        sample indices, log weights, labels
+        sample indices, log weights, labels, log-Normalizing constant
 
     NOTE: Labels: a sample is `positive` if its label is `>0`, `negative` otherwise.
           we run priority sampling for each sets {i | l_i = 0} and {i | l_i = 1}
@@ -153,7 +162,7 @@ def _priority_sampling_1d(
     k: int = 1,
     temperature: float = 1.0,
     max_support_size: int = -1,
-) -> tuple[npt.NDArray[np.int64], npt.NDArray[npo.Float]]:
+) -> tuple[npt.NDArray[np.int64], npt.NDArray[npo.Float], npo.Float]:
     """Truncated priority sampling."""
     _dtype = scores.dtype
     temperature_inv = _dtype.type(temperature if temperature > 0 else 1.0)
@@ -168,6 +177,9 @@ def _priority_sampling_1d(
     # Normalize the scores
     npo.log_softmax_1d_(log_p)
     #### End - Compute the log-probabilities
+
+    # Compute the normalization constant `LogSum(p(z))``
+    log_norm_const = np.log(np.sum(np.exp(log_p)))
 
     # Log exponential noise, u ~ Exp(1)
     log_u: npt.NDArray[npo.Float] = np.log(exponential_noise_)
@@ -201,8 +213,8 @@ def _priority_sampling_1d(
     else:
         log_weights: npt.NDArray[npo.Float] = log_pi.copy()
 
-    # return the samples and the log weights
-    return sorted_ids, log_weights  # type: ignore
+    # return the samples, the log weights and the LogSumExp of the logprobs (normalazing constant)
+    return sorted_ids, log_weights, log_norm_const  # type: ignore
 
 
 def priority_sampling_1d(
@@ -218,13 +230,14 @@ def priority_sampling_1d(
 
     # sample the noise and compute priority sampling
     noise = np.random.exponential(size=scores.shape).astype(scores.dtype)
-    return _priority_sampling_1d(
+    sorted_ids, log_weights, _ = _priority_sampling_1d(
         scores,
         noise,
         k,
         temperature=temperature,
         max_support_size=max_support_size,
     )
+    return sorted_ids, log_weights
 
 
 @numba.njit(fastmath=True, cache=npo.CACHE_NUMBA_JIT, nogil=True)
@@ -237,6 +250,7 @@ def _labeled_priority_sampling_1d_(  # noqa: PLR0913
     out_samples_: npt.NDArray[npo.Int],
     out_log_weights_: npt.NDArray[npo.Float],
     out_labels_: npt.NDArray[npo.Bool],
+    out_lse_: npt.NDArray[npo.Float],
     normalized: bool,
     temperature: float = 1.0,
     max_support_size: int = -1,
@@ -262,7 +276,7 @@ def _labeled_priority_sampling_1d_(  # noqa: PLR0913
         k_positive = k_total - n_neg_finite  # type: ignore
 
     # Priority samples the positive labels
-    pos_samples_, pos_log_weights = _priority_sampling_1d(
+    pos_samples_, pos_log_weights, pos_lse = _priority_sampling_1d(
         scores[labels],
         exponential_noise_[labels],
         k_positive,
@@ -274,7 +288,7 @@ def _labeled_priority_sampling_1d_(  # noqa: PLR0913
         npo.log_softmax_1d_(pos_log_weights)
 
     # Priority samples the negative labels
-    neg_samples_, neg_log_weights = _priority_sampling_1d(
+    neg_samples_, neg_log_weights, neg_lse = _priority_sampling_1d(
         scores[labels_],
         exponential_noise_[labels_],
         k_total - len(pos_samples_),
@@ -284,6 +298,11 @@ def _labeled_priority_sampling_1d_(  # noqa: PLR0913
     neg_samples = indices[labels_][neg_samples_]
     if normalized and len(neg_samples) > 0:
         npo.log_softmax_1d_(neg_log_weights)
+
+    # Fills the LogSumExp of the logprobs (normalazing constant)
+    assert out_lse_.shape[0] == 2  # noqa: S101, PLR2004
+    out_lse_[0] = pos_lse
+    out_lse_[1] = neg_lse
 
     # return the samples and the log weights
     j: int = 0
@@ -308,7 +327,8 @@ def _labeled_priority_sampling_2d_(  # noqa: PLR0913
     k_total: int,
     out_samples_: npt.NDArray[npo.Int],
     out_log_weights_: npt.NDArray[npo.Float],
-    out_labels: npt.NDArray[npo.Bool],
+    out_labels_: npt.NDArray[npo.Bool],
+    out_lse_: npt.NDArray[npo.Float],
     normalized: bool,
     temperature: float = 1.0,
     max_support_size: int = -1,
@@ -322,7 +342,8 @@ def _labeled_priority_sampling_2d_(  # noqa: PLR0913
             k_total,
             out_samples_=out_samples_[i],
             out_log_weights_=out_log_weights_[i],
-            out_labels_=out_labels[i],
+            out_labels_=out_labels_[i],
+            out_lse_=out_lse_[i],
             normalized=normalized,
             temperature=temperature,
             max_support_size=max_support_size,
@@ -337,12 +358,13 @@ def labeled_priority_sampling_1d(
     normalized: bool = True,
     temperature: float = 1.0,
     max_support_size: None | int = None,
-) -> tuple[npt.NDArray[np.int64], npt.NDArray[npo.Float], npt.NDArray[npo.Bool]]:
+) -> tuple[npt.NDArray[np.int64], npt.NDArray[npo.Float], npt.NDArray[npo.Bool], npt.NDArray[npo.Float]]:
     """Sample from unformalized log p(z) using priority sampling."""
     noise_ = np.random.exponential(size=scores.shape).astype(scores.dtype)
     samples_ = np.full(k_total, -1, dtype=np.int64)
     log_weights_ = np.full(k_total, -np.inf, dtype=scores.dtype)
     labels_: npt.NDArray[npo.Bool] = np.full(k_total, 0, dtype=np.bool_)  # type: ignore
+    lse_: npt.NDArray[npo.Float] = np.full((2,), 0, dtype=scores.dtype)
     max_support_size = max_support_size or -1
     _labeled_priority_sampling_1d_(
         scores,
@@ -350,14 +372,15 @@ def labeled_priority_sampling_1d(
         noise_,
         k_positive,
         k_total,
-        samples_,
-        log_weights_,
-        labels_,
+        out_samples_=samples_,
+        out_log_weights_=log_weights_,
+        out_labels_=labels_,
+        out_lse_=lse_,
         normalized=normalized,
         temperature=temperature,
         max_support_size=max_support_size,
     )
-    return samples_, log_weights_, labels_
+    return samples_, log_weights_, labels_, lse_
 
 
 def labeled_priority_sampling_2d(
@@ -368,12 +391,13 @@ def labeled_priority_sampling_2d(
     normalized: bool = True,
     temperature: float = 1.0,
     max_support_size: None | int = None,
-) -> tuple[npt.NDArray[np.int64], npt.NDArray[npo.Float], npt.NDArray[npo.Bool]]:
+) -> tuple[npt.NDArray[np.int64], npt.NDArray[npo.Float], npt.NDArray[npo.Bool], npt.NDArray[npo.Float]]:
     """Sample from unformalized log p(z) using priority sampling."""
     noise_ = np.random.exponential(size=scores.shape).astype(scores.dtype)
     samples_ = np.full((len(scores), k_total), -1, dtype=np.int64)
     log_weights_ = np.full((len(scores), k_total), -np.inf, dtype=scores.dtype)
     labels_: npt.NDArray[npo.Bool] = np.full((len(scores), k_total), 0, dtype=np.bool_)  # type: ignore
+    lse_: npt.NDArray[npo.Float] = np.full((len(scores), 2), 0, dtype=scores.dtype)
     max_support_size = max_support_size or -1
     _labeled_priority_sampling_2d_(
         scores,
@@ -383,9 +407,10 @@ def labeled_priority_sampling_2d(
         k_total,
         out_samples_=samples_,
         out_log_weights_=log_weights_,
-        out_labels=labels_,
+        out_labels_=labels_,
+        out_lse_=lse_,
         normalized=normalized,
         temperature=temperature,
         max_support_size=max_support_size,
     )
-    return samples_, log_weights_, labels_
+    return samples_, log_weights_, labels_, lse_

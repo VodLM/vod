@@ -6,3 +6,5 @@ _target_: vod_models.VodXLMRobertaEncoder.from_pretrained
 pretrained_model_name_or_path: intfloat/multilingual-e5-base
 pooler:
   agg_method: mean
+  output_norm: l2
+  scaler: 100

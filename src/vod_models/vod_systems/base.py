@@ -4,6 +4,7 @@ import typing as typ
 
 import omegaconf as omg
 import torch
+import vod_types as vt
 from datasets.fingerprint import Hasher, hashregister
 from transformers import pytorch_utils, trainer_pt_utils
 from vod_models.support import maybe_instantiate
@@ -33,7 +34,9 @@ class VodSystem(torch.nn.Module):
         self.optimizer_cls: functools.partial = optimizer  # type: ignore
         self.scheduler_cls: functools.partial = scheduler  # type: ignore
 
-    def forward(self, batch: dict, *, mode: VodSystemMode = "encode", **kws: typ.Any) -> dict[str, torch.Tensor]:
+    def forward(
+        self, batch: typ.Mapping[str, torch.Tensor], *, mode: VodSystemMode = "encode", **kws: typ.Any
+    ) -> typ.Mapping[str, torch.Tensor]:
         """Handles multiple modes in the forward pass.
 
         NOTE: this is required so `torch.compile()` and other optimizations can work.
@@ -50,26 +53,27 @@ class VodSystem(torch.nn.Module):
     @abc.abstractmethod
     def evaluate(
         self,
-        batch: dict[str, typ.Any],
-        *,
-        filter_output: bool = True,
-        compute_metrics: bool = True,
+        batch: typ.Mapping[str, torch.Tensor],
         **kws: typ.Any,
-    ) -> dict[str, typ.Any]:  # noqa: ARG002
-        """Run a forward pass, compute the gradients, compute & return the metrics."""
+    ) -> vt.RealmOutput:  # noqa: ARG002
+        """Run a forward pass and compute the gradients."""
         ...
 
     @abc.abstractmethod
     def generate(
         self,
-        batch: dict[str, typ.Any],
+        batch: typ.Mapping[str, torch.Tensor],
         **kws: typ.Any,
-    ) -> dict[str, typ.Any]:  # noqa: ARG002
+    ) -> typ.Mapping[str, torch.Tensor]:
         """Generate completions given the inputs."""
         ...
 
     @abc.abstractmethod
-    def encode(self, batch: dict, **kws: typ.Any) -> dict[str, torch.Tensor]:
+    def encode(
+        self,
+        batch: typ.Mapping[str, torch.Tensor],
+        **kws: typ.Any,
+    ) -> typ.Mapping[str, torch.Tensor]:
         """Computes the embeddings for the query and the document."""
 
     @abc.abstractmethod
