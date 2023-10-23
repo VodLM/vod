@@ -1,8 +1,5 @@
 defaults:
-  - bert-base
-  - _self_
+  - pooler: mpool-cosine
 
 _target_: vod_models.VodBertEncoder.from_pretrained
 pretrained_model_name_or_path: sentence-transformers/all-MiniLM-L6-v2
-pooler:
-  agg_method: mean
