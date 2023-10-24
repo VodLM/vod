@@ -14,7 +14,13 @@ DatasetType = typ.Literal["queries_with_context", "queries", "sections"]
 
 
 class QueryModel(pydantic.BaseModel):
-    """A base query data model."""
+    """A base query data model.
+
+    TODO(rosetta): Remove defaults and ensure consistent types to ensure safe concatenation of datasets.
+                   Having values in one dataset, but not in another leads to unexpected
+                   behaviour when concatenating datasets.
+                   E.g., `retrieval_ids: None | list[str]` -> `retrieval_ids: list[str]`
+    """
 
     id: str = pydantic.Field(
         default_factory=lambda: uuid.uuid4().hex,
@@ -42,6 +48,10 @@ class QueryModel(pydantic.BaseModel):
         default=None,
         description="A list of target section IDs `section.id` for the given query.",
     )
+    retrieval_scores: None | list[float] = pydantic.Field(
+        default=None,
+        description=("Unnormalized scores for each retrieval ID. When not provided, assume uniform scores."),
+    )
     subset_ids: None | list[str] = pydantic.Field(
         default=None,
         description="An optional ID representing a subset of data to search over.",
@@ -52,6 +62,16 @@ class QueryModel(pydantic.BaseModel):
         """Validate the answers and scores."""
         if self.answer_scores is not None and len(self.answers) != len(self.answer_scores):
             raise ValueError("The number of answers must match the number of answer scores.")
+        return self
+
+    @pydantic.model_validator(mode="after")
+    def _validate_retrieval(self) -> "QueryModel":
+        if (
+            self.retrieval_ids is not None
+            and self.retrieval_scores is not None
+            and len(self.retrieval_ids) != len(self.retrieval_scores)
+        ):
+            raise ValueError("The number of retrieval IDs must match the number of retrieval scores.")
         return self
 
 

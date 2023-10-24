@@ -14,7 +14,9 @@ EXTRA_MODE = typ.Literal["raise", "ignore", "keep"]
 class Batch(MappingMixin):
     """Adictionary like object behaving like a dictionary, but also accepts class attributes."""
 
-    def __init__(self, *args: typ.Mapping[str, typ.Any], _extras: EXTRA_MODE = "raise", **kws: typ.Any):  # noqa: C901
+    _extras: EXTRA_MODE = "raise"  # Specify how to handle extra attributes
+
+    def __init__(self, *args: typ.Mapping[str, typ.Any], **kws: typ.Any):  # noqa: C901
         if len(args) > 0 and len(kws) > 0:
             raise ValueError
         if len(args) > 1:
@@ -35,11 +37,11 @@ class Batch(MappingMixin):
         for k, v in kws.items():
             if k not in self.__class__.__annotations__:
                 unknown_attributes.add(k)
-                if _extras != "keep":
+                if self._extras != "keep":
                     continue
             setattr(self, k, v)
             set_attributes.add(k)
-        if _extras == "raise" and len(unknown_attributes):
+        if self._extras == "raise" and len(unknown_attributes):
             raise ValueError(f"Unknown attributes `{unknown_attributes}`.")
 
         # check if all required attributes are set
@@ -63,6 +65,8 @@ class Batch(MappingMixin):
 class RealmBatch(Batch):
     """Represents a tokenized batch for retrieval-augmented tasks."""
 
+    _extras: EXTRA_MODE = "keep"  # Allow extra attributes
+
     # Language Model tokenized text
     lm__input_ids: None | torch.Tensor = None
     lm__attention_mask: None | torch.Tensor = None
@@ -82,7 +86,7 @@ class RealmBatch(Batch):
     section__subset_id: None | str = None
     section__language: None | str = None
     # Retrieval label & scores
-    section__label: torch.Tensor
+    section__relevance: torch.Tensor
     section__idx: torch.Tensor
     section__score: torch.Tensor
     section__sparse: torch.Tensor

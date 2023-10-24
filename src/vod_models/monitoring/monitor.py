@@ -92,7 +92,7 @@ class RetrievalMonitor(Monitor):
 
         # Rank the relevances and scores by decreasing score value
         ranked_relevances, ranked_scores, n_positives = prepare_for_metric_computation(
-            relevances=batch.section__label, scores=model_output.retriever_scores, topk=-1
+            relevances=batch.section__relevance, scores=model_output.retriever_scores, topk=-1
         )
 
         # Compute each metric

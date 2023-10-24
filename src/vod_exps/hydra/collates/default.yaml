@@ -9,6 +9,9 @@ train:
   prefetch_n_sections: 128 # Number of sections to fetch from each search service
   do_sample: true # Whether to sample or use the top-k sections
   in_batch_negatives: false # Whether to share sections across all queries in a batch
+  # Extras attrs
+  query_extras: []
+  section_extras: []
   # Base args
   templates: ${templates}
   tokenizer_encoder: ${tokenizers.encoder}
@@ -18,10 +21,13 @@ benchmark:
   n_sections: null
   max_pos_sections: null
   support_size: null
-  prefetch_n_sections: 300
+  prefetch_n_sections: 128
   do_sample: false
   in_batch_negatives: false
   prep_num_proc: ${resources.num_proc}
+  # Extras attrs
+  query_extras: []
+  section_extras: []
   # Base args
   templates: ${templates}
   tokenizer_encoder: ${tokenizers.encoder}

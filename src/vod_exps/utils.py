@@ -13,9 +13,7 @@ import torch
 import transformers
 import vod_models
 import yaml
-from lightning.fabric.loggers.logger import Logger as FabricLogger
 from lightning.pytorch.loggers.wandb import WandbLogger
-from vod_ops.callbacks import Callback
 from vod_tools.misc.config import config_to_flat_dict
 
 T = typ.TypeVar("T")
@@ -84,28 +82,3 @@ def log_config(
             flat_config = config_to_flat_dict(all_data, sep="/")
             flat_config = {k: _cast_hps(v) for k, v in flat_config.items()}
             logger.experiment.config.update(flat_config)
-
-
-def init_fabric(
-    *args,  # noqa: ANN002
-    loggers: None | typ.Iterable[FabricLogger] | typ.Mapping[str, FabricLogger] = None,
-    callbacks: None | typ.Iterable[Callback] | typ.Mapping[str, Callback] = None,
-    **kwargs,  # noqa: ANN003
-) -> L.Fabric:
-    """Initialize a fabric with the given `omegaconf`-defined loggers."""
-
-    def _cast_to_list(x: None | typ.Iterable[T] | typ.Mapping[str, T]) -> list[T]:
-        if x is None:
-            return []
-        if isinstance(x, omegaconf.DictConfig):
-            x = omegaconf.OmegaConf.to_container(x, resolve=True)  # type: ignore
-        if isinstance(x, dict):
-            x = x.values()
-        return list(x)  # type: ignore
-
-    return L.Fabric(
-        *args,
-        loggers=_cast_to_list(loggers),
-        callbacks=_cast_to_list(callbacks),
-        **kwargs,
-    )

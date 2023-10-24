@@ -1,9 +1,5 @@
 defaults:
-  - bert-base
-  - _self_
+  - pooler: mpool-scaled-cosine
 
+_target_: vod_models.VodBertEncoder.from_pretrained
 pretrained_model_name_or_path: intfloat/e5-base-v2
-pooler:
-  agg_method: mean
-  output_norm: l2
-  scaler: 100

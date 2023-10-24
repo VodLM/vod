@@ -8,7 +8,7 @@ defaults:
       - export_module
   - _self_
 
-_target_: vod_exps.utils.init_fabric
+_target_: vod_exps.init.fabric
 accelerator: auto
 devices: ${resources.n_devices}
 precision: 32

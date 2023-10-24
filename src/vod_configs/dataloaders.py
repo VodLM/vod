@@ -119,6 +119,9 @@ class RealmCollateConfig(_BaseCollateConfig):
     in_batch_neg_offset: int = 0
     prep_num_proc: int = 4
     lookup_engine: str = "sparse"  # Name of the search engine to use to lookup gold sections
+    # Realm - extra data
+    query_extras: list[str] = []
+    section_extras: list[str] = []
 
     @pydantic.field_validator("tokenizer_lm", mode="before")
     @classmethod
