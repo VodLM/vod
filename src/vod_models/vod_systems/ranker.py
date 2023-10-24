@@ -21,7 +21,6 @@ _FIELD_MAPPING_KEYS = sorted(FIELD_MAPPING.keys())
 class Ranker(VodSystem):
     """Deep ranking model using a Transformer encoder as a backbone."""
 
-    _output_size: int
     encoder: vod_encoder.VodEncoder
 
     def __init__(
@@ -48,7 +47,7 @@ class Ranker(VodSystem):
         """Dimension of the model output."""
         return self.encoder.get_encoding_shape()
 
-    def get_fingerprint(self) -> str:
+    def get_encoder_fingerprint(self) -> str:
         """Return a fingerprint of the model."""
         try:
             return self.encoder.get_fingerprint()

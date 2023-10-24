@@ -6,7 +6,6 @@ defaults:
 
 exp_suffix: -msmarco
 
-# TODO binary metric: sigmoid + Gumbel-softax
 benchmark:
   on_init: true
 

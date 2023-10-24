@@ -1,5 +1,4 @@
 import collections
-import functools
 from typing import Any
 
 import datasets
@@ -40,6 +39,26 @@ def postprocess_sections(
     return dset
 
 
+def _section_extractor(
+    batch: dict[str, list[Any]],
+    idx: None | list[int] = None,  # noqa: ARG001
+    *,
+    sectionizer: Sectionizer,
+    template: Template,
+) -> dict[str, list[Any]]:
+    contents = batch["content"]
+    new_batch = collections.defaultdict(list)
+    for i, content in enumerate(contents):
+        # Render a section without content to infer how many tokens the prefix takes up
+        rendered_section_zero = template.render({"content": "", "title": batch["title"][i]})
+        for chunk in sectionizer(content, prefix=rendered_section_zero, add_prefix=False):
+            new_batch["content"].append(chunk)
+            for key in batch.keys() - {"content"}:
+                new_batch[key].append(batch[key][i])
+
+    return new_batch
+
+
 def _extract_sections(
     data: datasets.Dataset,
     *,
@@ -48,28 +67,10 @@ def _extract_sections(
 ) -> datasets.Dataset:
     sectionizer = init_sectionizer(config)
     template = Template(config.section_template)
-
-    def _section_extractor(
-        batch: dict[str, list[Any]],
-        idx: None | list[int] = None,  # noqa: ARG001
-        *,
-        sectionizer: Sectionizer,
-    ) -> dict[str, list[Any]]:
-        contents = batch["content"]
-        new_batch = collections.defaultdict(list)
-        for i, content in enumerate(contents):
-            # Render a section without content to infer how many tokens the prefix takes up
-            rendered_section_zero = template.render({"content": "", "title": batch["title"][i]})
-            for chunk in sectionizer(content, prefix=rendered_section_zero, add_prefix=False):
-                new_batch["content"].append(chunk)
-                for key in batch.keys() - {"content"}:
-                    new_batch[key].append(batch[key][i])
-
-        return new_batch
-
     return data.map(
-        functools.partial(_section_extractor, sectionizer=sectionizer),
+        _section_extractor,
         remove_columns=data.column_names,
+        fn_kwargs={"sectionizer": sectionizer, "template": template},
         **(map_kwargs or {}),
     )
 

@@ -33,6 +33,9 @@ SUBSET_ID = "subset_id"
 SUBSET_IDS = "subset_ids"
 RETRIEVAL_IDS = "retrieval_ids"
 RELEVANCE_SCORES = "retrieval_scores"
+ANSWER = "answer"
+ANSWERS = "answers"
+ANSWER_SCORES = "answer_scores"
 
 
 @dataclasses.dataclass
@@ -76,7 +79,7 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
         self.config = config
         self.parameters = _validate_parameters(parameters or {}, search_client)
         self.tokenizer_encoder = config.tokenizer_encoder.instantiate()
-        self.tokenizer_encoder = config.tokenizer_encoder.instantiate()
+        self.tokenizer_lm = config.tokenizer_lm.instantiate() if config.tokenizer_lm is not None else None
         self.templates = RealmTemplates(
             query=Template(config.templates.query),
             section=Template(config.templates.section),
@@ -99,6 +102,7 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
         """Collate function for retrieval tasks. This function is used to convert a list of examples into a batch."""
         start_time = time.perf_counter()
         input_batch = utils.pack_examples(inputs)  # list[dict] -> dict[list]
+        sample_answer_(input_batch)  # Sample an answer from the list of answers
         relevances_map: list[dict[str, float]] = _extract_relevances(input_batch)  # Extract relevance scores
 
         # Search within each client
@@ -151,6 +155,19 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
                 output_shape=samples.batch.indices.shape,
                 **self.config.tokenizer_encoder.kwargs(),
             )
+            if self.tokenizer_lm is not None:
+                assert self.config.tokenizer_lm is not None  # noqa: S101
+                tokenized_lm_texts = _tokenize_lm(
+                    input_batch,
+                    flat_sections_content,
+                    tokenizer=self.tokenizer_lm,
+                    template=self.templates.lm,
+                    prefix="lm__",
+                    output_shape=samples.batch.indices.shape,  # type: ignore
+                    **self.config.tokenizer_lm.kwargs(),
+                )
+            else:
+                tokenized_lm_texts = None
 
         # Get query/section attributes (e.g., subset_id, retrieval_ids, language, etc.)
         extra_attributes = _get_extra_attributes(
@@ -168,6 +185,7 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
 
         # Make the final batch and potentially cast attributes to `torch.Tensor`
         input_batch = vt.RealmBatch(
+            **(tokenized_lm_texts or {}),
             **tokenized_queries,
             **tokenized_sections,
             **_samples_to_dict(
@@ -268,7 +286,6 @@ def _tokenize(
     output_shape: None | tuple[int, ...] = None,
     **tokenize_kws: typ.Any,
 ) -> dict[str, torch.Tensor]:
-    # Tokenize the queries
     tokenized = render_template_and_tokenize(
         batch,
         template=template,
@@ -279,6 +296,45 @@ def _tokenize(
     if output_shape is not None:
         tokenized = {k: v.view(*output_shape, -1) for k, v in tokenized.items()}
     return tokenized
+
+
+def _tokenize_lm(
+    batch: dict[str, list[typ.Any]],
+    sections: dict[str, list[typ.Any]],
+    *,
+    tokenizer: transformers.PreTrainedTokenizerBase,
+    template: Template,
+    prefix: str,
+    output_shape: tuple[int, int],
+    **tokenize_kws: typ.Any,
+) -> dict[str, torch.Tensor]:
+    """Tokenize the inputs to the language model.
+
+    TODO(collate): add support for `token_type_ids` (encode context/instructions/answers separately)
+    """
+    input_vars = set(template.input_vars)
+    inputs = {k: sections[k] for k in input_vars.intersection(sections.keys())}
+    for key in input_vars.intersection(batch.keys()):
+        inputs[key] = [item for item in batch[key] for _ in range(output_shape[1])]
+
+    return _tokenize(
+        inputs,
+        tokenizer=tokenizer,
+        template=template,
+        prefix=prefix,
+        output_shape=output_shape,
+        **tokenize_kws,
+    )
+
+
+def sample_answer_(batch: dict[str, list[typ.Any]]) -> None:
+    """Sample an answer from the list of answers, and create attribute `ANSWER`."""
+    answers: list[list[str]] = batch[ANSWERS]
+    answer_scores: list[list[float]] = batch[ANSWER_SCORES]
+    batch[ANSWER] = []
+    for ans_options, ans_scores in zip(answers, answer_scores):
+        ans_choice_idx = np.argmax(ans_scores)
+        batch[ANSWER].append(ans_options[ans_choice_idx])
 
 
 def _get_extra_attributes(

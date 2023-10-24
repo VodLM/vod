@@ -1,0 +1,56 @@
+defaults:
+  - search_defaults: default
+  - options: default
+  - _self_
+
+# Base search
+search:
+  dense:
+    backend: qdrant
+  sparse:
+    backend: elasticsearch
+
+# Train/val splits
+training:
+  queries:
+    train:
+      - identifier: quality_train
+        name_or_path: emozilla/quality
+        split: train
+        link: quality_sections
+    val:
+      - identifier: quality_val
+        name_or_path: emozilla/quality
+        split: validation
+        link: quality_sections
+
+  sections:
+    - identifier: quality_sections
+      name_or_path: emozilla/quality
+      options:
+        sectioning:
+          mode: fixed_length
+          section_template: ${templates.section}
+          tokenizer_name_or_path: ${tokenizers.encoder.name_or_path}
+          max_length: ${tokenizers.encoder.max_length}
+          stride: ${tokenizers.encoder.max_length}
+
+
+# Benchmarks
+benchmark:
+  - queries:
+      identifier: quality_val
+      name_or_path: emozilla/quality
+      split: train
+      link: quality_sections
+
+    sections:
+      identifier: quality_sections
+      name_or_path: emozilla/quality
+      options:
+        sectioning:
+          mode: fixed_length
+          section_template: ${templates.section}
+          tokenizer_name_or_path: ${tokenizers.encoder.name_or_path}
+          max_length: ${tokenizers.encoder.max_length}
+          stride: ${tokenizers.encoder.max_length}

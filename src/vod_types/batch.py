@@ -74,6 +74,7 @@ class RealmBatch(Batch):
     # Language Model tokenized text
     lm__input_ids: None | torch.Tensor = None
     lm__attention_mask: None | torch.Tensor = None
+    lm__token_type_ids: None | torch.Tensor = None  # Takes value 0/1/2 whether the token is context/question/answer
     # Query tokenized text
     query__input_ids: torch.Tensor
     query__attention_mask: torch.Tensor

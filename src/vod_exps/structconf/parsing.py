@@ -1,4 +1,5 @@
 import copy
+import pathlib
 import typing as typ
 
 import omegaconf as omg
@@ -81,7 +82,8 @@ def parse_dataset_config(
         params: dict[str, typ.Any] = copy.deepcopy(config)  # type: ignore
 
     # Instantiate the `DatasetLoader` if any
-    params["name_or_path"] = instantiate(params["name_or_path"])
+    if not isinstance(params["name_or_path"], (str, pathlib.Path)):
+        params["name_or_path"] = instantiate(params["name_or_path"])
 
     # parse base options and search
     params["options"] = _parse_base_options(params, base_options=base_options)

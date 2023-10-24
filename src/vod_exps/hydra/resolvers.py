@@ -42,10 +42,6 @@ def register_omgeaconf_resolvers() -> None:  # noqa: C901, PLR0915
             f"Unknown mode name: {model_name}. " f"The model name should start with one of {known_model_types}."
         )
 
-    def _format_model_name(model_name: str) -> str:
-        *_, model_name = model_name.split("/")
-        return model_name
-
     def _join_path(*args: typ.Any) -> str:
         return pathlib.Path(*args).as_posix()
 
@@ -127,12 +123,16 @@ def register_omgeaconf_resolvers() -> None:  # noqa: C901, PLR0915
             return None
         return model_config.lm.pretrained_model_name_or_path
 
+    def _fmt_model_name(model_name: str) -> str:
+        *_, model_name = model_name.split("/")
+        return model_name
+
     def _parse_model_name(model_config: omg.DictConfig) -> str:
         encoder_name = _parse_encoder_name(model_config)
         lm_name = _parse_lm_name(model_config)
         if lm_name is None:
-            return f"ranker-{encoder_name}"
-        return f"realm-{lm_name}-{encoder_name}"
+            return _fmt_model_name(encoder_name)
+        return f"realm-{_fmt_model_name(lm_name)}-{_fmt_model_name(encoder_name)}"
 
     # Register resolvers
     omg.OmegaConf.register_new_resolver("whoami", lambda: os.environ.get("USER"))
@@ -158,7 +158,7 @@ def register_omgeaconf_resolvers() -> None:  # noqa: C901, PLR0915
     omg.OmegaConf.register_new_resolver("infer_model_type", _infer_model_type)
     omg.OmegaConf.register_new_resolver("randint", randint)
     omg.OmegaConf.register_new_resolver("global_seed", lambda *_: SEED)
-    omg.OmegaConf.register_new_resolver("fmt_mn", _format_model_name)
+    omg.OmegaConf.register_new_resolver("fmt_model_name", _fmt_model_name)
     omg.OmegaConf.register_new_resolver("is_cuda_available", torch.cuda.is_available)
     omg.OmegaConf.register_new_resolver("null_cls", lambda *_: None)
     omg.OmegaConf.register_new_resolver("join_path", _join_path)

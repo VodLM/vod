@@ -81,7 +81,7 @@ class VodSystem(torch.nn.Module):
         """Dimension of the model output."""
         ...
 
-    def get_fingerprint(self) -> str:
+    def get_encoder_fingerprint(self) -> str:
         """Return a fingerprint of the model."""
         return fingerprint.fingerprint_torch_module(self)
 

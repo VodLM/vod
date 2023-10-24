@@ -249,6 +249,7 @@ def pprint_batch(
     console: None | rich.console.Console = None,
     header: None | str = None,
     footer: None | str = None,
+    sort_keys: bool = False,
     **kwargs: typ.Any,
 ) -> dict:
     """Pretty print a batch of data."""
@@ -260,7 +261,9 @@ def pprint_batch(
 
     # Convert dict to flat dict
     flat_batch = flatten_dict(batch)
-    for key, value in flat_batch.items():
+    flat_batch_keys = sorted(flat_batch.keys()) if sort_keys else list(flat_batch.keys())
+    for key in flat_batch_keys:
+        value = flat_batch[key]
         try:
             props = infer_properties(value)
             attrs = {f: getattr(props, f) for f in fields}

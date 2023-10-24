@@ -53,8 +53,8 @@ class FixedLengthSectionizer(Sectionizer):
         max_length: int,
         stride: int,
         tokenizer_name_or_path: str,
-        ellipsis_start: str = "(...) ",
-        ellipsis_end: str = " (...)",
+        ellipsis_start: str = "... ",
+        ellipsis_end: str = " ...",
         add_special_tokens: bool = True,
     ) -> None:
         self.length = max_length

@@ -15,6 +15,7 @@ class Gradients(abc.ABC):
         batch: vt.RealmBatch,
         query_encoding: torch.Tensor,  # the encoding of the queries
         section_encoding: torch.Tensor,  # the encoding of the documents/sections
+        lm_logits: None | torch.Tensor,  # the logits of the language model
     ) -> vt.RealmOutput:
         """Compute the gradients/loss."""
         raise NotImplementedError

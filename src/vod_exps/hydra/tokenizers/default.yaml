@@ -5,6 +5,7 @@ encoder:
   padding_side: right
   truncation_side: right
   # Kwargs
+  add_special_tokens: true
   padding: max_length
   truncation: true
 lm:
@@ -14,5 +15,6 @@ lm:
   padding_side: left
   truncation_side: left
   # Kwargs
+  add_special_tokens: false
   padding: max_length
   truncation: true
