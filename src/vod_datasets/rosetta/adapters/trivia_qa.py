@@ -48,6 +48,9 @@ class TriviaQaQueryAdapter(base.Adapter[TriviaQaQueryModel, models.QueryModel]):
             query=m.question,
             answers=m.answer.aliases,
             answer_scores=[1.0] * len(m.answer.aliases),
+            retrieval_ids=[],
+            retrieval_scores=[],
+            subset_ids=[],
         )
 
 
@@ -68,4 +71,7 @@ class TriviaQaQueryWithContextsAdapter(base.Adapter[TriviaQaQueryWithContextsMod
             answer_scores=[1.0] * len(m.answer.aliases),
             contexts=m.entity_pages.wiki_context,
             titles=m.entity_pages.title,
+            retrieval_ids=[],
+            retrieval_scores=[],
+            subset_ids=[],
         )

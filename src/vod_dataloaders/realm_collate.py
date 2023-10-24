@@ -342,13 +342,8 @@ def _validate_parameters(
 
 def _extract_relevances(batch: dict[str, typ.Any]) -> list[dict[str, float]]:
     retrieval_ids = batch[RETRIEVAL_IDS]
-    retrieval_scores = batch.get(RELEVANCE_SCORES, None)
-    if retrieval_scores is None:
-        # Set default relevance scores to 1.0 when not provided
-        return [{x: 1.0 for x in ids} for ids in retrieval_ids]
-
+    retrieval_scores = batch[RELEVANCE_SCORES]
     relevances = []
     for ids, scores in zip(retrieval_ids, retrieval_scores):
         relevances.append(dict(zip(ids, scores)))
-
     return relevances

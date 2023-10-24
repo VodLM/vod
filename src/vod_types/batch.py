@@ -61,6 +61,10 @@ class Batch(MappingMixin):
         attributes = ",\n".join(f"    {k}={v!r}" for k, v in self.__dict__.items())
         return f"{self.__class__.__name__}(\n{attributes}\n)"
 
+    def to_dict(self) -> dict[str, typ.Any]:
+        """Return a dictionary representation of the object."""
+        return self.__dict__.copy()
+
 
 class RealmBatch(Batch):
     """Represents a tokenized batch for retrieval-augmented tasks."""

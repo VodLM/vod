@@ -59,6 +59,9 @@ class MultipleChoiceQueryAdapter(base.Adapter[MultipleChoiceQueryModel, models.Q
             query=m.query,
             answers=m.choices,
             answer_scores=scores,
+            retrieval_ids=[],
+            retrieval_scores=[],
+            subset_ids=[],
         )
 
 
@@ -88,4 +91,7 @@ class MultipleChoiceQueryWithContextAdapter(
             answer_scores=scores,
             contexts=m.contexts,
             titles=m.titles,
+            retrieval_ids=[],
+            retrieval_scores=[],
+            subset_ids=[],
         )

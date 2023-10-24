@@ -33,4 +33,7 @@ class TextToTextQueryAdapter(base.Adapter[TextToTextQueryModel, models.QueryMode
             query=m.inputs,
             answers=[m.targets],
             answer_scores=[1.0],
+            retrieval_ids=[],
+            retrieval_scores=[],
+            subset_ids=[],
         )

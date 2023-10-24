@@ -61,24 +61,6 @@ class AliasAdapter(base.Adapter[base.Im, base.Om]):
         return alias_mapping
 
 
-class AliasQueryModel(models.QueryModel):
-    """A query with an alias."""
-
-    id: str = pydantic.Field(
-        ...,
-        validation_alias=aliases.QUERY_ID_ALIASES,
-    )
-
-    query: str = pydantic.Field(
-        ...,
-        validation_alias=aliases.QUERY_ALIASES,
-    )
-    answers: list[str] = pydantic.Field(
-        [],
-        validation_alias=aliases.ANSWER_ALIASES,
-    )
-
-
 class AliasSectionModel(models.SectionModel):
     """A query with an alias."""
 
@@ -94,13 +76,6 @@ class AliasSectionModel(models.SectionModel):
         default=None,
         validation_alias=aliases.TITLES_ALIASES,
     )
-
-
-class RenameQueryAdapter(AliasAdapter[AliasQueryModel, models.QueryModel]):
-    """An adapter to rename queries."""
-
-    input_model = AliasQueryModel
-    output_model = models.QueryModel
 
 
 class RenameSectionAdapter(AliasAdapter[AliasSectionModel, models.SectionModel]):

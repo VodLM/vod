@@ -16,7 +16,6 @@ from .missing_fields import (
     MissingFieldSectionAdapter,
 )
 from .rename_fields import (
-    RenameQueryAdapter,
     RenameSectionAdapter,
 )
 from .squad import (
@@ -40,7 +39,6 @@ KNOWN_QUERY_WITH_CONTEXT_ADAPTERS: list[Type[Adapter]] = [
 
 KNOWN_QUERY_ADAPTERS: list[Type[Adapter]] = [
     IdentityQueryAdapter,
-    RenameQueryAdapter,
     MissingFieldQueryAdapter,
     MultipleChoiceQueryAdapter,
     TriviaQaQueryAdapter,

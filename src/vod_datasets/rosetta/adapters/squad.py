@@ -49,6 +49,9 @@ class SquadQueryAdapter(base.Adapter[SquadQueryModel, models.QueryModel]):
             query=m.query,
             answers=m.answer.text,
             answer_scores=[1.0] * len(m.answer.text),
+            retrieval_ids=[],
+            retrieval_scores=[],
+            subset_ids=[],
         )
 
 
@@ -69,4 +72,7 @@ class SquadQueryWithContextsAdapter(base.Adapter[SquadQueryWithContextsModel, mo
             answer_scores=[1.0] * len(m.answer.text),
             contexts=m.contexts,
             titles=m.titles,
+            retrieval_ids=[],
+            retrieval_scores=[],
+            subset_ids=[],
         )

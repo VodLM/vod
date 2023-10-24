@@ -1,4 +1,3 @@
-import dataclasses
 import typing as typ
 
 import datasets
@@ -14,7 +13,6 @@ from vod_datasets.rosetta.adapters import (
     MissingFieldSectionAdapter,
     MultipleChoiceQueryAdapter,
     MultipleChoiceQueryWithContextAdapter,
-    RenameQueryAdapter,
     RenameSectionAdapter,
     SquadQueryAdapter,
     SquadQueryWithContextsAdapter,
@@ -29,27 +27,6 @@ from vod_datasets.rosetta.models import (
 )
 
 
-@dataclasses.dataclass
-class Args:
-    """A simple dataclass for passing arguments to the test."""
-
-    name: str
-    subset: str | None = None
-    split: str | None = None
-
-    def load(self) -> datasets.Dataset:
-        """Load the dataset."""
-        data = datasets.load_dataset(self.name, self.subset, split=self.split)
-        if isinstance(data, datasets.DatasetDict):
-            data = data[list(data.keys())[0]]
-
-        return data  # type: ignore
-
-    def __repr__(self) -> str:
-        """Return a string representation."""
-        return f"{self.name}.{self.subset}:{self.split}"
-
-
 @pytest.mark.parametrize(
     "inputs,adapter_cls,output_model",
     [
@@ -59,6 +36,25 @@ class Args:
                     "id": "1",
                     "query": "What is the answer to life, the universe, and everything?",
                     "answers": ["42"],
+                    "answer_scores": [1.0],
+                    "retrieval_ids": [],
+                    "retrieval_scores": [],
+                    "subset_ids": [],
+                }
+            ],
+            IdentityQueryAdapter,
+            QueryModel,
+        ),
+        (
+            [
+                {
+                    "id": "1",
+                    "query": "What is the answer to life, the universe, and everything?",
+                    "answers": ["42"],
+                    "answer_scores": [1.0],
+                    "retrieval_ids": ["1"],
+                    "retrieval_scores": [1.0],
+                    "subset_ids": ["xyz"],
                 }
             ],
             IdentityQueryAdapter,
@@ -82,6 +78,10 @@ class Args:
                     "query": "What is the answer to life, the universe, and everything?",
                     "titles": ["The meaning of life"],
                     "answers": ["42"],
+                    "answer_scores": [1.0],
+                    "retrieval_ids": ["1"],
+                    "retrieval_scores": [1.0],
+                    "subset_ids": ["xyz"],
                     "contexts": [
                         "The answer to life, the universe, and everything is 42.",
                     ],
@@ -91,48 +91,102 @@ class Args:
             QueryWithContextsModel,
         ),
         (
-            Args("cais/mmlu", "astronomy", "dev"),
+            [  # cais/mmlu
+                {
+                    "question": (
+                        "You are pushing a truck along a road. "
+                        "Would it be easier to accelerate this truck on Mars? Why? (Assume there is no friction)"
+                    ),
+                    "subject": "astronomy",
+                    "choices": [
+                        "It would be harder since the truck is heavier on Mars.",
+                        "It would be easier since the truck is lighter on Mars.",
+                        "It would be harder since the truck is lighter on Mars.",
+                        "It would be the same no matter where you are.",
+                    ],
+                    "answer": 3,
+                }
+            ],
             MultipleChoiceQueryAdapter,
             QueryModel,
         ),
-        (
-            Args("emozilla/quality", None, "validation[:10]"),
+        (  # emozilla/quality
+            [
+                {
+                    "article": (
+                        "THE GIRL IN HIS MIND\nBy ROBERT F. YOUNG\n\n\n "
+                        "[Transcriber's Note: This etext was produced from\n\n Worlds of Tomorrow April 1963\n\n "
+                        "Extensive research did not uncover any evidence that\n\n the U.S."
+                    ),
+                    "question": (
+                        "How much time has passed between Blake's night with Eldoria "
+                        "and his search for Sabrina York in his mind-world?"
+                    ),
+                    "options": ["7 years", "10 hours", "12 years", "1 hour"],
+                    "answer": 1,
+                    "hard": False,
+                }
+            ],
             MultipleChoiceQueryWithContextAdapter,
             QueryWithContextsModel,
         ),
         (
-            Args("race", "middle", "test[:10]"),
+            [  # race/middle
+                {
+                    "example_id": "middle2177.txt",
+                    "article": (
+                        "It is well-known that the prom, a formal dance held at the end of high school or "
+                        "college, is an important date in every student's life. What is less well-known "
+                        "is that the word prom comes from the verb to promenade, which means to walk around, "
+                        "beautifully dressed, in order to attract attention. The idea is that you should see "
+                        "and be seen by others.\nThe prom is not just an American tradition, "
+                        "though most people believe that it started in America. In Canada the event "
+                        "is called a formal. In Britain and Australia the old fashioned word dance "
+                        "is more and more frequently being referred to as a prom. "
+                    ),
+                    "answer": "B",
+                    "question": 'In which country is the prom called a "formal"?',
+                    "options": ["America.", "Canada.", "Britain.", "Australia."],
+                }
+            ],
             MultipleChoiceQueryWithContextAdapter,
             QueryWithContextsModel,
         ),
         (
-            Args("ag_news", None, "train[:10]"),
+            [  # ag_news
+                {
+                    "text": (
+                        "Wall St. Bears Claw Back Into the Black (Reuters) Reuters - Short-sellers, "
+                        "Wall Street's dwindling\\band of ultra-cynics, are seeing green again."
+                    ),
+                    "label": 2,
+                }
+            ],
             MissingFieldQueryAdapter,
             QueryModel,
         ),
         (
-            Args("ag_news", None, "train[:10]"),
+            [  # ag_news
+                {
+                    "text": (
+                        "Wall St. Bears Claw Back Into the Black (Reuters) Reuters - Short-sellers, "
+                        "Wall Street's dwindling\\band of ultra-cynics, are seeing green again."
+                    ),
+                    "label": 2,
+                }
+            ],
             MissingFieldSectionAdapter,
             SectionModel,
         ),
         (
-            Args("nq_open", None, "validation[:10]"),
+            [  # nq_open
+                {
+                    "question": "when was the last time anyone was on the moon",
+                    "answer": ["14 December 1972 UTC", "December 1972"],
+                }
+            ],
             MissingFieldQueryAdapter,
             QueryModel,
-        ),
-        (
-            [
-                [
-                    {
-                        "id": "1",
-                        "question": "What is the meaning of life?",
-                        "answers": ["42"],
-                        "answer_scores": [1.0],
-                    }
-                ],
-                RenameQueryAdapter,
-                QueryModel,
-            ]
         ),
         (
             [
@@ -146,17 +200,39 @@ class Args:
             SectionModel,
         ),
         (
-            Args("squad_v2", None, "validation[:10]"),
+            [  # squad_v2
+                {
+                    "id": "56ddde6b9a695914005b9628",
+                    "title": "Normans",
+                    "context": "The Normans (Norman: Nourmands; French: Normands; Latin: Normanni)",
+                    "question": "In what country is Normandy located?",
+                    "answers": {"text": ["France", "France", "France", "France"], "answer_start": [159, 159, 159, 159]},
+                }
+            ],
             SquadQueryAdapter,
             QueryModel,
         ),
         (
-            Args("squad_v2", None, "validation[:10]"),
+            [  # squad_v2
+                {
+                    "id": "56ddde6b9a695914005b9628",
+                    "title": "Normans",
+                    "context": "The Normans (Norman: Nourmands; French: Normands; Latin: Normanni)",
+                    "question": "In what country is Normandy located?",
+                    "answers": {"text": ["France", "France", "France", "France"], "answer_start": [159, 159, 159, 159]},
+                }
+            ],
             SquadQueryWithContextsAdapter,
             QueryWithContextsModel,
         ),
         (
-            Args("Muennighoff/flan", None, "test[:10]"),
+            [  # Muennighoff/flan
+                {
+                    "inputs": 'Write an email with the subject line "EnronOnline- Change to Autohedge".',
+                    "targets": "Effective Monday, October 22, 2001 the following changes will be made to the Autohedge",
+                    "task": "aeslc_10templates",
+                }
+            ],
             TextToTextQueryAdapter,
             QueryModel,
         ),
@@ -171,19 +247,109 @@ class Args:
             QueryModel,
         ),
         (
-            Args("trivia_qa", "rc.wikipedia", "validation[:10]"),
+            [  # trivia_qa
+                {
+                    "question": "Which Lloyd Webber musical premiered in the US on 10th December 1993?",
+                    "question_id": "tc_33",
+                    "question_source": "http://www.triviacountry.com/",
+                    "entity_pages": {
+                        "doc_source": ["TagMe"],
+                        "filename": ["Andrew_Lloyd_Webber.txt"],
+                        "title": ["Andrew Lloyd Webber"],
+                        "wiki_context": [
+                            (
+                                "Andrew Lloyd Webber, Baron Lloyd-Webber   (born 22 March 1948) "
+                                "is an English composer and impresario of musical theatre."
+                            )
+                        ],
+                    },
+                    "search_results": {
+                        "description": [],
+                        "filename": [],
+                        "rank": [],
+                        "title": [],
+                        "url": [],
+                        "search_context": [],
+                    },
+                    "answer": {
+                        "aliases": [
+                            "Sunset Blvd",
+                            "West Sunset Boulevard",
+                            "Sunset Boulevard",
+                            "Sunset Bulevard",
+                            "Sunset Blvd.",
+                        ],
+                        "normalized_aliases": [
+                            "sunset boulevard",
+                            "sunset bulevard",
+                            "west sunset boulevard",
+                            "sunset blvd",
+                        ],
+                        "matched_wiki_entity_name": "",
+                        "normalized_matched_wiki_entity_name": "",
+                        "normalized_value": "sunset boulevard",
+                        "type": "WikipediaEntity",
+                        "value": "Sunset Boulevard",
+                    },
+                }
+            ],
             TriviaQaQueryAdapter,
             QueryModel,
         ),
         (
-            Args("trivia_qa", "rc.wikipedia", "validation[:10]"),
+            [  # trivia_qa
+                {
+                    "question": "Which Lloyd Webber musical premiered in the US on 10th December 1993?",
+                    "question_id": "tc_33",
+                    "question_source": "http://www.triviacountry.com/",
+                    "entity_pages": {
+                        "doc_source": ["TagMe"],
+                        "filename": ["Andrew_Lloyd_Webber.txt"],
+                        "title": ["Andrew Lloyd Webber"],
+                        "wiki_context": [
+                            (
+                                "Andrew Lloyd Webber, Baron Lloyd-Webber   "
+                                "(born 22 March 1948) is an English composer and impresario of musical theatre."
+                            )
+                        ],
+                    },
+                    "search_results": {
+                        "description": [],
+                        "filename": [],
+                        "rank": [],
+                        "title": [],
+                        "url": [],
+                        "search_context": [],
+                    },
+                    "answer": {
+                        "aliases": [
+                            "Sunset Blvd",
+                            "West Sunset Boulevard",
+                            "Sunset Boulevard",
+                            "Sunset Bulevard",
+                            "Sunset Blvd.",
+                        ],
+                        "normalized_aliases": [
+                            "sunset boulevard",
+                            "sunset bulevard",
+                            "west sunset boulevard",
+                            "sunset blvd",
+                        ],
+                        "matched_wiki_entity_name": "",
+                        "normalized_matched_wiki_entity_name": "",
+                        "normalized_value": "sunset boulevard",
+                        "type": "WikipediaEntity",
+                        "value": "Sunset Boulevard",
+                    },
+                }
+            ],
             TriviaQaQueryWithContextsAdapter,
             QueryWithContextsModel,
         ),
     ],
 )
 def test_adapter(
-    inputs: list[dict[str, typ.Any]] | Args,
+    inputs: list[dict[str, typ.Any]],
     adapter_cls: Type[Adapter],
     output_model: Type[pydantic.BaseModel],
     num_proc: int = 2,
@@ -192,8 +358,6 @@ def test_adapter(
     """A generic test for parsing a dataset."""
     if isinstance(inputs, list):
         data = datasets.Dataset.from_list(inputs)
-    elif isinstance(inputs, Args):
-        data = inputs.load()
     else:
         raise NotImplementedError(f"Cannot handle {type(inputs)}")
 
