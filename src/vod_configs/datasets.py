@@ -74,7 +74,7 @@ class BaseDatasetConfig(StrictModel):
         frozen = True
         from_attributes = True
 
-    identifier: pydantic.constr(to_lower=True) = pydantic.Field(  # type: ignore | auto-lowercase
+    identifier: str = pydantic.Field(  # type: ignore | auto-lowercase
         ...,
         description="Name of the dataset",
     )

@@ -336,7 +336,7 @@ def pprint_retrieval_batch(  # noqa: C901, PLR0915, PLR0912
     ]
 
     # Fetch the querys
-    batch = copy.deepcopy(batch)  # noqa: F821
+    batch = {k: copy.deepcopy(v) for k, v in batch.items()}
     query_input_ids = batch["query__input_ids"]
     batch_size = len(query_input_ids)
 

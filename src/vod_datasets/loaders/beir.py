@@ -211,6 +211,8 @@ class BeirDatasetLoader(DatasetLoader):
 
         queries = load_as_hf_arrow(pathlib.Path(dataset_dir, *subpath, "queries.jsonl"))
         corpus = load_as_hf_arrow(pathlib.Path(dataset_dir, *subpath, "corpus.jsonl"))
+        if "metadata" in corpus.column_names:
+            corpus = corpus.remove_columns("metadata")
         qrels_parts: dict[str, datasets.Dataset] = {}
         for part_path in pathlib.Path(dataset_dir, *subpath, "qrels").glob("*.tsv"):
             qrels_parts[part_path.stem] = load_as_hf_arrow(part_path)

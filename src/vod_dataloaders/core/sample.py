@@ -63,10 +63,12 @@ def sample_search_results(
     for key, scores_key in raw_scores.items():
         sampled_raw_scores[key] = np.take_along_axis(scores_key, local_ids, axis=-1)
 
-    # Compute the rank of the document sampled with the smaller score.
-    # This is used to debug the sampling step.
-    min_score = np.amin(np.where(np.isfinite(scores), scores, np.inf), axis=-1)
-    max_sampling_id = np.sum((scores_ref >= min_score[..., None]).astype(np.float32), axis=-1)
+    # Compute the rank of the document sampled with the smaller score -- for debugging purposes
+    # NOTE: we compute the number of original document with a score larger than the min sampled score
+    #       this is only approximate as multiple sections can have equal scores.
+    min_neg_score = np.amin(np.where((labels <= 0) & np.isfinite(scores), scores, np.inf), axis=-1, keepdims=True)
+    larger_than_min_sampled = (labels_ref <= 0) & np.isfinite(scores_ref) & (scores_ref >= min_neg_score)
+    max_sampling_id = np.sum(larger_than_min_sampled.astype(np.float32), axis=-1)
 
     return PrioritySampledSections(
         batch=vt.RetrievalBatch(

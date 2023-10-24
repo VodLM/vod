@@ -3,7 +3,6 @@ import warnings
 
 import numba
 import numpy as np
-import vod_types as vt
 from numpy import typing as npt
 
 CACHE_NUMBA_JIT = True
@@ -255,11 +254,10 @@ def fill_nans_with_min(
         return np.where(np.isnan(values), min_scores, values)
 
 
-def replace_negative_indices(sections: vt.RetrievalBatch, world_size: int) -> vt.RetrievalBatch:
+def replace_negative_indices_(indices: np.ndarray, world_size: int) -> None:
     """Replace negative indices with random ones."""
-    is_negative = sections.indices < 0
+    is_negative = indices < 0
     n_negative = is_negative.sum()
     if n_negative:
-        sections.indices.setflags(write=True)
-        sections.indices[is_negative] = np.random.randint(0, world_size, size=n_negative)
-    return sections
+        indices.setflags(write=True)
+        indices[is_negative] = np.random.randint(0, world_size, size=n_negative)

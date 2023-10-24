@@ -14,7 +14,13 @@ DatasetType = typ.Literal["queries_with_context", "queries", "sections"]
 
 
 class QueryModel(pydantic.BaseModel):
-    """A base query data model."""
+    """A base query data model.
+
+    TODO(rosetta): Remove defaults and ensure consistent types to ensure safe concatenation of datasets.
+                   Having values in one dataset, but not in another leads to unexpected
+                   behaviour when concatenating datasets.
+                   E.g., `retrieval_ids: None | list[str]` -> `retrieval_ids: list[str]`
+    """
 
     id: str = pydantic.Field(
         default_factory=lambda: uuid.uuid4().hex,
@@ -44,7 +50,7 @@ class QueryModel(pydantic.BaseModel):
     )
     retrieval_scores: None | list[float] = pydantic.Field(
         default=None,
-        description="Unnormalized scores for each retrieval ID. When not provided, assume uniform scores.",
+        description=("Unnormalized scores for each retrieval ID. When not provided, assume uniform scores."),
     )
     subset_ids: None | list[str] = pydantic.Field(
         default=None,

@@ -10,6 +10,7 @@ import vod_configs
 import vod_search
 import vod_types as vt
 from loguru import logger
+from vod_dataloaders.core import numpy_ops
 from vod_tools.misc.exceptions import dump_exceptions_to_file
 from vod_tools.misc.template import Template
 
@@ -126,7 +127,7 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
 
         # Replace negative indices with random ones
         #    this is required because `datasets.Dataset` doesn't support negative indices
-        # samples = numpy_ops.replace_negative_indices(samples, world_size=len(self.sections))
+        numpy_ops.replace_negative_indices_(samples.batch.indices, world_size=len(self.sections))
 
         # Fetch the content of each section from the huggingface `datasets.Dataset`
         sections_shape = samples.batch.indices.shape

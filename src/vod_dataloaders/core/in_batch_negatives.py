@@ -44,6 +44,9 @@ def flatten_samples(samples: PrioritySampledSections, padding: bool = True) -> P
             labels=labels,
             allow_unsafe=True,
         ),
+        max_sampling_id=samples.max_sampling_id,
         raw_scores=flat_raw_scores,
         log_weights=log_weights,
+        lse_pos=samples.lse_pos,
+        lse_neg=samples.lse_neg,
     )

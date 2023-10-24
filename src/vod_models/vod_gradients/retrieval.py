@@ -47,10 +47,10 @@ class RetrievalGradients(Gradients):
         retriever_logprobs = retriever_scores.log_softmax(dim=-1)
 
         # 3. compute the reference probabilities for each pair of (question, section)
-        data_targets = _cast_data_targets(batch.section__relevance, is_padding)
+        data_binary_targets = _cast_data_targets(batch.section__relevance, is_padding)
 
         # 4 compute the number of positives
-        n_positives = data_targets.sum(dim=1)
+        n_positives = data_binary_targets.sum(dim=1)
         if (n_positives == 0).any():
             warnings.warn("This batch contains a question without positive section.", stacklevel=2)
 
@@ -60,7 +60,7 @@ class RetrievalGradients(Gradients):
         loss = _compute_loss(
             ref_retriever_probs=retriever_logprobs.exp().detach(),
             retriever_logprobs=retriever_logprobs,
-            data_targets=data_targets,
+            data_targets=data_binary_targets,
             n_positive=n_positives,
             section_mask=is_padding,
         )
@@ -70,7 +70,7 @@ class RetrievalGradients(Gradients):
             batch=batch,
             loss=loss,
             retriever_scores=retriever_scores,
-            data_targets=data_targets,
+            data_targets=data_binary_targets,
             n_positives=n_positives,
         )
 
@@ -204,13 +204,12 @@ def _compute_retriever_scores(
 
 
 @torch.jit.script
-@torch.no_grad()
 def _cast_data_targets(
     data_targets: torch.Tensor,
     mask: torch.Tensor,
 ) -> torch.Tensor:
     """Compute the reference probabilities for each pair of (question, section)."""
-    data_targets = data_targets.float()
+    data_targets = (data_targets > 0).float()
     data_targets.masked_fill_(mask, 0.0)
 
     return data_targets
