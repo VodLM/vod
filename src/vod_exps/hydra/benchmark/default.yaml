@@ -1,4 +1,4 @@
-strategy: rertrieval
+strategy: retrieval
 on_init: false
 n_max_eval: null
 parameters:

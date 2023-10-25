@@ -51,7 +51,7 @@ class ExportModule(Callback):
                 raise ValueError(
                     f"Must provide a `tokenizers` dict when using `submodules`. Found `{type(tokenizers)}`"
                 )
-            if set(self.submodules) >= set(tokenizers.keys()):  # type: ignore
+            if set(self.submodules) > set(tokenizers.keys()):  # type: ignore
                 raise ValueError(
                     f"`submodules` list `{self.submodules}` must match `tokenizers` keys {tokenizers.keys()}"
                 )
