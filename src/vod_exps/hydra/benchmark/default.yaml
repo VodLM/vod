@@ -1,3 +1,4 @@
+strategy: rertrieval
 on_init: false
 n_max_eval: null
 parameters:

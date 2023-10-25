@@ -8,6 +8,8 @@ from vod_tools.misc.config import as_pyobj_validator
 
 from .utils.schedule import ParameterSchedule
 
+BenchmarkStrategy = typ.Literal["retrieval", "generative", "rag"]  # Benchmarking strategies
+
 
 class TrainerConfig(StrictModel):
     """Configures the Training step."""
@@ -51,6 +53,7 @@ class BenchmarkConfig(StrictModel):
     parameters: dict[str, float] = {}
     metrics: list[str] = ["ndcg_10", "mrr_10", "hitrate_01", "hitrate_03", "kldiv"]
     serve_search_on_gpu: bool = False
+    strategy: BenchmarkStrategy = "retrieval"
 
     @pydantic.field_validator("metrics", mode="before")
     @classmethod
