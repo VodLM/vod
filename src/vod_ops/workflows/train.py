@@ -18,7 +18,7 @@ from vod_ops.utils.trainer_state import TrainerState
 K = typ.TypeVar("K")
 
 
-def spawn_search_and_train(
+def spawn_search_and_train(  # noqa: PLR0913
     state: TrainerState,
     *,
     # ML module & optimizer

@@ -46,7 +46,7 @@ class Encoder(torch.nn.Module):
         pooled_output = _mean_pooling(output.last_hidden_state, batch["attention_mask"])
         return F.normalize(pooled_output, p=2, dim=-1)
 
-    def get_output_shape(self, *args, **kwargs) -> tuple[int]:  # noqa: ANN
+    def get_output_shape(self, *args, **kwargs) -> tuple[int]:  # noqa: ANN002, ANN003
         """Return the output shape."""
         return (self.backbone.config.hidden_size,)
 

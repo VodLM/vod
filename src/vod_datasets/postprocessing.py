@@ -77,7 +77,7 @@ def _extract_sections(
 
 def _postprocessing(
     dset: datasets.Dataset,
-    identifier: str,  # noqa: ARG
+    identifier: str,  # noqa: ARG001
     config: vod_configs.DatasetOptions,
 ) -> datasets.Dataset:
     dset = _take_subset(dset, config.subset_size)

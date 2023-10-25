@@ -29,9 +29,7 @@ FAISS_METRICS = {
 FAISS_METRICS_INV = {v: k for k, v in FAISS_METRICS.items()}
 
 
-def _get_gpu_resources(
-    devices: list[int], tempmem: int = -1, log_mem_allocation: bool = False
-) -> list[GpuResources]:  # type: ignore
+def _get_gpu_resources(devices: list[int], tempmem: int = -1, log_mem_allocation: bool = False) -> list[GpuResources]:  # type: ignore
     """Return a list of GPU resources."""
     gpu_resources = []
     ngpu = torch.cuda.device_count() if devices is None else len(devices)
@@ -61,7 +59,8 @@ class FaissGpuConfig(StrictModel):
     add_batch_size: int = 2**18
 
     @pydantic.field_validator("devices", mode="before")
-    def _validate_devices(cls, v):  # noqa: ANN
+    @classmethod
+    def _validate_devices(cls: Type[Self], v: None | list[int]) -> list[int]:  # noqa: ANN202
         if v is None or v == [-1]:
             return list(range(torch.cuda.device_count()))
         return v

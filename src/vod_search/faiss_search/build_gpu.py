@@ -34,7 +34,7 @@ class WithTimer:
         self._enter_time = time.time()
         self.log(f"Starting `{self.event_name}`")
 
-    def __exit__(self, *args, **kwargs) -> None:  # noqa: ANN
+    def __exit__(self, *args, **kwargs) -> None:  # noqa: ANN002 ANN003
         if self._enter_time is None:
             raise ValueError("`enter()` was not called")
         self.log(f"Completed `{self.event_name}` in {time.time() - self._enter_time:.2f}s")

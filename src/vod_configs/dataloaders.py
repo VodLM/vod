@@ -59,9 +59,9 @@ class TokenizerConfig(StrictModel):
     # keyword arguments for `tokenizer(..., **kwargs)`
     add_special_tokens: bool = True
     padding: typ.Literal["longest", "max_length", "do_not_pad"] = "longest"
-    truncation: None | bool | typ.Literal[
-        "longest_first", "only_first", "only_second", "do_not_truncate"
-    ] = "longest_first"
+    truncation: (
+        None | bool | typ.Literal["longest_first", "only_first", "only_second", "do_not_truncate"]
+    ) = "longest_first"
     return_token_type_ids: bool = False
 
     def instantiate(

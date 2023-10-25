@@ -23,7 +23,7 @@ class RealmDataloader(torch_data.DataLoader[dict[str, typ.Any]]):
     """A subclass of `torch.utils.data.DataLoader` to implement VOD's magic."""
 
     @classmethod
-    def factory(  # noqa: ANN206, D417
+    def factory(  # noqa: PLR0913, ANN206, D417
         cls: Type[Self],
         *,
         queries: dict[K, tuple[ShardName, vt.DictsSequence]],

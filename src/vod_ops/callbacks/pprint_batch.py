@@ -72,7 +72,7 @@ class PprintBatch(Callback):
         self,
         *,
         fabric: L.Fabric,
-        module: torch.nn.Module,  # noqa:
+        module: torch.nn.Module,  # noqa: ARG002
         batch: dict[str, typ.Any],
         batch_idx: int,
     ) -> None:

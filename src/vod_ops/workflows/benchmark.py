@@ -18,7 +18,7 @@ DEFAULT_RETRIEVAL_SCORE_KEYS = ["sparse", "dense", "score"]
 
 
 @torch.no_grad()
-def benchmark_retrieval(
+def benchmark_retrieval(  # noqa: PLR0913
     queries: schemas.QueriesWithVectors,
     sections: schemas.SectionsWithVectors,
     *,

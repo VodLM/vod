@@ -17,7 +17,7 @@ FLOAT_INF_THRES = 3e12  # <-- values above this threshold are considered as +inf
 LOOKUP_CLIENT_NAME = "lookup"
 
 
-def async_hybrid_search(
+def async_hybrid_search(  # noqa: PLR0913
     *,
     text: list[str],
     shards: list[str],
@@ -34,7 +34,7 @@ def async_hybrid_search(
     NOTE: The `lookup_engine_name` is used to lookup the golden/positive sections.
     """
     meta = {}
-    if lookup_engine_name not in clients.keys():
+    if lookup_engine_name not in clients:
         raise ValueError(f"The `{lookup_engine_name}` client must be specified to lookup the golden/positive sections.")
 
     # Create the search payloads

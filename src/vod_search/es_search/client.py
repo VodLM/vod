@@ -239,7 +239,7 @@ class ElasticSearchMaster(base.SearchMaster[ElasticsearchClient]):
 
     _allow_existing_server: bool = True
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         texts: typ.Iterable[str],
         *,

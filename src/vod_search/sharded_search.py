@@ -14,8 +14,8 @@ from vod_search.base import (
     SubsetId,
 )
 
-Sc = typ.TypeVar("Sc", bound=SearchClient, covariant=True)
-Sm = typ.TypeVar("Sm", bound=SearchMaster, covariant=True)
+Sc_co = typ.TypeVar("Sc_co", bound=SearchClient, covariant=True)
+Sm_co = typ.TypeVar("Sm_co", bound=SearchMaster, covariant=True)
 T_co = typ.TypeVar("T_co", covariant=True)
 
 
@@ -25,13 +25,13 @@ class _ShardedQueries(typ.Generic[T_co]):
     lookup: list[tuple[T_co, int]]
 
 
-class ShardedSearchClient(typ.Generic[Sc], SearchClient):
+class ShardedSearchClient(typ.Generic[Sc_co], SearchClient):
     """A sharded search client."""
 
-    _shards: dict[ShardName, Sc]
+    _shards: dict[ShardName, Sc_co]
     _offsets: dict[ShardName, int]
 
-    def __init__(self, shards: dict[ShardName, Sc], offsets: dict[ShardName, int]):
+    def __init__(self, shards: dict[ShardName, Sc_co], offsets: dict[ShardName, int]):
         self._shards = shards
         self._offsets = offsets
 
@@ -44,7 +44,7 @@ class ShardedSearchClient(typ.Generic[Sc], SearchClient):
         return f"{type(self).__name__}(shards={self._shards})"
 
     @property
-    def shards(self) -> dict[ShardName, Sc]:
+    def shards(self) -> dict[ShardName, Sc_co]:
         """The shards."""
         return self._shards.copy()
 
@@ -203,14 +203,14 @@ def _gather_results(
     return vt.RetrievalBatch.stack_samples(gathered_results)
 
 
-class ShardedSearchMaster(typ.Generic[Sm, Sc], SearchMaster[ShardedSearchClient]):
+class ShardedSearchMaster(typ.Generic[Sm_co, Sc_co], SearchMaster[ShardedSearchClient]):
     """Handle multiple search servers."""
 
-    shards: dict[ShardName, Sm]
+    shards: dict[ShardName, Sm_co]
 
     def __init__(
         self,
-        shards: dict[ShardName, Sm],
+        shards: dict[ShardName, Sm_co],
         offsets: dict[ShardName, int],
         skip_setup: bool = False,
         free_resources: bool = False,
@@ -235,12 +235,12 @@ class ShardedSearchMaster(typ.Generic[Sm, Sc], SearchMaster[ShardedSearchClient]
 
         return self
 
-    def __exit__(self, *args, **kwargs) -> None:  # noqa: ANN, ARG
+    def __exit__(self, *args, **kwargs) -> None:  # noqa: ANN002, ANN003
         """Stop the servers."""
         for shard in self.shards.values():
             shard.__exit__(*args, **kwargs)
 
-    def get_client(self) -> ShardedSearchClient[Sc]:
+    def get_client(self) -> ShardedSearchClient[Sc_co]:
         """Get the client for interacting with the Faiss server."""
         return ShardedSearchClient(
             shards={name: shard.get_client() for name, shard in self.shards.items()},

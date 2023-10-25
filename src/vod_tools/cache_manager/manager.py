@@ -1,5 +1,6 @@
 import pathlib
 import shutil
+import typing as typ
 
 import loguru
 from lightning_utilities.core.rank_zero import rank_zero_only
@@ -23,7 +24,7 @@ class CacheManager:
         self._create(self.path)
         return self.path
 
-    def __exit__(self, exc_type, exc_value, traceback):  # noqa: ANN
+    def __exit__(self, *args: typ.Any, **kwargs: typ.Any) -> None:
         """Cleanup the temporary directory."""
         if not self.persist:
             self._cleanup(self.path)

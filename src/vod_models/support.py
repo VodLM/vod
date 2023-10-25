@@ -13,7 +13,7 @@ from vod_models import vod_encoder
 FIELD_MAPPING: dict[vod_encoder.VodEncoderInputType, str] = {"query": "query_encoding", "section": "section_encoding"}
 
 
-def maybe_instantiate(conf_or_obj: typ.Any | omg.DictConfig, **kws: typ.Any) -> object:
+def maybe_instantiate(conf_or_obj: typ.Any | omg.DictConfig, **kws: typ.Any) -> object:  # noqa: ANN401
     """Instantiate a config if needed."""
     if isinstance(conf_or_obj, (omg.DictConfig, dict)):
         return instantiate(conf_or_obj, **kws)

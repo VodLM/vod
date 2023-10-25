@@ -9,7 +9,7 @@ T = typ.TypeVar("T")
 def maybe_cast_omegaconf(
     x: T | omegaconf.DictConfig | omegaconf.ListConfig,
     **kwargs: typ.Any,
-) -> T | dict | None | str | typ.Any:
+) -> T | dict | None | str | typ.Any:  # noqa: ANN401
     """Cast an OmegaConf object to a dict."""
     if isinstance(x, (omegaconf.DictConfig)):
         return omegaconf.OmegaConf.to_container(x, **kwargs)
@@ -21,8 +21,9 @@ def maybe_cast_omegaconf(
 
 
 def as_pyobj_validator(
-    cls: typ.Any, x: T | omegaconf.DictConfig | omegaconf.ListConfig  # noqa: ARG, ANN
-) -> T | dict | None | str | typ.Any:
+    cls: typ.Any,  # noqa: ANN401, ARG001
+    x: T | omegaconf.DictConfig | omegaconf.ListConfig,
+) -> T | dict | None | str | typ.Any:  # noqa: ANN401
     """Pydantic validator to cast an OmegaConf object to a dict/list."""
     return maybe_cast_omegaconf(x, resolve=True)
 

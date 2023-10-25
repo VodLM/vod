@@ -122,7 +122,8 @@ def _stack_results(results: typ.Iterable[T]) -> T:
 
 @datasets.fingerprint.hashregister(ConcatenatedSequences)
 def _hash_partitioned_indexable(
-    hasher: datasets.fingerprint.Hasher, value: ConcatenatedSequences  # noqa: ARG001
+    hasher: datasets.fingerprint.Hasher,  # noqa: ARG001
+    value: ConcatenatedSequences,  # noqa: ARG001
 ) -> str:  # noqa: ARG001
     hasher_ = datasets.fingerprint.Hasher()
     for part in value.parts:

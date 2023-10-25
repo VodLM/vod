@@ -48,7 +48,7 @@ def register_omgeaconf_resolvers() -> None:  # noqa: C901, PLR0915
     def _cmd_check_output(args: list[str]) -> str:
         """Returns the output of a command as a string."""
         try:
-            output = subprocess.check_output(args, stderr=subprocess.DEVNULL)
+            output = subprocess.check_output(args, stderr=subprocess.DEVNULL)  # noqa: S603
             return output.decode("ascii").strip()
         except Exception:
             return "unknown"

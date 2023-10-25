@@ -65,7 +65,7 @@ def pprint_config(
     rich.print(tree)
 
 
-def _prune_keys(x: typ.Any | dict | list, exclude: list[str]) -> None:
+def _prune_keys(x: typ.Any | dict | list, exclude: list[str]) -> None:  # noqa: ANN401
     """Prune keys from a dict or list."""
     if isinstance(x, dict):
         for key in list(x.keys()):

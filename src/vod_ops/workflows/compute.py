@@ -13,7 +13,7 @@ from vod_tools.ts_factory.ts_factory import TensorStoreFactory
 from .predict import Predict
 
 
-def compute_vectors(
+def compute_vectors(  # noqa: PLR0913
     dataset: vt.DictsSequence,
     *,
     module: torch.nn.Module,

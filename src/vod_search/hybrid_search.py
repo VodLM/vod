@@ -171,7 +171,7 @@ class HyrbidSearchMaster(SearchMaster):
     def _make_cmd(self) -> list[str]:
         raise NotImplementedError(f"{type(self).__name__} does not implement `_make_cmd`")
 
-    def __exit__(self, *args, **kwargs) -> None:  # noqa: ANN, ARG
+    def __exit__(self, *args, **kwargs) -> None:  # noqa: ANN003, ANN002
         """Stop the servers."""
         for server in self.servers.values():
             server.__exit__(*args, **kwargs)

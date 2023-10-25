@@ -133,7 +133,7 @@ class _UniqueValuesMap:
                 unique_values_ids[value] = idx
         return list(unique_values_ids.values())
 
-    def __call__(self, row: dict, idx: int) -> bool:  # noqa: ARG
+    def __call__(self, row: dict, idx: int) -> bool:  # noqa: ARG002
         """Check if an index is in a row."""
         if self._unique_ids_map is None:
             self._unique_ids_map = self._build_allowed_ids(self.sections, self.key)

@@ -42,7 +42,7 @@ def run() -> None:  # noqa: D103
         if time.time() - last_active > args.base * args.inactivity:
             loguru.logger.info("Shutting down...")
             loguru.logger.info(f"Running command: {args.cmd}")
-            subprocess.run(args.cmd.split())
+            subprocess.run(args.cmd.split())  # noqa: PLW1510, S603
             break
 
 

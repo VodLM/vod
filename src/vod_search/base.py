@@ -77,10 +77,10 @@ class SearchClient(abc.ABC):
         )
 
 
-Sc = typ.TypeVar("Sc", bound=SearchClient, covariant=True)
+Sc_co = typ.TypeVar("Sc_co", bound=SearchClient, covariant=True)
 
 
-class SearchMaster(typ.Generic[Sc], abc.ABC):
+class SearchMaster(typ.Generic[Sc_co], abc.ABC):
     """A class that manages a search server."""
 
     _timeout: float = 300
@@ -125,7 +125,7 @@ class SearchMaster(typ.Generic[Sc], abc.ABC):
         pass
 
     @abc.abstractmethod
-    def get_client(self) -> Sc:
+    def get_client(self) -> Sc_co:
         """Return a client to the server."""
         raise NotImplementedError
 
@@ -159,7 +159,7 @@ class SearchMaster(typ.Generic[Sc], abc.ABC):
 
         # spawn server
         server_proc = subprocess.Popen(
-            cmd,
+            cmd,  # noqa: S603
             env=env,
             stdout=stdout_file.open("w"),
             stderr=stderr_file.open("w"),

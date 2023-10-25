@@ -11,9 +11,9 @@ from vod_tools.misc.tensor_tools import serialize_tensor
 
 def make_predict_fingerprint(
     *,
-    dataset: typ.Any | vt.Sequence | vt.SupportsGetFingerprint,
-    collate_fn: typ.Any | vt.Collate | vt.SupportsGetFingerprint,
-    model: typ.Any | torch.nn.Module | vt.SupportsGetFingerprint,
+    dataset: typ.Any | vt.Sequence | vt.SupportsGetFingerprint,  # noqa: ANN401
+    collate_fn: typ.Any | vt.Collate | vt.SupportsGetFingerprint,  # noqa: ANN401
+    model: typ.Any | torch.nn.Module | vt.SupportsGetFingerprint,  # noqa: ANN401
     model_output_key: None | str = None,
 ) -> str:
     """Make a fingerprint for the `predict` operation."""

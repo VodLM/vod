@@ -1,5 +1,6 @@
 import os
 import pathlib
+import shutil
 import typing as typ
 import warnings
 
@@ -118,15 +119,15 @@ def _export_module(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Copy the extra files
-    for f in include_files:
-        logger.info(f"Copying `{f}` to `{output_dir.absolute()}`")
-        if not pathlib.Path(f).exists():
+    for f in map(pathlib.Path, include_files):
+        if not f.exists():
             warnings.warn(f"File `{f}` does not exist", stacklevel=2)
-        if pathlib.Path(f).is_dir():
-            warnings.warn(f"Cannot copy directory `{f}`. Only files are supported", stacklevel=2)
-        if pathlib.Path(f).is_symlink():
-            warnings.warn(f"Cannot copy symlink `{f}`. Only files are supported", stacklevel=2)
-        os.system(f"cp {f} {output_dir.absolute()}")
+        else:
+            logger.debug(f"Copying `{f}` to `{output_dir.absolute()}`")
+            if f.is_dir():
+                shutil.copytree(f, output_dir / f.name, symlinks=True)
+            else:
+                shutil.copy(f, output_dir, follow_symlinks=True)
 
     # Handle `transformers.PreTrainedModel`
     if isinstance(module, transformers.PreTrainedModel):

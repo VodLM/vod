@@ -1,3 +1,4 @@
+import ast
 import copy
 import os
 import pathlib
@@ -24,7 +25,7 @@ from .sharded_search import ShardedSearchMaster
 D = typ.TypeVar("D", bound=vt.Sequence)
 
 
-def build_search_index(
+def build_search_index(  # noqa: PLR0913
     index_type: str,
     *,
     sections: None | vt.DictsSequence,
@@ -270,7 +271,7 @@ def _init_dense_search_engine(
     raise TypeError(f"Unknown dense factory config type `{type(config)}`")
 
 
-def build_hybrid_search_engine(  # noqa: C901, PLR0912
+def build_hybrid_search_engine(  # noqa: C901, PLR0912, PLR0913
     *,
     sections: None | dict[ShardName, vt.DictsSequence],
     vectors: None | dict[ShardName, vt.Sequence[np.ndarray]],
@@ -287,7 +288,7 @@ def build_hybrid_search_engine(  # noqa: C901, PLR0912
 ) -> HyrbidSearchMaster:
     """Build a hybrid search engine."""
     if free_resources is None:
-        free_resources = eval(os.environ.get("FREE_SEARCH_RESOURCES", "True"))
+        free_resources = ast.literal_eval(os.environ.get("FREE_SEARCH_RESOURCES", "True"))
         free_resources = bool(free_resources)
     if skip_setup:
         free_resources = False

@@ -216,7 +216,7 @@ class Predict:
         return len(zero_ids) == 0
 
 
-def predict(
+def predict(  # noqa: PLR0913
     dataset: vt.Sequence,
     *,
     fabric: L.Fabric,

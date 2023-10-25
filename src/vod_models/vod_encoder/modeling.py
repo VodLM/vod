@@ -76,7 +76,7 @@ class Aggregator(abc.ABC, nn.Module):
 class MeanAgg(Aggregator):
     """Mean aggregator."""
 
-    def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:  # noqa: ARG
+    def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:  # noqa: D102
         sum_mask = mask.sum(dim=-1, keepdim=True)
         x_mean = x.sum(dim=-2) / sum_mask.to(self._dtype_marker.dtype)
         return x_mean.masked_fill(sum_mask <= 0, 0.0)
@@ -85,14 +85,14 @@ class MeanAgg(Aggregator):
 class ClsAgg(Aggregator):
     """Returns the vector at the CLS token."""
 
-    def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:  # noqa: ARG
+    def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:  # noqa: D102, ARG002
         return x[..., 0, :]
 
 
 class MaxAgg(Aggregator):
     """Returns the vector with the largest norm."""
 
-    def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:  # noqa: ARG
+    def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:  # noqa: ARG002, D102
         vec_norms = torch.norm(x, dim=-1, keepdim=True)
         return x.gather(dim=-2, index=vec_norms.argmax(dim=-2, keepdim=True))
 
@@ -100,7 +100,7 @@ class MaxAgg(Aggregator):
 class IdentityAgg(Aggregator):
     """Identity aggregator (no aggregation)."""
 
-    def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:  # noqa: ARG
+    def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:  # noqa: ARG002, D102
         return x
 
 
