@@ -159,7 +159,7 @@ class VodPooler(torch.nn.Module):
             }[config.output_norm]
 
         # Temperature
-        self.scaler = nn.Parameter(torch.tensor(config.scaler or 1.0), requires_grad=False)
+        self.log_scaler = nn.Parameter(torch.tensor(config.scaler).log(), requires_grad=config.learn_scaler)
 
     def forward(self, hidden_states: torch.Tensor, *, attention_mask: torch.Tensor) -> torch.Tensor:
         """Pools the model output and project. Note that the activation is applied last."""
@@ -170,7 +170,8 @@ class VodPooler(torch.nn.Module):
             pooled_output = self.activation(pooled_output)
         if self.norm_fn:
             pooled_output = self.norm_fn(pooled_output)
-        return pooled_output / self.scaler
+
+        return pooled_output * self.log_scaler.mul(0.5).exp()
 
     def get_encoding_shape(self) -> tuple[int, ...]:
         """The output dimension of the encoder."""

@@ -3,4 +3,4 @@ projection_size: null
 output_activation: null
 output_norm: null
 agg_method: cls
-scaler: null
+scaler: 1.0

@@ -3,4 +3,4 @@ projection_size: null
 output_activation: null
 output_norm: l2
 agg_method: mean
-scaler: null
+scaler: 1.0

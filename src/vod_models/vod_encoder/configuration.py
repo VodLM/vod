@@ -16,7 +16,8 @@ class VodPoolerConfig:
     output_activation: None | ActivationMethod = None
     output_norm: None | NormMethod = None
     agg_method: AggMethod = "mean"
-    scaler: None | float = None
+    scaler: float = 1.0
+    learn_scaler: bool = False
 
     def __init__(
         self,
@@ -24,7 +25,8 @@ class VodPoolerConfig:
         output_activation: None | ActivationMethod = None,
         output_norm: None | NormMethod = None,
         agg_method: AggMethod = "mean",
-        scaler: None | float = None,
+        scaler: float = 1.0,
+        learn_scaler: bool = False,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
@@ -33,6 +35,7 @@ class VodPoolerConfig:
         self.output_norm = output_norm
         self.agg_method = agg_method
         self.scaler = scaler
+        self.learn_scaler = learn_scaler
 
     def to_dict(self) -> dict[str, Any]:
         """Convert config to dict."""
@@ -42,6 +45,7 @@ class VodPoolerConfig:
             "output_norm": self.output_norm,
             "agg_method": self.agg_method,
             "scaler": self.scaler,
+            "learn_scaler": self.learn_scaler,
         }
 
 
