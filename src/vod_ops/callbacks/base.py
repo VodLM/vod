@@ -5,13 +5,13 @@ import torch
 class Callback:
     """Base class for callbacks."""
 
+    def on_after_setup(self, *, fabric: L.Fabric, module: torch.nn.Module) -> None:  # noqa: D102
+        pass
+
     def on_fit_start(self, *, fabric: L.Fabric, module: torch.nn.Module) -> None:  # noqa: D102
         pass
 
     def on_fit_end(self, *, fabric: L.Fabric, module: torch.nn.Module) -> None:  # noqa: D102
-        pass
-
-    def on_after_setup(self, *, fabric: L.Fabric, module: torch.nn.Module) -> None:  # noqa: D102
         pass
 
     def on_train_start(self, *, fabric: L.Fabric, module: torch.nn.Module) -> None:  # noqa: D102

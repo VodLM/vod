@@ -1,17 +1,22 @@
 import os
 import pathlib
+import typing as typ
 import warnings
 
 import fsspec
 import gcsfs
 import lightning as L
+import omegaconf as omg
 import torch
 import transformers
+import vod_configs
 from lightning.fabric import wrappers as fabric_wrappers
 from lightning_utilities.core.rank_zero import rank_zero_only
 from loguru import logger
 
 from .base import Callback
+
+ConfLike = typ.Union[dict[str, typ.Any], omg.DictConfig]
 
 
 class ExportModule(Callback):
@@ -23,20 +28,35 @@ class ExportModule(Callback):
         output_dir: str | pathlib.Path = "exported-module",
         include_files: None | list[str] = None,  # Include additional files in the export
         upload_path: None | str = None,  # Upload the exported module to a remote location
-        only_submodule: None | str = None,
-        submodules: None | list[str],
+        submodules: None
+        | str
+        | list[str],  # When setting this, only export the given submodules, each to a separate dir
         on_fit_end: bool = True,  # at the end the whole training routine
         on_train_end: bool = False,  # at the end of each training period
+        tokenizers: None
+        | transformers.PreTrainedTokenizer
+        | ConfLike
+        | dict[str, transformers.PreTrainedTokenizer | dict[str, ConfLike]] = None,
     ) -> None:
         super().__init__()
         self.output_dir = pathlib.Path(output_dir).expanduser()
         self.include_files = include_files or []
         self.upload_path = upload_path
-        self.only_submodule = only_submodule
-        if only_submodule is not None and submodules is not None:
-            submodules = []
-            warnings.warn("Both `only_submodule` and `submodules` are set. Ignoring `submodules`.")  # noqa: B028
+        if isinstance(submodules, str):
+            submodules = [submodules]
         self.submodules = submodules
+        if submodules is not None:
+            if not isinstance(tokenizers, (dict, omg.DictConfig)):
+                raise ValueError(
+                    f"Must provide a `tokenizers` dict when using `submodules`. Found `{type(tokenizers)}`"
+                )
+            if set(self.submodules) >= set(tokenizers.keys()):  # type: ignore
+                raise ValueError(
+                    f"`submodules` list `{self.submodules}` must match `tokenizers` keys {tokenizers.keys()}"
+                )
+            self.tokenizers = tokenizers or {}
+        else:
+            self.tokenizers = tokenizers or None
 
         # triggers
         self._on_fit_end = on_fit_end
@@ -60,20 +80,28 @@ class ExportModule(Callback):
             module = module.module
 
         # Export the module
-        if self.only_submodule is not None:
-            submodule_ = getattr(module, self.only_submodule, None)
-            if submodule_ is None:
-                raise ValueError(f"Submodule `{self.only_submodule}` not found in `{type(module).__name__}`")
-            _export_module(submodule_, self.output_dir, self.include_files)
-        elif self.submodules is None:
-            _export_module(module, self.output_dir, self.include_files)
-        else:
+        if self.submodules is None:
+            _export_module(
+                module,
+                self.output_dir,
+                self.include_files,
+                tokenizer=self.tokenizers,  # Expect a single tokenizer
+            )
+        elif isinstance(self.submodules, (list, omg.ListConfig)):
             for submodule in self.submodules:
                 submodule_ = getattr(module, submodule, None)
                 if submodule_ is None:
                     logger.debug(f"Submodule `{submodule}` not found in `{type(module).__name__}`")
                     continue
-                _export_module(submodule_, self.output_dir / submodule, self.include_files)
+                export_path = self.output_dir / submodule if len(self.submodules) > 1 else self.output_dir
+                _export_module(
+                    submodule_,
+                    export_path,
+                    self.include_files,
+                    tokenizer=self.tokenizers[submodule],  # type: ignore # Expect a tokenizer per module
+                )
+        else:
+            raise TypeError(f"Invalid type `{type(self.submodules)}` for `submodules`")
 
         # Upload the module
         if self.upload_path is not None:
@@ -84,6 +112,7 @@ def _export_module(
     module: torch.nn.Module | transformers.PreTrainedModel,
     output_dir: pathlib.Path,
     include_files: list[str],
+    tokenizer: None | transformers.PreTrainedTokenizerBase | ConfLike = None,
 ) -> None:
     """Export a module."""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -106,6 +135,15 @@ def _export_module(
     else:
         logger.info(f"Exporting module `{type(module).__name__}` to `{output_dir.absolute()}` (torch state dict)")
         torch.save(module.state_dict(), output_dir / "model.pt")
+
+    if tokenizer is None:
+        return
+
+    # Handle the tokenizer
+    if not isinstance(tokenizer, transformers.PreTrainedTokenizerBase):
+        tokenizer = vod_configs.TokenizerConfig(**tokenizer).instantiate()  # type: ignore
+    logger.info(f"Exporting tokenizer `{type(tokenizer).__name__}` to `{output_dir.absolute()}` (HF pretrained)")
+    tokenizer.save_pretrained(output_dir)
 
 
 def init_gcloud_filesystem() -> fsspec.AbstractFileSystem:

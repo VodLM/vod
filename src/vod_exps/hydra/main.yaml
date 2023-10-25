@@ -26,7 +26,7 @@ lm_name: ${parse_lm_name:${model}}
 run_name: ${exp_version}-${model_name}--${rdn_name:}${exp_suffix}
 
 # Exposed variables -- set this to control your app
-exp_version: v1.0
+exp_version: v1
 code_version: ${code_version:}
 exp_suffix: ""
 exp_name: vod

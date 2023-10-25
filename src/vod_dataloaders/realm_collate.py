@@ -333,8 +333,11 @@ def sample_answer_(batch: dict[str, list[typ.Any]]) -> None:
     answer_scores: list[list[float]] = batch[ANSWER_SCORES]
     batch[ANSWER] = []
     for ans_options, ans_scores in zip(answers, answer_scores):
-        ans_choice_idx = np.argmax(ans_scores)
-        batch[ANSWER].append(ans_options[ans_choice_idx])
+        if len(ans_scores) > 0:
+            ans_choice_idx = np.argmax(ans_scores)
+            batch[ANSWER].append(ans_options[ans_choice_idx])
+        else:
+            batch[ANSWER].append("")
 
 
 def _get_extra_attributes(
