@@ -50,8 +50,8 @@ DATASET_CONFIGS = {
 
 
 class _Args(arguantic.Arguantic):
-    name: str = "scifact"
-    use_sectioning: bool = False
+    name: str = "quality"
+    use_sectioning: int = 1
 
 
 def run(args: _Args) -> None:
@@ -112,7 +112,6 @@ def run(args: _Args) -> None:
         batch = queries[:1]
 
         # Make a rich console highlighter
-
         console = Console(
             highlighter=QueryHighlighter(
                 batch["query"][0],

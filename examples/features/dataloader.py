@@ -1,6 +1,6 @@
-import functools
 import pathlib
 import tempfile
+import typing as typ
 
 import dotenv
 import lightning as L
@@ -8,16 +8,14 @@ import rich
 import torch
 import torch.nn.functional as F
 import transformers
-import vod_configs
-import vod_dataloaders
-import vod_search
+import vod_configs as vc
+import vod_dataloaders as vdl
+import vod_datasets as vds
+import vod_search as vs
 import vod_types as vt
 from rich.progress import track
-from torch.utils import data as torch_data
-from vod_ops.utils import helpers
-from vod_tools import arguantic, pipes, predict
-
-from src import vod_datasets
+from vod_ops import Predict
+from vod_tools import arguantic, pretty
 
 dotenv.load_dotenv(str(pathlib.Path(__file__).parent / ".predict.env"))
 
@@ -25,7 +23,7 @@ dotenv.load_dotenv(str(pathlib.Path(__file__).parent / ".predict.env"))
 class Args(arguantic.Arguantic):
     """Arguments for the script."""
 
-    dset: str = "squad.en"
+    dset: str = "squad_v2"
     split: str = "validation"
     name_or_path: str = "sentence-transformers/all-MiniLM-L6-v2"
     batch_size: int = 32
@@ -46,9 +44,29 @@ class Encoder(torch.nn.Module):
         pooled_output = _mean_pooling(output.last_hidden_state, batch["attention_mask"])
         return F.normalize(pooled_output, p=2, dim=-1)
 
-    def get_output_shape(self, *args, **kwargs) -> tuple[int]:  # noqa: ANN002, ANN003
+    def get_encoding_shape(self, *args, **kwargs) -> tuple[int]:  # noqa: ANN002, ANN003
         """Return the output shape."""
         return (self.backbone.config.hidden_size,)
+
+
+class CollateFn:
+    """Extract questions and tokenize into a batch."""
+
+    def __init__(self, text_field: str, tokenizer: transformers.PreTrainedTokenizerBase, template: str):
+        self.text_field = text_field
+        self.tokenizer = tokenizer
+        self.template = template
+
+    def __call__(
+        self,
+        inputs: typ.Iterable[typ.Mapping[str, typ.Any]],
+        **kws: typ.Any,
+    ) -> dict[str, torch.Tensor]:
+        """Collate function for the `predict` tool."""
+        texts = [x[self.text_field] for x in inputs]
+        texts = [self.template.format(text) for text in texts]
+        output = self.tokenizer(texts, return_tensors="pt", padding=True, truncation=True)
+        return dict(output)
 
 
 @torch.inference_mode()
@@ -62,53 +80,75 @@ def run(args: Args) -> None:
     fabric.launch()
     model = fabric.setup_module(model)
 
-    # 2. Load the dataset (we are working on extending this interface to external datasets)
-    dset_factory = vod_datasets.RetrievalDatasetFactory.from_config({"name": args.dset, "split": args.split})
-    questions = dset_factory.get_qa_split()
-    sections = dset_factory.get_sections()
-    if args.subset_size > 0:
-        questions = questions.select(range(args.subset_size))
-        sections = sections.select(range(args.subset_size))
+    # 2. Load the dataset
+    queries = vds.load_dataset(
+        vc.QueriesDatasetConfig(
+            identifier="squad_queries",
+            name_or_path=args.dset,
+            split=args.split,
+            link="squad_sections",
+        )
+    )
+    sections = vds.load_dataset(
+        vc.SectionsDatasetConfig(
+            identifier="squad_sections",
+            name_or_path=args.dset,
+            split=args.split,
+            search=None,
+        )
+    )
     rich.print(
         {
-            "factory": dset_factory,
-            "questions": questions,
+            "queries": queries,
             "sections": sections,
         }
     )
 
     with tempfile.TemporaryDirectory() as tmpdir:
         # 3. Compute the vectors for the questions and sections
-        predict_fn = functools.partial(
-            predict.predict,
-            fabric=fabric,
+        question_vectors = Predict(
+            dataset=queries,
+            save_dir=tmpdir,
             model=model,
-            loader_kwargs={"batch_size": args.batch_size, "num_workers": args.num_workers},
-            cache_dir=tmpdir,
-            model_output_key=None,
-            collate_fn=functools.partial(
-                pipes.torch_tokenize_collate,
+            collate_fn=CollateFn(
+                text_field="query",
                 tokenizer=tokenizer,
-                text_key="text",
-                truncation=True,
+                template="query: {}",
             ),
+            model_output_key=None,
+        )(
+            fabric=fabric,
+            loader_kwargs={"batch_size": 10, "num_workers": 0},
+            open_mode="x",
         )
-        question_vectors = predict_fn(dataset=questions)  # type: ignore
-        section_vectors = predict_fn(dataset=sections)  # type: ignore
+        section_vectors = Predict(
+            dataset=sections,
+            save_dir=tmpdir,
+            model=model,
+            collate_fn=CollateFn(
+                text_field="content",
+                tokenizer=tokenizer,
+                template="passage: {}",
+            ),
+            model_output_key=None,
+        )(
+            fabric=fabric,
+            loader_kwargs={"batch_size": 10, "num_workers": 0},
+            open_mode="x",
+        )
 
         # 4. Spin up a hybrid search engine
-        with vod_search.build_hybrid_search_engine(
-            sections=sections,  # type: ignore
-            vectors=vt.as_lazy_array(section_vectors),
-            config=vod_configs.SearchConfig(
-                dense=vod_configs.FaissFactoryConfig(
-                    factory="IVFauto,Flat",
-                ),
-                sparse=vod_configs.ElasticsearchFactoryConfig(
-                    text_key="text",
-                    persistent=False,
-                ),
-            ),
+        with vs.build_hybrid_search_engine(
+            sections={args.dset: sections},  # {shard_id : dataset}
+            vectors={args.dset: vt.as_lazy_array(section_vectors)},  # {shard_id : vectors}
+            configs={
+                args.dset: vc.HybridSearchFactoryConfig(
+                    engines={
+                        "dense": vc.FaissFactoryConfig(factory="Flat"),
+                        "sparse": vc.ElasticsearchFactoryConfig(persistent=False),
+                    }
+                )
+            },
             cache_dir=tmpdir,
             dense_enabled=True,
             sparse_enabled=True,
@@ -116,36 +156,33 @@ def run(args: Args) -> None:
             search_client = master.get_client()
             rich.print(search_client)
 
-            # 5. Setup the VOD retrieval dataloader
-            collate_fn = vod_dataloaders.RealmCollate(
-                tokenizer=tokenizer,
-                sections=sections,  # type: ignore
+            # 5. Setup the VOD Realm dataloader
+            realm_dataloader = vdl.RealmDataloader.factory(
+                queries={args.dset: (args.dset, queries)},  # {query_id : (shard_id, dataset)}
+                vectors={args.dset: vt.as_lazy_array(question_vectors)},  # {query_id : vectors}
                 search_client=search_client,
-                config=vod_configs.RetrievalCollateConfig(),
-                parameters={"dense": 1.0, "sparse": 1.0},
-            )
-            dataset_with_vectors = helpers.IndexWithVectors(
-                dataset=questions,
-                vectors=vt.as_lazy_array(question_vectors),  # type: ignore
-                vector_key="vector",
-            )
-            dataloader = torch_data.DataLoader(
-                dataset=dataset_with_vectors,  # type: ignore
-                collate_fn=collate_fn,
-                num_workers=args.num_workers,
+                collate_config=vc.RealmCollateConfig(
+                    templates=vc.TemplatesConfig(
+                        query="query: {{ query }}",
+                        section="passage: {{ content }}",
+                    ),
+                    tokenizer_encoder=vc.TokenizerConfig(name_or_path=args.name_or_path),
+                    tokenizer_lm=None,
+                    n_sections=5,
+                ),
             )
 
             # 6. Iterate through the questions
             for j, batch in enumerate(
                 track(
-                    dataloader,
+                    realm_dataloader,
                     description="Making batches by retrieving documents dynamically",
-                    total=len(dataloader),
+                    total=len(realm_dataloader),
                 )
             ):
                 if j == 0:
-                    pipes.pprint_retrieval_batch(batch, tokenizer=tokenizer, skip_special_tokens=True)
-                    pipes.pprint_batch(batch, header="Batch")
+                    pretty.pprint_retrieval_batch(batch, tokenizer=tokenizer, skip_special_tokens=True)
+                    pretty.pprint_batch(batch, header="Batch")
                 ...
 
 

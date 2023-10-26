@@ -1,19 +1,21 @@
 from __future__ import annotations
 
-import functools
 import tempfile
-from functools import partial
+import typing as typ
 from pathlib import Path
 
 import datasets
 import dotenv
 import lightning as L
 import rich
-import tensorstore as ts
 import torch
 import transformers
+import vod_types as vt
+from tensorstore import _tensorstore as ts
 from transformers import BertModel
-from vod_tools import arguantic, dstruct, pipes, predict
+from vod_ops import Predict
+from vod_tools import arguantic
+from vod_tools.ts_factory.ts_factory import TensorStoreFactory
 
 dotenv.load_dotenv(str(Path(__file__).parent / ".predict.env"))
 
@@ -35,18 +37,38 @@ class Encoder(torch.nn.Module):
     def forward(self, batch: dict) -> dict[str, torch.Tensor]:
         """Forward pass of the model, returns the embeddings of the [CLS] token."""
         output = self.bert(batch["input_ids"], batch["attention_mask"])
-        return {"pooler_output": output.pooler_output}
+        return {"poolet_output": output.pooler_output}
+
+
+class CollateFn:
+    """Extract questions and tokenize into a batch."""
+
+    def __init__(self, tokenizer: transformers.PreTrainedTokenizerBase):
+        self.tokenizer = tokenizer
+
+    def __call__(
+        self,
+        inputs: typ.Iterable[typ.Mapping[str, typ.Any]],
+        **kws: typ.Any,
+    ) -> dict[str, torch.Tensor]:
+        """Collate function for the `predict` tool."""
+        texts = [x["question"] for x in inputs]
+        output = self.tokenizer(texts, return_tensors="pt", padding=True, truncation=True)
+        return dict(output)
 
 
 def run(args: Args) -> None:
     """Showcase the `predict` tool."""
-    bert = transformers.AutoModel.from_pretrained(args.model_name)
+    tokenizer = transformers.AutoTokenizer.from_pretrained(args.name_or_path)
+    bert = transformers.AutoModel.from_pretrained(args.name_or_path)
     model = Encoder(bert)
     model.eval()
-    tokenizer = transformers.AutoTokenizer.from_pretrained(args.model_name)
-    squad: datasets.Dataset = datasets.load_dataset("squad", split=args.split)  # type: ignore
+    squad_: datasets.Dataset = datasets.load_dataset("squad", split=args.split)  # type: ignore
+    squad: vt.DictsSequence = squad_
     rich.print(squad)
-    collate_fn = partial(pipes.torch_tokenize_collate, tokenizer=tokenizer, text_key="question")
+
+    # collate_fn
+    collate_fn = CollateFn(tokenizer=tokenizer)
 
     # Init Lightning's fabric
     fabric = L.Fabric()
@@ -56,22 +78,27 @@ def run(args: Args) -> None:
     # Compute the vectors (first create them and readthem, then only read them)
     with tempfile.TemporaryDirectory() as tmpdir:
         # Define the predict function
-        predict_fn = functools.partial(
-            predict.predict,  # <- the actual function, below are the arguments
-            fabric=fabric,
-            cache_dir=tmpdir,
+        predict_fn = Predict(
+            dataset=squad,
+            save_dir=tmpdir,
             model=model,
-            model_output_key="pooler_output",
             collate_fn=collate_fn,
-            loader_kwargs={"batch_size": 10, "num_workers": 0},
+            model_output_key="poolet_output",
         )
 
         # Step 1 - Write the vectors and save to cache
-        store_factory: dstruct.TensorStoreFactory = predict_fn(squad, open_mode="x")  # type: ignore
+        store_factory: TensorStoreFactory = predict_fn(
+            fabric=fabric,
+            loader_kwargs={"batch_size": 10, "num_workers": 0},
+            open_mode="x",
+        )
 
-        # Step 2 - Call the function again, this time in ready only mode `r`, the function will
-        #         read the vectors from the cache without computing them again.
-        store_factory: dstruct.TensorStoreFactory = predict_fn(squad, open_mode="r")  # type: ignore
+        # Step 2 - Call the function again, the function will read the vectors from the cache.
+        store_factory: TensorStoreFactory = predict_fn(
+            fabric=fabric,
+            loader_kwargs={"batch_size": 10, "num_workers": 0},
+            open_mode="r",
+        )
 
         # Step 3 - Open the TensorStore (on-disk memory structure)
         rich.print({"store_factory": store_factory})

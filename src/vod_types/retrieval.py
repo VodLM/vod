@@ -12,13 +12,13 @@ import torch
 from numba.typed import List
 from typing_extensions import Self, Type
 
-from .sequence import SliceType
+ArrayIndexType: typ.TypeAlias = typ.Union[int, slice, typ.Iterable[int]]
 
 
 class RetrievalData(abc.ABC):
     """Model search results."""
 
-    __slots__ = ("scores", "indices", "labels")
+    __slots__ = ("scores", "indices", "labels", "allow_unsafe", "meta")
     _expected_dim: int
     _str_sep: str = ""
     _repr_sep: str = ""
@@ -76,7 +76,7 @@ class RetrievalData(abc.ABC):
         )
 
     @abc.abstractmethod
-    def __getitem__(self, item: SliceType) -> "RetrievalData":
+    def __getitem__(self, item: ArrayIndexType) -> "RetrievalData":
         """Slice the data."""
         ...
 

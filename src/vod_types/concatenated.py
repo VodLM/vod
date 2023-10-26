@@ -3,34 +3,23 @@ import typing as typ
 import datasets
 import numpy as np
 import torch
-from vod_types.sequence import Sequence, SliceType, T_co
+from vod_types.sequence import Sequence
 
-T = typ.TypeVar("T")
+_T = typ.TypeVar("_T")
+_T_co = typ.TypeVar("_T_co", covariant=True)
 
 
-class ConcatenatedSequences(Sequence[T_co]):
+class ConcatenatedSequences(Sequence[_T_co]):
     """A concatenation of sequences."""
 
-    parts: list[Sequence[T_co]]
+    parts: list[Sequence[_T_co]]
 
-    def __init__(self, parts: typ.Iterable[Sequence[T_co]]) -> None:
+    def __init__(self, parts: typ.Iterable[Sequence[_T_co]]) -> None:
         self.parts = list(parts)
 
-    def __getitem__(self, idx: SliceType) -> T_co:
+    def __getitem__(self, idx: int) -> _T_co:
         """Get an item by index."""
-        if isinstance(idx, (int, np.int64, np.int32, np.uint64, np.uint32)):  # type: ignore
-            return _get_item_int(idx, self.parts)
-
-        if isinstance(idx, slice):
-            if idx.start is None:
-                idx = slice(0, idx.stop, idx.step)
-            if idx.stop is None:
-                idx = slice(idx.start, len(self), idx.step)
-            chunks = list(_get_interset_slice(idx, self.parts))
-            chunks = (p[i] for i, p in chunks)
-            return _join_results(chunks)
-
-        return _stack_results([self.__getitem__(i) for i in idx])
+        return _get_item_int(idx, self.parts)
 
     def __len__(self) -> int:
         """Get the length of the indexable."""
@@ -45,12 +34,12 @@ class ConcatenatedSequences(Sequence[T_co]):
         return str(self)
 
 
-def _get_item_int(idx: int, parts: typ.Iterable[Sequence[T]]) -> T:
+def _get_item_int(idx: int, parts: typ.Iterable[Sequence[_T]]) -> _T:
     i, part = _get_intersect(idx, parts)
     return part[i]
 
 
-def _get_intersect(idx: int, parts: typ.Iterable[Sequence[T]]) -> tuple[int, Sequence[T]]:
+def _get_intersect(idx: int, parts: typ.Iterable[Sequence[_T]]) -> tuple[int, Sequence[_T]]:
     if idx < 0:
         raise NotImplementedError("Negative indices are not supported.")
     for part in parts:
@@ -63,8 +52,8 @@ def _get_intersect(idx: int, parts: typ.Iterable[Sequence[T]]) -> tuple[int, Seq
 
 def _get_interset_slice(
     idx: slice,
-    parts: typ.Iterable[Sequence[T]],
-) -> typ.Iterable[tuple[slice, Sequence[T]]]:
+    parts: typ.Iterable[Sequence[_T]],
+) -> typ.Iterable[tuple[slice, Sequence[_T]]]:
     """Return the list of intersecting slices with their relative slices."""
     total_length = sum([len(p) for p in parts])
     if idx.step is not None and idx.step != 1:
@@ -90,7 +79,7 @@ def _get_interset_slice(
         offset += len(part)
 
 
-def _join_results(results: typ.Iterable[T]) -> T:
+def _join_results(results: typ.Iterable[_T]) -> _T:
     results = list(results)
     if isinstance(results[0], list):
         return [el for result in results for el in result]  # type: ignore
@@ -105,7 +94,7 @@ def _join_results(results: typ.Iterable[T]) -> T:
     raise TypeError(f"Unsupported type {type(results[0])}")
 
 
-def _stack_results(results: typ.Iterable[T]) -> T:
+def _stack_results(results: typ.Iterable[_T]) -> _T:
     results = list(results)
     if isinstance(results[0], list):
         return list(results)  # type: ignore

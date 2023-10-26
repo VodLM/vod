@@ -7,5 +7,8 @@ from .utils.schemas import (
     SectionsWithVectors,
 )
 from .workflows.benchmark import benchmark_retrieval
-from .workflows.compute import compute_vectors
+from .workflows.compute import (
+    Predict,
+    compute_vectors,
+)
 from .workflows.train import spawn_search_and_train

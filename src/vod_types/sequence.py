@@ -1,30 +1,26 @@
 import typing as typ
-from collections import abc
 
-from datasets import Dataset
-
-T = typ.TypeVar("T")
-T_co = typ.TypeVar("T_co", covariant=True)
-
-SliceType: typ.TypeAlias = typ.Union[int, slice, list[int]]
+_T = typ.TypeVar("_T")
+_T_co = typ.TypeVar("_T_co", covariant=True)
 
 
-class Sequence(abc.Sequence[T_co]):
-    """Similar to `collections.abc.Sequence`."""
+@typ.runtime_checkable
+class Sequence(typ.Protocol[_T_co]):
+    """A sequence of data."""
 
-    def __getitem__(self, idx: SliceType) -> T_co:
-        """Get an item by index."""
+    def __getitem__(self, __it: int) -> _T_co:
         ...
 
     def __len__(self) -> int:
-        """Get the length of the indexable."""
         ...
 
 
-class DictsSequence(Sequence[dict[str, T]]):
+@typ.runtime_checkable
+class DictsSequence(typ.Protocol[_T]):
     """A sequence of dictionaries."""
 
+    def __getitem__(self, __it: int) -> dict[str, _T]:
+        ...
 
-# Register `datasets.Dataset` as a `SequenceDict`.
-DictsSequence.register(Dataset)  # type: ignore
-DictsSequence.register(DictsSequence)  # type: ignore
+    def __len__(self) -> int:
+        ...

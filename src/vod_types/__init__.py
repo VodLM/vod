@@ -34,5 +34,4 @@ from .retrieval import (
 from .sequence import (
     DictsSequence,
     Sequence,
-    SliceType,
 )

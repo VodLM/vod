@@ -136,7 +136,7 @@ class _WithExtrasAndVectors(vt.DictsSequence[T]):
         self.vector_key = vector_key
         self.extras = extras or {}
 
-    def __getitem__(self, index: vt.SliceType) -> dict[str, T]:
+    def __getitem__(self, index: int) -> dict[str, T]:
         row = self.dataset[index]
         row.update(self.extras)
         if self.vectors is not None:

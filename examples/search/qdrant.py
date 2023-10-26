@@ -28,12 +28,12 @@ def run(args: Args) -> None:
 
     # Dataset
     vectors = np.random.randn(args.dataset_size, args.vector_size).astype("float32")
-    groups = np.linspace(0, args.n_categories, len(vectors)).astype("int64")
+    subset_ids = [str(g) for g in np.linspace(0, args.n_categories, len(vectors)).astype("int64")]
 
     # Spin up a server
     with qdrant_search.QdrantSearchMaster(
         vectors=vectors,  # type: ignore
-        subset_ids=groups,
+        subset_ids=subset_ids,
         index_name=index_name,
         qdrant_body={
             "shard_number": 1,
@@ -42,14 +42,15 @@ def run(args: Args) -> None:
                 "m": 16,
             },
             "quantization_config": {
-                "product": {
-                    "compression": "x8",
+                "scalar": {
+                    "type": "int8",
+                    "quantile": 0.99,
                     "always_ram": True,
                 },
             },
         },
         search_params={
-            "ef_search": 256,
+            "hnsw_ef": 256,
         },
         persistent=args.persistent,
     ) as master:
@@ -57,19 +58,19 @@ def run(args: Args) -> None:
         rich.print(client)
         logger.info(f"Client: {client.size()} records")
 
-        query_vecs = np.random.randn(args.bs, args.vector_size).astype("float32")
-        query_groups = np.random.randint(0, args.n_categories, size=args.bs).astype("int64")
-
+        # Make a dummy query and search
+        query_vecs = np.random.randn(args.batch_size, args.vector_size).astype("float32")
+        query_subset_ids = np.random.randint(0, args.n_categories, size=args.batch_size).astype("int64")
         results = client.search(
             vector=query_vecs,
-            subset_ids=query_groups,  # type: ignore
+            subset_ids=[[str(g)] for g in query_subset_ids],
             top_k=3,
         )
         rich.print(
             {
                 "search_results": results,
-                "query_groups": query_groups,
-                "results_groups": [[groups[i] for i in row] for row in results.indices],
+                "query_subsets": query_subset_ids,
+                "result_subsets": [[subset_ids[i] for i in row] for row in results.indices],
             }
         )
 
@@ -77,11 +78,11 @@ def run(args: Args) -> None:
         logger.info("Benchmarking...")
         start = time.perf_counter()
         for _ in track(range(args.n_trials), description="Benchmarking Qdrant"):
-            query_vecs = np.random.randn(args.bs, args.vector_size).astype("float32")
-            query_groups = np.random.randint(0, args.n_categories, size=args.bs).astype("int64")
+            query_vecs = np.random.randn(args.batch_size, args.vector_size).astype("float32")
+            query_subset_ids = np.random.randint(0, args.n_categories, size=args.batch_size).astype("int64")
             results = client.search(
                 vector=query_vecs,
-                subset_ids=query_groups,  # type: ignore
+                subset_ids=[[str(g)] for g in query_subset_ids],
                 top_k=args.top_k,
             )
         end = time.perf_counter()
