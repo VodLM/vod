@@ -3,6 +3,7 @@ import time
 import typing as typ
 import warnings
 
+import datasets
 import numpy as np
 import torch
 import transformers
@@ -136,7 +137,7 @@ class RealmCollate(vt.Collate[typ.Any, torch.Tensor | list[int | float | str]]):
         # Fetch the content of each section from the huggingface `datasets.Dataset`
         sections_shape = samples.batch.indices.shape
         flat_ids = samples.batch.indices.flatten().tolist()
-        flat_sections_content: dict[str, list[typ.Any]] = self.sections[flat_ids]
+        flat_sections_content: dict[str, list[typ.Any]] = _fecth_section_content(self.sections, flat_ids)
 
         # Tokenize the sections and add them to the output
         with utils.BlockTimer(name="tokenize_time", output=diagnostics):
@@ -406,3 +407,9 @@ def _extract_relevances(batch: dict[str, typ.Any]) -> list[dict[str, float]]:
     for ids, scores in zip(retrieval_ids, retrieval_scores):
         relevances.append(dict(zip(ids, scores)))
     return relevances
+
+
+def _fecth_section_content(sections: vt.DictsSequence, idx: list[int]) -> dict[str, list[typ.Any]]:
+    if isinstance(sections, datasets.Dataset):
+        return sections[idx]
+    raise NotImplementedError(f"Unsupported type: {type(sections)}")

@@ -440,7 +440,7 @@ def _ingest_data(
         range(0, len(vectors), batch_size),
         description=f"{_collection_name(collection_name)}: Ingesting {pretty.human_format_nb(len(vectors))} vectors",
     ):
-        vec_chunk = vectors[j : j + batch_size]
+        vec_chunk = vt.slice_arrays_sequence(vectors, slice(j, j + batch_size))
         if groups is None:
             payloads = None
         else:

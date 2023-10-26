@@ -63,7 +63,7 @@ def _build_faiss_index_on_cpu(
         train_size = len(vectors)
 
     for i in range(0, len(vectors), train_size):
-        batch = vectors[i : i + train_size]
+        batch = vt.slice_arrays_sequence(vectors, slice(i, i + train_size))
         batch = np.asarray(batch).astype(np.float32)
         if i == 0:
             logger.info(f"Training faiss index on `{len(batch)}` vectors " f"({len(batch) / len(vectors):.2%} (cpu)")

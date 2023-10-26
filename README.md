@@ -86,20 +86,20 @@ poetry install
 ## Examples
 
 ```shell
-# How load MSMarco
-poetry run python -m examples.load_msmarco
+# How load datasets wtih the universal `rosetta` intergace
+poetry run python -m examples.datasets.rosetta
 
 # How to start and use a `faiss` search engine
-poetry run python -m examples.faiss_search
+poetry run python -m examples.search.faiss
 
 # How to start and use a `qdrant` search engine
-poetry run python -m examples.qdrant_search
+poetry run python -m examples.search.qdrant
 
 # How to compute embeddings for a large dataset using `lighning.Fabric`
-poetry run python -m examples.predict
+poetry run python -m examples.features.predict
 
-# How to build dataloaders with a Hybrid search engine
-poetry run python -m examples.dataloader
+# How to build a Realm dataloader backed by a Hybrid search engine
+poetry run python -m examples.features.dataloader
 
 ```
 
@@ -109,6 +109,9 @@ VOD allows training large retrieval models while dynamically retrieving sections
 
 ```shell
 poetry run train
+
+# Debugging -- Run the training script with a small model and small dataset
+poetry run train model/encoder=debug datasets=scifact
 ```
 
 <details>

@@ -161,6 +161,8 @@ def _concatenate_dsets(parts: list[D]) -> D:
     if len(parts) > 1:
         if all(isinstance(p, datasets.Dataset) for p in parts):
             return datasets.concatenate_datasets(parts)  # type: ignore
-        return vt.ConcatenatedSequences(parts)  # type: ignore
+        raise NotImplementedError(
+            f"Concatenation is only supported for type `datasets.Dataset`. Found types {[type(p) for p in parts]}"
+        )
 
     return parts[0]
