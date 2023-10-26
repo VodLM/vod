@@ -326,7 +326,7 @@ def pprint_retrieval_batch(  # noqa: C901, PLR0915, PLR0912, PLR0913
     tree = rich.tree.Tree(header, guide_style="dim")
     query_keys = ["id", "retrieval_ids", "subset_ids", "language"]
     query_keys = [f"query__{key}" for key in query_keys]
-    section_keys = ["id", "subset_id", "score", "log_weight", "label", "language"]
+    section_keys = ["id", "subset_id", "score", "log_weight", "relevance", "language"]
     section_keys = [f"section__{key}" for key in section_keys]
     need_expansion = [
         "section__input_ids",

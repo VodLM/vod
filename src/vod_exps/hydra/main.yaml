@@ -15,7 +15,7 @@ defaults:
   - resources: default
   - batch_size: default
   - sys: default
-  - env: default
+  - set_env: default
   - hydra: default
 
 # Shorthands

@@ -29,7 +29,10 @@ def training_loop(  # noqa: C901, PLR0915
     scheduler: None | torch.optim.lr_scheduler.LRScheduler = None,
     parameters: None | typ.MutableMapping[str, typ.Any] = None,
 ) -> TrainerState:
-    """Train a ranker."""
+    """Training loop.
+
+    TODO(training): pre-fetch validation loader.
+    """
     _check_frabric_wrapping(module, optimizer)
     optimizer.zero_grad()
     module.train()

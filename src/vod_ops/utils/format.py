@@ -22,11 +22,9 @@ def format_pbar_info(
 ) -> str:
     """Format the metrics for the progress bar."""
     keys = keys or ["loss"]
-    desc = (
-        f"{state.step}/{state.next_period_start_step} ({state.config.max_steps}) "
-        f"• epoch={1+state.epoch} "
-        f"• grad-acc={state.config.accumulate_grad_batches}"
-    )
+    desc = f"{state.step}/{state.next_period_start_step} ({state.config.max_steps}) • epoch={1+state.epoch}"
+    if state.config.accumulate_grad_batches > 1:
+        desc += f" • grad-acc={state.config.accumulate_grad_batches}"
     if train_metrics or val_metrics:
         suppl = []
         if train_metrics is not None:

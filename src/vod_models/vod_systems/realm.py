@@ -46,11 +46,11 @@ class Realm(Ranker):
         **kws: typ.Any,
     ) -> vt.RealmOutput:  # noqa: ARG002
         """Run a forward pass and compute the gradients."""
-        encoded = self.encode(batch)
         lm_logits = self._forward_lm(
             input_ids=batch.lm__input_ids,  # type: ignore
             attention_mask=batch.lm__attention_mask,  # type: ignore
         )
+        encoded = self.encode(batch)
         return self.gradients(batch=batch, **encoded, lm_logits=lm_logits)
 
     def _forward_lm(self, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:

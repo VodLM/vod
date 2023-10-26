@@ -52,8 +52,8 @@ def run_exp(hydra_config: DictConfig) -> torch.nn.Module:
         pretty.pprint_config(hydra_config, exclude=["search_defaults"])
 
     # Set training context (env variables, muliprocessing, omp_threads, etc.)
-    logger.debug(f"Setting environment variables from config: {hydra_config.env}")
-    os.environ.update({k: str(v) for k, v in hydra_config.env.items()})
+    logger.debug(f"Setting environment variables from config: {hydra_config.set_env}")
+    os.environ.update({k: str(v) for k, v in hydra_config.set_env.items()})
     exp_utils.set_training_context()
     logger.info(f"Experiment directory: {pathlib.Path().absolute()}")
 

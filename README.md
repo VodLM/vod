@@ -49,7 +49,7 @@ The repo is currently in **research preview**. This means we already have a few 
 - [x] Search API: add Filtering Capabilities
 - [x] Datasets: support more datasets for common IR & Gen AI
 - [x] UX: plug-and-play, extendable
-- [ ] Modelling: implement REALM for Generative Tasks
+- [x] Modelling: implement REALM for Generative Tasks
 - [ ] Gradients: VOD for Generative Tasks
 
 ## Join us 🤝
@@ -60,15 +60,15 @@ If you also see great potential in combining LLMs with search components, join t
 
 | Module          | Usage                                                 | Status |
 |-----------------|-------------------------------------------------------|--------|
-| vod_cli         | CLI to train REALMs                                   | ✅      |
-| vod_configs     | Hydra and Pydantic configs                            | ✅      |
+| vod_configs     | Sturctured `pydantic` configurations                 | ✅      |
 | vod_dataloaders | Dataloaders for retrieval-augmented tasks             | ✅      |
-| vod_datasets    | Dataset loaders (MSMarco, etc.)                       | ✅      |
-| vod_gradients   | Computing gradients for end-to-end REALM training     |    ❌    |
-| vod_models      | A collection of REALMs                                |   ❌     |
-| vod_search      | Hybrid search using elasticsearch, faiss and Qdrant   |     ✅   |
-| vod_tools       | A collection of easy-to-use tools                     |    ✅    |
-| vod_ops   | Main recipes (training, benchmarking, indexing, etc.) |   ✅     |
+| vod_datasets    | Universal dataset interface (`rosetta`) and custom dataloaders (e.g., BeIR)   | ✅      |
+| vod_exps         | Research experiments, configurable with `hydra`      | ✅      |
+| vod_models      | A collection of REALMs + gradients (retrieval, VOD, etc.)   |   ⚠️     |
+| vod_ops         | ML operations using `lightning.Fabric` (training, benchmarking, indexing, etc.)  |   ✅     |
+| vod_search      | Hybrid and sharded search clients (`elasticsearch`, `faiss` and `qdrant`)   |     ✅   |
+| vod_tools       | A collection of utilities  (pretty printing, argument parser, etc.)   |    ✅    |
+| vod_types   | A collection data structures and python `typing` modules |   ✅     |
 
 > **Note** The code for VOD gradient and sampling methods currently lives at [VodLM/vod-gradients](https://github.com/VodLM/vod-gradients). The project is still under development and will be integrated into this repo in the next month.
 
@@ -121,7 +121,6 @@ See `vod_exps/hydra/main.yaml` for the default configuration. You can override a
 poetry run train model/encoder=t5-base batch_size.per_device=4 datasets=msmarco fabric/strategy=fsdp
 ```
 
-
 </details>
 
 ## Technical details
@@ -142,20 +141,22 @@ VOD implement a hybrid sharded search engine. This means that for each indexed c
 ## Tips and Tricks 🦊
 
 <details>
-<summary>🐍 Setup a Mamba environment and build faiss-gpu</summary>
+<summary>🐍 Setup a Mamba environment and build faiss-gpu from source</summary>
 
 ```bash
 # install mamba
 curl -L -O "https://github.com/conda-forge/miniforge/releases/latest/download/Mambaforge-$(uname)-$(uname -m).sh"
 bash Mambaforge-$(uname)-$(uname -m).sh
 # setup base env - try to run it, or follow the script step by step
-bash setup-mamba-env.sh
+bash setup-scripts/setup-mamba-env.sh
 # build faiss - try to run it, or follow the script step by step
-bash build-faiss.sh
+bash setup-scripts/build-faiss-gpu.sh
+# **Optional**: Install faiss-gpu in your poetry env:
+export PYPATH=`poetry run which python`
+(cd libs/faiss/build/faiss/python && $PYPATH setup.py install)
 ```
 
 </details>
-
 
 ## Citation 📚
 
