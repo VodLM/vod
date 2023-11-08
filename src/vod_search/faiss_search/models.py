@@ -1,9 +1,4 @@
-from __future__ import annotations
-
-from typing import Optional
-
 import pydantic
-from vod_search import rdtypes
 
 
 class FaissInitConfig(pydantic.BaseModel):
@@ -12,7 +7,7 @@ class FaissInitConfig(pydantic.BaseModel):
     class Config:
         """pydantic config."""
 
-        allow_mutation = False
+        frozen = False
         extra = "forbid"
 
     index_path: str
@@ -25,11 +20,11 @@ class InitResponse(pydantic.BaseModel):
     class Config:
         """pydantic config."""
 
-        allow_mutation = False
+        frozen = False
         extra = "forbid"
 
     success: bool
-    exception: Optional[str]
+    exception: None | str
 
 
 class SearchFaissQuery(pydantic.BaseModel):
@@ -38,7 +33,7 @@ class SearchFaissQuery(pydantic.BaseModel):
     class Config:
         """pydantic config."""
 
-        allow_mutation = False
+        frozen = False
         extra = "forbid"
 
     vectors: list = pydantic.Field(..., description="A batch of vectors. Implicitly defines `list[list[float]]`.")
@@ -51,13 +46,10 @@ class FastSearchFaissQuery(pydantic.BaseModel):
     class Config:
         """pydantic config."""
 
-        allow_mutation = False
+        frozen = False
         extra = "forbid"
 
-    vectors: str = pydantic.Field(
-        ..., description="A batch of serialized vectors`. Implicitly defines `np.ndarray` or `torch.Tensor`."
-    )
-    array_type: rdtypes.RetrievalDataType = rdtypes.RetrievalDataType.NUMPY
+    vectors: str = pydantic.Field(..., description="A batch of serialized vectors")
     top_k: int = 3
 
 
@@ -67,7 +59,7 @@ class FaissSearchResponse(pydantic.BaseModel):
     class Config:
         """pydantic config."""
 
-        allow_mutation = False
+        frozen = False
         extra = "forbid"
 
     scores: list = pydantic.Field(..., description="A batch of scores. Implicitly defines `list[list[float]]`.")
@@ -80,7 +72,7 @@ class FastFaissSearchResponse(pydantic.BaseModel):
     class Config:
         """pydantic config."""
 
-        allow_mutation = False
+        frozen = False
         extra = "forbid"
 
     scores: str

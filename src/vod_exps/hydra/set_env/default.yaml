@@ -1,0 +1,6 @@
+KMP_DUPLICATE_LIB_OK: TRUE
+HYDRA_FULL_ERROR: 1
+WANDB_SILENT: TRUE
+OMP_NUM_THREADS: ${resources.omp_threads}
+DS_SKIP_CUDA_CHECK: FALSE # remove the check on CUDA version in DeepSpeed
+DYNAMO_LOG_LEVEL: ERROR

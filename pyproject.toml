@@ -1,7 +1,20 @@
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
 [tool.commitizen]
-version = "0.1.0"
+version = "0.2.0"
 version_files = [
   "src/__init__.py:__version__",
+  "src/vod_configs/__init__.py:__version__",
+  "src/vod_dataloaders/__init__.py:__version__",
+  "src/vod_datasets/__init__.py:__version__",
+  "src/vod_exps/__init__.py:__version__",
+  "src/vod_models/__init__.py:__version__",
+  "src/vod_search/__init__.py:__version__",
+  "src/vod_tools/__init__.py:__version__",
+  "src/vod_types/__init__.py:__version__",
+  "src/vod_ops/__init__.py:__version__",
   "pyproject.toml:version",
   "VERSION",
 ]
@@ -16,29 +29,28 @@ description = "Variational Open-Domain: A scalable experimentation framework for
 authors = ["Valentin Liévin <vl@raffle.ai>"]
 readme = "README.md"
 packages = [
-  { include = "src" }, # TODO: remove?
+  { from = "src", include = "vod_configs" },
   { from = "src", include = "vod_dataloaders" },
   { from = "src", include = "vod_datasets" },
-  { from = "src", include = "vod_gradients" },
+  { from = "src", include = "vod_exps" },
   { from = "src", include = "vod_models" },
   { from = "src", include = "vod_search" },
   { from = "src", include = "vod_tools" },
-  { from = "src", include = "vod_workflows" },
-  { from = "src", include = "vod_cli" },
+  { from = "src", include = "vod_types" },
+  { from = "src", include = "vod_ops" },
+
 ]
 
-
 [tool.poetry.scripts]
-train = 'vod_cli.train:run'
-watch = 'watch_gpus:run'
+train = 'vod_exps.train:cli'
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = ">=3.10,<3.12"
 hydra-core = "^1.3.1"
-loguru = "^0.6.0"
+loguru = "^0.7.0"
 datasets = "^2.10.0"
-torch = { version = "^2", allow-prereleases = true }
-lightning = { version = "^2", allow-prereleases = true }
+torch = { version = ">=2", allow-prereleases = true }
+lightning = ">=2.1.0"
 wandb = "^0.14.0"
 transformers = "^4.26.1"
 jinja2 = ">=2.0"
@@ -58,18 +70,24 @@ cython = "^0.29.33"
 elasticsearch = "^8.6.2"
 gcsfs = "^2023.3.0"
 richuru = "^0.1.1"
-pydantic = "^1"
-numpy = "^1.24" # <-- setting this for numba
+pydantic = "^2"
+numpy = "^1.24"                                        # <-- setting this for numba
 numba = "^0.57.1"
+qdrant-client = "^1.4.0"
+peft = "^0.5.0"
+bitsandbytes = "^0.41.1"
+scipy = "^1.11.2"
+accelerate = "^0.23.0"
+gpustat = "^1.1.1"
+tenacity = "^8.2.3"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.1"
-black = { extras = ["d"], version = "^23.3.0" }
 pre-commit = "^3.0.4"
 commitizen = "^2.42.0"
 seaborn = "^0.12.2"
 inflect = "^6.0.2"
-ruff = "^0.0.261"
+ruff = "^0.1.2"
 gpustat = "^1.1"
 boto3 = "^1.26.137"
 
@@ -79,8 +97,9 @@ optional = true
 [tool.poetry.group.cuda.dependencies]
 faiss-gpu = { platform = "linux", version = ">=1.7.2" } # <-- or build it using `build-faiss.sh`
 
-[build-system]
-build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+testpaths = "src/"
 
 [tool.black]
 line-length = 120
@@ -130,8 +149,9 @@ ignore = [
   "PLC1901", # compare-to-empty-string
   "PTH123",  # builtin-open
   "RET504",  # unnecessary-assign
-  "N805",    # invalid-first-argument-name-for-method
   "N812",    # lowercase-underscore
+  "D206",    # no-docstring-on-init
+  "E501",    # line-too-long
 ]
 
 # Allow autofix for all enabled rules (when `--fix`) is provided.
@@ -222,7 +242,7 @@ target-version = "py311"
 "*/__init__.py" = [
   "F401", # unused-import
 ]
-"tests/*" = [
+"*/test*.py" = [
   "S101",    # assert
   "D102",    # undocumented-public-method
   "D103",    # undocumented-public-function

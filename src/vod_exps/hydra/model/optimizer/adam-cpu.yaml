@@ -1,0 +1,4 @@
+defaults:
+  - base
+
+_target_: deepspeed.ops.adam.DeepSpeedCPUAdam

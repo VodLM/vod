@@ -1,0 +1,19 @@
+defaults:
+  - default
+
+compile: false
+gradient_checkpointing: true
+prepare_for_kbit_training: true
+force_dtype: ${normalize_dtype:${fabric.precision}}
+peft_config:
+  peft_type: LORA
+  target_modules:
+    - "*.attention.self.(query|key|value)$"
+    - "*.dense$"
+    - "*.SelfAttention.(q|k|v)$"
+    - "*.DenseReluDense.(wi_0|wi_1|wo)$"
+    - "*.projection$"
+  r: 16
+  lora_alpha: 16
+  lora_dropout: 0.01
+  bias: none

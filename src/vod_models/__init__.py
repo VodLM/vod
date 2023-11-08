@@ -1,6 +1,32 @@
 """Defines the ML models used in the project."""
-from __future__ import annotations
 
-from .encoder import TransformerEncoder
-from .monitor import RetrievalMetricCollection, RetrievalMonitor, retrieval_metric_factory
-from .ranker import Ranker
+__version__ = "0.2.0"
+
+from .monitoring import (
+    RetrievalMonitor,
+)
+from .vod_encoder import (
+    VodBertEncoder,
+    VodBertEncoderConfig,
+    VodBertEncoderDebug,
+    VodRobertaEncoder,
+    VodRobertaEncoderConfig,
+    VodRobertaEncoderDebug,
+    VodT5Encoder,
+    VodT5EncoderConfig,
+    VodT5EncoderDebug,
+    VodXLMRobertaEncoder,
+    VodXLMRobertaEncoderConfig,
+    VodXLMRobertaEncoderDebug,
+)
+from .vod_gradients import (
+    Gradients,
+    MarginalLikelihoodGradients,
+    RetrievalGradients,
+)
+from .vod_systems import (
+    Ranker,
+    Realm,
+    VodSystem,
+    VodSystemMode,
+)

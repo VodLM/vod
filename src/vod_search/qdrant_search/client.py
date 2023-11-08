@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import abc
 import copy
 import dataclasses
@@ -12,20 +10,20 @@ from typing import Any, Iterable, Optional
 import numba
 import numpy as np
 import qdrant_client
+import vod_types as vt
 from grpc import StatusCode
 from grpc._channel import _InactiveRpcError
 from loguru import logger
 from qdrant_client.http import exceptions as qdrexc
 from qdrant_client.http import models as qdrm
+from qdrant_client.qdrant_remote import QdrantRemote
 from rich import status
 from rich.markup import escape
 from rich.progress import track
-from typing_extensions import Self
-from vod_search import base, rdtypes
-from vod_tools import dstruct
-from vod_tools.misc.pretty import human_format_nb
+from vod_search import base
+from vod_tools import pretty
 
-QDRANT_GROUP_KEY: str = "_group_"
+QDRANT_SUBSET_ID_KEY: str = "_SUBSET_ID_"
 
 
 def _init_client(host: str, port: int, grpc_port: None | int, **kwargs: Any) -> qdrant_client.QdrantClient:
@@ -110,30 +108,30 @@ class QdrantSearchClient(base.SearchClient):
     def search(
         self,
         *,
-        text: Optional[list[str]] = None,  # noqa: ARG002
-        vector: Optional[rdtypes.Ts],
-        group: Optional[list[str | int]] = None,
-        section_ids: Optional[list[list[str | int]]] = None,  # noqa: ARG002
+        text: None | list[str] = None,  # noqa: ARG002
+        vector: None | np.ndarray,
+        subset_ids: None | list[list[base.SubsetId]] = None,
+        ids: None | list[list[base.SectionId]] = None,  # noqa: ARG002
+        shard: None | list[base.ShardName] = None,  # noqa: ARG002
         top_k: int = 3,
-    ) -> rdtypes.RetrievalBatch[rdtypes.Ts]:
+    ) -> vt.RetrievalBatch:
         """Search the server given a batch of text and/or vectors."""
         if vector is None:
             raise ValueError("vector cannot be None")
-        if self.supports_groups and group is None:
-            warnings.warn(f"This `{type(self).__name__}` supports group, but no label is provided.", stacklevel=2)
+        if self.supports_groups and subset_ids is None:
+            warnings.warn(f"This `{type(self).__name__}` supports subsets, but no label is provided.", stacklevel=2)
 
-        def _get_filter(group: None | str | int) -> None | qdrm.Filter:
-            if group is None:
+        def _get_filter(subset_ids: None | list[str]) -> None | qdrm.Filter:
+            if subset_ids is None:
                 return None
-            if not isinstance(group, str):
-                group = int(group)
 
             return qdrm.Filter(
                 must=[
                     qdrm.FieldCondition(
-                        key=QDRANT_GROUP_KEY,
-                        match=qdrm.MatchValue(value=group),
-                    ),
+                        key=QDRANT_SUBSET_ID_KEY,
+                        match=qdrm.MatchValue(value=sid),
+                    )
+                    for sid in subset_ids
                 ],
             )
 
@@ -143,7 +141,7 @@ class QdrantSearchClient(base.SearchClient):
                 qdrm.SearchRequest(
                     limit=top_k,
                     vector=vector[i].tolist(),
-                    filter=_get_filter(group[i]) if group is not None else None,
+                    filter=_get_filter(subset_ids[i]) if subset_ids is not None else None,
                     with_payload=False,
                     params=self.search_params,
                 )
@@ -154,7 +152,7 @@ class QdrantSearchClient(base.SearchClient):
 
 
 @numba.jit(forceobj=True, looplift=True)
-def _search_batch_to_rdtypes(batch: list[list[qdrm.ScoredPoint]], top_k: int) -> rdtypes.RetrievalBatch:
+def _search_batch_to_rdtypes(batch: list[list[qdrm.ScoredPoint]], top_k: int) -> vt.RetrievalBatch:
     """Convert a batch of search results to rdtypes."""
     scores = np.full((len(batch), top_k), -np.inf, dtype=np.float32)
     indices = np.full((len(batch), top_k), -1, dtype=np.int64)
@@ -166,7 +164,7 @@ def _search_batch_to_rdtypes(batch: list[list[qdrm.ScoredPoint]], top_k: int) ->
             if j > max_j:
                 max_j = j
 
-    return rdtypes.RetrievalBatch(
+    return vt.RetrievalBatch(
         scores=scores[:, : max_j + 1],
         indices=indices[:, : max_j + 1],
     )
@@ -185,28 +183,29 @@ class QdrantSearchMaster(base.SearchMaster[QdrantSearchClient], abc.ABC):
 
     _allow_existing_server: bool = True
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
-        vectors: dstruct.SizedDataset[np.ndarray],
+        vectors: vt.Sequence[np.ndarray],
         *,
-        groups: Optional[Iterable[str | int]] = None,
+        subset_ids: Optional[Iterable[str | int]] = None,
         host: str = "http://localhost",
         port: int = 6333,
         grpc_port: None | int = 6334,
-        index_name: Optional[str] = None,
+        index_name: None | str = None,
         persistent: bool = True,
         exist_ok: bool = True,
         skip_setup: bool = False,
         qdrant_body: Optional[dict[str, Any]] = None,
         search_params: Optional[dict[str, Any]] = None,
-        force_single_collection: bool = True,
+        free_resources: bool = False,
+        force_single_collection: bool = False,
     ) -> None:
-        super().__init__(skip_setup=skip_setup)
+        super().__init__(skip_setup=skip_setup, free_resources=free_resources)
         self._host = host
         self._port = port
         self._grpc_port = grpc_port
         self._vectors = vectors
-        self._input_groups = groups
+        self._input_groups = subset_ids
         if index_name is None:
             index_name = f"auto-{uuid.uuid4().hex}"
         self._index_name = index_name
@@ -221,11 +220,10 @@ class QdrantSearchMaster(base.SearchMaster[QdrantSearchClient], abc.ABC):
         """Whether the index supports labels."""
         return self._input_groups is not None
 
-    def __enter__(self) -> Self:
-        """Start the server."""
-        if not self.skip_setup:
-            self._setup()
-        return self
+    @property
+    def service_info(self) -> str:
+        """Return the name of the service."""
+        return f"Qdrant[{self._host}:{self._port}]"
 
     def get_client(self) -> QdrantSearchClient:
         """Return a client to the server."""
@@ -264,6 +262,7 @@ class QdrantSearchMaster(base.SearchMaster[QdrantSearchClient], abc.ABC):
 
         # Delete other collections
         if self._force_single_collection:
+            logger.debug(f"Forcing single collection for {_get_client_url(client)}")
             _delete_except([self._index_name], client)
 
         # Check wheter the index exist
@@ -285,9 +284,9 @@ class QdrantSearchMaster(base.SearchMaster[QdrantSearchClient], abc.ABC):
         if not index_exist:
             # Create the index & Ingest the data
             body = _make_qdrant_body(vshp[-1], self._qdrant_body)
-            client.create_collection(collection_name=self._index_name, **body)
+            client.recreate_collection(collection_name=self._index_name, **body)
 
-            with WithIndexingDisabled(client, self._index_name, delete_on_exception=True):
+            with DisableIndexing(client, self._index_name, delete_on_exception=True):
                 _ingest_data(
                     client=client,
                     collection_name=self._index_name,
@@ -303,11 +302,19 @@ class QdrantSearchMaster(base.SearchMaster[QdrantSearchClient], abc.ABC):
             client = _init_client(self._host, self._port, self._grpc_port)
             client.delete_collection(collection_name=self._index_name)
 
+    def _free_resources(self) -> None:
+        client = _init_client(self._host, self._port, self._grpc_port)
+        with status.Status(f"{_collection_name(self._index_name)}: Deleting other indices.."):
+            logger.debug(f"Freeing resources for Qdrant[{_get_client_url(client)}]")
+            _delete_except([self._index_name], client)
+            while not self.get_client().ping():
+                time.sleep(0.05)
+
 
 def _validate(
     client: qdrant_client.QdrantClient,
     collection_name: str,
-    vectors: dstruct.SizedDataset[np.ndarray],
+    vectors: vt.Sequence[np.ndarray],
     raise_if_invalid: bool = False,
 ) -> IndexValidationStatus:
     """Validate the index."""
@@ -332,8 +339,15 @@ def _validate(
 def _delete_except(exclude_list: list[str], client: qdrant_client.QdrantClient) -> None:
     for col in client.get_collections().collections:
         if col.name not in exclude_list:
-            logger.debug(f"Deleting collection `{col.name}`")
+            logger.debug(f"Qdrant: Deleting collection {_get_client_url(client)}/{col.name}`")
             client.delete_collection(collection_name=col.name)
+
+
+def _get_client_url(client: qdrant_client.QdrantClient) -> str:
+    if isinstance(client._client, QdrantRemote):
+        return f"{client._client._host}:{client._client._port}"
+
+    return "local"
 
 
 def _collection_exists(client: qdrant_client.QdrantClient, collection_name: str) -> bool:
@@ -352,7 +366,7 @@ def _collection_exists(client: qdrant_client.QdrantClient, collection_name: str)
     return index_exist
 
 
-class WithIndexingDisabled:
+class DisableIndexing:
     """Temporarily disable indexing."""
 
     _opt_config: None | qdrm.OptimizersConfig
@@ -383,7 +397,7 @@ class WithIndexingDisabled:
         with status.Status(f"{_collection_name(self._collection_name)}: indexing..."):
             self._client.update_collection(
                 collection_name=self._collection_name,
-                optimizers_config=self._opt_config.dict(),  # type: ignore
+                optimizers_config=self._opt_config.model_dump(),  # type: ignore
             )
 
 
@@ -397,7 +411,7 @@ def _make_qdrant_body(dim: int, body: Optional[dict[str, Any]]) -> dict[str, Any
             **body.get("vectors_config", {}),
         }
     )
-    if "quantization_config" in body:
+    if "quantization_config" in body and body["quantization_config"] is not None:
         quant_conf = body.pop("quantization_config")
         keys = set(quant_conf.keys())
         if len(keys) > 1:
@@ -416,7 +430,7 @@ def _make_qdrant_body(dim: int, body: Optional[dict[str, Any]]) -> dict[str, Any
 def _ingest_data(
     client: qdrant_client.QdrantClient,
     collection_name: str,
-    vectors: dstruct.SizedDataset[np.ndarray],
+    vectors: vt.Sequence[np.ndarray],
     groups: Optional[Iterable[str | int]] = None,
     batch_size: int = 1_000,
 ) -> None:
@@ -424,14 +438,17 @@ def _ingest_data(
     groups_iter = iter(groups) if groups is not None else itertools.repeat(None)
     for j in track(
         range(0, len(vectors), batch_size),
-        description=f"{_collection_name(collection_name)}: Ingesting {human_format_nb(len(vectors))} vectors",
+        description=f"{_collection_name(collection_name)}: Ingesting {pretty.human_format_nb(len(vectors))} vectors",
     ):
-        vec_chunk = vectors[j : j + batch_size]
+        vec_chunk = vt.slice_arrays_sequence(vectors, slice(j, j + batch_size))
         if groups is None:
             payloads = None
         else:
             group_chunk = [next(groups_iter) for _ in range(len(vec_chunk))]
-            payloads = [{QDRANT_GROUP_KEY: g if isinstance(g, str) else int(g)} for g in group_chunk]  # type: ignore
+            payloads = [
+                {QDRANT_SUBSET_ID_KEY: g if isinstance(g, str) else int(g)}
+                for g in group_chunk  # type: ignore
+            ]
         ids = np.arange(j, j + len(vec_chunk))
         batch = qdrm.Batch(
             ids=ids.tolist(),

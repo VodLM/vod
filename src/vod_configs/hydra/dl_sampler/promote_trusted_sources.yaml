@@ -1,6 +1,0 @@
-mode: lookup
-key: data_source
-lookup:
-  ai_trainer: 2.5
-  production: 1.5
-  default_weight: 1.0

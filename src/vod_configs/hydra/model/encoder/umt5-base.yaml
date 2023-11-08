@@ -1,4 +1,0 @@
-defaults:
-  - t5-base
-  - _self_
-model_name: ArthurZ/umt5-base # TODO: Google version

@@ -1,5 +1,0 @@
-defaults:
-  - t5-base
-  - _self_
-model_name: google/mt5-xl
-agg: mean

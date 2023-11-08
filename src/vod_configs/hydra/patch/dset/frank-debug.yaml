@@ -1,9 +1,0 @@
-# @package _global_
-
-dataset:
-  train:
-    - frank.A.en-pos:train
-  validation:
-    - frank.A.en-pos:val
-  benchmark:
-    - frank.A.en-pos:val

@@ -1,22 +1,30 @@
-from __future__ import annotations
-
 import abc
 import copy
 import os
 import pathlib
 import subprocess
 import time
-from typing import Any, Generic, Optional, TypeVar
+import typing as typ
 
 import loguru
+import numpy as np
+import vod_types as vt
 from typing_extensions import Self
-from vod_search import rdtypes
+
+ShardName: typ.TypeAlias = str
+SubsetId: typ.TypeAlias = str
+SectionId: typ.TypeAlias = str
+
+
+def _camel_to_snake(name: str) -> str:
+    """Convert a camel case name to snake case."""
+    return "".join(["_" + c.lower() if c.isupper() else c for c in name]).lstrip("_")
 
 
 class DoNotPickleError(Exception):
     """An exception to raise when an object cannot be pickled."""
 
-    def __init__(self, msg: Optional[str] = None):
+    def __init__(self, msg: None | str = None):
         msg = msg or "This object cannot be pickled."
         super().__init__(msg)
 
@@ -39,11 +47,12 @@ class SearchClient(abc.ABC):
         self,
         *,
         text: list[str],
-        vector: Optional[rdtypes.Ts] = None,
-        group: Optional[list[str | int]] = None,
-        section_ids: Optional[list[list[str | int]]] = None,
+        vector: None | np.ndarray = None,
+        subset_ids: None | list[list[SubsetId]] = None,
+        ids: None | list[list[SectionId]] = None,
+        shard: None | list[ShardName] = None,
         top_k: int = 3,
-    ) -> rdtypes.RetrievalBatch[rdtypes.Ts]:
+    ) -> vt.RetrievalBatch:
         """Search the server given a batch of text and/or vectors."""
         raise NotImplementedError()
 
@@ -51,37 +60,47 @@ class SearchClient(abc.ABC):
         self,
         *,
         text: list[str],
-        vector: Optional[rdtypes.Ts] = None,
-        group: Optional[list[str | int]] = None,
-        section_ids: Optional[list[list[str | int]]] = None,
+        vector: None | np.ndarray = None,
+        subset_ids: None | list[list[SubsetId]] = None,
+        ids: None | list[list[SectionId]] = None,
+        shard: None | list[ShardName] = None,
         top_k: int = 3,
-    ) -> rdtypes.RetrievalBatch[rdtypes.Ts]:
+    ) -> vt.RetrievalBatch:
         """Search the server given a batch of text and/or vectors."""
         return self.search(
             text=text,
             vector=vector,
-            group=group,
-            section_ids=section_ids,
+            subset_ids=subset_ids,
+            ids=ids,
+            shard=shard,
             top_k=top_k,
         )
 
 
-Sc = TypeVar("Sc", bound=SearchClient, covariant=True)
+Sc_co = typ.TypeVar("Sc_co", bound=SearchClient, covariant=True)
 
 
-class SearchMaster(Generic[Sc], abc.ABC):
+class SearchMaster(typ.Generic[Sc_co], abc.ABC):
     """A class that manages a search server."""
 
     _timeout: float = 300
-    _server_proc: Optional[subprocess.Popen] = None
+    _server_proc: None | subprocess.Popen = None
     _allow_existing_server: bool = False
     skip_setup: bool
+    free_resources: bool
 
-    def __init__(self, skip_setup: bool = False) -> None:
+    def __init__(
+        self,
+        skip_setup: bool = False,
+        free_resources: bool = False,
+    ) -> None:
         self.skip_setup = skip_setup
+        self.free_resources = free_resources
 
     def __enter__(self) -> "Self":
         """Start the server."""
+        if self.free_resources:
+            self._free_resources()
         if not self.skip_setup:
             self._setup()
         return self
@@ -90,11 +109,14 @@ class SearchMaster(Generic[Sc], abc.ABC):
         self._server_proc = self._start_server()
         self._on_init()
 
-    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:  # noqa: ANN401
+    def __exit__(self, exc_type: typ.Any, exc_val: typ.Any, exc_tb: typ.Any) -> None:  # noqa: ANN401
         """Kill the server."""
         self._on_exit()
         if self._server_proc is not None:
             self._server_proc.terminate()
+
+    def _free_resources(self) -> None:
+        pass
 
     def _on_init(self) -> None:
         pass
@@ -103,7 +125,7 @@ class SearchMaster(Generic[Sc], abc.ABC):
         pass
 
     @abc.abstractmethod
-    def get_client(self) -> Sc:
+    def get_client(self) -> Sc_co:
         """Return a client to the server."""
         raise NotImplementedError
 
@@ -111,14 +133,14 @@ class SearchMaster(Generic[Sc], abc.ABC):
     def _make_cmd(self) -> list[str]:
         raise NotImplementedError
 
-    def _make_env(self) -> dict[str, Any]:
+    def _make_env(self) -> dict[str, typ.Any]:
         return copy.copy(dict(os.environ))
 
-    def _start_server(self) -> Optional[subprocess.Popen]:
+    def _start_server(self) -> None | subprocess.Popen:
         _client = self.get_client()
         if _client.ping():
             if self._allow_existing_server:
-                loguru.logger.info(f"Connecting to existing {self.service_info}")
+                loguru.logger.debug(f"Connecting to existing {self.service_info}")
                 return None
             raise RuntimeError(f"Server {self.service_name} is already running.")
 
@@ -137,7 +159,7 @@ class SearchMaster(Generic[Sc], abc.ABC):
 
         # spawn server
         server_proc = subprocess.Popen(
-            cmd,
+            cmd,  # noqa: S603
             env=env,
             stdout=stdout_file.open("w"),
             stderr=stderr_file.open("w"),
@@ -150,27 +172,27 @@ class SearchMaster(Generic[Sc], abc.ABC):
             if time.time() - t0 > self._timeout:
                 server_proc.terminate()
                 raise TimeoutError(f"Couldn't ping the server after {self._timeout:.0f}s.")
-        loguru.logger.info(f"Spawned {self.service_info} in {time.time() - t0:.1f}s.")
+        loguru.logger.debug(f"Spawned {self.service_info} in {time.time() - t0:.1f}s.")
         return server_proc
 
     @property
     def service_name(self) -> str:
         """Return the name of the service."""
-        return self.__class__.__name__.lower()
+        return _camel_to_snake(self.__class__.__name__)
 
     @property
     def service_info(self) -> str:
         """Return the name of the service."""
         return self.service_name
 
-    def __getstate__(self) -> dict[str, Any]:
+    def __getstate__(self) -> dict[str, typ.Any]:
         """Prevent pickling."""
         raise DoNotPickleError(
             f"{type(self).__name__} is not pickleable. "
             f"To use in multiprocessing, using a client instead (`server.get_client()`)."
         )  # type: ignore
 
-    def __setstate__(self, state: dict[str, Any]) -> None:
+    def __setstate__(self, state: dict[str, typ.Any]) -> None:
         """Prevent unpickling."""
         raise DoNotPickleError(
             f"{type(self).__name__} is not pickleable. "

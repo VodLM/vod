@@ -1,2 +1,3 @@
 """A collection of Python tools with minimum interdependencies."""
-from __future__ import annotations
+
+__version__ = "0.2.0"

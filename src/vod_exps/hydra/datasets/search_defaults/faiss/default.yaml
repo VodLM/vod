@@ -1,0 +1,13 @@
+backend: faiss
+factory: OPQ32_512,IVFauto,PQ32x8
+metric: inner_product
+host: http://localhost
+port: -1
+nprobe: 16
+train_size: null
+gpu:
+  use_float16: false
+  use_precomputed_tables: false
+  keep_indices_on_cpu: false
+  verbose: true
+  shard: true

@@ -1,0 +1,6 @@
+_target_: builtins.dict
+projection_size: null
+output_activation: null
+output_norm: null
+agg_method: cls
+scaler: 1.0

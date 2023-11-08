@@ -1,0 +1,45 @@
+# @package _global_
+
+defaults:
+  - override /datasets: long-qa
+  - override /model: realm
+  - override /model/gradients: marginal-likelihood
+  - override /model/encoder: mini-lm
+  - override /model/lm: pygmalion-350m
+  - _self_
+
+exp_suffix: -long-qa
+
+collates:
+  train:
+    # Configuration for the training/evaluation `Collate`
+    n_sections: 4 # Number of sections for each query
+    max_pos_sections: 1 # Maximum number of positive sections for each query
+
+tokenizers:
+  encoder:
+    max_length: 24
+  lm:
+    max_length: 64
+
+trainer:
+  gradient_clip_val: 1.0
+  max_steps: 100_000
+  period: 10_000
+  n_max_eval: 1_000
+  val_check_interval: 500
+  log_interval: 50
+  pbar_keys: [loss, mrr_10]
+  parameters:
+    sparse:
+      mode: linear
+      start: 1
+      value: 0
+      offset: ${trainer.period}
+      period: ${trainer.max_steps}
+    dense:
+      mode: linear
+      start: 0
+      value: 1
+      offset: ${trainer.period}
+      period: ${trainer.period}

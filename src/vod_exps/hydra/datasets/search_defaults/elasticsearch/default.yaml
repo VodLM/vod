@@ -1,0 +1,46 @@
+section_template: "{% if title %}{{ title }}{% endif %} {{ content }}"
+persistent: true
+language: en
+es_body:
+  # defining a mapping will help: (1) optimize the performance, (2) save disk space
+  mappings:
+    properties:
+      __body__: # section content
+        type: text
+        analyzer: custom_analyzer
+      __subset_id__: # susbet ID
+        type: keyword
+        ignore_above: 1024
+      __section_id__: # section/document ID
+        type: keyword
+        ignore_above: 1024
+      __row_idx__: # index of the section in the dataset
+        type: unsigned_long
+        # Prevents the inverted index and doc values from being created
+        # enabled: false
+  settings:
+    # Defines changes to the text before tokenization and indexing
+    analysis:
+      analyzer:
+        custom_analyzer:
+          filter:
+            - lowercase # Converts tokens to lowercase
+            - icu_folding # This is similar to asciifolding, but it's better at handling a wide variety of characters that appear in different languages.
+            - icu_normalizer # Normalizes unicode text to a canonical form
+            - __auto_stopwords__ #  Automatically picks up a stopword list based on `language`
+          tokenizer: icu_tokenizer # Tokenizes the text using ICU tokenizer
+          type: custom
+    # Replicas are copies of the shards and provide reliability if a node is lost
+    number_of_replicas: 0
+    # Shards are used to parallelize work on an index
+    number_of_shards: 1
+    similarity:
+      default:
+        # texts which touch on several topics often benefit by choosing a larger b
+        # most experiments seem to show the optimal b to be in a range of 0.3-0.9
+        b: 0.75
+        # should generally trend toward larger numbers when the text is a long and diverse
+        # most experiments seem to show the optimal k1 to be in a range of 0.5-2.0
+        k1: 1.2
+        # By default, b has a value of 0.75 and k1 a value of 1.2
+        type: BM25

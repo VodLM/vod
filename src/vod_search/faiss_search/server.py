@@ -1,7 +1,3 @@
-# pylint: disable=unused-import
-
-from __future__ import annotations
-
 import argparse
 import pathlib
 import re
@@ -16,17 +12,16 @@ import stackprinter  # noqa: E402
 import uvicorn  # noqa: E402
 from fastapi import FastAPI, HTTPException  # noqa: E402
 from loguru import logger  # noqa: E402
-from vod_search.rdtypes import RetrievalDataType  # noqa: E402
-
-from src import vod_configs  # noqa: E402
-from src.vod_search import io  # noqa: E402
-from src.vod_search.faiss_search import SearchFaissQuery  # noqa: E402
-from src.vod_search.faiss_search.models import (  # noqa: E402
+from vod_search import io  # noqa: E402
+from vod_search.faiss_search import SearchFaissQuery  # noqa: E402
+from vod_search.faiss_search.models import (  # noqa: E402
     FaissSearchResponse,
     FastFaissSearchResponse,
     FastSearchFaissQuery,
 )
-from src.vod_tools.misc.exceptions import dump_exceptions_to_file  # noqa: E402
+from vod_tools.misc.exceptions import dump_exceptions_to_file  # noqa: E402
+
+from src import vod_configs  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -73,8 +68,8 @@ def health_check() -> str:
 @app.post("/search")
 async def search(query: SearchFaissQuery) -> FaissSearchResponse:
     """Search the index."""
-    query_vec = np.array(query.vectors, dtype=np.float32)
-    scores, indices = faiss_index.search(query_vec, k=query.top_k)
+    query_vec = np.asarray(query.vectors, dtype=np.float32)
+    scores, indices = faiss_index.search(query_vec, k=query.top_k)  # type: ignore
     return FaissSearchResponse(scores=scores.tolist(), indices=indices.tolist())
 
 
@@ -83,14 +78,10 @@ async def search(query: SearchFaissQuery) -> FaissSearchResponse:
 async def fast_search(query: FastSearchFaissQuery) -> FastFaissSearchResponse:
     """Search the index."""
     try:
-        deserializer = {
-            RetrievalDataType.NUMPY.value: io.deserialize_np_array,
-            RetrievalDataType.TORCH.value: io.deserialize_torch_tensor,
-        }[query.array_type.value]
-        query_vec = deserializer(query.vectors)
+        query_vec = io.deserialize_np_array(query.vectors)
         if len(query_vec.shape) != 2:  # noqa: PLR2004
             raise ValueError(f"Expected 2D array, got {len(query_vec.shape)}D array")
-        scores, indices = faiss_index.search(query_vec, k=query.top_k)
+        scores, indices = faiss_index.search(query_vec, k=query.top_k)  # type: ignore
         return FastFaissSearchResponse(
             scores=io.serialize_np_array(scores),
             indices=io.serialize_np_array(indices),

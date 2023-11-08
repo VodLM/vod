@@ -1,4 +1,0 @@
-_target_: deepspeed.ops.adam.DeepSpeedCPUAdam
-_partial_: true
-lr: 1e-5
-weight_decay: 0

@@ -1,0 +1,5 @@
+defaults:
+  - e5-base
+  - _self_
+
+pretrained_model_name_or_path: intfloat/e5-small-v2

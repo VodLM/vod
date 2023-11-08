@@ -1,0 +1,72 @@
+defaults:
+  - search_defaults: default
+  - options: default
+  - _self_
+
+# Base search
+search:
+  dense:
+    backend: qdrant
+  sparse:
+    backend: elasticsearch
+
+# Train/val splits
+training:
+  queries:
+    train:
+      - __vars__:
+          subset: [fiqa, nfcorpus, scifact]
+        identifier: "{subset}_train"
+        name_or_path:
+          _target_: vod_datasets.BeirDatasetLoader
+          what: queries
+        subsets: "{subset}"
+        split: train
+        link: "{subset}_sections"
+    val:
+      - __vars__:
+          subset: [fiqa, nfcorpus, scifact]
+        identifier: "{subset}_test"
+        name_or_path:
+          _target_: vod_datasets.BeirDatasetLoader
+          what: queries
+        subsets: "{subset}"
+        split: test
+        link: "{subset}_sections"
+
+  sections:
+    - __vars__:
+        subset: [fiqa, nfcorpus, scifact]
+      identifier: "{subset}_sections"
+      name_or_path:
+        _target_: vod_datasets.BeirDatasetLoader
+        what: sections
+      subsets: "{subset}"
+
+# Benchmarks
+benchmark:
+  - __vars__:
+      subset: [fiqa, nfcorpus, scifact]
+    queries:
+      identifier: "{subset}_test"
+      name_or_path:
+        _target_: vod_datasets.BeirDatasetLoader
+        what: queries
+      subsets: "{subset}"
+      split: test
+      link: "{subset}_sections"
+
+    sections:
+      identifier: "{subset}_sections"
+      name_or_path:
+        _target_: vod_datasets.BeirDatasetLoader
+        what: sections
+      subsets: "{subset}"
+
+      # # Note -- you can override the default search backend for a specific dataset/benchmark
+      # search:
+      #   dense:
+      #     backend: faiss
+      #     factory: IVFauto,Flat
+      #     gpu:
+      #       use:_float16: true

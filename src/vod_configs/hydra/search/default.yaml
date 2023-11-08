@@ -1,3 +1,0 @@
-defaults:
-  - dense: qdrant
-  - sparse: elasticsearch

@@ -1,0 +1,27 @@
+# @package _global_
+
+# This config is for ==1xA100 GPU (80GB)
+
+defaults:
+  - override /fabric/strategy: single_device
+  - _self_
+
+model:
+  tweaks:
+    compile: false
+    gradient_checkpointing: false
+
+resources:
+  num_workers: 2
+  num_proc: 16
+  omp_threads: ${int_div:${n_cpus:},2}
+
+batch_size:
+  effective: 32
+  per_device: 32
+  per_device_eval: 32
+  per_device_predict: 4096
+
+fabric:
+  precision: bf16-mixed
+  accelerator: gpu

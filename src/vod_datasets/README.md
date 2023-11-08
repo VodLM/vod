@@ -1,3 +1,3 @@
 # VOD - datasets
 
-Dev-friendly dataset loaders for retrieval-augmented taskss
+Dev-friendly dataset loaders for retrieval-augmented tasks.

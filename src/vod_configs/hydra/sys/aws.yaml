@@ -1,7 +1,0 @@
-defautls:
-  - defaults
-  - _self_
-
-# path to folder with data
-cache_dir: /mnt/cache/
-

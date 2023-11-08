@@ -1,20 +1,17 @@
-from __future__ import annotations
-
 import contextlib
 import re
 import sys
 import time
-from typing import Callable, Optional
+import typing as typ
 
 import faiss.contrib.torch_utils  # type: ignore
 import gpustat
 import numpy as np
+import vod_configs
+import vod_types as vt
 from loguru import logger
 from tqdm import tqdm
 from vod_search.faiss_search import support as faiss_support
-from vod_tools import dstruct
-
-from src import vod_configs
 
 _MAX_GPU_MEM_USAGE = 0.8  # Limit max GPU memory usage to 80% of total
 
@@ -28,16 +25,16 @@ def _get_max_gpu_usage() -> float:
 class WithTimer:
     """Context manager to log the time taken for an event."""
 
-    def __init__(self, event_name: str, log: Callable[[str], None]) -> None:
+    def __init__(self, event_name: str, log: typ.Callable[[str], None]) -> None:
         self.log = log
         self.event_name = event_name
-        self._enter_time: Optional[float] = None
+        self._enter_time: None | float = None
 
     def __enter__(self) -> None:
         self._enter_time = time.time()
         self.log(f"Starting `{self.event_name}`")
 
-    def __exit__(self, *args, **kwargs) -> None:  # noqa: ANN
+    def __exit__(self, *args, **kwargs) -> None:  # noqa: ANN002 ANN003
         if self._enter_time is None:
             raise ValueError("`enter()` was not called")
         self.log(f"Completed `{self.event_name}` in {time.time() - self._enter_time:.2f}s")
@@ -48,7 +45,7 @@ def train_ivfpq_multigpu(
     *,
     x_train: np.ndarray,
     faiss_metric: int = faiss.METRIC_INNER_PRODUCT,
-    gpu_config: Optional[vod_configs.FaissGpuConfig] = None,
+    gpu_config: None | vod_configs.FaissGpuConfig = None,
 ) -> tuple[None | faiss.VectorTransform, faiss.Index]:
     """Train a faiss index using multiple GPUs."""
     gpu_config = gpu_config or vod_configs.FaissGpuConfig()
@@ -110,7 +107,7 @@ def _train_ivf(
     config: vod_configs.FaissGpuConfig,
     preprocessor: None | faiss.VectorTransform,
     faiss_metric: int = faiss.METRIC_INNER_PRODUCT,
-    max_points_per_centroid: Optional[int] = 10_000_000,
+    max_points_per_centroid: None | int = 10_000_000,
     verbose: bool = True,
 ) -> faiss.IndexFlat:
     """Train the centroids for the IVF index."""
@@ -204,12 +201,12 @@ def _train_ivfpq(
 
 
 def build_faiss_index_multigpu(
-    vectors: dstruct.SizedDataset[np.ndarray],
+    vectors: vt.Sequence[np.ndarray],
     *,
     factory_string: str,
-    train_size: Optional[int] = None,
+    train_size: None | int = None,
     faiss_metric: int = faiss.METRIC_INNER_PRODUCT,
-    gpu_config: Optional[vod_configs.FaissGpuConfig] = None,
+    gpu_config: None | vod_configs.FaissGpuConfig = None,
 ) -> faiss.Index:
     """Build a faiss IVF-PQ index using multiple GPUs."""
     gpu_config = gpu_config or vod_configs.FaissGpuConfig()
@@ -260,7 +257,7 @@ def build_faiss_index_multigpu(
     return index
 
 
-def _sample_train_vecs(vectors: dstruct.SizedDataset[np.ndarray], train_size: Optional[int]) -> np.ndarray:
+def _sample_train_vecs(vectors: vt.Sequence[np.ndarray], train_size: None | int) -> np.ndarray:
     if train_size is None or train_size >= len(vectors):
         return vectors[:]
 
@@ -269,10 +266,10 @@ def _sample_train_vecs(vectors: dstruct.SizedDataset[np.ndarray], train_size: Op
 
 
 def _populate_index_cpu(
-    vectors: dstruct.SizedDataset[np.ndarray],
+    vectors: vt.Sequence[np.ndarray],
     *,
     index: faiss.Index,
-    preprocessor: Optional[faiss.VectorTransform] = None,
+    preprocessor: None | faiss.VectorTransform = None,
     max_add: int = 10_000,
 ) -> faiss.Index:
     """Add elements to a sharded index."""
@@ -295,11 +292,11 @@ def _populate_index_cpu(
 
 
 def _populate_index_multigpu(  # noqa: PLR0912, PLR0915
-    vectors: dstruct.SizedDataset[np.ndarray],
+    vectors: vt.Sequence[np.ndarray],
     *,
     index: faiss.Index,
     gpu_config: vod_configs.FaissGpuConfig,
-    preprocessor: Optional[faiss.VectorTransform] = None,
+    preprocessor: None | faiss.VectorTransform = None,
 ) -> faiss.Index:
     """Add elements to a sharded index."""
     co = gpu_config.cloner_options()
@@ -308,7 +305,7 @@ def _populate_index_multigpu(  # noqa: PLR0912, PLR0915
     max_add = gpu_config.max_add * max(1, ngpu) if gpu_config.max_add is not None else len(vectors)
 
     # move the cpu index to GPU
-    with WithTimer(f"Moving full index to GPU shars ({ngpu} GPUs).", logger.debug):
+    with WithTimer(f"Moving full index to GPU shards ({ngpu} GPUs).", logger.debug):
         gpu_index: faiss.IndexShards = faiss.index_cpu_to_gpu_multiple_py(gpu_resources, index, co)  # type: ignore
 
     # create an iterator over the vectors
@@ -375,6 +372,7 @@ def _populate_index_multigpu(  # noqa: PLR0912, PLR0915
             index_src.copy_subset_to(index, 0, 0, nb)
     else:
         # simple index
+        # TODO(faiss): this breaks when using an IVFFlat index (segmentation fault)
         index_src = faiss.index_gpu_to_cpu(gpu_index)  # type: ignore
         index_src.copy_subset_to(index, 0, 0, nb)
 

@@ -1,17 +1,15 @@
-from __future__ import annotations
-
 import os
 import sys
 import time
 from copy import copy
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 import requests
 import rich
-import torch
-from vod_search import base, io, rdtypes
+import vod_types as vt
+from vod_search import base, io
+from vod_search.socket import find_available_port
 
 # get the path to the server script
 server_run_path = Path(__file__).parent / "server.py"
@@ -46,11 +44,8 @@ class FaissClient(base.SearchClient):
         response.raise_for_status()
         return "OK" in response.text
 
-    def search_py(
-        self, query_vec: rdtypes.Ts, top_k: int = 3, timeout: float = 120
-    ) -> rdtypes.RetrievalBatch[rdtypes.Ts]:
+    def search_py(self, query_vec: np.ndarray, top_k: int = 3, timeout: float = 120) -> vt.RetrievalBatch:
         """Search the server given a batch of vectors (slow implementation)."""
-        input_type = type(query_vec)
         response = requests.post(
             f"{self.url}/search",
             json={
@@ -61,38 +56,28 @@ class FaissClient(base.SearchClient):
         )
         response.raise_for_status()
         data = response.json()
-        indices_list = data["indices"]
-        scores_list = data["scores"]
-        cast_fn = {
-            torch.Tensor: torch.tensor,
-            np.ndarray: np.array,
-        }[input_type]
-        indices = cast_fn(indices_list)
-        scores = cast_fn(scores_list)
-        return rdtypes.RetrievalBatch(indices=indices, scores=scores)
+        return vt.RetrievalBatch.cast(
+            indices=data["indices"],
+            scores=data["scores"],
+        )
 
     def search(
         self,
         *,
-        vector: rdtypes.Ts,
-        text: Optional[list[str]] = None,  # noqa: ARG
-        group: Optional[list[str | int]] = None,  # noqa: ARG
-        section_ids: Optional[list[list[str | int]]] = None,  # noqa: ARG
+        vector: np.ndarray,
+        text: None | list[str] = None,  # noqa: ARG002
+        subset_ids: None | list[list[base.SubsetId]] = None,  # noqa: ARG002
+        ids: None | list[list[base.SectionId]] = None,  # noqa: ARG002
+        shard: None | list[base.ShardName] = None,  # noqa: ARG002
         top_k: int = 3,
         timeout: float = 120,
-    ) -> rdtypes.RetrievalBatch[rdtypes.Ts]:
+    ) -> vt.RetrievalBatch:
         """Search the server given a batch of vectors."""
         start_time = time.time()
-        input_type = type(vector)
-        input_type_enum, serialized_fn = {
-            torch.Tensor: (rdtypes.RetrievalDataType.TORCH, io.serialize_torch_tensor),
-            np.ndarray: (rdtypes.RetrievalDataType.NUMPY, io.serialize_np_array),
-        }[input_type]
-        serialized_vectors = serialized_fn(vector)
+        serialized_vectors = io.serialize_np_array(vector)
         payload = {
             "vectors": serialized_vectors,
             "top_k": top_k,
-            "array_type": input_type_enum.value,
         }
         response = requests.post(f"{self.url}/fast-search", json=payload, timeout=timeout)
         try:
@@ -107,22 +92,16 @@ class FaissClient(base.SearchClient):
         data = response.json()
         indices_list = io.deserialize_np_array(data["indices"])
         scores_list = io.deserialize_np_array(data["scores"])
-        cast_fn = {
-            torch.Tensor: torch.tensor,
-            np.ndarray: np.array,
-        }[input_type]
-        indices = cast_fn(indices_list)
-        scores = cast_fn(scores_list)
 
         try:
-            return rdtypes.RetrievalBatch(
-                indices=indices,
-                scores=scores,
+            return vt.RetrievalBatch.cast(
+                indices=indices_list,
+                scores=scores_list,
                 labels=None,
                 meta={"time": time.time() - start_time},
             )
         except Exception as exc:
-            rich.print({"indices": indices, "scores": scores})
+            rich.print({"indices": indices_list, "scores": scores_list})
             raise exc
 
 
@@ -136,21 +115,24 @@ class FaissMaster(base.SearchMaster[FaissClient]):
     ```
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         index_path: str | Path,
         nprobe: int = 8,
         logging_level: str = "DEBUG",
         host: str = "http://localhost",
-        port: int = 7678,
+        port: int = 6637,
         skip_setup: bool = False,
+        free_resources: bool = False,
         serve_on_gpu: bool = False,
     ):
-        super().__init__(skip_setup=skip_setup)
+        super().__init__(skip_setup=skip_setup, free_resources=free_resources)
         self.index_path = Path(index_path)
         self.nprobe = nprobe
         self.logging_level = logging_level
         self.host = host
+        if port < 0:
+            port = find_available_port()
         self.port = port
         self.serve_on_gpu = serve_on_gpu
 
@@ -197,3 +179,8 @@ class FaissMaster(base.SearchMaster[FaissClient]):
     def service_info(self) -> str:
         """Return the name of the service."""
         return f"FaissServer[{self.url}]"
+
+    @property
+    def service_name(self) -> str:
+        """Return the name of the service."""
+        return super().service_name + f"-{self.port}"

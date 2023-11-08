@@ -1,4 +1,0 @@
-defaults:
-  - t5-base
-  - _self_
-model_name: t5-3b

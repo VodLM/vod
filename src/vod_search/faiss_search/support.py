@@ -1,25 +1,25 @@
-from __future__ import annotations
-
 import math
+import os
 import re
+import typing as typ
 from multiprocessing import pool as mp_pool
-from typing import Callable, Iterable, Literal, Optional, TypeVar
 
 import pydantic
 from typing_extensions import Self, Type
 
-T = TypeVar("T")
+T = typ.TypeVar("T")
 
 
-def infer_factory_centroids(factory_str: str, n_vecs: int, min_vecs_per_centroid: int = 64) -> str:
+def infer_factory_centroids(factory_str: str, n_vecs: int, min_vecs_per_centroid: int = 128) -> str:
     """Infer the number of centroids for a factory string containing IVFauto."""
     if "IVFauto" not in factory_str:
         return factory_str
-    n_centroids = max(1, 2 ** math.ceil(math.log2(n_vecs / min_vecs_per_centroid)))
+    num_threads = int(os.environ.get("OMP_NUM_THREADS", "1"))
+    n_centroids = max(num_threads, 2 ** math.ceil(math.log2(n_vecs / min_vecs_per_centroid)))
     return factory_str.replace("IVFauto", f"IVF{n_centroids}")
 
 
-def rate_limited_imap(func: Callable[[int], T], seq: Iterable, workers: int = 1) -> Iterable[T]:
+def rate_limited_imap(func: typ.Callable[[int], T], seq: typ.Iterable, workers: int = 1) -> typ.Iterable[T]:
     """A threaded imap that does not produce elements faster than they are consumed."""
     pool = mp_pool.ThreadPool(workers)
     res = None
@@ -28,7 +28,8 @@ def rate_limited_imap(func: Callable[[int], T], seq: Iterable, workers: int = 1)
         if res:
             yield res.get()
         res = res_next
-    yield res.get()
+    if res is not None:
+        yield res.get()
 
 
 index_factory_pattern = re.compile(
@@ -43,20 +44,22 @@ index_factory_pattern = re.compile(
 class IVFPQFactory(pydantic.BaseModel):
     """Parse an IVFPQFactory string."""
 
-    preproc: Optional[str] = None
+    preproc: None | str = None
     n_centroids: int
-    ncodes: Optional[int] = None
-    nbits: Optional[int] = None
-    encoding: Literal["flat", "", "fs", "fs"] = "flat"
+    ncodes: None | int = None
+    nbits: None | int = None
+    encoding: typ.Literal["flat", "", "fs", "fs"] = "flat"
 
-    @pydantic.validator("encoding", pre=True)
-    def _validate_encoding(cls, v):  # noqa: ANN
+    @pydantic.field_validator("encoding", mode="before")
+    @classmethod
+    def _validate_encoding(cls: Type[Self], v: None | str) -> str:
         if v is None:
             return "flat"
         return v
 
-    @pydantic.validator("preproc", pre=True)
-    def _validate_preproc(cls, v):  # noqa: ANN
+    @pydantic.field_validator("preproc", mode="before")
+    @classmethod
+    def _validate_preproc(cls: Type[Self], v: None | str) -> None | str:
         if v is None:
             return None
         return v.rstrip(",")

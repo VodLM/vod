@@ -1,8 +1,0 @@
-defaults:
-  - bert-base
-  - _self_
-model_name: sentence-transformers/all-MiniLM-L6-v2
-cls_name: AutoModel
-agg: mean
-vector_size: null
-vector_norm: null

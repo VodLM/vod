@@ -1,0 +1,17 @@
+strategy: retrieval
+on_init: false
+n_max_eval: null
+parameters:
+  dense: 1.0
+  sparse: 1.0
+metrics:
+  - kldiv
+  - entropy
+  - ndcg_10
+  - mrr_10
+  - mrr_100
+  - hitrate_01
+  - hitrate_03
+  - hitrate_10
+  - hitrate_100
+  - recall_50

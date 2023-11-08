@@ -1,0 +1,4 @@
+defaults:
+  - bert-base
+  - _self_
+pretrained_model_name_or_path: google/bert_uncased_L-4_H-256_A-4
