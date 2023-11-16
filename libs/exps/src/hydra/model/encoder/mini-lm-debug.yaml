@@ -1,0 +1,6 @@
+defaults:
+  - mini-lm
+  - _self_
+_target_: models.VodBertEncoderDebug.from_pretrained
+pretrained_model_name_or_path: sentence-transformers/paraphrase-MiniLM-L3-v2
+

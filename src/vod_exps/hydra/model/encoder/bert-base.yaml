@@ -1,5 +1,0 @@
-defaults:
-  - pooler: cls
-
-_target_: vod_models.VodBertEncoder.from_pretrained
-pretrained_model_name_or_path: bert-base-uncased

@@ -1,2 +1,0 @@
-pprint_model_stats:
-  _target_: vod_ops.callbacks.PprintModelStats

@@ -1,0 +1,15 @@
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "vod-configs"
+version = "0.1.0"
+description = "Package for VOD configs"
+# Other relevant configurations for this package
+
+[tool.poetry.dependencies]
+# Dependencies specific to vod-dataloaders
+
+[tool.poetry.scripts]
+# Scripts specific to vod-dataloaders, if any

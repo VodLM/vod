@@ -1,0 +1,8 @@
+export_module:
+  _target_: ops.callbacks.ExportModule
+  output_dir: ${export_path}
+  include_files: [config.yaml]
+  submodules:
+    - encoder
+    - lm
+  tokenizers: ${tokenizers}

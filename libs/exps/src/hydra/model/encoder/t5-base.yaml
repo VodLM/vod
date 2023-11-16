@@ -1,0 +1,5 @@
+defaults:
+  - pooler: mpool-tanh
+
+_target_: models.VodT5Encoder.from_pretrained
+pretrained_model_name_or_path: t5-base
