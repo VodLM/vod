@@ -7,7 +7,7 @@ from typing import Optional
 import gpustat
 import loguru
 
-from libs.tools.src import arguantic
+from src.vod_tools import arguantic
 
 
 class Arguments(arguantic.Arguantic):

@@ -3,7 +3,21 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.commitizen]
-version = "0.2.1"
+version = "0.2.0"
+version_files = [
+  "src/__init__.py:__version__",
+  "src/vod_configs/__init__.py:__version__",
+  "src/vod_dataloaders/__init__.py:__version__",
+  "src/vod_datasets/__init__.py:__version__",
+  "src/vod_exps/__init__.py:__version__",
+  "src/vod_models/__init__.py:__version__",
+  "src/vod_search/__init__.py:__version__",
+  "src/vod_tools/__init__.py:__version__",
+  "src/vod_types/__init__.py:__version__",
+  "src/vod_ops/__init__.py:__version__",
+  "pyproject.toml:version",
+  "VERSION",
+]
 tag_format = "v$version"
 bump_message = "[ci skip] bump: $current_version → $new_version"
 
@@ -12,18 +26,19 @@ bump_message = "[ci skip] bump: $current_version → $new_version"
 name = "vod"
 version = "0.1.0"
 description = "Variational Open-Domain: A scalable experimentation framework for latent-retrieval models."
-authors = ["Valentin Liévin <vl@raffle.ai>", "Andreas Motzfeldt", "Benjamin Starostka Jakobsen", "Jens Perregaard Thorsen"]
+authors = ["Valentin Liévin <vl@raffle.ai>"]
 readme = "README.md"
 packages = [
-  { from = "packages", include = "configs" },
-  { from = "packages", include = "dataloaders" },
-  { from = "packages", include = "datasets" },
-  { from = "packages", include = "exps" },
-  { from = "packages", include = "models" },
-  { from = "packages", include = "search" },
-  { from = "packages", include = "tools" },
-  { from = "packages", include = "types" },
-  { from = "packages", include = "ops" },
+  { from = "src", include = "vod_configs" },
+  { from = "src", include = "vod_dataloaders" },
+  { from = "src", include = "vod_datasets" },
+  { from = "src", include = "vod_exps" },
+  { from = "src", include = "vod_models" },
+  { from = "src", include = "vod_search" },
+  { from = "src", include = "vod_tools" },
+  { from = "src", include = "vod_types" },
+  { from = "src", include = "vod_ops" },
+
 ]
 
 [tool.poetry.scripts]

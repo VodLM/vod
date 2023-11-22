@@ -1,0 +1,9 @@
+defaults:
+  - encoder: mini-lm
+  - gradients: retrieval
+  - optimizer: adamw
+  - scheduler: linear
+  - tweaks: default
+  - _self_
+
+_target_: vod_models.Ranker

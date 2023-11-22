@@ -176,6 +176,7 @@ tzdata==2023.3
 urllib3==1.26.17
 uvicorn==0.23.2
 virtualenv==20.24.5
+-e git+https://github.com/raffle-ai/ds-research.git@c033573d925cf4f7e9c74996c0f41659ae18958d#egg=vod
 wandb==0.14.2
 wcwidth==0.2.8
 xxhash==3.4.1

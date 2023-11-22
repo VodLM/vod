@@ -36,7 +36,7 @@ jobs:
       - checkout
 
       - run:
-          name: Install dependency libs
+          name: Install dependency packages
           command: |
             poetry install
 

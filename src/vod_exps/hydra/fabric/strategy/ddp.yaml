@@ -1,0 +1,4 @@
+_target_: vod_exps.init.ddp_strategy
+find_unused_parameters: false
+static_graph: true
+timeout: 7_200 # 2hours

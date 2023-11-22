@@ -58,17 +58,17 @@ If you also see great potential in combining LLMs with search components, join t
 
 ## Project Structure 🏗️
 
-| Module          | Usage                                                                           | Status |
-|-----------------|---------------------------------------------------------------------------------|--------|
-| vod_configs     | Sturctured `pydantic` configurations                                            | ✅      |
-| vod_dataloaders | Dataloaders for retrieval-augmented tasks                                       | ✅      |
-| vod_datasets    | Universal dataset interface (`rosetta`) and custom dataloaders (e.g., BeIR)     | ✅      |
-| vod_exps        | Research experiments, configurable with `hydra`                                 | ✅      |
-| vod_models      | A collection of REALMs + gradients (retrieval, VOD, etc.)                       | ⚠️     |
-| vod_ops         | ML operations using `lightning.Fabric` (training, benchmarking, indexing, etc.) | ✅      |
-| vod_search      | Hybrid and sharded search clients (`elasticsearch`, `faiss` and `qdrant`)       | ✅      |
-| vod_tools       | A collection of utilities  (pretty printing, argument parser, etc.)             | ✅      |
-| vod_types       | A collection data structures and python `typing` modules                        | ✅      |
+| Module          | Usage                                                 | Status |
+|-----------------|-------------------------------------------------------|--------|
+| vod_configs     | Sturctured `pydantic` configurations                 | ✅      |
+| vod_dataloaders | Dataloaders for retrieval-augmented tasks             | ✅      |
+| vod_datasets    | Universal dataset interface (`rosetta`) and custom dataloaders (e.g., BeIR)   | ✅      |
+| vod_exps         | Research experiments, configurable with `hydra`      | ✅      |
+| vod_models      | A collection of REALMs + gradients (retrieval, VOD, etc.)   |   ⚠️     |
+| vod_ops         | ML operations using `lightning.Fabric` (training, benchmarking, indexing, etc.)  |   ✅     |
+| vod_search      | Hybrid and sharded search clients (`elasticsearch`, `faiss` and `qdrant`)   |     ✅   |
+| vod_tools       | A collection of utilities  (pretty printing, argument parser, etc.)   |    ✅    |
+| vod_types   | A collection data structures and python `typing` modules |   ✅     |
 
 > **Note** The code for VOD gradient and sampling methods currently lives at [VodLM/vod-gradients](https://github.com/VodLM/vod-gradients). The project is still under development and will be integrated into this repo in the next month.
 
@@ -125,19 +125,6 @@ poetry run train model/encoder=t5-base batch_size.per_device=4 datasets=msmarco 
 ```
 
 </details>
-
-## Contribution (development environment)
-
-```shell
-# Install pinned pip first
-pip install -r $(git rev-parse --show-toplevel)/pip-requirements.txt
-
-# Install shared development dependencies and project/library-specific dependencies
-pip install -r $(git rev-parse --show-toplevel)/dev-requirements.txt -r requirements.txt
-
-# Typecheck the code
-pyright .
-```
 
 ## Technical details
 

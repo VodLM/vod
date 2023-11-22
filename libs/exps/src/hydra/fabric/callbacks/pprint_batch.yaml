@@ -1,8 +1,0 @@
-pprint_batch:
-  _target_: ops.callbacks.PprintBatch
-  training: true
-  validation: false
-  testing: false
-  is_retrieval: true
-  tokenizer_encoder: ${tokenizers.encoder}
-  log_to_wandb: true
