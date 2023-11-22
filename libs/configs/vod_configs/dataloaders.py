@@ -5,7 +5,7 @@ import pydantic
 import transformers
 from typing_extensions import Self, Type
 
-from .utils.base import StrictModel
+from utils.base import StrictModel
 
 
 class DataLoaderConfig(StrictModel):

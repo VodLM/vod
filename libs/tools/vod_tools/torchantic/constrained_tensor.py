@@ -3,8 +3,7 @@ from typing import Any, Callable, Dict, Iterable, Optional, Self, Type, Union
 import numpy as np
 import torch
 from pydantic import BaseModel
-from vod_tools.utils.pretty import repr_tensor
-
+from vod_tools.pretty.format import repr_tensor
 
 class ConstrainedTensor:
     """Define a `torch.Tensor` with constraints on its dtype, device, and shape.

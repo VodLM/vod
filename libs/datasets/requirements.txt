@@ -1,2 +1,15 @@
 -e ../tools
 -e ../configs
+pydantic==2.4.2
+pydantic_core==2.10.1
+rich==13.6.0
+datasets==2.14.4
+loguru==0.7.2
+
+pytest==7.0.1
+requests==2.31.0
+tqdm==4.66.1
+xxhash==3.4.1
+fsspec==2023.10.0
+transformers==4.35.2
+numpy==1.24.4

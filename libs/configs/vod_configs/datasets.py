@@ -4,7 +4,7 @@ import datasets
 import pydantic
 from datasets import fingerprint
 from typing_extensions import Self, Type
-from vod_tools.misc.config import as_pyobj_validator
+from misc.config import as_pyobj_validator
 
 from .search import (
     HybridSearchFactoryConfig,
