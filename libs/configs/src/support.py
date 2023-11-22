@@ -4,7 +4,7 @@ import typing as typ
 import peft
 from typing_extensions import Self
 
-from utils.base import StrictModel
+from .utils.base import StrictModel
 
 
 class TweaksConfig(StrictModel):

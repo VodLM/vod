@@ -3,8 +3,8 @@ import typing as typ
 
 import pydantic
 from typing_extensions import Self, Type
-from utils.base import StrictModel
-from misc.config import as_pyobj_validator
+from vod_configs.utils.base import StrictModel
+from vod_tools.misc.config import as_pyobj_validator
 
 from .utils.schedule import ParameterSchedule
 

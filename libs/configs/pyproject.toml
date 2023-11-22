@@ -5,19 +5,11 @@ build-backend = "poetry.core.masonry.api"
 [tool.poetry]
 name = "vod-configs"
 version = "0.1.0"
-target-version = "py311"
 description = "Package for VOD configs"
-authors = ["Valentin Liévin <vl@raffle.ai>", "Andreas Motzfeldt", "Benjamin Starostka Jakobsen", "Jens Perregaard Thorsen"]
-packages = [
-    { include = 'vod_configs' }
-]
+# Other relevant configurations for this package
 
 [tool.poetry.dependencies]
-torch = { version = ">=2", allow-prereleases = true }
-datasets = "^2.10.0"
-pydantic = "^2"
-loguru = "^0.7.0"
-qdrant-client = "^1.4.0"
-peft = "^0.5.0"
-transformers = "^4.26.1"
-vod-tools = "*"
+# Dependencies specific to vod-dataloaders
+
+[tool.poetry.scripts]
+# Scripts specific to vod-dataloaders, if any

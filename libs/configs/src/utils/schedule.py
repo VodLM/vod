@@ -2,7 +2,7 @@ import math
 import typing as typ
 
 from typing_extensions import Self, Type
-from utils.base import StrictModel
+from vod_configs.utils.base import StrictModel
 
 ParameterScheduleModes = typ.Literal["constant", "linear", "step", "exponential"]
 

@@ -7,10 +7,9 @@ import pydantic
 import torch
 from loguru import logger
 from typing_extensions import Self, Type
-from utils.base import StrictModel
-import fingerprint
-import pretty
-from misc.config import as_pyobj_validator
+from vod_configs.utils.base import StrictModel
+from vod_tools import fingerprint, pretty
+from vod_tools.misc.config import as_pyobj_validator
 
 try:
     from faiss import GpuMultipleClonerOptions, GpuResources, StandardGpuResources  # type: ignore

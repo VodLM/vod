@@ -1,7 +1,7 @@
 import typing
 
 import datasets
-from vod_configs import DatasetLoader
+import vod_configs
 from vod_datasets import rosetta
 
 from .postprocessing import (

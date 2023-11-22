@@ -129,24 +129,14 @@ poetry run train model/encoder=t5-base batch_size.per_device=4 datasets=msmarco 
 ## Contribution (development environment)
 
 ```shell
-# Navigate to library you wish to work on (`cd libs/<library name>`)
-python -m venv .venv
-source .venv/bin/activate
-
-# Install globally pinned pip
+# Install pinned pip first
 pip install -r $(git rev-parse --show-toplevel)/pip-requirements.txt
 
 # Install shared development dependencies and project/library-specific dependencies
 pip install -r $(git rev-parse --show-toplevel)/dev-requirements.txt -r requirements.txt
 
-# Build and install the library (according to pyproject.toml specification)
-pip install -e .
-
-# Use th following utilities to validate the state of the library
-python -m black --check .
-python -m flake8 .
-python -m isort --check-only .
-python -m pyright .
+# Typecheck the code
+pyright .
 ```
 
 ## Technical details

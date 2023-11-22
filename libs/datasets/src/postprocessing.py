@@ -4,7 +4,7 @@ from typing import Any
 import datasets
 import numpy as np
 import vod_configs
-from vod_configs.misc.template import Template
+from vod_tools.misc.template import Template
 
 from .sectioning import Sectionizer, init_sectionizer
 

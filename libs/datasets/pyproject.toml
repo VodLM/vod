@@ -3,13 +3,14 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
-name = "vod-datasets"
+name = "vod-dataloaders"
 version = "0.1.0"
-target-version = "py311"
-description = "Package for datasets supported by VOD"
+description = "Package for VOD dataloaders"
 authors = ["Valentin Liévin <vl@raffle.ai>", "Andreas Motzfeldt", "Benjamin Starostka Jakobsen", "Jens Perregaard Thorsen"]
+# Other relevant configurations for this package
+
 packages = [
-    { include = 'vod_datasets' }
+    { from = 'src', include = '*/**.py'}
 ]
 
 [tool.poetry.dependencies]
@@ -17,5 +18,5 @@ pydantic = "^2"
 rich = "^13.3.1"
 datasets = "^2.10.0"
 loguru = "^0.7.0"
-vod-configs = "*"
-vod-tools = "*"
+vod_configs = "*"
+vod_tools = "*"
